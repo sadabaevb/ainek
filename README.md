@@ -14,6 +14,12 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 
 **What Ainek does.** <!-- TODO: three bullets = the three questions (key real? answer from there? agent within policy?) -->
 
+## Three catches (what you will see)
+
+1. **Swapped key → nothing is sent.** `pnpm demo:tamper`: the model's signing key is not in the public log → full-screen stop.
+2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
+3. **Agent over its mandate.** A prompt-injected "urgent transfer to a new vendor" → policy job says Deny inside TDX → contract refuses → `action_denied` with a signed reason.
+
 ## How NEAR is used
 
 | Layer | NEAR provides (shipped) | Ainek adds |
@@ -33,7 +39,9 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 git clone https://github.com/<org>/ainek && cd ainek
 cp .env.example .env            # fill NEARAI_API_KEY (cloud.near.ai → API Keys) — testnet needs nothing else
 pnpm i
-pnpm demo                        # → prints: key logged at index N, model verified, proof committed (tx …), re-verified OK
+pnpm demo                        # replay mode, no API key: verifies recorded attestation reports + signed responses offline,
+                                 #   reads the public key log on testnet, prints ✓/✗ per check
+pnpm demo:live                   # needs NEARAI_API_KEY: live E2EE request → proof → on-chain commit (tx …)
 pnpm -F web dev                  # → open http://localhost:3000, send "hello" → proof card with ✓ rows and a nearblocks link
 ```
 

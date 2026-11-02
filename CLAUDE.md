@@ -3,12 +3,11 @@
 Ainek ("glass" in Kyrgyz) is a glass box for private AI agents on NEAR, built for the NEAR Hackathon
 (build window Nov 1–14 2026; code since Oct 19 counts; submission deadline Nov 14 23:59 UTC).
 
-Team: Bektur builds everything with Claude Code (frontend/fullstack background: Next.js, TypeScript, Django;
-no Rust and no prior blockchain work — explain Rust and NEAR decisions in plain comments and in
-docs/DEV-NOTES.md). Dastan (Rust, crypto) reviews the parts Bektur cannot judge himself: contract design
-and tests, the policy job's canonical bytes and signatures, key handling, and the final clean-clone run.
-Both are new to NEAR. Prefer official NEAR tooling and examples over clever custom code. Every Rust
-component must have `near-workspaces` / unit tests so a reviewer can trust it without reading every line.
+Team: Dastan (Rust, crypto) builds the contract, the verifier daemon, the OutLayer policy job and the
+contract-facing parts of the agent; Bektur (frontend/fullstack: Next.js, TypeScript) builds the client, proof card,
+pages, `packages/proof` and the agent's Telegram/LLM side. Both work full-time on this until Nov 14 and both are new
+to NEAR, so explain NEAR-specific decisions in plain comments and in docs/DEV-NOTES.md. Prefer official NEAR tooling
+and examples over clever custom code. Every Rust component ships with `near-workspaces` / unit tests.
 
 ## What we are building (one paragraph)
 
@@ -30,11 +29,11 @@ Three questions the product answers: "Is this key real?", "Did this answer come 
 
 - **Tier 1 — Ainek Verify (must ship):** contract key log + verifier daemon + fail-closed client +
   proof card with local hash recomputation + on-chain salted commit + re-verify page.
-- **Tier 2 — Ainek Agent (ship if Tier 1 runs end-to-end by Nov 4 evening):** agent sub-account with
+- **Tier 2 — Ainek Agent (ship if Tier 1 runs end-to-end by Nov 6 evening):** agent sub-account with
   a scoped function-call key, OutLayer policy job, `register_agent/propose_action/approve` in the
   contract, Telegram approval, stop button (`DeleteKey` + `pause_agent`).
 - Do not start Tier 2 work before Tier 1 runs from a clean clone. If OutLayer does not work by
-  Oct 31 evening, policy moves into the contract (public caps, salted-hash whitelist) and OutLayer
+  Nov 3 evening, policy moves into the contract (public caps, salted-hash whitelist) and OutLayer
   goes to "next steps".
 
 ## Repository layout (monorepo, pnpm workspaces)

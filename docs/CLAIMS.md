@@ -19,13 +19,19 @@ Honest limitations won prizes at previous NEAR hackathons.
   Revoking the key (`DeleteKey`) or `pause_agent` stops the agent at the chain level.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer),
   bound to the job's `wasm_hash`; the contract verifies this signature before executing.
+- (Tier 2) The policy job **cannot retain or exfiltrate its input by construction**: it is a WASI-P1 binary with no
+  network and no storage interfaces, its build is reproducible (`Cargo.lock`, pinned toolchain), and the `wasm_hash`
+  you get from building the repo equals the hash in the attestation. This is a proof of *inability to retain*, not a
+  proof of deletion, and it applies to the policy job only — not to the model enclave.
+- The card tells you when privacy is **only contractual**: a response signed by the gateway (`signature_kind: gateway`,
+  NEAR AI's Incognito tier for Claude/GPT/Gemini) is shown red, not green.
 
 ## We do not claim
 
 - **Verified model weights.** Attestation measures the deployment (container image digests, compose
   hash), not the weights. We say "attested deployment of model X".
-- **No retention inside the enclave.** Attestation cannot prove what the enclave does with data after
-  inference. NEAR AI documents a no-store Responses API, but we use chat completions (needed for E2EE).
+- **No retention inside the model enclave.** Attestation cannot prove what NEAR AI's model enclave does with data
+  after inference (its serving image is not open or reproducible). NEAR AI documents a no-store Responses API, but we use chat completions (needed for E2EE).
 - **That nobody can read your data.** Our server cannot. The enclave can, by design, during inference.
 - **Hidden settlement.** On the public testnet the executed transfer (token, amount, receiver) is visible
   in the transaction. What stays private is the conversation, the reasoning and the policy contents.

@@ -1,18 +1,18 @@
-# Сессия 1b (31 октября – 1 ноября) — Rust-спайки: hello-контракт + OutLayer
+# Сессия 1b (Дастан, 3 ноября) — Rust-спайки: hello-контракт + OutLayer
 
 Открой Claude Code в корне репо и вставь целиком.
 
 ---
 
-Прочитай CLAUDE.md и docs/SPEC.md. Я Бектур, делаю весь проект с тобой; Rust и NEAR для меня новые, поэтому
-объясняй каждое Rust- и NEAR-решение в комментариях и в docs/DEV-NOTES.md — результаты будет ревьюить Дастан (Rust, крипто). Работаем на testnet. Ничего не деплоим на mainnet.
+Прочитай CLAUDE.md и docs/SPEC.md. Я Дастан, отвечаю за контракт, верификатор, OutLayer policy job и контрактную часть агента. Rust знаю, NEAR — нет, поэтому
+объясняй NEAR-специфичные решения в комментариях и в docs/DEV-NOTES.md. Работаем на testnet. Ничего не деплоим на mainnet.
 
 Задача этой сессии — два спайка, без продакшен-кода:
 
 **Спайк A — hello-контракт на NEAR.**
 1. Используй skill `near-smart-contracts` и docs-MCP (`search_near_docs`) — не угадывай API near-sdk-rs.
 2. Поставь toolchain: rustup target `wasm32-unknown-unknown`, `cargo-near`, `near-cli-rs`. Создай testnet-аккаунты
-   `ainek-dev-bektur.testnet` через near-cli-rs (кран для тестовых NEAR).
+   `ainek-dev-dastan.testnet` через near-cli-rs (кран для тестовых NEAR).
 3. В `contracts/ainek` создай минимальный контракт с одним change-методом `log_key(entry: String) -> u64`
    (append в `Vector<String>`, эмит NEP-297 события `ainek.key_logged`) и view `head()`. Тест на `near-workspaces`.
 4. `cargo near build`, деплой на testnet, вызови `log_key` и `head()` из CLI. Покажи мне tx-хеш и ссылку на
@@ -30,7 +30,7 @@
    открытый ввод или нет (если в доках нет ответа, так и запиши); (г) можно ли подписать выход ключом
    `PROTECTED_ED25519` внутри job (ed25519-dalek).
 5. Итог — docs/DECISIONS.md: «Политика в TEE через OutLayer: GO / NO-GO», с фактами из пунктов 3–4 и
-   оценкой, сколько дней займёт полный job из SPEC §6, и списком вопросов для ревью Дастана. Если NO-GO — опиши fallback «политика в контракте»
+   оценкой, сколько дней займёт полный job из SPEC §6. Если NO-GO — опиши fallback «политика в контракте»
    из SPEC §4.3.
 
 Правила: коммить маленькими коммитами по ходу; секреты только в .env (добавь в .env.example имена переменных);

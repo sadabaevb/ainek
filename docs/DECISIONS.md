@@ -8,3 +8,8 @@
 | 2026-10-31 | Policy in TEE via OutLayer: GO / NO-GO — <fill after spike> | <facts from docs/spike-outlayer/> | Dastan |
 | 2026-10-31 | Bektur builds the whole project with Claude Code; Dastan reviews at 5 checkpoints (ROADMAP.md); Rust plan unchanged | Dastan does his own separate submission | both |
 | 2026-10-31 | Checkpoint moved to Nov 4 evening (sequential, not parallel work) | one builder | Bektur |
+| 2026-11-02 | Both work full-time Nov 3–14 as one team; Dastan: chain + TEE, Bektur: client + proof + agent TS side; checkpoint Nov 6, freeze Nov 12; no stretch features | 12 days × 2 people makes both tiers feasible; stretch would eat polish days | both |
+| 2026-11-02 | Demo and README framed as "three catches" (swapped key, false privacy, agent over mandate), not as green badges | trust products are remembered by what they catch | both |
+| 2026-11-02 | Replay mode `pnpm demo` without API keys is mandatory in Tier 1 | the first reviewer is Claude Code without our keys | both |
+| 2026-11-02 | Claim "retention impossible by construction" only for the WASI-P1 policy job with reproducible build; never for the model | proof of inability to retain ≠ proof of deletion | both |
+| 2026-11-02 | Second provider (Venice) in the key log is the only allowed stretch, Nov 10–11, green status required | turns "our log" into "CT for the industry" | both |

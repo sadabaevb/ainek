@@ -1,11 +1,11 @@
-# Сессия 1a (31 октября – 1 ноября) — NEAR AI SDK своими глазами + скелет web
+# Сессия 1a (Бектур, 2–3 ноября) — NEAR AI SDK своими глазами + скелет web
 
 Открой Claude Code в корне репо и вставь целиком.
 
 ---
 
-Прочитай CLAUDE.md и docs/SPEC.md. Я Бектур, делаю весь проект с тобой. В этой сессии — apps/web (Next.js), клиентская верификация, карточка
-proof, страницы /verify, /log, /auditor, /trust и relay. Блокчейн-разработки у меня не было; NEAR новый. Контракт — в следующей сессии (docs/prompts/day1-rust-spikes.md).
+Прочитай CLAUDE.md и docs/SPEC.md. Я Бектур, отвечаю за apps/web (Next.js), клиентскую верификацию, карточку
+proof, страницы /verify, /log, /auditor, /trust и relay. Блокчейн-разработки у меня не было; NEAR новый. Контракт и верификатор делает Дастан (docs/prompts/day1-rust-spikes.md, tier1-contract-and-verifier.md).
 Объясняй, что делаешь, короткими комментариями в коде и в docs/DEV-NOTES.md.
 
 Задача сессии — три шага, без продакшен-UI:
