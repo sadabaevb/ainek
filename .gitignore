@@ -16,3 +16,4 @@ neardev/
 .near-credentials/
 
 next-env.d.ts
+*.tsbuildinfo
