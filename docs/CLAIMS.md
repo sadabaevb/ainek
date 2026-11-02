@@ -50,4 +50,4 @@ Honest limitations won prizes at previous NEAR hackathons.
 - NEAR AI's E2EE route had a reply-key-substitution finding (NEAR issue 1061, Miller registry). We pin the
   model key from a verified report via `X-Model-Pub-Key`; status of the fix: <check before submission>.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log *is* the allowlist,
-  and it is only as good as the verifiers that write to it. In the demo both verifiers are ours.
+  and it is only as good as the verifiers that write to it. Two of the verifiers in the demo are ours; the third (`v3`) is run by <name, outside the team> from the one-command image in README — <if this did not happen by Nov 12, replace with: "all verifiers in the demo are ours">.

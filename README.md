@@ -26,10 +26,22 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 | --- | --- | --- |
 | Inference in TEE, attestation, response signatures, E2EE, JS SDK | NEAR AI Cloud, `@nearai/inference-sdk` | used as-is |
 | Verifying an answer | Verification Center (signature + fresh attestation; cannot recompute hashes; no allowlist) | local hash recomputation; check against a **public log**, not the vendor's current answer; a card a non-technical user can read |
-| Key & measurement log | none | append-only log in a NEAR contract, independent verifiers, fail-closed client, split-view detection |
+| Key & measurement log | none (TEE Receipts: owner-registered signer list) | append-only log in a NEAR contract, **independent verifiers anyone can run** (`npx ainek-verify`), fail-closed client, split-view detection |
 | Agents in TEE | IronClaw runtime (no policies, limits or proofs); Shade Agents (deprecated Apr 2026) | agent mandate + policy; decision signed inside TDX (OutLayer); contract executes; public proof without details; stop button |
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
 | NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | — |
+
+## Prior art in this hackathon (and what Ainek adds)
+
+Other teams shipped adjacent pieces in the first days — we think naming them is fairer than pretending they don't exist.
+
+| Project | What it does | What Ainek adds |
+| --- | --- | --- |
+| [TEE Receipts](https://github.com/tmdry4530/tee-receipts) | NEAR AI Cloud answer → receipt anchored on NEAR; signer registry with key history (**registered by the contract owner**); on-chain signature check; local hash recomputation; replay fixtures | the key log is written by **independent verifiers** anyone can run, not by one owner; the client is **fail-closed before sending**, not "prove later"; E2EE incl. tool calls; non-TEE route detection; a **salted commit** on-chain instead of a bare `sha256(prompt)` (short prompts are brute-forceable from a bare hash) |
+| [PrivatePay Agent](https://github.com/Nassami1/privatepay-agent) | invoice redacted locally → sanitized text to NEAR AI TEE (attestation + signature checked) → agent may only call `try_pay`; contract enforces public daily cap, whitelist, duplicate check | the policy stays **private** and its decision is **signed inside Intel TDX** (OutLayer) before the contract executes; E2EE instead of redaction (redaction loses data and the gateway still reads the rest); proof without amount or receiver; approval flow + kill switch; public key log |
+| [AgentGuard](https://github.com/CodeMasterLabs/agentguard) | agent asks, on-chain vault decides paid / held / refused; a TEE "risk oracle" screens prompt injection | the **whole policy** runs in the enclave and the contract verifies its signature; the model route itself is verified and encrypted |
+| [Black box](https://github.com/tenxagent/blackbox) | hash-chained decision log of an agent, anchored on NEAR | our action proofs are bound to a TDX-signed decision and to the model proof, not only to the agent's own log |
+| ~25 "spending guard" entries (Veto, Leash, Tollgate, Claw Guard, Approval Moment, …) | limits + whitelist + function-call key, injection blocked | we are not another guard: the point is a verifiable route model → policy → chain, checked by someone other than the vendor |
 
 ## Try it (do X → see Y)
 

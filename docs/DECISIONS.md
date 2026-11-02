@@ -13,3 +13,6 @@
 | 2026-11-02 | Replay mode `pnpm demo` without API keys is mandatory in Tier 1 | the first reviewer is Claude Code without our keys | both |
 | 2026-11-02 | Claim "retention impossible by construction" only for the WASI-P1 policy job with reproducible build; never for the model | proof of inability to retain ≠ proof of deletion | both |
 | 2026-11-02 | Second provider (Venice) in the key log is the only allowed stretch, Nov 10–11, green status required | turns "our log" into "CT for the industry" | both |
+| 2026-11-02 | Field scan (58 entries): TEE Receipts ≈ our Tier 1 with owner-only registry; PrivatePay Agent ≈ our Tier 2 with public caps; ~25 spending guards. Direction unchanged; positioning = "verified by someone other than the vendor", never "a guard" | docs/FIELD.md | both |
+| 2026-11-02 | An external verifier (`v3`, run by someone outside the team) is mandatory, not a stretch; verifier ships as one-command image | without it our log differs from an owner registry only in words | both |
+| 2026-11-03 | Open verifier registration (storage deposit, client-side trust set + quorum): <decide at sync> | SPEC §4.1 proposal | Dastan |

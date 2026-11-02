@@ -30,3 +30,12 @@
    для демонстрации детекции split-view на клиенте. Пометить в README как демо.
 
 После этого обнови docs/SPEC.md, если ABI изменился, и напиши в DEV-NOTES.md, что проверить Бектуру на клиенте (адрес контракта, имена view-методов, формат событий).
+
+**Дополнительно (docs/FIELD.md, SPEC §3.2 и §4.1):**
+- Верификатор должен запускаться чужими руками: Dockerfile (multi-stage, Node 24), образ `ghcr.io/sadabaevb/ainek-verifier`
+  через GitHub Action, и `npx ainek-verify` (bin в `services/verifier/package.json`). Конфиг — только env:
+  `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `AINEK_CONTRACT`, `NEARAI_API_KEY`, `MODELS`. Раздел README
+  «Run a verifier in 5 minutes» с тремя командами. Проверь сам с чистой машины/контейнера.
+- Если на синке принята открытая регистрация: `register_verifier` `#[payable]` со storage deposit, `pause_verifier` для owner,
+  событие `verifier_registered` / `verifier_paused`; view `verifiers()`; тест в near-workspaces: чужой аккаунт регистрируется
+  и пишет в лог, клиент с `TRUSTED_VERIFIERS` его записи не засчитывает.

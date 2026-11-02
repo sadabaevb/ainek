@@ -65,3 +65,9 @@
 - ERC-8004 (privacy not addressed): https://erc-8004.quicknode.com/learn/what-is-erc-8004
 - NEAR Business (Oct 21 2026): https://www.coingabbar.com/en/near-protocol-news-near-business-launch-today-lifts-price
 - Prior-art to cite and differentiate from (0G hackathon): https://hackquest.io/projects/Sworn · https://hackquest.io/projects/Meru · https://hackquest.io/projects/Ivaronix
+
+## Field (other hackathon entries near us — see docs/FIELD.md)
+- Entries list: https://nearhackathon.com/#projects · API: https://nearhackathon.com/api/projects?page=1
+- Official track prompts: https://github.com/nearai/near-hackathon-prompt-examples/tree/main/tracks
+- TEE Receipts: https://github.com/tmdry4530/tee-receipts · PrivatePay Agent: https://github.com/Nassami1/privatepay-agent
+- AgentGuard: https://github.com/CodeMasterLabs/agentguard · Black box: https://github.com/tenxagent/blackbox · Approval Moment: https://github.com/minotorxbt/approval-moment

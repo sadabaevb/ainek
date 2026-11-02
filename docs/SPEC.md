@@ -38,6 +38,11 @@ testnet, верификатор пишет ключи, клиент верифи
 сохраняет полный отчёт аттестации в локальное хранилище (JSON-файл или SQLite) под `sha256(report)`.
 Два инстанса на двух машинах с разными аккаунтами (`v1.ainek.testnet`, `v2.ainek.testnet`).
 
+**Чужими руками за 5 минут.** Верификатор — не наш внутренний сервис, а то, что отличает *лог* от *реестра владельца*
+(docs/FIELD.md: у TEE Receipts ключи регистрирует owner). Поэтому он пакуется как `docker run ghcr.io/sadabaevb/ainek-verifier`
+и `npx ainek-verify`, с одним обязательным параметром — аккаунт верификатора и его ключ (env), и разделом README
+«Run a verifier in 5 minutes». Цель: к 10.11 в логе есть записи `v3`, запущенного человеком не из команды.
+
 ### 3.3 Клиент `apps/web` (Next.js) — Бектур
 Чат с E2EE через relay-роут; клиентская верификация (браузерная сборка SDK: dcap-qvl + Phala PCCS,
 NRAS через `/api/nras` прокси, подписи через tweetnacl/ethers); fail-closed сверка с логом; хранение
@@ -93,7 +98,7 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 
 ### 4.1 Лог ключей
 ```
-register_verifier(account_id: AccountId)                         // owner
+register_verifier(account_id: AccountId)                         // owner — ИЛИ открытая регистрация, см. ниже
 log_key(entry: KeyEntryInput) -> u64                             // verifier; returns index
 view head() -> { index: u64, entry_hash: String }
 view entry(index: u64) -> KeyEntry
@@ -119,6 +124,15 @@ KeyEntry = KeyEntryInput + { index: u64, verifier: AccountId, prev_hash: String,
 entry_hash = sha256(prev_hash || canonical_json(KeyEntryInput) || verifier)   // hash chain, like CT
 ```
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
+
+**Предложение к синку 3.11 — открытая регистрация.** Owner-регистрация делает лог «реестром владельца» — ровно то, что мы
+ставим в минус TEE Receipts. Вариант: `register_verifier()` вызывает сам кандидат, `#[payable]`, storage deposit
+(~0.1 NEAR) как анти-спам; owner может только `pause_verifier` при явном мусоре (событие `verifier_paused` с причиной).
+Доверие переносится на клиента: `TRUSTED_VERIFIERS` (по умолчанию `v1`, `v2`, `v3`) и кворум — запись считается
+подтверждённой, если тот же `signing_address` + `compose_hash` залогирован хотя бы `QUORUM=1` (демо) / `2` (prod)
+доверенными верификаторами в окне. Это модель Certificate Transparency: лог открыт, политика доверия — у клиента.
+Если Дастан против (сложность, время) — оставляем owner, но в README честно пишем «registration is owner-gated in this
+demo; the log format and the client policy do not depend on it».
 
 ### 4.2 Коммиты proof-ов
 ```
@@ -227,7 +241,7 @@ amount > needs_approval_above → NeedsApproval; иначе Allow. `nonce` = sha
 ### 7.1 Отправка сообщения (ярус 1)
 1. Клиент: `client.verify(model)` (кеш 60 мин) → `signing_address`, `signing_public_key`, `compose_hash`.
 2. Клиент: view `latest_keys(model, 24h)` → требуется запись с тем же `signing_address` и `compose_hash`
-   хотя бы от одного верификатора; если два верификатора дают разные наборы ключей за одно окно — баннер
+   хотя бы от `QUORUM` верификаторов из `TRUSTED_VERIFIERS` (записи незнакомых верификаторов показываются, но не считаются); если два верификатора дают разные наборы ключей за одно окно — баннер
    «split-view» и отказ. Нет записи — отказ с объяснением, без отправки.
 3. Клиент: E2EE-запрос через relay, `X-Model-Pub-Key` = ключ из проверенного отчёта.
 4. Клиент: сохраняет сырые байты; `GET /v1/signature/{id}?signing_algo=ed25519` через relay; проверяет
