@@ -1,0 +1,16 @@
+node_modules/
+.next/
+dist/
+target/
+*.wasm
+.env
+.env.*
+!.env.example
+data/
+tmp/
+.DS_Store
+*.log
+# never commit keys
+*.json.key
+neardev/
+.near-credentials/
