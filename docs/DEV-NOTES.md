@@ -155,7 +155,14 @@ failure?, timingsMs, attestation }` — `signatureKind` клиенту нуже�
 `app/log/page.tsx`: view `get_greeting` на `hello.near-examples.testnet` (контракт из официального quickstart), кнопка
 «Connect wallet», список access-ключей аккаунта после входа, форма `set_greeting` с ссылкой на nearblocks. View call проверен
 в браузере (Playwright): greeting отрисовался без кошелька, ошибок в консоли нет (кроме 404 favicon). Вход кошельком и
-change call — руками Бектура (нужен его testnet-аккаунт), tx-хеш дописать сюда.
+change call сделан Бектуром через Meteor Wallet: `set_greeting` →
+tx `55VUNG7Fw3B22JJJzkRfLTDPxV9nH16g9xjrGaAxGbhT` (https://testnet.nearblocks.io/txns/55VUNG7Fw3B22JJJzkRfLTDPxV9nH16g9xjrGaAxGbhT).
+
+**Находка про кошельки (важно для яруса 2):** Meteor при логине выдал FC-ключ с `method_names: []` (= все методы контракта),
+хотя мы запрашивали только `set_greeting`. На право кошелька полагаться нельзя — ключ агента в ярусе 2 создавать через
+near-cli-rs с явным `method_names: ["propose_action"]` (`near account add-key agent.ainek.testnet grant-function-call-access
+--allowance '…' --receiver-account-id ainek.testnet --method-names 'propose_action' …`) и проверять результат через
+`view_access_key_list` перед демо.
 
 **Как кошелёк добавляет function-call ключ при логине.** Сам вход — это не транзакция: NEAR Connect грузит скрипт кошелька
 из публичного манифеста в sandbox-iframe, кошелёк отдаёт `accountId`, и всё. Но если в `signIn` передать `addFunctionCallKey`
