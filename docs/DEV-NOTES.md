@@ -147,3 +147,45 @@ failure?, timingsMs, attestation }` — `signatureKind` клиенту нуже�
   один запрос в relay заранее (кеш живёт 60 мин в процессе; рестарт `next dev` его сбрасывает).
 - Корневой `.env` читается через `apps/web/instrumentation.ts` — упомянуть в README «Try it»: один `.env` в корне, в `apps/web`
   ничего класть не нужно.
+
+## 2026-11-02 — день 1, шаг 3 (Бектур): кошелёк и `/log`
+
+Сделано: `near-connect-hooks@1.1.6` + `@hot-labs/near-connect@0.11.4` + `near-api-js@7.4.0` (точные версии; 0.12.0 коннектора
+не взял, чтобы не было двух копий — hooks тянут `^0.11.1`). `NearProvider` в `app/providers.tsx` (client), страница
+`app/log/page.tsx`: view `get_greeting` на `hello.near-examples.testnet` (контракт из официального quickstart), кнопка
+«Connect wallet», список access-ключей аккаунта после входа, форма `set_greeting` с ссылкой на nearblocks. View call проверен
+в браузере (Playwright): greeting отрисовался без кошелька, ошибок в консоли нет (кроме 404 favicon). Вход кошельком и
+change call — руками Бектура (нужен его testnet-аккаунт), tx-хеш дописать сюда.
+
+**Как кошелёк добавляет function-call ключ при логине.** Сам вход — это не транзакция: NEAR Connect грузит скрипт кошелька
+из публичного манифеста в sandbox-iframe, кошелёк отдаёт `accountId`, и всё. Но если в `signIn` передать `addFunctionCallKey`
+(у нас: контракт `hello.near-examples.testnet`, методы `['set_greeting']`, allowance 0.25 NEAR), коннектор генерирует в браузере
+новую пару ed25519, кладёт приватный ключ в localStorage и просит кошелёк подписать транзакцию `AddKey` на аккаунте пользователя:
+публичный ключ добавляется с правом `FunctionCall { receiver_id, method_names, allowance }`. Эту транзакцию подписывает
+full-access-ключ кошелька, она стоит газ и видна в `view_access_key_list` (страница их перечисляет). Дальше вызовы, которые
+попадают под право (тот контракт, те методы, нулевой депозит), подписываются локально без всплывашки кошелька; всё остальное
+уходит в кошелёк. Такой ключ не может приложить депозит, перевести NEAR или вызвать другой метод, а allowance ограничивает
+трату на газ. Это ровно механизм яруса 2: суб-аккаунт агента с FC-ключом только на `propose_action`, стоп-кнопка —
+`DeleteKey`, и `commit_proof` FC-ключом пользователя (SPEC §4.2) — поэтому у `commit_proof` не может быть депозита, а
+storage deposit кладётся заранее полным ключом.
+
+**Чем view call отличается от change call.** View call — RPC-запрос `query` с `request_type: call_function`: узел RPC
+исполняет метод на состоянии последнего (или указанного) блока у себя и отдаёт результат синхронно. Нет транзакции,
+подписи и газа для вызывающего — бесплатно, кошелёк не нужен, `predecessor` пустой, менять состояние нельзя, лимит газа
+на узле (~200 TGas). Так будут работать `head`, `entry`, `latest_keys`, `proof_commit` — клиент читает лог без входа.
+Change call — транзакция: signer, receiver, nonce ключа, свежий block hash, список действий (`FunctionCall { method, args,
+gas, deposit }`), подпись access-ключом; уходит через `send_tx`, сеть превращает её в receipt, исполняет в шарде получателя в
+следующем блоке и возвращает `FinalExecutionOutcome` c `transaction.hash`, статусом, outcome'ами receipt'ов и сожжённым
+газом. Стоит газ (простой вызов ≈0.0001–0.0002 NEAR), финальность ~1–2 с. Так работают `log_key`, `commit_proof`,
+`propose_action`, `approve`.
+
+**Как выглядит транзакция на testnet.nearblocks.io.** Адрес `testnet.nearblocks.io/txns/<hash>`. Свежий пример с того же
+контракта (через API nearblocks): `NEmGxtT3tNXsabBSxVgQtsT2WvbsgdPabhhfgz32ugL`, блок 260 602 583, статус Success,
+получатель `hello.near-examples.testnet`, одно действие `FUNCTION_CALL set_greeting` с расшифрованными аргументами
+`{"greeting": "hi"}`, депозит 0, сожжено 1.22 TGas, комиссия 0.000153 NEAR. На странице: From → To, публичный ключ, которым
+подписано (по нему видно, FC-ключ это или full-access), nonce, высота блока и время, действия с JSON-аргументами, вкладка
+Receipts (транзакция → receipt в шарде получателя → возвратный receipt signer'у за неиспользованный газ), «gas attached»
+против «gas burnt» и логи контракта — именно там судьи увидят наши NEP-297 строки `EVENT_JSON:{"event":"proof_committed"…}`.
+Чего там нет: содержимого — только аргументы. Для `commit_proof` в аргументах будут видны лишь `commit`, `kind`,
+`log_index`; для `propose_action` — действие целиком (сумма и получатель на публичном testnet видны, об этом честно пишем в
+README, SPEC §4.3).
