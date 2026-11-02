@@ -63,4 +63,28 @@ Spike (`tmp/spike/run.sh`, ed25519) — что увидели:
 сверяет пару; (б) fail-closed только по `signing_address` (+`tcb_status`), а `compose_hash` показываем в карточке как
 «деплой X, виден верификатором/нет». Склоняюсь к (а) с дедупликацией по `(signing_address, compose_hash)` в контракте. Решить 3 ноября.
 
+**Мини-спайк: 20 отчётов подряд (2.11, 22:30, `tmp/spike/fleet-scan.mjs`, сырые строки в `tmp/spike/out/fleet-scan.json`).**
+20 вызовов `GET /v1/attestation/report?model=z-ai/glm-5.3-flash&signing_algo=ed25519&nonce=<свежий>` с параллельностью 4.
+В каждом отчёте ровно один `model_attestations[]` — шлюз отдаёт узел, который ответил, а не весь флот. Nonce эхом 20/20,
+`tcb_info.compose_hash == sha256(app_compose)` 20/20, латентность 274–8782 мс.
+
+| compose_hash | signing_address | попаданий | instance_id | app_name | последний `compose_up` (compose_manager) |
+| --- | --- | --- | --- | --- | --- |
+| `a0e3c6f4…8c5f` | `5a0210f2…caff` | 3/20 | `19aea169` | dstack-nvidia-0.5.11 | v0.0.521 `prod/GLM-5.3-Flash-SGL-TP2x4-W4AFP8-V12Q8.yaml`, 2026-10-28 |
+| `5f7ebd85…efa6` | `5a0210f2…caff` | 17/20 | `7bb9af0a` | dstack-nvidia-0.5.11 | тот же файл и тег, 2026-10-29 |
+
+Итого: distinct `signing_address` = 1, distinct `compose_hash` = 2, distinct пар (адрес, compose) = 2, distinct `instance_id` = 2,
+distinct `rtmr3` = 2. Diff двух `app_compose` (`tmp/spike/out/compose-*.yaml`) — **одна строка** внутри docker-compose:
+`INSTANCE_LABEL=gpu03` против `INSTANCE_LABEL=gpu04` (метка хоста для Slack-уведомлений). Всё остальное байт-в-байт одинаково,
+образы те же.
+
+Что это значит для ABI (к синку 3.11):
+- `compose_hash` (= MRCONFIGID) — идентичность **хоста**, не деплоя. Пар (адрес, compose) столько, сколько хостов; чтобы залогировать
+  все, верификатору нужно «дождаться» каждого хоста (второй попался 3 раза из 20; третий с долей 5% потребовал бы ~60 вызовов).
+- Ключ подписи один на модель, он и есть то, что подтверждает подпись ответа. Предлагаю: fail-closed клиента — по `signing_address`
+  (+ `tcb_status`, + `image_digests` из compose, которые у хостов совпадают); `compose_hash` в `KeyEntry` оставляем как факт
+  («хост с таким MRCONFIGID видел верификатор»), и несовпадение показываем жёлтым «хост ещё не виден верификаторами», а не красным.
+- Если Дастан хочет пару (адрес, compose) как ключ записи — тогда `log_key` с дедупликацией по паре и `latest_keys` возвращает все
+  пары за окно; `image_digests` обязательны в сверке в любом случае.
+
 Сохранено в `docs/samples/` (см. README там): сырой отчёт, сырые байты запроса/ответа, `signature.json`. Ключа API в файлах нет (проверено grep).
