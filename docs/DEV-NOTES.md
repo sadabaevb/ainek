@@ -141,3 +141,9 @@ failure?, timingsMs, attestation }` — `signatureKind` клиенту нуже�
 - Typecheck: `next typegen && tsc --noEmit` (первый прогон переписывает `tsconfig`: `jsx: react-jsx`, include `.next/dev/types`).
 - `pnpm -F web dev -- -p 3999` передаёт `--` буквально; правильно `pnpm -F web dev -p 3999`.
 - Node 24.15.0 при `engines >=24.22.1` у SDK — всё работает и внутри Next.
+
+**Для DEMO-SCRIPT.md (перенести при правке сценария):**
+- Холодная аттестация занимает до 40 с, когда Intel PCS медленный. Перед записью видео и перед прогоном судей прогреть кеш:
+  один запрос в relay заранее (кеш живёт 60 мин в процессе; рестарт `next dev` его сбрасывает).
+- Корневой `.env` читается через `apps/web/instrumentation.ts` — упомянуть в README «Try it»: один `.env` в корне, в `apps/web`
+  ничего класть не нужно.
