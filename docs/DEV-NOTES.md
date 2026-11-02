@@ -88,3 +88,56 @@ distinct `rtmr3` = 2. Diff двух `app_compose` (`tmp/spike/out/compose-*.yaml
   пары за окно; `image_digests` обязательны в сверке в любом случае.
 
 Сохранено в `docs/samples/` (см. README там): сырой отчёт, сырые байты запроса/ответа, `signature.json`. Ключа API в файлах нет (проверено grep).
+
+## 2026-11-02 — день 1, шаг 2 (Бектур): первый E2EE-запрос через SDK в `apps/web`
+
+Как запустить: `pnpm i && pnpm -F web dev` → http://localhost:3000 → ввести текст → увидеть ответ и сырой результат
+верификации. Relay: `apps/web/app/api/relay/route.ts` (`POST {message}`), страница `apps/web/app/page.tsx` (без дизайна).
+Ответ relay: `{ completionId, model, content, signedText, signature, signingAddress, signingAlgo, signatureKind, verified,
+failure?, timingsMs, attestation }` — `signatureKind` клиенту нужен для детектора маршрута (SPEC §3.9).
+
+**Что именно SDK проверил на сервере** (`InferenceClient` из `@nearai/inference-sdk/node`, `verify(model)` + `verifyResponse(id)`):
+1. Отчёт шлюза: TDX-квота через `@phala/dcap-qvl` с коллатералью Intel PCS (`api.trustedservices.intel.com`), `tcbStatus`
+   против политики (дефолт `UpToDate | OutOfDate | TDRelaunchAdvised`), `report_data` = nonce + ключ подписи, replay `event_log`
+   → RTMR3, MRCONFIGID = `01 || sha256(app_compose) || 00×15`, SPKI-отпечаток TLS-пира совпал с квотой (`tlsBinding=attested`,
+   дальше запросы к шлюзу идут через pinned TLS).
+2. Отчёт модели: то же + `nvidia_payload` в NRAS (JWT NVIDIA ES384, issuer, `eat_nonce`, verdict; per-GPU claims SDK не читает),
+   `gpuEvidence=verified` (я поставил `gpuEvidence: 'required'`), `signingPublicKey` = ed25519-ключ модели для E2EE.
+3. Чат: SDK сам шифрует поля к проверенному ключу модели и сам ставит заголовки `X-Signing-Algo`, `X-Client-Pub-Key`,
+   `X-Model-Pub-Key`, `X-Encryption-Version: 2`, `x-no-aliasing: true`, **`X-Encrypt-All-Fields: true`** — и шифрует
+   `tools[]`, `tool_calls`, `refusal`, `name` (проверил по бандлу 0.2.1). Требования CLAUDE.md по заголовкам выполняются SDK,
+   руками ничего добавлять не надо. Сырые байты запроса/ответа SDK удерживает в памяти 60 мин.
+4. `verifyResponse(id)`: `GET /v1/signature/{id}?signing_algo=ed25519`, sha256 по удержанным байтам = `text`, подпись ed25519
+   под `signing_address` из *того же* отчёта, что использовался для запроса; `signatureKind=provider_tee`.
+
+**Сколько заняло** (dev-сервер, 2.11 ~22:45): холодный `verify()` 40.8 с (в спайках днём 7–14 с; Intel PCS сегодня то медленный,
+то отдаёт `quote.collateral_unavailable` — SDK помечает это `retryable`, relay повторяет до 3 раз), чат 4.6–7.8 с,
+`verifyResponse` 0.6 с, тёплый `verify()` 0 мс (кэш 60 мин внутри процесса — один клиент на процесс). Прокси PCCS NEAR
+(`cloud.near.ai/api/proxy/pccs`) работает, но 36 с против 12 с у Intel напрямую — оставил Intel.
+
+**Честно про этот relay.** Шифрует и расшифровывает *сервер*, значит relay видит открытый текст — это противоречит SPEC §3.4.
+Это шаг 1 из промпта, не продукт. В сессии tier1-client шифрование уезжает в браузер, relay только форвардит шифртекст и
+подставляет API-ключ.
+
+**Что нужно браузеру** (`js/docs/verification-guide.md`, раздел «Connect through an application proxy»):
+- Корневой entry `@nearai/inference-sdk` с `baseUrl` = наш relay; relay форвардит `GET /v1/model/{model}`,
+  `GET /v1/attestation/report`, `POST /v1/chat/completions`, `GET /v1/signature/{id}`, сохраняя тела и заголовки шифрования
+  байт-в-байт и URL-кодирование id; при cross-origin — `Access-Control-Expose-Headers: X-Generation-Id`.
+- Полифилы: «default Intel verifier may need `crypto`, `buffer`, and `stream` polyfills» (зависит от сборки; SDK тянет `buffer`
+  сам). В браузере нет TLS-биндинга (`tlsBinding.kind='none'`): fetch не отдаёт сертификат пира.
+- PCCS и NRAS в браузере по умолчанию идут через прокси NEAR (`cloud.near.ai/api/proxy/{pccs,nras/v3/attest/gpu}`), JWKS NVIDIA —
+  напрямую. Прокси не может подделать вердикт (JWT подписан NVIDIA, коллатераль подписана Intel), может только отказать;
+  наш `/api/nras` (SPEC §3.3) нужен, чтобы не зависеть от доступности прокси вендора, а не ради доверия.
+- `verifyResponse` работает только для ответов, отправленных тем же клиентом → в браузере чат должен идти через SDK-клиент
+  браузера, а `/verify` по вставленному JSON — своя проверка по сырым байтам (`tweetnacl`/`node:crypto`, как в spike).
+
+**Гочи Next.js 16.4 / pnpm 10** (чтобы не наступать второй раз):
+- Корневой `.env`: Next читает только `apps/web/.env*`. Решение — `apps/web/instrumentation.ts` → `instrumentation-node.ts` с
+  `process.loadEnvFile(<root>/.env)` при старте сервера. Не работает: `@next/env.loadEnvConfig` из `next.config.ts` (no-op после
+  того, как Next загрузил своё), `NODE_OPTIONS=--env-file…` (флаг запрещён в NODE_OPTIONS), `node --env-file… next dev`
+  (Next копирует `execArgv` родителя в `NODE_OPTIONS` дочернего процесса → та же ошибка).
+- `serverExternalPackages: ['@nearai/inference-sdk']` — SDK ESM с wasm `dcap-qvl`, бандлить не надо.
+- Next 16 на каждый `next dev` пишет `apps/web/AGENTS.md` — выключено `agentRules: false`.
+- Typecheck: `next typegen && tsc --noEmit` (первый прогон переписывает `tsconfig`: `jsx: react-jsx`, include `.next/dev/types`).
+- `pnpm -F web dev -- -p 3999` передаёт `--` буквально; правильно `pnpm -F web dev -p 3999`.
+- Node 24.15.0 при `engines >=24.22.1` у SDK — всё работает и внутри Next.
