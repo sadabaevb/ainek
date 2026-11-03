@@ -7,6 +7,8 @@
   },
   "scripts": {
     "dev": "pnpm -F web dev",
+    "demo": "pnpm -F demo replay",
+    "demo:tamper": "pnpm -F demo tamper",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

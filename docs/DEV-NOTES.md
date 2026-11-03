@@ -233,6 +233,103 @@ README, SPEC §4.3).
 
 Следующий шаг: replay-режим `pnpm demo` на `docs/samples/` (офлайн-проверка + печать карточки в терминал), затем сессия 3.
 
+## 2026-11-03 — replay-режим `pnpm demo` (Бектур): проверка SDK по записи, без ключа и сети
+
+`apps/demo` (`pnpm demo`, `pnpm demo:tamper`), ~0,8 с, выход 0/1. Главная находка: у SDK есть чистые функции
+`verifyModelAttestation` / `verifyGatewayAttestation` / `verifyModelResponse` из `@nearai/inference-sdk/node` с инъекцией
+`verifiers: { tdxQuote, gpuEvidence }`. Значит, replay гоняет **родной код проверки SDK** (nonce в report_data, ключ подписи в
+report_data, `app_compose` ↔ MRCONFIGID, повтор RTMR3 по event log, nonce в NRAS, политика TCB, compose-manager), а подменены
+только два сетевых шага: «сходить к Intel за коллатералью» и «спросить NVIDIA». Это честнее, чем своя урезанная проверка.
+
+**Что записано в `docs/samples/` (всё публичное):** `intel-collateral.json` — коллатераль Intel PCS для трёх квот отчёта (модель,
+шлюз, compose-manager), ключ — `sha256(quote hex)`; `nras-response.json` — вердикт NRAS на записанный `nvidia_payload`;
+`nvidia-jwks.json` — ключи NVIDIA; `replay-manifest.json` — время записи и момент, на который replay оценивает улики.
+Время берётся из манифеста, а не `Date.now()`: `dcap-qvl.verify(quote, collateral, nowSecs)` и `jose.jwtVerify(..., { currentDate })`.
+Свежесть в replay не перепроверяется, и демо печатает это отдельной строкой.
+
+**Наблюдения.**
+- NRAS повторно аттестует payload суточной давности и возвращает JWT с тем же `eat_nonce`: свежесть у NVIDIA не на их стороне,
+  а на нашей (nonce клиента → report_data → payload). Для replay это удобно, для CLAIMS — повод не писать «NVIDIA подтверждает,
+  что железо проверено сейчас».
+- Первый прогон записи упал на проверке JWT: `jwtVerify` с `currentDate` на секунду раньше `nbf` токена. В replay берём
+  `currentDate = iat` из манифеста, детерминированно.
+- Коллатераль Intel (TCB info, QE identity, CRL) имеет `nextUpdate` порядка месяца. Если `pnpm demo` начнёт падать на
+  `quote.verification_failed` ближе к концу ноября — перезаписать `intel-collateral.json` скриптом записи (tmp, см. ниже) и
+  обновить `nowSecs` в манифесте. Проверить 12 ноября перед фризом.
+- `nvidia-jwks.json` — 513 КБ как есть (у NVIDIA много ключей); оставил verbatim, чтобы не объяснять обрезку.
+- Весь маппинг сырого отчёта в `ModelAttestation` (`apps/demo/src/report.ts`) — копия того, что SDK делает внутри
+  `AttestationClient`; пригодится клиенту в браузере, где отчёт приходит через relay.
+
+**Fail-closed в replay.** `evaluateKeyLog` (`packages/proof/src/key-log.ts`, 6 тестов) — правило SPEC §7.1 на клиенте:
+`TRUSTED_VERIFIERS` + `QUORUM`, записи незнакомых верификаторов показываются, но не считаются; split-view = два доверенных
+верификатора с непересекающимися наборами ключей → отказ даже при кворуме. `compose_hash` сверяется, только если передан —
+под решение синка. Лог в replay — `key-entry.sample.json`; когда `ainek.testnet` задеплоен, добавить view `latest_keys`.
+`--tamper` подменяет ключ, который «видит клиент», на `abab…` → `not-logged` → REFUSED, выход 0 (так и задумано).
+
+Перезапись улик: `pnpm -F demo record` (`apps/demo/scripts/record-evidence.mjs`, ключ не нужен): коллатераль на три квоты с
+проверкой на месте, POST `nvidia_payload` в NRAS, GET JWKS, новый манифест.
+
+Дальше: `pnpm demo:live` через `apps/web` (живой запрос с ключом, коммит в контракт), запись E2EE-сэмпла, чтобы строка
+«End-to-end encryption» в карточке стала ✓, и view-вызовы лога после деплоя контракта.
+
+## 2026-11-03 — сессия 3, часть 1 (Бектур): клиент в браузере — проверка, fail-closed, E2EE, карточка
+
+**Главное решение: SDK работает в браузере по официальному manual-flow, без полифилов.** В verification-guide есть раздел
+«Connect through an application proxy»: generic-вход `@nearai/inference-sdk` + `baseUrl` на наш прокси, который только
+добавляет API-ключ. Все проверки (dcap-qvl, NRAS, привязки nonce/ключа/compose) идут на устройстве пользователя. Turbopack
+собрал root-вход как есть: `crypto`/`buffer`/`stream`, которых боялся промпт, не понадобились (dcap-qvl — чистый JS, SDK
+тянет `buffer`). Холодная проверка в браузере 24–29 с (PCCS/NRAS через прокси NEAR AI), повтор из кеша 0 мс.
+
+Почему manual-flow, а не `InferenceClient` в браузере: `verifyResponse(id)` не отдаёт сырые байты, а опции `fetch` у
+клиента нет; proof требует байты у пользователя. Поэтому `lib/nearai-browser.ts` — это `AttestationClient` +
+`verifyGatewayAttestation` / `verifyModelAttestation` + `prepareE2eeChatRequest` + `fetch(prepared.request)` с клоном ответа
+до расшифровки + `fetchCompletionSignature` + `findModelAttestationForSignature` + `verifyModelResponse`. Между
+«проверил отчёт» и «отправил» встаёт сверка с логом (SPEC §7.1), чего в `InferenceClient` не вставить.
+
+**Прокси `/api/nearai/[...path]`** (вместо старого relay, который шифровал на сервере и видел открытый текст): allow-list
+`GET v1/model/*`, `GET v1/attestation/report`, `POST v1/chat/completions`, `GET v1/signature/*`; путь берётся сырым из URL,
+чтобы `z-ai%2Fglm-5.3-flash` дошёл без перекодирования; `Accept-Encoding: identity` наверх; тело наверх как ArrayBuffer,
+вниз — потоком без перекодирования; срезаются `content-encoding`/`content-length`; `Authorization`/`cookie` клиента не
+пропускаются. Логов тел нет вовсе: сервер видит только шифртекст и размеры (таблица §8 теперь правда).
+
+**Поток (`lib/flow.ts`), восемь шагов с живым статусом на странице:** metadata (`attestationSupported`) → attestation →
+key-log (fail-closed) → send (E2EE) → signature (ретрай ×4: подпись кешируется на узле, обслужившем запрос) → sdk-check →
+proof (`@ainek/proof`: пересчёт хешей, привязка к записи лога, соль + commit) → store (IndexedDB). Три исхода на карточке:
+`verified` (зелёная), `refused` (красная, ничего не отправлено), `non-tee` (красная: только подпись шлюза).
+
+**Проверено в браузере (Playwright, 3 ноября):** зелёная карточка (24 с холодная проверка, ответ «Exactly three words.»,
+`provider_tee`, 8/8 проверок proof, консоль чистая); tamper → «Key not in the public log. Message not sent.» за 3 с;
+Incognito `anthropic/claude-haiku-5-5` → `provider external, model attestation not supported`, plaintext, подпись `gateway`
+проверена против аттестованного шлюза, красная карточка «This answer went through a non-attested model». `/verify?id=…`
+перечитывает запись лога и даёт 8/8; `/log` показывает образец и баннер split-view; `/trust` — таблица §8. `next build` зелёный.
+
+**Compose в сверке не участвует — пока.** В живом прогоне модель обслужил хост с compose `5f7ebd85…`, а в образце лога
+`a0e3c6f4…`: если бы клиент требовал совпадения пары, честный запрос отказали бы. Это ровно сценарий из заметки 2 ноября;
+в `evaluateKeyLog` compose сверяется только если передан, в `flow.ts` не передаётся. Решение по ABI — на синке.
+
+**Что ещё не сделано в сессии 3:** `commit_proof` кошельком (контракт не задеплоен; FC-ключ на `commit_proof` уже
+запрашивается при логине на `/log`); кеш проверки в IndexedDB (сейчас только память, перезагрузка = 24 с заново);
+`/auditor`; переключатель RU покрывает чат и карточку, `/verify` и `/log` на английском; `pnpm demo:live`.
+
+Мелочи: NEXT_PUBLIC_* из корневого `.env` в клиент не попадают (инлайн на этапе сборки) — публичную конфигурацию читает
+layout на сервере (`lib/config.server.ts`, `force-dynamic`) и отдаёт в контекст `<Providers>`, страницы берут `useConfig()`; `useEffect(() => el.scrollIntoView())` без фигурных скобок ломает React 19 («destroy is not a function»);
+`allowImportingTsExtensions` нужен и в tsconfig web, раз `@ainek/proof` импортируется исходниками с `.ts`.
+
+**После `/simplify` (4 ревью-агента, 3 ноября):** поток переписан на один `runStep` + `StepFailed` вместо девяти копий try/catch;
+`buildModelProof`, формат раскрытия (`Disclosure`, `toDisclosure`/`parseDisclosure`) и `findSplitView` переехали в `@ainek/proof`
+(43 теста), чтобы агент Дастана собирал proof тем же кодом; конфиг — из layout в контекст, роуты `/api/config` и `/api/log/sample`
+удалены, образец лога — статический импорт JSON; прокси пропускает наверх закрытый список заголовков SDK, а не «всё кроме»;
+шлюз и модель проверяются параллельно (холодный старт 24 → 13 с), метаданные модели кешируются, лог читается параллельно с
+аттестацией; карточки мемоизированы, статусы/ссылки/ошибки — в общих помощниках. Поведение не менялось, три исхода
+перепроверены в браузере.
+
+**После `/code-review` (15 находок, 3 ноября), все исправлены:** прокси принимает только same-origin, две модели из конфига, без
+`stream`/`n`, тело ≤ 64 КБ, 30 запросов в минуту на IP (ключ всё равно под spend limit); plaintext-маршрут включается только
+выбором Incognito-модели, а не метаданными шлюза (иначе fail-closed на шаге metadata); падение после отправки показывает ответ и
+честный заголовок «Reply received, but its proof could not be completed» вместо «Nothing was sent»; карточка Incognito, `/trust`
+и SPEC §3.4 говорят прямо, что на этом маршруте открытый текст проходит через наш прокси; ретраи только на `retryable` ошибках SDK
+(аттестация ×3, подпись ×4); `AINEK_ACCEPTED_TCB` вместо зашитого `UpToDate`; HTTP-ошибка проверяется до расшифровки; `entry()`
+понимает `undefined` от near-api-js; `shortHex` один на всех; SPEC §5.4 описывает файл раскрытия.
 ## 2026-11-03 — день 1b, спайк A (Дастан): hello-контракт на testnet
 
 Тулчейн: `cargo-near 0.22.0`, `near-cli-rs 0.30.1` (`cargo +1.93 install --locked cargo-near near-cli-rs` — near-cli-rs

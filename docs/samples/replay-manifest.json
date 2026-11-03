@@ -1,0 +1,16 @@
+{
+  "_note": "Timestamps the offline replay evaluates the recorded evidence at. The report and chat were captured 2026-11-02; Intel collateral and the NRAS verdict were recorded later (see evidenceRecordedAt). Freshness is therefore not re-checked by the replay and the demo says so.",
+  "reportCapturedAt": "2026-11-02T16:14:00Z",
+  "evidenceRecordedAt": "2026-11-03T13:55:27.494Z",
+  "nowSecs": 1793714127,
+  "nras": {
+    "iat": 1793714132,
+    "exp": 1793717732,
+    "kid": "nv-eat-kid-prod-20261103070944715-7a013a2b-ff4a-4fd6-bb15-8400f99aea30"
+  },
+  "quotes": {
+    "5b8bcefe7ae294b00c743df84da8e6c35e73d8fb5c101d99754a7c2bc69e8c37": "model",
+    "677fc537259223657eb269c70b202316a75c13b05682f16b672501210be46e05": "gateway",
+    "1b36294a0a38f09e4cdeb0e444d68022eb02a334e54855b0f5cef34ed34c021c": "compose_manager"
+  }
+}

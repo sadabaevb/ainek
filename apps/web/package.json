@@ -9,6 +9,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@ainek/proof": "workspace:*",
     "@hot-labs/near-connect": "0.11.4",
     "@nearai/inference-sdk": "0.2.1",
     "near-api-js": "7.4.0",

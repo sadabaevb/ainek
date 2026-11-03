@@ -8,8 +8,33 @@ importers:
 
   .: {}
 
+  apps/demo:
+    dependencies:
+      '@ainek/proof':
+        specifier: workspace:*
+        version: link:../../packages/proof
+      '@nearai/inference-sdk':
+        specifier: 0.2.1
+        version: 0.2.1(typescript@5.9.3)(ws@8.21.0)(zod@4.6.7)
+      '@phala/dcap-qvl':
+        specifier: 0.7.0
+        version: 0.7.0
+      jose:
+        specifier: 6.2.13
+        version: 6.2.13
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   apps/web:
     dependencies:
+      '@ainek/proof':
+        specifier: workspace:*
+        version: link:../../packages/proof
       '@hot-labs/near-connect':
         specifier: 0.11.4
         version: 0.11.4
