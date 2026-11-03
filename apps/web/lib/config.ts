@@ -8,7 +8,7 @@ export interface PublicConfig {
   network: 'testnet' | 'mainnet';
   rpcUrl: string;
   contract: string;
-  /** "sample" = docs/samples/key-entry.sample.json until the contract is deployed; "contract" = view calls. */
+  /** "contract" = view calls to the log contract (default); "sample" = the recorded entry in docs/samples (offline). */
   logSource: 'sample' | 'contract';
   trustedVerifiers: string[];
   quorum: number;
