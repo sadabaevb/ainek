@@ -21,3 +21,5 @@ export {
   SigningAlgo,
   hex64,
 } from './schema.ts';
+export { evaluateKeyLog } from './key-log.ts';
+export type { KeyLogQuery, KeyLogVerdict, KeyLogStatus } from './key-log.ts';
