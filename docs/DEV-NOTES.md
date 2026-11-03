@@ -358,3 +358,49 @@ near contract call-function as-read-only ainek-dev-dastan.testnet head json-args
 https://testnet.nearblocks.io/txns/3wE9RBaubngqhyWXKMqWygKsokCbyEKwUDvtTsNMcEs8), в логах
 `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged",...}`; `head()` → `{"entry":"spike-key-5a0210f2","index":0}`.
 Ключ аккаунта — в macOS keychain (`save-to-keychain`), не в репо.
+
+## 2026-11-03 — контракт v1 (лог ключей, SPEC §4.1) на testnet — Дастан
+
+**Для Бектура:** контракт `ainek-log-dastan.testnet` (owner = он же), верификатор `ainek-dev-dastan.testnet` зарегистрирован,
+запись №0 для `z-ai/glm-5.3-flash` — это `KeyEntryInput` из `docs/test-vectors/canonical.json` с `observed_at` = момент записи.
+`pnpm -F demo check-contract ainek-log-dastan.testnet` (PR #5) → 4/4 ✓. Для клиента: `TRUSTED_VERIFIERS=ainek-dev-dastan.testnet`.
+- Деплой `CR6NGJJM3g5QuEVbUFwEG58A2qRyLdHWXJrsed5Ej72`, `register_verifier` `CqhMcDf4KnMJxyMSYgSZwCkWTW1JSE4b1Zn7b8YxbN3L`,
+  `log_key` `FvCMG7Rp2wJtk7ZMamxdXbUMxWWEvoaiQTdJtgSA2fvs` (https://testnet.nearblocks.io/txns/FvCMG7Rp2wJtk7ZMamxdXbUMxWWEvoaiQTdJtgSA2fvs).
+- Методы: `new(owner)` (init), `register_verifier(account_id)` owner-only, `log_key(entry: KeyEntryInput) -> u64`,
+  view `head() -> Option<{index, entry_hash}>` (**null на пустом логе** — правка SPEC §4.1), `entry(index) -> Option<KeyEntry>`,
+  `entries_since(index, limit≤100) -> Vec<KeyEntry>`, `latest_keys(model, max_age_ns: U64) -> Vec<KeyEntry>` (новые первыми, ≤100),
+  `verifiers()`, `owner()`.
+- `latest_keys` сравнивает `observed_at` (мс, часы верификатора) с `block_timestamp` ноды: контракт не проверяет честность
+  `observed_at` — это доверие к верификатору, которое клиент выражает через `TRUSTED_VERIFIERS`. Дедупликации по
+  `(signing_address, compose_hash)` в контракте нет — это задача верификатора (идемпотентность, SPEC §3.2).
+- `entry_hash` совпадает с тест-вектором `commits.entry_hash` байт в байт (unit-тест). Канонический JSON — свой сериализатор
+  `src/canonical.rs`: в дереве зависимостей near-sdk у `serde_json` включён `preserve_order` (через `serde_with`), поэтому
+  `serde_json::Value` **не** сортирует ключи и на него полагаться нельзя. Для `jobs/policy` файл скопировать как есть.
+- События NEP-297: `verifier_registered {account_id}`, `key_logged {index, model, signing_address, verifier, entry_hash}`.
+- Валидация входа повторяет zod-схему (hex64, algo ∈ {ed25519, ecdsa}, непустые поля) — мусор в цепочку не попадает.
+- Тесты: `cargo test` — 9 unit (включая вектор) + 1 sandbox (деплой с init, owner-only, verifier-only, цепочка, 4 view).
+- Почему новый аккаунт: у `ainek-dev-dastan.testnet` уже лежит состояние спайка A, а `#[init]` на занятом состоянии падает.
+  Боевой `ainek.testnet` — отдельно, когда договоримся об owner.
+- Ещё нет: `commit_proof` / `proof_commit` / `deposit_storage` (SPEC §4.2) — следующий коммит.
+
+## 2026-11-03 — спайк B (OutLayer): заблокирован FastFS, факты собраны — Дастан
+
+Сделано: `jobs/policy` — WASI-P1 job (`[[bin]]`, serde), `cargo build --target wasm32-wasip1 --release` → 95 КБ, локально в
+`wasmtime` `{"action":{"amount":"300"},"cap":"500"}` → `{"verdict":"Allow"}`, 900 → `Deny`; 3 unit-теста. CLI `outlayer-cli 0.2.1`
+(`cargo +1.93 install --locked outlayer-cli`), `outlayer login testnet` (интерактивно; при вводе с точкой на конце CLI сохраняет
+`account_id` с точкой → `Invalid account_id`, перелогиниться). `outlayer upload` → tx `3xRUXhLDuAxkUdbVj3vTr3QK4rqoNg2RUkP5tfqQpg7K`,
+`outlayer deploy policy <url> --target wasm32-wasip1` → проект `ainek-dev-dastan.testnet/policy`. Два `outlayer run` в режиме NEAR
+(`request_execution` на `outlayer.testnet`, ~0.001 NEAR каждый): оба `wasm_url could not be fetched` — `https://test.fastfs.io/`
+отдаёт 502 на всё, включая корень (сырые tx в `docs/spike-outlayer/`). Повторить утром 4.11; fallback — любой https-URL
+(`outlayer deploy` принимает любой URL + `--hash`).
+
+Факты по пунктам промпта (из доков и live-данных):
+- (а) `POLICY_JSON` — обычный секрет (`outlayer secrets set --project … '{"POLICY_JSON": …}'`), в job как env.
+  `PROTECTED_*` — генерируются в TEE, типы `hex16|hex32|hex64|ed25519|ed25519_seed|password`, тоже env → P1 job может подписывать
+  `ed25519-dalek`. Привязка к сборке: `--build <wasm sha256>` («one build only»). Формат значения `ed25519` в env — в доках нет,
+  проверить живьём. Альтернатива: host-интерфейс `outlayer:signing-keys` (ключ никогда не попадает в модуль) — **только WASI P2**.
+- (б) Лимит выхода ≤ 900 байт — подтверждён (доки + «truncated in explorer»).
+- (в) Вход **публичен**: `input_data` целиком лежит в событии `execution_requested` на NEAR (видно в наших tx) и в БД
+  координатора. Для нас: `Action` и так виден в `propose_action`; политика — только через секреты, никогда через stdin.
+- (г) Да, если `PROTECTED_…:ed25519` даёт seed/ключ в env (см. (а)); аттестация коммитит `wasm_hash`, hash входа и выхода, TDX quote.
+- Оплата: HTTPS API требует payment key (стейбл ≥ $1, на testnet `keys topup --usd`); режим NEAR платит NEAR с аккаунта — работает без ключа.

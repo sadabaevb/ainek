@@ -106,7 +106,7 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 ```
 register_verifier(account_id: AccountId)                         // owner — ИЛИ открытая регистрация, см. ниже
 log_key(entry: KeyEntryInput) -> u64                             // verifier; returns index
-view head() -> { index: u64, entry_hash: String }
+view head() -> Option<{ index: u64, entry_hash: String }>          // null while the log is empty
 view entry(index: u64) -> KeyEntry
 view entries_since(index: u64, limit: u32) -> Vec<KeyEntry>
 view latest_keys(model: String, max_age_ns: U64) -> Vec<KeyEntry>
