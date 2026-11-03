@@ -86,12 +86,14 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
 9. When unsure about a NEAR API, look it up: `docs.near.org/llms.txt`, the NEAR docs MCP, and the
    installed agent skills. Do not guess method names or argument shapes.
 
-## Tooling to install once
+## Tooling (already in the repo — nothing to install)
+
+NEAR agent skills are vendored in `.agents/skills/` (canonical, read by Codex; `skills-lock.json` pins them) with
+symlinks in `.claude/skills/` for Claude Code. The NEAR docs MCP server is in `.mcp.json` (approve it once when
+Claude Code asks). Only to refresh the skills: `npx skills update` (or `npx skills add near/agent-skills`).
 
 ```
-npx skills add near/agent-skills                      # near-ai-cloud, near-kit, near-api-js, near-dapp, near-smart-contracts, near-intents
-claude mcp add near-docs --transport http https://docs.near.org/mcp
-# OutLayer skills: https://github.com/out-layer/skills
+# OutLayer skills, not vendored yet: https://github.com/out-layer/skills
 ```
 
 Reference implementations to copy patterns from (not code wholesale; disclose anything copied):
