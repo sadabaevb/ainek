@@ -1,6 +1,8 @@
 // IndexedDB on the user's device: the exact bytes of each exchange and its proof never leave the browser
-// unless the user discloses them (SPEC §5.1). Everything here is best-effort: a private window may refuse.
+// unless the user discloses them (SPEC §5.1); verified deployment evidence is cached here for 60 minutes so a
+// page reload does not cost another cold verification. Everything is best-effort: a private window may refuse.
 import type { KeyEntry, ModelProof } from '@ainek/proof';
+import type { VerifiedDeployment } from './nearai-browser';
 
 export interface StoredExchange {
   completionId: string;
@@ -14,7 +16,9 @@ export interface StoredExchange {
 }
 
 const DB_NAME = 'ainek';
-const STORE = 'exchanges';
+const DB_VERSION = 2;
+const EXCHANGES = 'exchanges';
+const DEPLOYMENTS = 'deployments';
 
 function request<T>(r: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -23,28 +27,54 @@ function request<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
-async function withStore<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const open = indexedDB.open(DB_NAME, 1);
+async function withStore<T>(name: string, mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  const open = indexedDB.open(DB_NAME, DB_VERSION);
   open.onupgradeneeded = () => {
-    if (!open.result.objectStoreNames.contains(STORE)) open.result.createObjectStore(STORE, { keyPath: 'completionId' });
+    const db = open.result;
+    if (!db.objectStoreNames.contains(EXCHANGES)) db.createObjectStore(EXCHANGES, { keyPath: 'completionId' });
+    if (!db.objectStoreNames.contains(DEPLOYMENTS)) db.createObjectStore(DEPLOYMENTS, { keyPath: 'model' });
   };
   const db = await request(open);
   try {
-    return await request(op(db.transaction(STORE, mode).objectStore(STORE)));
+    return await request(op(db.transaction(name, mode).objectStore(name)));
   } finally {
     db.close();
   }
 }
 
 export async function putExchange(x: StoredExchange): Promise<void> {
-  await withStore('readwrite', (s) => s.put(x));
+  await withStore(EXCHANGES, 'readwrite', (s) => s.put(x));
 }
 
 export function getExchange(completionId: string): Promise<StoredExchange | undefined> {
-  return withStore('readonly', (s) => s.get(completionId) as IDBRequest<StoredExchange | undefined>);
+  return withStore(EXCHANGES, 'readonly', (s) => s.get(completionId) as IDBRequest<StoredExchange | undefined>);
 }
 
 export async function listExchanges(): Promise<StoredExchange[]> {
-  const all = await withStore('readonly', (s) => s.getAll() as IDBRequest<StoredExchange[]>);
+  const all = await withStore(EXCHANGES, 'readonly', (s) => s.getAll() as IDBRequest<StoredExchange[]>);
   return all.sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+}
+
+/** Bumped whenever the shape of VerifiedDeployment (SDK result) changes, so a row from an older deploy is a miss, not a crash. */
+const DEPLOYMENT_ROW_VERSION = 1;
+
+interface DeploymentRow {
+  model: string;
+  v: number;
+  /** The attestation policy the row was verified under; a different policy is a miss. */
+  policyKey: string;
+  deployment: VerifiedDeployment;
+}
+
+export async function putDeployment(model: string, policyKey: string, deployment: VerifiedDeployment): Promise<void> {
+  const row: DeploymentRow = { model, v: DEPLOYMENT_ROW_VERSION, policyKey, deployment };
+  await withStore(DEPLOYMENTS, 'readwrite', (s) => s.put(row));
+}
+
+export async function getDeployment(model: string, policyKey: string): Promise<VerifiedDeployment | undefined> {
+  const row = await withStore(DEPLOYMENTS, 'readonly', (s) => s.get(model) as IDBRequest<Partial<DeploymentRow> | undefined>);
+  if (!row || row.v !== DEPLOYMENT_ROW_VERSION || row.policyKey !== policyKey) return undefined;
+  const d = row.deployment;
+  const wellFormed = typeof d === 'object' && d !== null && typeof d.verifiedAt === 'string' && Array.isArray(d.models) && d.models.length > 0 && typeof d.gateway === 'object' && d.gateway !== null;
+  return wellFormed ? d : undefined;
 }

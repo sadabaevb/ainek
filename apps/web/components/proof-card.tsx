@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { memo, useMemo, type ReactNode } from 'react';
 import { toDisclosure } from '@ainek/proof';
-import { useT } from '@/app/providers';
+import { useConfig, useT } from '@/app/providers';
 import { STEPS_AFTER_SEND, type ChatOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
 import { seconds, short } from '@/lib/format';
-import { verificationCenterUrl } from '@/lib/links';
+import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { CheckList, Row } from './checks';
 
 function RedCard({ title, body, lines }: { title: string; body?: string; lines: ReactNode[] }) {
@@ -26,6 +26,7 @@ function RedCard({ title, body, lines }: { title: string; body?: string; lines: 
 
 export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOutcome }) {
   const { t } = useT();
+  const cfg = useConfig();
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
   if (outcome.kind === 'failed') {
@@ -65,6 +66,8 @@ export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOut
   const { proof, deployment, modelAttestation: m, logEntry, keyVerdict, exchange, report, logSource } = outcome;
   const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
   const since = new Date(Number(logEntry.observed_at)).toISOString().slice(0, 10);
+  const commitShort = short(proof.commit ?? '');
+  const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
   const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
 
   return (
@@ -75,7 +78,13 @@ export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOut
       <Row status="ok" label={t.rowKey}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}</Row>
       <Row status="ok" label={t.rowHashes}>{t.hashesOk}</Row>
       <Row status="ok" label={t.rowE2ee}>{t.e2eeYes}</Row>
-      <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain}>{proof.commitTx ? t.chainTx(short(proof.commit ?? '')) : `${t.chainPending} (commit ${short(proof.commit ?? '')})`}</Row>
+      <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain}>
+        {proof.commitTx ? (
+          <>{t.chainTx(commitShort)} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>
+        ) : (
+          `${chainText} (commit ${commitShort})`
+        )}
+      </Row>
       <div className="actions">
         <Link className="btn" href={`/verify?id=${encodeURIComponent(proof.completionId)}`}>{t.reverify}</Link>
         <a className="btn" href={vcUrl} target="_blank" rel="noreferrer">{t.openVc}</a>

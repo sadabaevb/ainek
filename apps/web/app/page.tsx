@@ -1,10 +1,13 @@
 'use client';
 // Chat with a proof card per reply. The page only renders; lib/flow.ts does the work step by step.
+// The wallet is a React hook, so the page hands flow a committer callback for the on-chain step (SPEC §4.2).
 import { memo, useEffect, useRef, useState } from 'react';
+import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
 import { describeError } from '@/lib/errors';
-import { runChat, type ChatMessage, type ChatOutcome, type StepEvent } from '@/lib/flow';
+import { commitOutcome, runChat, type ChatMessage, type ChatOutcome, type Committer, type StepEvent } from '@/lib/flow';
+import { commitProofOnChain } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
 
 interface Turn {
@@ -35,6 +38,9 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
 export default function ChatPage() {
   const cfg = useConfig();
   const { t } = useT();
+  const wallet = useNearWallet();
+  const walletRef = useRef(wallet); // the commit runs after an await: read the wallet as it is then, not as it was
+  walletRef.current = wallet;
   const [model, setModel] = useState(cfg.model);
   const [tamper, setTamper] = useState(false);
   const [input, setInput] = useState('');
@@ -49,7 +55,14 @@ export default function ChatPage() {
     bottom.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns.length]);
 
+  /** NearProvider restores a saved session asynchronously; a cached flow can finish first, so give it a moment before deciding there is no wallet. */
+  const walletReady = async () => {
+    for (let i = 0; i < 50 && walletRef.current.loading; i++) await new Promise((r) => setTimeout(r, 100));
+  };
+
   const patch = (idx: number, fn: (turn: Turn) => Turn) => setTurns((prev) => prev.map((turn, i) => (i === idx ? fn(turn) : turn)));
+  const step = (idx: number, e: StepEvent) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) }));
+  const setOutcome = (idx: number, outcome: ChatOutcome) => patch(idx, (turn) => ({ ...turn, outcome }));
 
   async function send() {
     const content = input.trim();
@@ -61,8 +74,17 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) })) });
-      patch(idx, (turn) => ({ ...turn, outcome }));
+      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => step(idx, e) });
+      setOutcome(idx, outcome);
+      if (outcome.kind === 'verified') {
+        // Off the critical path: the card is already on screen, the composer unlocks, the commit lands when it lands.
+        void (async () => {
+          await walletReady();
+          const { signedAccountId, callFunctionRaw } = walletRef.current;
+          const committer: Committer | null = signedAccountId ? (proof) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
+          setOutcome(idx, await commitOutcome(outcome, committer, (e) => step(idx, e)));
+        })().catch((err: unknown) => step(idx, { id: 'commit', status: 'skipped', detail: `commit failed: ${describeError(err)}; commit kept locally` }));
+      }
     } catch (err) {
       // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
       patch(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err) } }));

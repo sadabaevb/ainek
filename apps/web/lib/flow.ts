@@ -1,6 +1,7 @@
 // The Tier-1 client flow (SPEC §7.1) as a list of steps the page shows live:
 //   verify evidence in the browser → fail-closed check against the public log → E2EE send →
-//   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB.
+//   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
+//   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 import { buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
@@ -19,11 +20,12 @@ import {
   type Exchange,
   type VerifiedDeployment,
 } from './nearai-browser';
-import { putExchange } from './store';
+import { putExchange, type StoredExchange } from './store';
+import { isMethodNotFound } from './wallet';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
-export type StepId = 'metadata' | 'attestation' | 'key-log' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store';
+export type StepId = 'metadata' | 'attestation' | 'key-log' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store' | 'commit';
 export type StepStatus = 'running' | 'ok' | 'fail' | 'skipped';
 export interface StepEvent {
   id: StepId;
@@ -34,19 +36,25 @@ export interface StepEvent {
 /** Steps that run after the message has left the device: a failure there is "reply not provable", not "nothing was sent". */
 export const STEPS_AFTER_SEND: ReadonlySet<StepId> = new Set<StepId>(['signature', 'sdk-check', 'proof', 'store']);
 
+/** What happened to the on-chain commit of a verified reply (SPEC §4.2); `committed` puts `commitTx` on the proof. */
+export type CommitStatus = 'pending' | 'no-wallet' | 'not-deployed' | 'failed' | 'committed';
+
+export interface VerifiedOutcome {
+  kind: 'verified';
+  reply: string;
+  deployment: VerifiedDeployment;
+  modelAttestation: VerifiedModelAttestation;
+  logSource: 'contract' | 'sample';
+  keyVerdict: KeyLogVerdict;
+  logEntry: KeyEntry;
+  exchange: Exchange;
+  proof: ModelProof;
+  report: VerifyReport;
+  commit: CommitStatus;
+}
+
 export type ChatOutcome =
-  | {
-      kind: 'verified';
-      reply: string;
-      deployment: VerifiedDeployment;
-      modelAttestation: VerifiedModelAttestation;
-      logSource: 'contract' | 'sample';
-      keyVerdict: KeyLogVerdict;
-      logEntry: KeyEntry;
-      exchange: Exchange;
-      proof: ModelProof;
-      report: VerifyReport;
-    }
+  | VerifiedOutcome
   | { kind: 'refused'; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
   /** `reply` is present when the failure happened after the model had already answered. */
@@ -140,14 +148,41 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
   }, ({ proof, report }) => `${report.checks.filter((c) => c.status === 'ok').length}/${report.checks.length} checks; commit ${proof.commit?.slice(0, 12)}… (salt stays on this device)`);
 
   // 7. Keep bytes + proof locally (best effort: a private window may refuse).
+  const outcome: VerifiedOutcome = { kind: 'verified', reply: exchange.reply, deployment, modelAttestation: signer, logSource: log.source, keyVerdict, logEntry, exchange, proof, report, commit: 'pending' };
   try {
-    await putExchange({ completionId: exchange.completionId, model, sentAt: exchange.sentAt, requestBody: exchange.requestBody, responseBody: exchange.responseBody, reply: exchange.reply, proof, logEntry });
+    await putExchange(storedExchangeOf(outcome));
     emit({ id: 'store', status: 'ok', detail: 'raw bytes, proof and salt saved in this browser (IndexedDB)' });
   } catch (err) {
     emit({ id: 'store', status: 'skipped', detail: `could not save locally: ${describeError(err)}` });
   }
+  return outcome;
+}
 
-  return { kind: 'verified', reply: exchange.reply, deployment, modelAttestation: signer, logSource: log.source, keyVerdict, logEntry, exchange, proof, report };
+function storedExchangeOf(o: VerifiedOutcome): StoredExchange {
+  const { exchange } = o;
+  return { completionId: exchange.completionId, model: o.proof.model, sentAt: exchange.sentAt, requestBody: exchange.requestBody, responseBody: exchange.responseBody, reply: exchange.reply, proof: o.proof, logEntry: o.logEntry };
+}
+
+/** Step 8, after the card is already on screen: commit the salted hash on NEAR (SPEC §4.2) through the caller's wallet, or record why not. Never throws. */
+export type Committer = (proof: ModelProof) => Promise<string>;
+
+export async function commitOutcome(outcome: VerifiedOutcome, committer: Committer | null, emit: Emit): Promise<VerifiedOutcome> {
+  if (!committer) {
+    emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
+    return { ...outcome, commit: 'no-wallet' };
+  }
+  emit({ id: 'commit', status: 'running', detail: `commit_proof(${short(outcome.proof.commit ?? '')}, "model", ${outcome.proof.logIndex})` });
+  try {
+    const commitTx = await committer(outcome.proof);
+    const committed: VerifiedOutcome = { ...outcome, proof: { ...outcome.proof, commitTx }, commit: 'committed' };
+    emit({ id: 'commit', status: 'ok', detail: `commit ${short(outcome.proof.commit ?? '')} recorded in transaction ${short(commitTx)}` });
+    putExchange(storedExchangeOf(committed)).catch(() => undefined);
+    return committed;
+  } catch (err) {
+    const notDeployed = isMethodNotFound(err);
+    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? 'commit_proof is not in the contract yet (SPEC §4.2 lands next): commit kept locally' : `commit failed: ${describeError(err)}; commit kept locally` });
+    return { ...outcome, commit: notDeployed ? 'not-deployed' : 'failed' };
+  }
 }
 
 /** The user picked the Incognito model (SPEC §3.9): no model evidence, no E2EE; plaintext goes through our proxy and the gateway, and the card says so. */

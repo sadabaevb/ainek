@@ -17,6 +17,7 @@ import {
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
+import { getDeployment, putDeployment } from './store';
 
 const SIGNING_ALGO = 'ed25519' as const;
 const CACHE_TTL_MS = 60 * 60 * 1000;
@@ -64,8 +65,9 @@ class Cache<T> {
     const hit = this.entries.get(key);
     return hit && Date.now() - hit.at < CACHE_TTL_MS ? hit.value : undefined;
   }
-  set(key: string, value: T): T {
-    this.entries.set(key, { value, at: Date.now() });
+  /** `at` lets a value rehydrated from IndexedDB keep its original verification time, so the TTL is counted once. */
+  set(key: string, value: T, at = Date.now()): T {
+    this.entries.set(key, { value, at });
     return value;
   }
 }
@@ -111,13 +113,30 @@ function verifyModels(model: string, policy: AttestationPolicy): Promise<Verifie
   });
 }
 
-/** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min. */
+/** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min in memory and in IndexedDB (same TTL the SDK uses), so a reload does not repeat the cold check. */
 export async function verifyDeployment(model: string, policy: AttestationPolicy): Promise<VerifiedDeployment> {
-  const cached = deploymentCache.get(model);
+  const policyKey = policyKeyOf(policy);
+  const cacheKey = `${model}|${policyKey}`;
+  if (!deploymentCache.get(cacheKey)) {
+    const stored = await getDeployment(model, policyKey).catch(() => undefined);
+    const at = stored ? Date.parse(stored.verifiedAt) : Number.NaN;
+    if (stored && Date.now() - at < CACHE_TTL_MS) {
+      deploymentCache.set(cacheKey, stored, at);
+      if (!gatewayCache.get('gateway')) gatewayCache.set('gateway', stored.gateway, at); // never replace a fresher entry
+    }
+  }
+  const cached = deploymentCache.get(cacheKey);
   if (cached) return { ...cached, tookMs: 0 };
   const t0 = performance.now();
   const [gateway, models] = await Promise.all([verifyGateway(policy), verifyModels(model, policy)]);
-  return deploymentCache.set(model, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
+  const verified = deploymentCache.set(cacheKey, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
+  putDeployment(model, policyKey, verified).catch(() => undefined); // best effort
+  return verified;
+}
+
+/** Stable text for the policy a verification ran under; the cache treats a different policy as a miss. */
+function policyKeyOf(policy: AttestationPolicy): string {
+  return JSON.stringify({ tcb: [...policy.acceptedTcbStatuses].sort(), gpuEvidence: 'required' });
 }
 
 // No Accept-Encoding here: browsers drop it as a forbidden header; the proxy asks upstream for identity itself.
