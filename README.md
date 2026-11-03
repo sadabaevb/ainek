@@ -55,7 +55,9 @@ pnpm demo                        # replay mode, no API key, no network (~1 s): r
                                  #   NEAR AI SDK's own checks (Intel TDX quote + recorded collateral, NVIDIA NRAS verdict,
                                  #   compose measurements), applies the fail-closed log rule, re-checks the signed response,
                                  #   prints ✓/✗ per step and the proof card
-pnpm demo:live                   # needs NEARAI_API_KEY: live E2EE request → proof → on-chain commit (tx …)
+pnpm demo:live                   # needs NEARAI_API_KEY: live verification from Node (TLS pinned to the attested gateway),
+                                 #   fail-closed check against the public log, one E2EE request, signature, proof card;
+                                 #   add --record to refresh the E2EE sample in docs/samples
 pnpm -F web dev                  # needs NEARAI_API_KEY (server-side only): open http://localhost:3000, send "hello" →
                                  #   the browser verifies the TEE evidence itself (~25 s cold, then cached 60 min), encrypts to the
                                  #   attested model key, checks the signature and shows the proof card with ✓ rows

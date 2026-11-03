@@ -9,6 +9,7 @@
     "dev": "pnpm -F web dev",
     "demo": "pnpm -F demo replay",
     "demo:tamper": "pnpm -F demo tamper",
+    "demo:live": "pnpm -F demo live",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"

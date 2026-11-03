@@ -46,3 +46,10 @@ test('disclosure round-trips bytes, proof and log entry and still verifies', () 
   assert.deepEqual(Array.from(back.responseBody), Array.from(responseBody));
   assert.equal(verifyModelProof(back.proof, back.requestBody, back.responseBody, back.logEntry).ok, true);
 });
+
+test('the recorded E2EE exchange verifies end to end (ciphertext bytes, provider_tee signature, sample log entry)', () => {
+  const { proof: e2ee } = readRepoJson<{ proof: ModelProof }>('docs/samples/model-proof-e2ee.sample.json');
+  const report = verifyModelProof(e2ee, readRepoFile('docs/samples/e2ee-chat-request.raw.json'), readRepoFile('docs/samples/e2ee-chat-response.raw.json'), entry);
+  assert.equal(report.ok, true, JSON.stringify(report.checks));
+  assert.equal(e2ee.e2ee, true);
+});

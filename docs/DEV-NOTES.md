@@ -448,3 +448,17 @@ OutLayer по-прежнему упирается в 502 от `test.fastfs.io` (
 `normalizeHex`, чтобы `0x`/регистр на проводе не давал ложный «ключа нет в логе».
 Что верификатору Дастана остаётся: `GET /v1/attestation/report` сырым (байты сохранить), `toModelAttestation` → `verifyModelAttestation`
 (и при желании свой `gpuEvidence`, который захватывает NRAS JWT, как в `apps/demo/src/verifiers.ts`) → `buildKeyEntryInput` → `log_key`.
+
+## 2026-11-03 — E2EE-сэмпл и `pnpm demo:live` (Бектур)
+
+`apps/demo/src/live.ts`: тот же поток, что в браузере, но из Node с серверным ключом и по manual-flow из guide: `AttestationClient`
+(`/node`) → `verifyGatewayAttestation` (TLS-привязка `attested`, дальше `createPinnedTlsFetch`) → `verifyModelAttestation` →
+сверка с логом (контракт, при недоступности — образец, который доверяет собственному верификатору) → `prepareE2eeChatRequest` +
+pinned fetch с клоном ответа до расшифровки → подпись → `verifyModelResponse` → `buildModelProof` → карточка. Коммит в цепочку
+в этом режиме не делается (ключа аккаунта у скрипта нет). `--record` пишет `e2ee-*.json` и `model-proof-e2ee.sample.json` в
+`docs/samples`; proof для записи привязан к образцу лога (`key-entry.sample.json`), чтобы офлайн-replay был самодостаточен.
+Прогон 3 ноября: шлюз UpToDate/attested, модель 5,7 с, запись #0 из `ainek-log-dastan.testnet`, 293 Б шифртекста туда, 989 Б
+обратно, `provider_tee`, proof 8/8. Теперь в `pnpm demo` строка «End-to-end encryption» — ✓ по записанному обмену; открытый
+текст лежит отдельно в `e2ee-plaintext.json` и proof им не покрыт, о чём replay говорит прямо.
+Ловушка на будущее: корневой `.env` имеет приоритет над умолчаниями кода, и старый `AINEK_CONTRACT=ainek.testnet` там уводит
+live-режим на несуществующий аккаунт; обновить `.env` по `.env.example`.
