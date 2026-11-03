@@ -262,7 +262,16 @@
       "verifier": "v1.ainek.testnet",
       "canonical": "{\"compose_hash\":\"a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f\",\"image_digests\":[\"sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917\",\"sha256:742dbd2e61c8709b930712c38958386c3cb3928e09eeb1f1e490600c127e2edb\",\"sha256:6e035c8fb99c1d31f41760d25af178683a658cca4afd73cd0d366fbb5bf884be\",\"sha256:079a14b41deb11e0e27f9b69648e8b3d89bd6fb9ccf6071643b8f447fa415085\"],\"ita_jwt_hash\":\"\",\"model\":\"z-ai/glm-5.3-flash\",\"nonce\":\"fe7956b428eb5f489d46a23b7d7d8992c4ebe50da538604b9d81a5746ca3de55\",\"nras_result_hash\":\"\",\"observed_at\":\"1793636040000\",\"report_hash\":\"4cdab15a163e270f7502d42c18d7b24161279094f2de76b840678be3d0252cef\",\"signing_address\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"signing_algo\":\"ed25519\",\"signing_public_key\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"tcb_status\":\"UpToDate\"}",
       "entry_hash": "0680d3103539dc6aeed54da21cff5313bb0d758d9c18f3e94e2a482a1e1ea398",
-      "rule": "sha256(utf8(prev_hash hex) || utf8(canonical_json(input)) || utf8(verifier)) — convention to confirm with Dastan"
+      "rule": "sha256(utf8(prev_hash hex) || utf8(canonical_json(input)) || utf8(verifier)) — convention to confirm with Dastan",
+      "recorded_on_chain": {
+        "_note": "Entry #0 as logged by Dastan on 2026-11-03 from this same input with a fresh observed_at (recorded, not live: a contract redeploy changes it). Rust and TS agree on this hash byte for byte.",
+        "contract": "ainek-log-dastan.testnet",
+        "verifier": "ainek-dev-dastan.testnet",
+        "observed_at": "1793718606738",
+        "prev_hash": "",
+        "entry_hash": "5b2e5e5b0e3314b8efc47188eef0c400c36842fdd87f050587fffecdc6116979",
+        "log_key_tx": "FvCMG7Rp2wJtk7ZMamxdXbUMxWWEvoaiQTdJtgSA2fvs"
+      }
     }
   }
 }

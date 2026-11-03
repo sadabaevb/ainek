@@ -1,5 +1,5 @@
 // Build the KeyEntryInput (SPEC §4.1) a verifier logs after `verifyModelAttestation` succeeded. One implementation
-// for the verifier daemon and the replay demo, so field conventions (digest prefix, nonce form, hashes) cannot drift.
+// for every verifier instance, so field conventions (digest prefix, nonce form, hashes) cannot drift.
 import { sha256Hex } from './hash.ts';
 import { KeyEntryInput, type SigningAlgo } from './schema.ts';
 
