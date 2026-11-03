@@ -41,10 +41,11 @@ function entriesProblem(value) {
 }
 
 console.log(`ABI check for ${account} via ${rpc}`);
-const head = await check('head', {}, (v) => (typeof v?.index === 'number' && typeof v?.entry_hash === 'string' ? null : 'expected { index: u64, entry_hash: String }'));
+const head = await check('head', {}, (v) => (v === null || (typeof v?.index === 'number' && typeof v?.entry_hash === 'string') ? null : 'expected { index: u64, entry_hash: String } or null for an empty log'));
+if (head === null) console.log('  — the log is empty (head = null)');
 const latest = await check('latest_keys', { model, max_age_ns: '86400000000000' }, entriesProblem);
 await check('entries_since', { index: 0, limit: 10 }, entriesProblem);
-if (head && typeof head.index === 'number') {
+if (head != null && typeof head.index === 'number') {
   await check('entry', { index: head.index }, (v) => (v == null ? 'returned nothing for the head index' : KeyEntry.safeParse(v).success ? null : 'does not match KeyEntry'));
 }
 if (Array.isArray(latest) && latest.length === 0) console.log(`  — latest_keys is empty for ${model} in the last 24 h: the client would refuse to send (fail-closed)`);

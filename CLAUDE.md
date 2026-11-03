@@ -7,7 +7,7 @@ Team: Dastan (Rust, crypto) builds the contract, the verifier daemon, the OutLay
 contract-facing parts of the agent; Bektur (frontend/fullstack: Next.js, TypeScript) builds the client, proof card,
 pages, `packages/proof` and the agent's Telegram/LLM side. Both work full-time on this until Nov 14 and both are new
 to NEAR, so explain NEAR-specific decisions in plain comments and in docs/DEV-NOTES.md. Prefer official NEAR tooling
-and examples over clever custom code. Every Rust component ships with `near-workspaces` / unit tests.
+and examples over clever custom code. Every Rust component ships with unit tests plus a sandbox test (`near-sandbox` + `near-api`, as the official `cargo-near` template generates).
 
 ## What we are building (one paragraph)
 
@@ -58,7 +58,7 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
   and `X-Encrypt-All-Fields: true` (tool calls encrypted). Use `/v1/chat/completions`, never
   `/v1/responses` (no E2EE, best-effort signatures).
 - NEAR: `near-api-js` 7.x or `near-kit` 0.20.x for the client and services; `near-cli-rs` for ops;
-  contract on `near-sdk-rs` built with `cargo-near`, tests with `near-workspaces`. Testnet by default.
+  contract on `near-sdk-rs` built with `cargo-near`, sandbox tests with `near-sandbox` + `near-api`. Testnet by default.
 - OutLayer: Rust SDK crate `outlayer = "0.2"`, WASI-P1 is enough for the policy job (stdin JSON ->
   stdout JSON, no HTTP). Output must be <= 900 bytes.
 - Telegram: grammY. Frontend: Next.js (App Router), TypeScript strict.
@@ -112,7 +112,7 @@ pnpm -F web dev            Next.js dev server
 pnpm -F verifier start     verifier daemon
 pnpm -F agent start        agent service
 cargo near build           build the contract (in contracts/ainek)
-cargo test                 contract tests (near-workspaces sandbox)
+cargo test                 contract tests (unit + near-sandbox)
 ```
 
 ## Definition of done for the submission (Nov 14)

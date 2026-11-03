@@ -404,3 +404,17 @@ https://testnet.nearblocks.io/txns/3wE9RBaubngqhyWXKMqWygKsokCbyEKwUDvtTsNMcEs8)
   координатора. Для нас: `Action` и так виден в `propose_action`; политика — только через секреты, никогда через stdin.
 - (г) Да, если `PROTECTED_…:ed25519` даёт seed/ключ в env (см. (а)); аттестация коммитит `wasm_hash`, hash входа и выхода, TDX quote.
 - Оплата: HTTPS API требует payment key (стейбл ≥ $1, на testnet `keys topup --usd`); режим NEAR платит NEAR с аккаунта — работает без ключа.
+
+## 2026-11-03 — первая живая интеграция клиент ↔ контракт (Бектур)
+
+Дастан задеплоил v1 на `ainek-log-dastan.testnet` (PR #6), верификатор `ainek-dev-dastan.testnet`, запись #0 для
+`z-ai/glm-5.3-flash`. `pnpm -F demo check-contract ainek-log-dastan.testnet` — 4/4 ✓. Главная проверка: `entry_hash` записи #0
+в цепочке совпал с нашим `entryHashOf` байт в байт (`5b2e5e5b…6979`), то есть конвенция склейки и канонический JSON сошлись
+между Rust и TS без правок. Его находка: дерево near-sdk включает `serde_json/preserve_order`, поэтому `to_value` не сортирует
+ключи — он написал явный канонизатор и проверил его по `docs/test-vectors/canonical.json`; ровно на этот случай векторы и делались.
+
+Клиент в браузере против живого лога: шаг key-log «confirmed by ainek-dev-dastan.testnet (source: contract)», зелёная карточка,
+4,4 с аттестация. Теперь по умолчанию `AINEK_LOG_SOURCE=contract` с его аккаунтами; `sample` остаётся офлайн-режимом.
+SPEC: `head()` → `Option`, `null` для пустого лога; клиент `head` не использует, `check-contract` принимает `null`.
+Осталось от §4.2: `commit_proof` / `proof_commit` / `deposit_storage` — у него следующим шагом; у нас строка «On NEAR» ждёт их.
+OutLayer по-прежнему упирается в 502 от `test.fastfs.io` (проверено в 21:45), срок решения — 12:00 4 ноября.
