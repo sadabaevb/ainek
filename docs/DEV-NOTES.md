@@ -232,3 +232,32 @@ README, SPEC §4.3).
 живёт на сервере, то есть шифрует relay, а не браузер — переезд шифрования в клиент входит в сессию 3 (`tier1-client.md`, п. 3).
 
 Следующий шаг: replay-режим `pnpm demo` на `docs/samples/` (офлайн-проверка + печать карточки в терминал), затем сессия 3.
+
+## 2026-11-03 — день 1b, спайк A (Дастан): hello-контракт на testnet
+
+Тулчейн: `cargo-near 0.22.0`, `near-cli-rs 0.30.1` (`cargo +1.93 install --locked cargo-near near-cli-rs` — near-cli-rs
+0.30 требует rustc ≥ 1.93; curl-инсталлеры из skill тоже работают). Контракт закреплён на `1.93.0` в
+`contracts/ainek/rust-toolchain.toml` (rustup ставит его сам при первом `cargo` в папке).
+
+Скелет — `cargo near new` (шаблон-аукцион), из него взяты `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, тест-харнес;
+`.github/workflows` шаблона не взяты (GitHub читает только корневой `.github`). Тесты — **`near-sandbox` + `near-api`**
+(так генерирует официальный шаблон и рекомендует skill), а не `near-workspaces`, как написано в CLAUDE.md; решено с Дастаном.
+`cargo test` поднимает локальную ноду (первый прогон ~60 с, качает бинарь sandbox).
+
+Контракт-спайк: `log_key(entry: String) -> u64` (append в `store::Vector<String>`, событие NEP-297 `ainek.key_logged`),
+view `head() -> Option<{index, entry}>`. Без `#[init]`: `impl Default` — состояние создаётся при первом вызове.
+
+Команды (в `contracts/ainek`):
+```
+cargo test                                            # 3 unit + 1 sandbox
+cargo near build non-reproducible-wasm                # target/near/ainek.wasm, ~110 KB
+near account create-account sponsor-by-faucet-service ainek-dev-dastan.testnet autogenerate-new-keypair save-to-keychain network-config testnet create
+cargo near deploy build-non-reproducible-wasm ainek-dev-dastan.testnet without-init-call network-config testnet sign-with-keychain send
+near contract call-function as-transaction ainek-dev-dastan.testnet log_key json-args '{"entry":"spike-key-5a0210f2"}' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' sign-as ainek-dev-dastan.testnet network-config testnet sign-with-keychain send
+near contract call-function as-read-only ainek-dev-dastan.testnet head json-args '{}' network-config testnet now
+```
+Результаты: деплой `6zbX44fbjpcnFqioNYrXu1UyqrfioC2DP9GjZ3oHjnZD` (0.000105 NEAR),
+`log_key` → индекс 0, tx `3wE9RBaubngqhyWXKMqWygKsokCbyEKwUDvtTsNMcEs8` (0.000031 NEAR,
+https://testnet.nearblocks.io/txns/3wE9RBaubngqhyWXKMqWygKsokCbyEKwUDvtTsNMcEs8), в логах
+`EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged",...}`; `head()` → `{"entry":"spike-key-5a0210f2","index":0}`.
+Ключ аккаунта — в macOS keychain (`save-to-keychain`), не в репо.
