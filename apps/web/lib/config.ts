@@ -4,6 +4,6 @@ import type { TcbStatus } from '@nearai/inference-sdk';
 import type { AinekConfig } from '@ainek/proof';
 
 export interface PublicConfig extends Omit<AinekConfig, 'acceptedTcbStatuses'> {
-  /** Narrowed to the SDK's TcbStatus union by the server. */
+  /** Same strings as @ainek/proof's TcbStatusName, typed as the SDK's union for the verify calls. */
   acceptedTcbStatuses: TcbStatus[];
 }

@@ -36,3 +36,5 @@ export { ainekConfigFromEnv } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { viewFunction, keyLogReader } from './near-view.ts';
 export type { KeyLogReader } from './near-view.ts';
+export { TCB_STATUSES } from './config.ts';
+export type { TcbStatusName } from './config.ts';

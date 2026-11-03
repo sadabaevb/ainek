@@ -50,12 +50,24 @@ export interface RecordedExchange {
   signature: SignatureFile;
   proof: ModelProof;
   /** Present for the E2EE exchange only: what the recording client sent and decrypted; not covered by the proof. */
-  plaintext?: { prompt: string; reply: string };
+  plaintext?: { prompt: string; reply: string; recordedAt: string };
 }
 
 /** The recorded sample log entry (a fixture, not read from the chain). */
 export function loadSampleLogEntry(): KeyEntry {
   return readJson<{ entry: KeyEntry }>('key-entry.sample.json').entry;
+}
+
+function e2eeExchange(): RecordedExchange {
+  const plaintext = readJson<{ prompt: string; reply: string; recordedAt: string }>('e2ee-plaintext.json');
+  return {
+    label: `E2EE exchange (recorded ${plaintext.recordedAt.slice(0, 10)})`,
+    rawRequest: readBytes('e2ee-chat-request.raw.json'),
+    rawResponse: readBytes('e2ee-chat-response.raw.json'),
+    signature: readJson<SignatureFile>('e2ee-signature.json'),
+    proof: readJson<{ proof: ModelProof }>('model-proof-e2ee.sample.json').proof,
+    plaintext,
+  };
 }
 
 export function loadRecording(): Recording {
@@ -68,20 +80,13 @@ export function loadRecording(): Recording {
     logEntry: loadSampleLogEntry(),
     exchanges: [
       {
-        label: 'plaintext exchange (2026-11-02)',
+        label: 'plaintext exchange (recorded 2026-11-02)',
         rawRequest: readBytes('chat-request.raw.json'),
         rawResponse: readBytes('chat-response.raw.json'),
         signature: readJson<SignatureFile>('signature.json'),
         proof: readJson<{ proof: ModelProof }>('model-proof.sample.json').proof,
       },
-      {
-        label: 'E2EE exchange (2026-11-03)',
-        rawRequest: readBytes('e2ee-chat-request.raw.json'),
-        rawResponse: readBytes('e2ee-chat-response.raw.json'),
-        signature: readJson<SignatureFile>('e2ee-signature.json'),
-        proof: readJson<{ proof: ModelProof }>('model-proof-e2ee.sample.json').proof,
-        plaintext: readJson<{ prompt: string; reply: string }>('e2ee-plaintext.json'),
-      },
+      e2eeExchange(),
     ],
   };
 }

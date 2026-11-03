@@ -7,14 +7,16 @@ import {
   verifyModelResponse,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { evaluateKeyLog, shortHex as short, verifyModelProof, type KeyEntry } from '@ainek/proof';
+import { ainekConfigFromEnv, evaluateKeyLog, shortHex as short, verifyModelProof, type KeyEntry } from '@ainek/proof';
 import { loadRecording } from './evidence.ts';
 import { FAIL, NA, OK, describe, head, markOf, line as say } from './term.ts';
 import { toGatewayAttestation, toModelAttestation } from './report.ts';
 import { createRecordedGpuVerifier, createRecordedTdxVerifier, type RecordedGpuVerdict } from './verifiers.ts';
 
-const TRUSTED_VERIFIERS = ['v1.ainek.testnet', 'v2.ainek.testnet', 'v3.ainek.testnet'];
-const QUORUM = 1; // demo; production clients use 2
+// Replay is the offline sample world: the shared config's sample-mode defaults (trust set, quorum) apply.
+const cfg = ainekConfigFromEnv({ ...process.env, AINEK_LOG_SOURCE: 'sample' });
+const TRUSTED_VERIFIERS = cfg.trustedVerifiers;
+const QUORUM = cfg.quorum;
 const tamper = process.argv.includes('--tamper');
 
 let failures = 0;
@@ -73,7 +75,7 @@ const entries: KeyEntry[] = [rec.logEntry];
 const attestedKey = verifiedModel?.signer.signingAddress ?? model.signing_address;
 const seenKey = tamper ? 'ab'.repeat(32) : attestedKey;
 if (tamper) line(NA, `tamper mode: the client is shown key ${short(seenKey)} instead of the attested ${short(attestedKey)}`);
-line(NA, `log source: docs/samples/key-entry.sample.json (sample entry; the live demo reads latest_keys on ainek.testnet)`);
+line(NA, `log source: docs/samples/key-entry.sample.json (sample entry; the live demo reads latest_keys on ${cfg.contract})`);
 const verdict = evaluateKeyLog(entries, {
   model: model.model_name,
   signingAddress: seenKey,

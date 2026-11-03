@@ -8,7 +8,6 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   AttestationClient,
-  DEFAULT_NEAR_AI_CLOUD_BASE_URL,
   NO_ALIASING_HEADER,
   createPinnedTlsFetch,
   findModelAttestationForSignature,
@@ -20,7 +19,7 @@ import {
   type CompletionSignature,
   type TcbStatus,
 } from '@nearai/inference-sdk/node';
-import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, keyLogReader, shortHex as short, verifyModelProof, type KeyEntry, type ModelProof } from '@ainek/proof';
+import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, keyLogReader, normalizeHex, shortHex as short, verifyModelProof, type KeyEntry, type ModelProof } from '@ainek/proof';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
 import { FAIL, NA, OK, describe, head, line, markOf } from './term.ts';
 
@@ -28,34 +27,41 @@ const { values: flags } = parseArgs({ options: { record: { type: 'boolean', defa
 const record = flags.record === true;
 const message = String(flags.message);
 
-// Root .env (CLAUDE.md: secrets live in one file). Environment variables already set win.
+// Root .env (CLAUDE.md: secrets live in one file). loadEnvFile never overrides variables already set, so the shell wins.
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
-if (!process.env.NEARAI_API_KEY && existsSync(path.join(repoRoot, '.env'))) process.loadEnvFile(path.join(repoRoot, '.env'));
+if (existsSync(path.join(repoRoot, '.env'))) process.loadEnvFile(path.join(repoRoot, '.env'));
 const apiKey = process.env.NEARAI_API_KEY;
 if (!apiKey) {
   console.error('NEARAI_API_KEY is not set (root .env). The offline replay needs no key: pnpm demo');
   process.exit(2);
 }
 const cfg = ainekConfigFromEnv(process.env);
-const baseUrl = process.env.NEARAI_BASE_URL ?? DEFAULT_NEAR_AI_CLOUD_BASE_URL;
-const { model } = cfg;
+const { model, nearaiBaseUrl: baseUrl } = cfg;
 const SIGNING_ALGO = 'ed25519' as const;
-const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] };
+const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] }; // validated in ainekConfigFromEnv; same names as the SDK's
 
 console.log(`Ainek live: ${model} via ${baseUrl}${record ? ' (recording to docs/samples)' : ''}`);
 const client = new AttestationClient({ apiKey, baseUrl, headers: { [NO_ALIASING_HEADER]: 'true' } });
+
+// 0. The chosen model must support model attestation (flow.ts step 0): never a silent downgrade to plaintext.
+head(`0. Model metadata: ${model}`);
+const meta = await withRetry(() => client.fetchModelMetadata(model));
+if (meta.attestationSupported !== true) refuse(`${model} reports no model attestation (provider ${String(meta.providerType)}): refusing to send in plaintext`);
+line(OK, `provider ${String(meta.providerType)}, model attestation supported`);
 
 // 1–3. Gateway evidence, model evidence and the public log are independent: fetch and verify them together.
 const t0 = performance.now();
 const logPromise = loadLog(model);
 logPromise.catch(() => undefined); // awaited in step 3; a rejection must not surface before then
 const [gateway, models] = await Promise.all([
-  client.fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO }).then((f) => verifyGatewayAttestation({ attestation: f.attestation, clientBinding: f.clientBinding, policy })),
-  client.fetchModelAttestations({ model, signingAlgo: SIGNING_ALGO }).then((f) => Promise.all(f.attestations.map((attestation) => verifyModelAttestation({ attestation, clientBinding: f.clientBinding, policy: { ...policy, gpuEvidence: 'required' } })))),
+  withRetry(() => client.fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO }).then((f) => verifyGatewayAttestation({ attestation: f.attestation, clientBinding: f.clientBinding, policy }))),
+  withRetry(() => client.fetchModelAttestations({ model, signingAlgo: SIGNING_ALGO }).then((f) => Promise.all(f.attestations.map((attestation) => verifyModelAttestation({ attestation, clientBinding: f.clientBinding, policy: { ...policy, gpuEvidence: 'required' } }))))),
 ]);
 const verifiedAt = new Date().toISOString();
-const pinnedFetch = gateway.tlsBinding.kind === 'attested' ? createPinnedTlsFetch(gateway.tlsBinding.spkiFingerprint) : globalThis.fetch;
 head('1. Gateway attestation');
+// Node can observe the TLS peer; a gateway report without the TLS binding means the chat request could not be pinned, so stop.
+if (gateway.tlsBinding.kind !== 'attested') refuse(`gateway TLS binding is ${gateway.tlsBinding.kind}: the chat request cannot be pinned to the attested gateway`);
+const pinnedFetch = createPinnedTlsFetch(gateway.tlsBinding.spkiFingerprint);
 line(OK, `TCB ${gateway.tcbStatus}, signer ${short(gateway.signer.signingAddress)}, TLS binding ${gateway.tlsBinding.kind}`);
 head(`2. Model attestation: ${model}`);
 const modelAttestation = models.find((m) => m.signingPublicKey !== undefined);
@@ -63,17 +69,9 @@ if (!modelAttestation?.signingPublicKey) throw new Error('no verified model atte
 line(OK, `${models.length} report(s) verified in ${((performance.now() - t0) / 1000).toFixed(1)} s: ${models.map((m) => `${short(m.signer.signingAddress)} ${m.tcbStatus}/gpu ${m.gpuEvidence} compose ${short(m.deployment.runtimeMeasurements.composeHash ?? '')}`).join('; ')}`);
 
 head('3. Public key log');
-const log = await logPromise.catch((err: unknown) => {
-  line(FAIL, `public log unavailable (${describe(err)}): not sent (fail-closed)`);
-  console.log('\nResult: REFUSED. Nothing was sent.');
-  return process.exit(1);
-});
-const verdict = evaluateKeyLog(log.entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: log.trusted, quorum: cfg.quorum });
-if (verdict.status !== 'ok') {
-  line(FAIL, `${verdict.detail} (source: ${log.source})`);
-  console.log('\nResult: REFUSED. Nothing was sent.');
-  process.exit(1);
-}
+const log = await logPromise.catch((err: unknown) => refuse(`public log unavailable (${describe(err)})`));
+const verdict = evaluateKeyLog(log.entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
+if (verdict.status !== 'ok') refuse(`${verdict.detail} (source: ${log.source})`);
 const logEntry = verdict.matching[0] as KeyEntry;
 line(OK, `key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')} (source: ${log.source})`);
 
@@ -109,17 +107,25 @@ line(NA, 'commit on NEAR: not in this mode (the web client commits with the wall
 
 console.log('\n┌─ Ainek proof card ─ live ───────────────────────────────────────────');
 console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(signer.deployment.runtimeMeasurements.composeHash ?? '')})`);
-console.log(`│ ${OK} Hardware: Intel TDX ${signer.tcbStatus}, NVIDIA GPU ${signer.gpuEvidence}, gateway TLS ${gateway.tlsBinding.kind}`);
+console.log(`│ ${OK} Hardware: Intel TDX ${signer.tcbStatus}, NVIDIA GPU ${signer.gpuEvidence}; chat request pinned to the attested gateway`);
 console.log(`│ ${OK} Key #${logEntry.index} in the public log, logged by ${logEntry.verifier} (${log.source})`);
 console.log(`│ ${report.ok ? OK : FAIL} Request and response: hashes match the signature made inside the model TEE`);
 console.log(`│ ${OK} End-to-end encryption: yes, encrypted to the attested model key`);
 console.log(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);
 console.log(`└─ Result: ${report.ok ? 'VERIFIED' : 'FAILED'}`);
 
-if (record) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
+if (record && report.ok) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
+else if (record) console.log('\nnot recorded: the run did not verify');
 process.exit(report.ok ? 0 : 1);
 
 // ---- helpers ----
+/** Fail-closed exit: prints the reason as a ✗ line and the REFUSED result. */
+function refuse(reason: string): never {
+  line(FAIL, `${reason}: not sent (fail-closed)`);
+  console.log('\nResult: REFUSED. Nothing was sent.');
+  return process.exit(1);
+}
+
 /** Same as apps/web/lib/nearai-browser.ts withRetry: only SDK-retryable failures are retried. */
 async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
   for (let i = 1; ; i++) {
@@ -132,27 +138,29 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
   }
 }
 
-/** The contract log with the configured trust set; the recorded sample entry only when AINEK_LOG_SOURCE=sample asks for it explicitly. An unreachable contract is a refusal, never a silent fallback. */
-async function loadLog(modelId: string): Promise<{ entries: KeyEntry[]; trusted: string[]; source: string }> {
-  if (cfg.logSource === 'sample') {
-    const entry = loadSampleLogEntry();
-    return { entries: [entry], trusted: [entry.verifier], source: 'sample (docs/samples/key-entry.sample.json, AINEK_LOG_SOURCE=sample)' };
-  }
-  return { entries: await keyLogReader(cfg.rpcUrl, cfg.contract).latestKeys(modelId), trusted: cfg.trustedVerifiers, source: `contract ${cfg.contract}` };
+/** The contract log, or the recorded sample entry only when AINEK_LOG_SOURCE=sample asks for it explicitly (the trust set comes from the shared config in both cases). An unreachable contract is a refusal, never a silent fallback. */
+async function loadLog(modelId: string): Promise<{ entries: KeyEntry[]; source: string }> {
+  if (cfg.logSource === 'sample') return { entries: [loadSampleLogEntry()], source: 'sample (docs/samples/key-entry.sample.json, AINEK_LOG_SOURCE=sample)' };
+  return { entries: await keyLogReader(cfg.rpcUrl, cfg.contract).latestKeys(modelId), source: `contract ${cfg.contract}` };
 }
 
-/** The offline replay verifies against the recorded sample log entry, so the recorded proof binds to it (fixed salt, placeholder tx). */
+/** The offline replay verifies against the recorded sample log entry, so the recorded proof binds to it (fixed salt, placeholder tx). Refuses when the live signer is not the sample's key or the result would not verify, so a key rotation cannot poison the fixtures. */
 function proofBoundToSampleLog(x: { completionId: string; requestBody: Uint8Array; responseBody: Uint8Array; signature: CompletionSignature }): ModelProof {
-  const proof = buildModelProof({ ...x, model, logEntry: loadSampleLogEntry(), verifiedAt, e2ee: true, salt: '0123456789abcdef'.repeat(4) });
+  const sampleEntry = loadSampleLogEntry();
+  if (normalizeHex(sampleEntry.signing_address) !== normalizeHex(x.signature.signer.signingAddress)) throw new Error(`live signer ${short(x.signature.signer.signingAddress)} differs from the sample log entry key ${short(sampleEntry.signing_address)}: re-record attestation-report.json and key-entry.sample.json first`);
+  const proof = buildModelProof({ ...x, model, logEntry: sampleEntry, verifiedAt, e2ee: true, salt: '0123456789abcdef'.repeat(4) });
+  const check = verifyModelProof(proof, x.requestBody, x.responseBody, sampleEntry);
+  if (!check.ok) throw new Error(`recorded proof does not verify: ${check.checks.filter((c) => c.status === 'fail').map((c) => c.detail).join('; ')}`);
   return { ...proof, commitTx: 'SAMPLE-not-committed' };
 }
 
 function recordSamples(x: { completionId: string; requestBody: Uint8Array; responseBody: Uint8Array; signature: CompletionSignature; reply: string }): void {
+  const bound = proofBoundToSampleLog(x); // throws before anything is written
   const write = (name: string, data: string | Uint8Array) => writeFileSync(new URL(name, samplesDir), data);
   write('e2ee-chat-request.raw.json', x.requestBody);
   write('e2ee-chat-response.raw.json', x.responseBody);
   write('e2ee-signature.json', `${JSON.stringify({ text: x.signature.signedText, signature: x.signature.signature, signing_address: x.signature.signer.signingAddress, signing_algo: x.signature.signer.signingAlgo, signature_kind: x.signature.kind }, null, 2)}\n`);
   write('e2ee-plaintext.json', `${JSON.stringify({ _note: 'What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.', model, prompt: message, reply: x.reply, completionId: x.completionId, recordedAt: new Date().toISOString() }, null, 2)}\n`);
-  write('model-proof-e2ee.sample.json', `${JSON.stringify({ _note: 'SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.', proof: proofBoundToSampleLog(x) }, null, 2)}\n`);
+  write('model-proof-e2ee.sample.json', `${JSON.stringify({ _note: 'SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.', proof: bound }, null, 2)}\n`);
   console.log('\nrecorded: e2ee-chat-request.raw.json, e2ee-chat-response.raw.json, e2ee-signature.json, e2ee-plaintext.json, model-proof-e2ee.sample.json');
 }

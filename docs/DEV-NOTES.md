@@ -453,7 +453,7 @@ OutLayer по-прежнему упирается в 502 от `test.fastfs.io` (
 
 `apps/demo/src/live.ts`: тот же поток, что в браузере, но из Node с серверным ключом и по manual-flow из guide: `AttestationClient`
 (`/node`) → `verifyGatewayAttestation` (TLS-привязка `attested`, дальше `createPinnedTlsFetch`) → `verifyModelAttestation` →
-сверка с логом (контракт, при недоступности — образец, который доверяет собственному верификатору) → `prepareE2eeChatRequest` +
+сверка с логом (контракт; образец только по явному `AINEK_LOG_SOURCE=sample`, недоступный RPC = REFUSED) → `prepareE2eeChatRequest` +
 pinned fetch с клоном ответа до расшифровки → подпись → `verifyModelResponse` → `buildModelProof` → карточка. Коммит в цепочку
 в этом режиме не делается (ключа аккаунта у скрипта нет). `--record` пишет `e2ee-*.json` и `model-proof-e2ee.sample.json` в
 `docs/samples`; proof для записи привязан к образцу лога (`key-entry.sample.json`), чтобы офлайн-replay был самодостаточен.
