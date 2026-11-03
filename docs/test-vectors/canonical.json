@@ -1,0 +1,268 @@
+{
+  "_about": "Canonical JSON test vectors shared by packages/proof (TS) and the Rust side (contract entry_hash, policy job decision bytes). Every implementation must reproduce `canonical` byte for byte and `sha256` of its UTF-8 bytes. Regenerate: tmp script in Bektur's session; cross-checked with Python json.dumps(sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False).",
+  "rules": [
+    "object keys sorted by Unicode code point (= UTF-8 byte order = Rust BTreeMap<String,_>)",
+    "no whitespace",
+    "strings escaped as JSON.stringify/serde_json: \" \\ \\b \\f \\n \\r \\t, other control chars as lowercase \\u00xx; \"/\" and non-ASCII unescaped",
+    "numbers: safe integers only (|n| <= 2^53-1); floats and bigger numbers are rejected; U64/U128 travel as decimal strings",
+    "arrays keep order; undefined in an array becomes null; object members with undefined value are omitted",
+    "only plain objects, arrays, strings, numbers, booleans, null"
+  ],
+  "rejected": [
+    {
+      "example": "{\"x\":1.5}",
+      "reason": "non-integer number"
+    },
+    {
+      "example": "{\"x\":1e21}",
+      "reason": "outside safe integer range"
+    },
+    {
+      "example": "{\"x\":NaN}",
+      "reason": "not finite"
+    },
+    {
+      "example": "{\"x\":123n}",
+      "reason": "bigint (encode as string)"
+    },
+    {
+      "example": "{\"x\":new Date()}",
+      "reason": "not a plain object"
+    }
+  ],
+  "vectors": [
+    {
+      "name": "empty object",
+      "input": {},
+      "canonical": "{}",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "keys sorted",
+      "input": {
+        "b": 1,
+        "a": 2,
+        "c": 0
+      },
+      "canonical": "{\"a\":2,\"b\":1,\"c\":0}",
+      "sha256": "274af4efc15291218dc22cf4d3921f3f11412a2896c4390785ed0df7d9298ede"
+    },
+    {
+      "name": "nested objects sorted, array order kept",
+      "input": {
+        "z": [
+          3,
+          1,
+          {
+            "y": null,
+            "x": true
+          }
+        ],
+        "a": "s",
+        "m": {
+          "k": [],
+          "j": {}
+        }
+      },
+      "canonical": "{\"a\":\"s\",\"m\":{\"j\":{},\"k\":[]},\"z\":[3,1,{\"x\":true,\"y\":null}]}",
+      "sha256": "f1199100fdedf006e92aad949df5ec8fdbbb466bd7797be96f3dfd244516637d"
+    },
+    {
+      "name": "unicode is raw utf-8, not escaped",
+      "input": {
+        "model": "тест ✓ 😀",
+        "ключ": "значение"
+      },
+      "canonical": "{\"model\":\"тест ✓ 😀\",\"ключ\":\"значение\"}",
+      "sha256": "e87168f129256aa4d5a98e5b6c854828f7ee059bf09e06da24b5d8354097f256"
+    },
+    {
+      "name": "escapes like JSON.stringify / serde_json",
+      "input": {
+        "s": "line\nquote\"back\\slash\ttab\u0001bell\u0007delslash/"
+      },
+      "canonical": "{\"s\":\"line\\nquote\\\"back\\\\slash\\ttab\\u0001bell\\u0007delslash/\"}",
+      "sha256": "55e5447893dbc16a9fd312ef41a95d7489874f54e08a0537d86f551528c9c97d"
+    },
+    {
+      "name": "key order is by code point (utf-8 bytes), not utf-16 units",
+      "input": {
+        "😀": 2,
+        "ﬁ": 1,
+        "z": 0,
+        "Z": -1,
+        "": 3
+      },
+      "canonical": "{\"\":3,\"Z\":-1,\"z\":0,\"ﬁ\":1,\"😀\":2}",
+      "sha256": "4a0c966fa168790fc7214a99242a3c6e35e0abcd4ea31442aa7c9e6f98fb0645"
+    },
+    {
+      "name": "integers only: zero, negative, 2^53-1",
+      "input": {
+        "zero": 0,
+        "neg": -42,
+        "max": 9007199254740991,
+        "min": -9007199254740991
+      },
+      "canonical": "{\"max\":9007199254740991,\"min\":-9007199254740991,\"neg\":-42,\"zero\":0}",
+      "sha256": "9469cd310334e83149791bb63c074f091a11db56e149aaf2cc6005d3282ffaab"
+    },
+    {
+      "name": "amounts and timestamps are strings (near-sdk U128/U64)",
+      "input": {
+        "amount": "300000000",
+        "expires_at": "1762200000000",
+        "policy_version": 3
+      },
+      "canonical": "{\"amount\":\"300000000\",\"expires_at\":\"1762200000000\",\"policy_version\":3}",
+      "sha256": "9b9f1deb32417492bcb90857060bbae171561d8c66cb394208117c59ee5cb87a"
+    },
+    {
+      "name": "booleans and null",
+      "input": {
+        "t": true,
+        "f": false,
+        "n": null
+      },
+      "canonical": "{\"f\":false,\"n\":null,\"t\":true}",
+      "sha256": "22e00dc2f7b01420f940fbdbfbdf34fa0667cc6500186495023ba37722cbd05e"
+    },
+    {
+      "name": "KeyEntryInput (SPEC §4.1) from the recorded report",
+      "input": {
+        "model": "z-ai/glm-5.3-flash",
+        "signing_address": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+        "signing_algo": "ed25519",
+        "signing_public_key": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+        "compose_hash": "a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f",
+        "image_digests": [
+          "sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917",
+          "sha256:742dbd2e61c8709b930712c38958386c3cb3928e09eeb1f1e490600c127e2edb",
+          "sha256:6e035c8fb99c1d31f41760d25af178683a658cca4afd73cd0d366fbb5bf884be",
+          "sha256:079a14b41deb11e0e27f9b69648e8b3d89bd6fb9ccf6071643b8f447fa415085"
+        ],
+        "tcb_status": "UpToDate",
+        "ita_jwt_hash": "",
+        "nras_result_hash": "",
+        "nonce": "fe7956b428eb5f489d46a23b7d7d8992c4ebe50da538604b9d81a5746ca3de55",
+        "report_hash": "4cdab15a163e270f7502d42c18d7b24161279094f2de76b840678be3d0252cef",
+        "observed_at": "1793636040000"
+      },
+      "canonical": "{\"compose_hash\":\"a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f\",\"image_digests\":[\"sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917\",\"sha256:742dbd2e61c8709b930712c38958386c3cb3928e09eeb1f1e490600c127e2edb\",\"sha256:6e035c8fb99c1d31f41760d25af178683a658cca4afd73cd0d366fbb5bf884be\",\"sha256:079a14b41deb11e0e27f9b69648e8b3d89bd6fb9ccf6071643b8f447fa415085\"],\"ita_jwt_hash\":\"\",\"model\":\"z-ai/glm-5.3-flash\",\"nonce\":\"fe7956b428eb5f489d46a23b7d7d8992c4ebe50da538604b9d81a5746ca3de55\",\"nras_result_hash\":\"\",\"observed_at\":\"1793636040000\",\"report_hash\":\"4cdab15a163e270f7502d42c18d7b24161279094f2de76b840678be3d0252cef\",\"signing_address\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"signing_algo\":\"ed25519\",\"signing_public_key\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"tcb_status\":\"UpToDate\"}",
+      "sha256": "58568a61a2e938d22d9ecad51322fc1ecc4a1f45699f01fea2278a1960d6e525"
+    },
+    {
+      "name": "Action (SPEC §4.3)",
+      "input": {
+        "kind": "ft_transfer",
+        "token_id": "token.ainek.testnet",
+        "receiver_id": "supplier.testnet",
+        "amount": "300000000",
+        "memo": "October"
+      },
+      "canonical": "{\"amount\":\"300000000\",\"kind\":\"ft_transfer\",\"memo\":\"October\",\"receiver_id\":\"supplier.testnet\",\"token_id\":\"token.ainek.testnet\"}",
+      "sha256": "c1df99a7c5da783ffa48969de3bbee5486b90f30f0af0bb0ea8d69ca3bd9c330"
+    },
+    {
+      "name": "Decision (SPEC §4.3)",
+      "input": {
+        "verdict": "NeedsApproval",
+        "policy_hash": "645aa914d977904e40d59031cf38d0029365b1247b8dc870929119303227af88",
+        "policy_version": 3,
+        "action_commit": "c1df99a7c5da783ffa48969de3bbee5486b90f30f0af0bb0ea8d69ca3bd9c330",
+        "model_proof_commit": "f415f768dc1fa81dfed5a6d1cf421f90b7fa70bba60f7815ea32f995b5810dbf",
+        "nonce": "5b04078b6a165e06645f2dc97132e47a946fc8fb225f51030cc9ec1d8f8716a7",
+        "expires_at": "1762200000000"
+      },
+      "canonical": "{\"action_commit\":\"c1df99a7c5da783ffa48969de3bbee5486b90f30f0af0bb0ea8d69ca3bd9c330\",\"expires_at\":\"1762200000000\",\"model_proof_commit\":\"f415f768dc1fa81dfed5a6d1cf421f90b7fa70bba60f7815ea32f995b5810dbf\",\"nonce\":\"5b04078b6a165e06645f2dc97132e47a946fc8fb225f51030cc9ec1d8f8716a7\",\"policy_hash\":\"645aa914d977904e40d59031cf38d0029365b1247b8dc870929119303227af88\",\"policy_version\":3,\"verdict\":\"NeedsApproval\"}",
+      "sha256": "082d826d7c17b3b48ba23264490691347527d356a37daa22ef0f83162f8cc17b"
+    },
+    {
+      "name": "ModelProof payload (SPEC §5.1) without salt/commit/commitTx",
+      "input": {
+        "v": 1,
+        "kind": "model",
+        "completionId": "7556638665c34ec6ac6cb69579bd8ef2",
+        "model": "z-ai/glm-5.3-flash",
+        "signatureKind": "provider_tee",
+        "signingAlgo": "ed25519",
+        "signingAddress": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+        "signedText": "z-ai/glm-5.3-flash:3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80:8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60",
+        "signature": "d4ec7af5606397890fe66cb769a49adaf302808a1f05d2df8966e94f24edc8b8eae8d29bbb7779d77dd63bf3a99235dde5537f82ca86edadbd34b20321289104",
+        "requestSha256": "3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80",
+        "responseSha256": "8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60",
+        "e2ee": false,
+        "toolNames": [],
+        "logIndex": 0,
+        "verifier": "v1.ainek.testnet",
+        "verifiedAt": "2026-11-02T16:14:00Z"
+      },
+      "canonical": "{\"completionId\":\"7556638665c34ec6ac6cb69579bd8ef2\",\"e2ee\":false,\"kind\":\"model\",\"logIndex\":0,\"model\":\"z-ai/glm-5.3-flash\",\"requestSha256\":\"3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80\",\"responseSha256\":\"8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60\",\"signature\":\"d4ec7af5606397890fe66cb769a49adaf302808a1f05d2df8966e94f24edc8b8eae8d29bbb7779d77dd63bf3a99235dde5537f82ca86edadbd34b20321289104\",\"signatureKind\":\"provider_tee\",\"signedText\":\"z-ai/glm-5.3-flash:3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80:8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60\",\"signingAddress\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"signingAlgo\":\"ed25519\",\"toolNames\":[],\"v\":1,\"verifiedAt\":\"2026-11-02T16:14:00Z\",\"verifier\":\"v1.ainek.testnet\"}",
+      "sha256": "93d54fdc12b58520cfcf509064a44c647a4b36faa8278c323fb452d88ffbc239"
+    }
+  ],
+  "commits": {
+    "action_commit": {
+      "action": {
+        "kind": "ft_transfer",
+        "token_id": "token.ainek.testnet",
+        "receiver_id": "supplier.testnet",
+        "amount": "300000000",
+        "memo": "October"
+      },
+      "canonical": "{\"amount\":\"300000000\",\"kind\":\"ft_transfer\",\"memo\":\"October\",\"receiver_id\":\"supplier.testnet\",\"token_id\":\"token.ainek.testnet\"}",
+      "sha256": "c1df99a7c5da783ffa48969de3bbee5486b90f30f0af0bb0ea8d69ca3bd9c330",
+      "rule": "sha256(canonical_json(action))"
+    },
+    "proof_commit": {
+      "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "payload": {
+        "v": 1,
+        "kind": "model",
+        "completionId": "7556638665c34ec6ac6cb69579bd8ef2",
+        "model": "z-ai/glm-5.3-flash",
+        "signatureKind": "provider_tee",
+        "signingAlgo": "ed25519",
+        "signingAddress": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+        "signedText": "z-ai/glm-5.3-flash:3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80:8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60",
+        "signature": "d4ec7af5606397890fe66cb769a49adaf302808a1f05d2df8966e94f24edc8b8eae8d29bbb7779d77dd63bf3a99235dde5537f82ca86edadbd34b20321289104",
+        "requestSha256": "3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80",
+        "responseSha256": "8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60",
+        "e2ee": false,
+        "toolNames": [],
+        "logIndex": 0,
+        "verifier": "v1.ainek.testnet",
+        "verifiedAt": "2026-11-02T16:14:00Z"
+      },
+      "canonical": "{\"completionId\":\"7556638665c34ec6ac6cb69579bd8ef2\",\"e2ee\":false,\"kind\":\"model\",\"logIndex\":0,\"model\":\"z-ai/glm-5.3-flash\",\"requestSha256\":\"3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80\",\"responseSha256\":\"8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60\",\"signature\":\"d4ec7af5606397890fe66cb769a49adaf302808a1f05d2df8966e94f24edc8b8eae8d29bbb7779d77dd63bf3a99235dde5537f82ca86edadbd34b20321289104\",\"signatureKind\":\"provider_tee\",\"signedText\":\"z-ai/glm-5.3-flash:3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80:8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60\",\"signingAddress\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"signingAlgo\":\"ed25519\",\"toolNames\":[],\"v\":1,\"verifiedAt\":\"2026-11-02T16:14:00Z\",\"verifier\":\"v1.ainek.testnet\"}",
+      "commit": "f415f768dc1fa81dfed5a6d1cf421f90b7fa70bba60f7815ea32f995b5810dbf",
+      "rule": "sha256(salt_32_bytes || utf8(canonical_json(payload)))"
+    },
+    "entry_hash": {
+      "prev_hash": "",
+      "input": {
+        "model": "z-ai/glm-5.3-flash",
+        "signing_address": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+        "signing_algo": "ed25519",
+        "signing_public_key": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+        "compose_hash": "a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f",
+        "image_digests": [
+          "sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917",
+          "sha256:742dbd2e61c8709b930712c38958386c3cb3928e09eeb1f1e490600c127e2edb",
+          "sha256:6e035c8fb99c1d31f41760d25af178683a658cca4afd73cd0d366fbb5bf884be",
+          "sha256:079a14b41deb11e0e27f9b69648e8b3d89bd6fb9ccf6071643b8f447fa415085"
+        ],
+        "tcb_status": "UpToDate",
+        "ita_jwt_hash": "",
+        "nras_result_hash": "",
+        "nonce": "fe7956b428eb5f489d46a23b7d7d8992c4ebe50da538604b9d81a5746ca3de55",
+        "report_hash": "4cdab15a163e270f7502d42c18d7b24161279094f2de76b840678be3d0252cef",
+        "observed_at": "1793636040000"
+      },
+      "verifier": "v1.ainek.testnet",
+      "canonical": "{\"compose_hash\":\"a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f\",\"image_digests\":[\"sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917\",\"sha256:742dbd2e61c8709b930712c38958386c3cb3928e09eeb1f1e490600c127e2edb\",\"sha256:6e035c8fb99c1d31f41760d25af178683a658cca4afd73cd0d366fbb5bf884be\",\"sha256:079a14b41deb11e0e27f9b69648e8b3d89bd6fb9ccf6071643b8f447fa415085\"],\"ita_jwt_hash\":\"\",\"model\":\"z-ai/glm-5.3-flash\",\"nonce\":\"fe7956b428eb5f489d46a23b7d7d8992c4ebe50da538604b9d81a5746ca3de55\",\"nras_result_hash\":\"\",\"observed_at\":\"1793636040000\",\"report_hash\":\"4cdab15a163e270f7502d42c18d7b24161279094f2de76b840678be3d0252cef\",\"signing_address\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"signing_algo\":\"ed25519\",\"signing_public_key\":\"5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff\",\"tcb_status\":\"UpToDate\"}",
+      "entry_hash": "0680d3103539dc6aeed54da21cff5313bb0d758d9c18f3e94e2a482a1e1ea398",
+      "rule": "sha256(utf8(prev_hash hex) || utf8(canonical_json(input)) || utf8(verifier)) — convention to confirm with Dastan"
+    }
+  }
+}
