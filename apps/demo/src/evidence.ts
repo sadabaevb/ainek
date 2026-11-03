@@ -5,7 +5,7 @@ import type { KeyEntry, ModelProof, RawReport } from '@ainek/proof';
 
 export type { RawReport } from '@ainek/proof';
 
-const samplesDir = new URL('../../../docs/samples/', import.meta.url);
+export const samplesDir = new URL('../../../docs/samples/', import.meta.url);
 
 export function readBytes(name: string): Uint8Array {
   return new Uint8Array(readFileSync(new URL(name, samplesDir)));
@@ -53,6 +53,11 @@ export interface RecordedExchange {
   plaintext?: { prompt: string; reply: string };
 }
 
+/** The recorded sample log entry (a fixture, not read from the chain). */
+export function loadSampleLogEntry(): KeyEntry {
+  return readJson<{ entry: KeyEntry }>('key-entry.sample.json').entry;
+}
+
 export function loadRecording(): Recording {
   return {
     report: readJson<RawReport>('attestation-report.json'),
@@ -60,7 +65,7 @@ export function loadRecording(): Recording {
     collateralByQuote: readJson<{ byQuoteSha256: Record<string, unknown> }>('intel-collateral.json').byQuoteSha256,
     nrasResponse: readText('nras-response.json'),
     jwks: readJson<unknown>('nvidia-jwks.json'),
-    logEntry: readJson<{ entry: KeyEntry }>('key-entry.sample.json').entry,
+    logEntry: loadSampleLogEntry(),
     exchanges: [
       {
         label: 'plaintext exchange (2026-11-02)',

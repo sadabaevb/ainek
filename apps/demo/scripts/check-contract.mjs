@@ -1,21 +1,11 @@
 // Does a deployed contract speak the SPEC §4.1 ABI the client relies on? Read-only view calls over RPC, no keys.
 //   pnpm -F demo check-contract ainek.testnet [https://rpc.testnet.near.org] [model]
 // Prints ✓/✗ per method and validates every returned entry against the KeyEntry schema from @ainek/proof.
-import { KeyEntry } from '@ainek/proof';
+import { KeyEntry, viewFunction } from '@ainek/proof';
 
 const [account = 'ainek.testnet', rpc = 'https://rpc.testnet.near.org', model = 'z-ai/glm-5.3-flash'] = process.argv.slice(2);
 
-async function view(method, args) {
-  const res = await fetch(rpc, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: '1', method: 'query', params: { request_type: 'call_function', finality: 'final', account_id: account, method_name: method, args_base64: Buffer.from(JSON.stringify(args)).toString('base64') } }),
-  });
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.data ?? json.error.message ?? JSON.stringify(json.error));
-  if (json.result?.error) throw new Error(json.result.error);
-  return JSON.parse(Buffer.from(json.result.result).toString('utf8'));
-}
+const view = (method, args) => viewFunction(rpc, account, method, args);
 
 let failures = 0;
 const ok = (line) => console.log(`  ✓ ${line}`);

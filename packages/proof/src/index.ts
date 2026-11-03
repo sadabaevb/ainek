@@ -32,3 +32,7 @@ export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entr
 export { toModelAttestation, toGatewayAttestation } from './report.ts';
 export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
 export { stripHexPrefix, normalizeHex } from './hash.ts';
+export { ainekConfigFromEnv } from './config.ts';
+export type { AinekConfig, EnvLike } from './config.ts';
+export { viewFunction, keyLogReader } from './near-view.ts';
+export type { KeyLogReader } from './near-view.ts';

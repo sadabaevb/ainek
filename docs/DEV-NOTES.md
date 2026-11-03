@@ -462,3 +462,7 @@ pinned fetch с клоном ответа до расшифровки → под
 текст лежит отдельно в `e2ee-plaintext.json` и proof им не покрыт, о чём replay говорит прямо.
 Ловушка на будущее: корневой `.env` имеет приоритет над умолчаниями кода, и старый `AINEK_CONTRACT=ainek.testnet` там уводит
 live-режим на несуществующий аккаунт; обновить `.env` по `.env.example`.
+После `/simplify`: конфиг из env (`ainekConfigFromEnv`) и чтение лога по JSON-RPC (`keyLogReader`, `viewFunction`) переехали в
+`@ainek/proof`, их используют web, live, check-contract; у `apps/web` больше нет собственного RPC-кода на near-api-js для лога.
+Недоступный контракт в live-режиме — REFUSED, образец лога только по явному `AINEK_LOG_SOURCE=sample`. `live.ts` — зеркало
+`apps/web/lib/flow.ts`, порядок шагов держать одинаковым; общий поток вынесем, когда появится третий потребитель (агент).
