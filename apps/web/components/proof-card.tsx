@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { memo, useMemo, type ReactNode } from 'react';
 import { toDisclosure } from '@ainek/proof';
-import { useT } from '@/app/providers';
+import { useConfig, useT } from '@/app/providers';
 import { STEPS_AFTER_SEND, type ChatOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
 import { seconds, short } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
-import { useConfig } from '@/app/providers';
 import { CheckList, Row } from './checks';
 
 function RedCard({ title, body, lines }: { title: string; body?: string; lines: ReactNode[] }) {
@@ -25,7 +24,7 @@ function RedCard({ title, body, lines }: { title: string; body?: string; lines: 
   );
 }
 
-export const ProofCard = memo(function ProofCard({ outcome, walletConnected = false }: { outcome: ChatOutcome; walletConnected?: boolean }) {
+export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOutcome }) {
   const { t } = useT();
   const cfg = useConfig();
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
@@ -67,6 +66,8 @@ export const ProofCard = memo(function ProofCard({ outcome, walletConnected = fa
   const { proof, deployment, modelAttestation: m, logEntry, keyVerdict, exchange, report, logSource } = outcome;
   const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
   const since = new Date(Number(logEntry.observed_at)).toISOString().slice(0, 10);
+  const commitShort = short(proof.commit ?? '');
+  const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
   const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
 
   return (
@@ -79,9 +80,9 @@ export const ProofCard = memo(function ProofCard({ outcome, walletConnected = fa
       <Row status="ok" label={t.rowE2ee}>{t.e2eeYes}</Row>
       <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain}>
         {proof.commitTx ? (
-          <>{t.chainTx(short(proof.commit ?? ''))} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>
+          <>{t.chainTx(commitShort)} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>
         ) : (
-          `${walletConnected ? t.chainPending : t.chainNoWallet} (commit ${short(proof.commit ?? '')})`
+          `${chainText} (commit ${commitShort})`
         )}
       </Row>
       <div className="actions">

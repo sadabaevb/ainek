@@ -65,8 +65,9 @@ class Cache<T> {
     const hit = this.entries.get(key);
     return hit && Date.now() - hit.at < CACHE_TTL_MS ? hit.value : undefined;
   }
-  set(key: string, value: T): T {
-    this.entries.set(key, { value, at: Date.now() });
+  /** `at` lets a value rehydrated from IndexedDB keep its original verification time, so the TTL is counted once. */
+  set(key: string, value: T, at = Date.now()): T {
+    this.entries.set(key, { value, at });
     return value;
   }
 }
@@ -114,26 +115,21 @@ function verifyModels(model: string, policy: AttestationPolicy): Promise<Verifie
 
 /** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min in memory and in IndexedDB (same TTL the SDK uses), so a reload does not repeat the cold check. */
 export async function verifyDeployment(model: string, policy: AttestationPolicy): Promise<VerifiedDeployment> {
-  const cached = deploymentCache.get(model) ?? (await fromIndexedDb(model));
+  if (!deploymentCache.get(model)) {
+    const stored = await getDeployment(model).catch(() => undefined);
+    if (stored) {
+      const at = Date.parse(stored.verifiedAt);
+      deploymentCache.set(model, stored, at);
+      gatewayCache.set('gateway', stored.gateway, at);
+    }
+  }
+  const cached = deploymentCache.get(model);
   if (cached) return { ...cached, tookMs: 0 };
   const t0 = performance.now();
   const [gateway, models] = await Promise.all([verifyGateway(policy), verifyModels(model, policy)]);
   const verified = deploymentCache.set(model, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
-  gatewayCache.set('gateway', gateway);
-  putDeployment({ model, verifiedAt: verified.verifiedAt, deployment: verified }).catch(() => undefined); // best effort
+  putDeployment(model, verified).catch(() => undefined); // best effort
   return verified;
-}
-
-async function fromIndexedDb(model: string): Promise<VerifiedDeployment | undefined> {
-  try {
-    const stored = await getDeployment<VerifiedDeployment>(model);
-    if (!stored || Date.now() - Date.parse(stored.verifiedAt) >= CACHE_TTL_MS) return undefined;
-    deploymentCache.set(model, stored.deployment);
-    gatewayCache.set('gateway', stored.deployment.gateway);
-    return stored.deployment;
-  } catch {
-    return undefined;
-  }
 }
 
 // No Accept-Encoding here: browsers drop it as a forbidden header; the proxy asks upstream for identity itself.

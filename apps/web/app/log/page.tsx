@@ -7,7 +7,6 @@ import { findSplitView, type KeyEntry } from '@ainek/proof';
 import { describeError } from '@/lib/errors';
 import { short } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
-import { fcKeyLogin } from '@/lib/wallet';
 import { useConfig } from '../providers';
 
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
@@ -16,7 +15,7 @@ export default function LogPage() {
   const cfg = useConfig();
   const [entries, setEntries] = useState<KeyEntry[] | null>(null);
   const [error, setError] = useState('');
-  const { signedAccountId, signIn, signOut, getAccessKeyList, loading } = useNearWallet();
+  const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
   useEffect(() => {
@@ -34,8 +33,6 @@ export default function LogPage() {
   }, [signedAccountId]);
 
   const split = entries ? findSplitView(entries, cfg.model, cfg.trustedVerifiers) : null;
-
-  const connect = () => fcKeyLogin(signIn, cfg);
 
   return (
     <main className="page">
@@ -73,10 +70,10 @@ export default function LogPage() {
       )}
 
       <h2 style={{ fontSize: '1.1rem', marginTop: '2rem' }}>Wallet</h2>
-      <p className="muted small">Logging in adds a function-call key limited to <span className="mono">commit_proof</span> on the contract, so the chat can commit salted proof hashes without asking the wallet each time.</p>
+      <p className="muted small">Connecting (top right) adds a function-call key limited to <span className="mono">commit_proof</span> on the contract, so the chat can commit salted proof hashes without asking the wallet each time.</p>
       {signedAccountId ? (
         <>
-          <p>Connected as <span className="mono">{signedAccountId}</span> <button type="button" className="btn small" onClick={() => void signOut()}>Disconnect</button></p>
+          <p>Connected as <span className="mono">{signedAccountId}</span></p>
           <details>
             <summary>Access keys ({keys.length})</summary>
             <ul className="mono">
@@ -89,7 +86,7 @@ export default function LogPage() {
           </details>
         </>
       ) : (
-        <button type="button" className="btn primary" onClick={() => void connect()} disabled={loading}>Connect wallet</button>
+        <p className="muted">No wallet connected.</p>
       )}
     </main>
   );

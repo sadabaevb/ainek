@@ -2,6 +2,7 @@
 // unless the user discloses them (SPEC §5.1); verified deployment evidence is cached here for 60 minutes so a
 // page reload does not cost another cold verification. Everything is best-effort: a private window may refuse.
 import type { KeyEntry, ModelProof } from '@ainek/proof';
+import type { VerifiedDeployment } from './nearai-browser';
 
 export interface StoredExchange {
   completionId: string;
@@ -12,12 +13,6 @@ export interface StoredExchange {
   reply: string;
   proof: ModelProof;
   logEntry: KeyEntry;
-}
-
-export interface StoredDeployment<T = unknown> {
-  model: string;
-  verifiedAt: string;
-  deployment: T;
 }
 
 const DB_NAME = 'ainek';
@@ -60,10 +55,11 @@ export async function listExchanges(): Promise<StoredExchange[]> {
   return all.sort((a, b) => b.sentAt.localeCompare(a.sentAt));
 }
 
-export async function putDeployment<T>(x: StoredDeployment<T>): Promise<void> {
-  await withStore(DEPLOYMENTS, 'readwrite', (s) => s.put(x));
+export async function putDeployment(model: string, deployment: VerifiedDeployment): Promise<void> {
+  await withStore(DEPLOYMENTS, 'readwrite', (s) => s.put({ model, deployment }));
 }
 
-export function getDeployment<T>(model: string): Promise<StoredDeployment<T> | undefined> {
-  return withStore(DEPLOYMENTS, 'readonly', (s) => s.get(model) as IDBRequest<StoredDeployment<T> | undefined>);
+export async function getDeployment(model: string): Promise<VerifiedDeployment | undefined> {
+  const row = await withStore(DEPLOYMENTS, 'readonly', (s) => s.get(model) as IDBRequest<{ model: string; deployment: VerifiedDeployment } | undefined>);
+  return row?.deployment;
 }
