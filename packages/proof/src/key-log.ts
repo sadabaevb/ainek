@@ -1,6 +1,6 @@
 // SPEC §7.1 step 2: is the attested key confirmed by the public log? The contract's `latest_keys(model, max_age)`
 // returns the window; this function applies the client-side trust policy (TRUSTED_VERIFIERS + QUORUM) to it.
-import { shortHex } from './hash.ts';
+import { normalizeHex, shortHex } from './hash.ts';
 import type { KeyEntry } from './schema.ts';
 
 export interface KeyLogQuery {
@@ -39,7 +39,7 @@ export function findSplitView(entries: readonly KeyEntry[], model: string, trust
   for (const e of entries) {
     if (e.model !== model || !trustedSet.has(e.verifier)) continue;
     const set = keysByVerifier.get(e.verifier) ?? new Set<string>();
-    set.add(e.signing_address.toLowerCase());
+    set.add(normalizeHex(e.signing_address));
     keysByVerifier.set(e.verifier, set);
   }
   const verifiers = [...keysByVerifier.entries()];
@@ -64,9 +64,9 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   const split = findSplitView(forModel, query.model, query.trustedVerifiers);
   if (split) return { status: 'split-view', confirmedBy: [], matching: [], untrusted, detail: `${split.detail}: refusing to send` };
 
-  const wanted = query.signingAddress.toLowerCase();
+  const wanted = normalizeHex(query.signingAddress);
   const matching = trusted.filter(
-    (e) => e.signing_address.toLowerCase() === wanted && (query.composeHash === undefined || e.compose_hash === query.composeHash),
+    (e) => normalizeHex(e.signing_address) === wanted && (query.composeHash === undefined || normalizeHex(e.compose_hash) === normalizeHex(query.composeHash)),
   );
   const confirmedBy = [...new Set(matching.map((e) => e.verifier))];
   if (confirmedBy.length >= query.quorum) {

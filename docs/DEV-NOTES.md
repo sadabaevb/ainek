@@ -433,3 +433,18 @@ OutLayer по-прежнему упирается в 502 от `test.fastfs.io` (
   из них — промах, а не крэш и не обход ужесточённой политики. Проверено: после перезагрузки шаг attestation = `cached` вместо
   4–25 с. Это доверие к собственной записи на том же origin, ровно как кеш SDK в памяти. Для видео и прогона судей это убирает
   самую длинную паузу.
+
+## 2026-11-03 — `buildKeyEntryInput` для верификатора (Бектур)
+
+`packages/proof`: `buildKeyEntryInput({ model, verified, reportBytes, nrasJwt?, itaJwt?, observedAtMs? })` собирает `KeyEntryInput`
+из результата `verifyModelAttestation` SDK (структурный тип, SDK в пакет не тянем) и точных байт отчёта. Тест сверяет сборку
+с тест-вектором и с `entry_hash` записи #0, которую Дастан положил в `ainek-log-dastan.testnet` (записано в
+`canonical.json → commits.entry_hash.recorded_on_chain`). Соглашения, которых не было в SPEC, вписаны в §4.1 «Соглашения
+верификатора»: hex без `0x` в нижнем регистре, `image_digests` только из строк `image:` compose-файла (не любой `sha256:` в
+тексте), пустой список — отказ, для ecdsa без ключа — отказ, `nonce` берётся из проверенного отчёта, а не из параметра,
+`nras_result_hash` пустой допустим только со встроенным GPU-верификатором SDK. Туда же переехали `toModelAttestation` /
+`toGatewayAttestation` и типы сырого отчёта: верификатор обязан держать байты отчёта ради `report_hash`, а клиентские классы SDK
+их прячут, так что маппинг нужен и ему, и replay. Сравнения адресов в `verifyModelProof` и `evaluateKeyLog` теперь через
+`normalizeHex`, чтобы `0x`/регистр на проводе не давал ложный «ключа нет в логе».
+Что верификатору Дастана остаётся: `GET /v1/attestation/report` сырым (байты сохранить), `toModelAttestation` → `verifyModelAttestation`
+(и при желании свой `gpuEvidence`, который захватывает NRAS JWT, как в `apps/demo/src/verifiers.ts`) → `buildKeyEntryInput` → `log_key`.

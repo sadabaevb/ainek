@@ -132,6 +132,14 @@ entry_hash = sha256(prev_hash || canonical_json(KeyEntryInput) || verifier)   //
 Конкатенация в `entry_hash` — три UTF-8-строки подряд: `prev_hash` как 64 hex-символа (не 32 байта), канонический JSON,
 `verifier` как account id; у первой записи `prev_hash = ""`. `image_digests` — строки вида `sha256:<hex>` как в compose.
 Эталон: `docs/test-vectors/canonical.json` → `commits.entry_hash` (TS: `entryHashOf` в `packages/proof`).
+
+**Соглашения верификатора** (реализованы в `buildKeyEntryInput`, `packages/proof`; любой верификатор, включая чужой `v3`, обязан
+давать те же байты): все hex-поля — без `0x`, в нижнем регистре; `signing_public_key` = ключ из отчёта, для ed25519 равен
+`signing_address`, для ecdsa без ключа запись не создаётся; `compose_hash` = измерение из квоты (MRCONFIGID), при его
+отсутствии `sha256(app_compose)`; `image_digests` — только из строк `image:` compose-файла, в порядке первого появления,
+без дублей, пустой список — отказ логировать; `nonce` — тот, что SDK сверил с `report_data`; `report_hash` — sha256 точных
+байт ответа `/v1/attestation/report`; `nras_result_hash` может быть `""`, если верификатор использовал встроенный GPU-верификатор
+SDK (он не отдаёт JWT), и обязателен, если верификатор сам ходил в NRAS; `observed_at` — целые unix-миллисекунды.
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
 
 **Предложение к синку 3.11 — открытая регистрация.** Owner-регистрация делает лог «реестром владельца» — ровно то, что мы

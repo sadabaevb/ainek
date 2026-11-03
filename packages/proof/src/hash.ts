@@ -19,9 +19,19 @@ export function bytesToHex(bytes: Uint8Array): string {
   return out;
 }
 
+/** `0x`/`0X` prefix removed, otherwise unchanged. The one place this rule lives. */
+export function stripHexPrefix(hex: string): string {
+  return hex.startsWith('0x') || hex.startsWith('0X') ? hex.slice(2) : hex;
+}
+
+/** Canonical text form of a hex value for logging and comparison: no prefix, lowercase. */
+export function normalizeHex(hex: string): string {
+  return stripHexPrefix(hex).toLowerCase();
+}
+
 /** Accepts hex with or without 0x, any case. Throws on odd length or non-hex characters. */
 export function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith('0x') || hex.startsWith('0X') ? hex.slice(2) : hex;
+  const clean = stripHexPrefix(hex);
   if (clean.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(clean)) {
     throw new Error(`not a hex string: ${hex.length > 40 ? hex.slice(0, 40) + '…' : hex}`);
   }
