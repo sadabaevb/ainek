@@ -6,8 +6,8 @@ import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
 import { describeError } from '@/lib/errors';
-import { commitOutcome, runChat, type ChatMessage, type ChatOutcome, type StepEvent } from '@/lib/flow';
-import { commitProofOnChain, isMethodNotFound } from '@/lib/wallet';
+import { commitOutcome, runChat, type ChatMessage, type ChatOutcome, type Committer, type StepEvent } from '@/lib/flow';
+import { commitProofOnChain } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
 
 interface Turn {
@@ -55,6 +55,11 @@ export default function ChatPage() {
     bottom.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns.length]);
 
+  /** NearProvider restores a saved session asynchronously; a cached flow can finish first, so give it a moment before deciding there is no wallet. */
+  const walletReady = async () => {
+    for (let i = 0; i < 50 && walletRef.current.loading; i++) await new Promise((r) => setTimeout(r, 100));
+  };
+
   const patch = (idx: number, fn: (turn: Turn) => Turn) => setTurns((prev) => prev.map((turn, i) => (i === idx ? fn(turn) : turn)));
   const step = (idx: number, e: StepEvent) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) }));
   const setOutcome = (idx: number, outcome: ChatOutcome) => patch(idx, (turn) => ({ ...turn, outcome }));
@@ -73,9 +78,12 @@ export default function ChatPage() {
       setOutcome(idx, outcome);
       if (outcome.kind === 'verified') {
         // Off the critical path: the card is already on screen, the composer unlocks, the commit lands when it lands.
-        const { signedAccountId, callFunctionRaw } = walletRef.current;
-        const committer = signedAccountId ? (proof: Parameters<typeof commitProofOnChain>[2]) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
-        void commitOutcome(outcome, committer, (e) => step(idx, e), isMethodNotFound).then((committed) => setOutcome(idx, committed));
+        void (async () => {
+          await walletReady();
+          const { signedAccountId, callFunctionRaw } = walletRef.current;
+          const committer: Committer | null = signedAccountId ? (proof) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
+          setOutcome(idx, await commitOutcome(outcome, committer, (e) => step(idx, e)));
+        })().catch((err: unknown) => step(idx, { id: 'commit', status: 'skipped', detail: `commit failed: ${describeError(err)}; commit kept locally` }));
       }
     } catch (err) {
       // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
@@ -88,10 +96,8 @@ export default function ChatPage() {
   return (
     <main className="page">
       <header className="top">
-        <div>
-          <h1>Ainek</h1>
-          <p className="muted">{t.tagline}</p>
-        </div>
+        <h1>Ainek</h1>
+        <p className="muted">{t.tagline}</p>
       </header>
 
       <div className="controls">

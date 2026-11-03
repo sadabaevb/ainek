@@ -1,6 +1,7 @@
 // The Tier-1 client flow (SPEC §7.1) as a list of steps the page shows live:
 //   verify evidence in the browser → fail-closed check against the public log → E2EE send →
-//   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB.
+//   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
+//   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 import { buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
@@ -20,6 +21,7 @@ import {
   type VerifiedDeployment,
 } from './nearai-browser';
 import { putExchange, type StoredExchange } from './store';
+import { isMethodNotFound } from './wallet';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
@@ -162,7 +164,9 @@ function storedExchangeOf(o: VerifiedOutcome): StoredExchange {
 }
 
 /** Step 8, after the card is already on screen: commit the salted hash on NEAR (SPEC §4.2) through the caller's wallet, or record why not. Never throws. */
-export async function commitOutcome(outcome: VerifiedOutcome, committer: ((proof: ModelProof) => Promise<string>) | null, emit: Emit, isNotDeployed: (err: unknown) => boolean): Promise<VerifiedOutcome> {
+export type Committer = (proof: ModelProof) => Promise<string>;
+
+export async function commitOutcome(outcome: VerifiedOutcome, committer: Committer | null, emit: Emit): Promise<VerifiedOutcome> {
   if (!committer) {
     emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
     return { ...outcome, commit: 'no-wallet' };
@@ -175,7 +179,7 @@ export async function commitOutcome(outcome: VerifiedOutcome, committer: ((proof
     putExchange(storedExchangeOf(committed)).catch(() => undefined);
     return committed;
   } catch (err) {
-    const notDeployed = isNotDeployed(err);
+    const notDeployed = isMethodNotFound(err);
     emit({ id: 'commit', status: 'skipped', detail: notDeployed ? 'commit_proof is not in the contract yet (SPEC §4.2 lands next): commit kept locally' : `commit failed: ${describeError(err)}; commit kept locally` });
     return { ...outcome, commit: notDeployed ? 'not-deployed' : 'failed' };
   }

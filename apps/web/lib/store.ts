@@ -55,11 +55,26 @@ export async function listExchanges(): Promise<StoredExchange[]> {
   return all.sort((a, b) => b.sentAt.localeCompare(a.sentAt));
 }
 
-export async function putDeployment(model: string, deployment: VerifiedDeployment): Promise<void> {
-  await withStore(DEPLOYMENTS, 'readwrite', (s) => s.put({ model, deployment }));
+/** Bumped whenever the shape of VerifiedDeployment (SDK result) changes, so a row from an older deploy is a miss, not a crash. */
+const DEPLOYMENT_ROW_VERSION = 1;
+
+interface DeploymentRow {
+  model: string;
+  v: number;
+  /** The attestation policy the row was verified under; a different policy is a miss. */
+  policyKey: string;
+  deployment: VerifiedDeployment;
 }
 
-export async function getDeployment(model: string): Promise<VerifiedDeployment | undefined> {
-  const row = await withStore(DEPLOYMENTS, 'readonly', (s) => s.get(model) as IDBRequest<{ model: string; deployment: VerifiedDeployment } | undefined>);
-  return row?.deployment;
+export async function putDeployment(model: string, policyKey: string, deployment: VerifiedDeployment): Promise<void> {
+  const row: DeploymentRow = { model, v: DEPLOYMENT_ROW_VERSION, policyKey, deployment };
+  await withStore(DEPLOYMENTS, 'readwrite', (s) => s.put(row));
+}
+
+export async function getDeployment(model: string, policyKey: string): Promise<VerifiedDeployment | undefined> {
+  const row = await withStore(DEPLOYMENTS, 'readonly', (s) => s.get(model) as IDBRequest<Partial<DeploymentRow> | undefined>);
+  if (!row || row.v !== DEPLOYMENT_ROW_VERSION || row.policyKey !== policyKey) return undefined;
+  const d = row.deployment;
+  const wellFormed = typeof d === 'object' && d !== null && typeof d.verifiedAt === 'string' && Array.isArray(d.models) && d.models.length > 0 && typeof d.gateway === 'object' && d.gateway !== null;
+  return wellFormed ? d : undefined;
 }
