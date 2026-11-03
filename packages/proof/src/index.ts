@@ -29,3 +29,6 @@ export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64,
 export type { DisclosedExchange } from './disclosure.ts';
 export { buildKeyEntryInput, imageDigestsOf } from './key-entry.ts';
 export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entry.ts';
+export { toModelAttestation, toGatewayAttestation } from './report.ts';
+export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
+export { stripHexPrefix, normalizeHex } from './hash.ts';

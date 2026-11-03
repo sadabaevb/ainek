@@ -17,7 +17,8 @@ pnpm -F @ainek/proof typecheck
 | `verifySignedText({signedText, signature, signingAddress, signingAlgo})` | ed25519 via tweetnacl, ecdsa via ethers EIP-191 recover |
 | `commitOf(saltHex, proof)`, `proofPayload(proof)` | `sha256(salt ‖ canonical(proof without salt/commit/commitTx))` — what goes on-chain |
 | `actionCommitOf(action)`, `entryHashOf(prevHash, input, verifier)` | the contract-side hashes, so the client can re-check them |
-| `buildKeyEntryInput({ model, verified, reportBytes, nonce, nrasJwt?, observedAtMs? })`, `imageDigestsOf(appCompose)` | what a verifier logs with `log_key` after `verifyModelAttestation` (SPEC §4.1): digests from the compose file, `sha256(report)`, token hashes; tested against the live entry #0 |
+| `buildKeyEntryInput({ model, verified, reportBytes, nonce, nrasJwt?, observedAtMs? })`, `imageDigestsOf(appCompose)` | what a verifier logs with `log_key` after `verifyModelAttestation` (SPEC §4.1 conventions): image digests from the compose file, `sha256(report)`, token hashes; tested against the recorded entry #0 (tx `FvCMG7…`) |
+| `toModelAttestation(raw)`, `toGatewayAttestation(raw)`, types `RawReport`, `RawAttestation` | raw `/v1/attestation/report` → the shape the SDK's pure verify functions take, for verifiers that must keep the exact report bytes |
 | `buildModelProof(...)`, `toDisclosure` / `parseDisclosure` | assemble a proof after a verified exchange; the auditor file format (SPEC §5.4) |
 | `verifyModelProof(proof, rawRequest?, rawResponse?, logEntry)` | the 8-line report behind the proof card: schema, route, signed text, both hashes, signature, key-in-log (fail-closed), commit |
 | zod schemas `ModelProof`, `ActionProof`, `Action`, `Decision`, `KeyEntryInput`, `KeyEntry`, `SignatureResponse` | field names exactly as in SPEC; camelCase for proofs, snake_case for contract types |

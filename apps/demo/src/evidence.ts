@@ -1,7 +1,9 @@
 // Loads the recording in docs/samples. Everything here is public: attestation reports, Intel collateral,
 // NVIDIA's verdict and keys, the raw bytes of one chat and its signature. No API key anywhere.
 import { readFileSync } from 'node:fs';
-import type { KeyEntry, ModelProof } from '@ainek/proof';
+import type { KeyEntry, ModelProof, RawReport } from '@ainek/proof';
+
+export type { RawReport } from '@ainek/proof';
 
 const samplesDir = new URL('../../../docs/samples/', import.meta.url);
 
@@ -15,30 +17,6 @@ export function readJson<T>(name: string): T {
   return JSON.parse(readText(name)) as T;
 }
 
-/** The fields of the raw `/v1/attestation/report` reply that the replay uses (shape as received, snake_case). */
-export interface RawAttestation {
-  signing_address: string;
-  signing_algo: 'ed25519' | 'ecdsa';
-  signing_public_key?: string;
-  request_nonce: string;
-  intel_quote: string;
-  event_log: string | unknown[];
-  report_data?: string;
-  nvidia_payload?: string;
-  info: { tcb_info: { app_compose: string; compose_hash: string } };
-  compose_manager_attestation?: {
-    actions: unknown;
-    actions_hash: string;
-    nonce: string;
-    quote: string;
-    event_log: string | unknown[];
-    report_data: string;
-  };
-}
-export interface RawReport {
-  gateway_attestation: RawAttestation;
-  model_attestations: Array<RawAttestation & { model_name: string }>;
-}
 export interface ReplayManifest {
   reportCapturedAt: string;
   evidenceRecordedAt: string;

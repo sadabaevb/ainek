@@ -1,7 +1,7 @@
 // verifyModelProof: everything the user's own device can re-check without trusting us (SPEC §5.1 rules).
 // Returns a step-by-step report; the proof card and /verify render it line by line.
 import { commitOf } from './commit.ts';
-import { sha256Hex } from './hash.ts';
+import { normalizeHex, sha256Hex } from './hash.ts';
 import { KeyEntry, ModelProof } from './schema.ts';
 import { parseSignedText } from './signed-text.ts';
 import { verifySignedText } from './signature.ts';
@@ -115,7 +115,7 @@ export function verifyModelProof(
     }
     const e = entry.data;
     const problems: string[] = [];
-    if (e.signing_address.toLowerCase() !== p.signingAddress.toLowerCase()) problems.push('signing_address differs from the logged key');
+    if (normalizeHex(e.signing_address) !== normalizeHex(p.signingAddress)) problems.push('signing_address differs from the logged key');
     if (e.signing_algo !== p.signingAlgo) problems.push('signing_algo differs');
     if (e.model !== p.model) problems.push(`log entry is for ${e.model}, proof is for ${p.model}`);
     if (e.index !== p.logIndex) problems.push(`proof points at log index ${p.logIndex}, entry has index ${e.index}`);
