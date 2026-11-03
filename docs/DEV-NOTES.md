@@ -232,3 +232,42 @@ README, SPEC §4.3).
 живёт на сервере, то есть шифрует relay, а не браузер — переезд шифрования в клиент входит в сессию 3 (`tier1-client.md`, п. 3).
 
 Следующий шаг: replay-режим `pnpm demo` на `docs/samples/` (офлайн-проверка + печать карточки в терминал), затем сессия 3.
+
+## 2026-11-03 — replay-режим `pnpm demo` (Бектур): проверка SDK по записи, без ключа и сети
+
+`apps/demo` (`pnpm demo`, `pnpm demo:tamper`), ~0,8 с, выход 0/1. Главная находка: у SDK есть чистые функции
+`verifyModelAttestation` / `verifyGatewayAttestation` / `verifyModelResponse` из `@nearai/inference-sdk/node` с инъекцией
+`verifiers: { tdxQuote, gpuEvidence }`. Значит, replay гоняет **родной код проверки SDK** (nonce в report_data, ключ подписи в
+report_data, `app_compose` ↔ MRCONFIGID, повтор RTMR3 по event log, nonce в NRAS, политика TCB, compose-manager), а подменены
+только два сетевых шага: «сходить к Intel за коллатералью» и «спросить NVIDIA». Это честнее, чем своя урезанная проверка.
+
+**Что записано в `docs/samples/` (всё публичное):** `intel-collateral.json` — коллатераль Intel PCS для трёх квот отчёта (модель,
+шлюз, compose-manager), ключ — `sha256(quote hex)`; `nras-response.json` — вердикт NRAS на записанный `nvidia_payload`;
+`nvidia-jwks.json` — ключи NVIDIA; `replay-manifest.json` — время записи и момент, на который replay оценивает улики.
+Время берётся из манифеста, а не `Date.now()`: `dcap-qvl.verify(quote, collateral, nowSecs)` и `jose.jwtVerify(..., { currentDate })`.
+Свежесть в replay не перепроверяется, и демо печатает это отдельной строкой.
+
+**Наблюдения.**
+- NRAS повторно аттестует payload суточной давности и возвращает JWT с тем же `eat_nonce`: свежесть у NVIDIA не на их стороне,
+  а на нашей (nonce клиента → report_data → payload). Для replay это удобно, для CLAIMS — повод не писать «NVIDIA подтверждает,
+  что железо проверено сейчас».
+- Первый прогон записи упал на проверке JWT: `jwtVerify` с `currentDate` на секунду раньше `nbf` токена. В replay берём
+  `currentDate = iat` из манифеста, детерминированно.
+- Коллатераль Intel (TCB info, QE identity, CRL) имеет `nextUpdate` порядка месяца. Если `pnpm demo` начнёт падать на
+  `quote.verification_failed` ближе к концу ноября — перезаписать `intel-collateral.json` скриптом записи (tmp, см. ниже) и
+  обновить `nowSecs` в манифесте. Проверить 12 ноября перед фризом.
+- `nvidia-jwks.json` — 513 КБ как есть (у NVIDIA много ключей); оставил verbatim, чтобы не объяснять обрезку.
+- Весь маппинг сырого отчёта в `ModelAttestation` (`apps/demo/src/report.ts`) — копия того, что SDK делает внутри
+  `AttestationClient`; пригодится клиенту в браузере, где отчёт приходит через relay.
+
+**Fail-closed в replay.** `evaluateKeyLog` (`packages/proof/src/key-log.ts`, 6 тестов) — правило SPEC §7.1 на клиенте:
+`TRUSTED_VERIFIERS` + `QUORUM`, записи незнакомых верификаторов показываются, но не считаются; split-view = два доверенных
+верификатора с непересекающимися наборами ключей → отказ даже при кворуме. `compose_hash` сверяется, только если передан —
+под решение синка. Лог в replay — `key-entry.sample.json`; когда `ainek.testnet` задеплоен, добавить view `latest_keys`.
+`--tamper` подменяет ключ, который «видит клиент», на `abab…` → `not-logged` → REFUSED, выход 0 (так и задумано).
+
+Перезапись улик: `pnpm -F demo record` (`apps/demo/scripts/record-evidence.mjs`, ключ не нужен): коллатераль на три квоты с
+проверкой на месте, POST `nvidia_payload` в NRAS, GET JWKS, новый манифест.
+
+Дальше: `pnpm demo:live` через `apps/web` (живой запрос с ключом, коммит в контракт), запись E2EE-сэмпла, чтобы строка
+«End-to-end encryption» в карточке стала ✓, и view-вызовы лога после деплоя контракта.
