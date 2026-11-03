@@ -23,7 +23,7 @@ function contractLog(cfg: PublicConfig): KeyLog {
     latestKeys: async (model) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: DAY_NS })),
     entry: async (index) => {
       const raw = await view('entry', { index });
-      return raw === null ? null : KeyEntry.parse(raw);
+      return raw == null ? null : KeyEntry.parse(raw); // near-api-js returns undefined for an empty view result
     },
   };
 }

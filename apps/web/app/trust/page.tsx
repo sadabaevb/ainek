@@ -1,6 +1,7 @@
 // Who sees what (SPEC §8), verbatim in README as well. Static.
 const rows: Array<[party: string, sees: string, doesNotSee: string, guarantee: string]> = [
   ['Relay (our server)', 'ciphertext, size, timing, IP, API key', 'prompt, response and tool-call contents', 'E2EE to the model key from the verified attestation report'],
+  ['Relay on the Incognito demo route (user-chosen)', 'the plaintext prompt and reply', '—', 'none: no model key exists to encrypt to; the red card says so. This route exists to show what a non-attested model looks like'],
   ['NEAR AI gateway', 'ciphertext, token accounting', 'contents', 'E2EE; the gateway is attested'],
   ['Model enclave', 'plaintext for the duration of inference', '—', 'TDX + GPU attestation; retention inside the enclave is not provable by attestation'],
   ['OutLayer job', 'the action and the policy', 'the conversation', 'TDX; decision key generated in the TEE; what the OutLayer API gateway sees is being clarified'],

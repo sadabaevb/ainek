@@ -5,6 +5,7 @@ import {
   AttestationClient,
   NO_ALIASING_HEADER,
   findModelAttestationForSignature,
+  getSdkError,
   prepareE2eeChatRequest,
   verifyGatewayAttestation,
   verifyGatewayResponse,
@@ -12,6 +13,7 @@ import {
   verifyModelResponse,
   type CompletionSignature,
   type ModelMetadata,
+  type TcbStatus,
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
@@ -22,6 +24,10 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+}
+
+export interface AttestationPolicy {
+  acceptedTcbStatuses: TcbStatus[];
 }
 
 export interface VerifiedDeployment {
@@ -67,52 +73,70 @@ const metadataCache = new Cache<ModelMetadata>();
 const gatewayCache = new Cache<VerifiedGatewayAttestation>();
 const deploymentCache = new Cache<VerifiedDeployment>();
 
+/** Retries only what the SDK marks retryable (Intel PCS collateral hiccups, NRAS/transport 5xx, a signature not yet on this node). */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 1500): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= attempts || getSdkError(err)?.retryable !== true) throw err;
+      await new Promise((r) => setTimeout(r, delayMs * i));
+    }
+  }
+}
+
 /** Metadata only (no cryptographic check): tells whether the model supports model attestation at all. Static per model, cached. */
 export async function fetchModelMetadata(model: string): Promise<ModelMetadata> {
-  return metadataCache.get(model) ?? metadataCache.set(model, await client().fetchModelMetadata(model));
+  return metadataCache.get(model) ?? metadataCache.set(model, await withRetry(() => client().fetchModelMetadata(model)));
 }
 
 /** Gateway evidence verified on this device (no-TLS layout: a browser cannot observe the TLS peer). Cached 60 min. */
-export async function verifyGateway(): Promise<VerifiedGatewayAttestation> {
+export async function verifyGateway(policy: AttestationPolicy): Promise<VerifiedGatewayAttestation> {
   const cached = gatewayCache.get('gateway');
   if (cached) return cached;
-  const fetched = await client().fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO });
-  const gateway = await verifyGatewayAttestation({ attestation: fetched.attestation, clientBinding: fetched.clientBinding, policy: { acceptedTcbStatuses: ['UpToDate'] } });
+  const gateway = await withRetry(async () => {
+    const fetched = await client().fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO });
+    return verifyGatewayAttestation({ attestation: fetched.attestation, clientBinding: fetched.clientBinding, policy });
+  });
   return gatewayCache.set('gateway', gateway);
 }
 
-async function verifyModels(model: string): Promise<VerifiedModelAttestation[]> {
-  const fetched = await client().fetchModelAttestations({ model, signingAlgo: SIGNING_ALGO });
-  if (fetched.attestations.length === 0) throw new Error(`gateway returned no model attestation for ${model}`);
-  return Promise.all(
-    fetched.attestations.map((attestation) =>
-      verifyModelAttestation({ attestation, clientBinding: fetched.clientBinding, policy: { acceptedTcbStatuses: ['UpToDate'], gpuEvidence: 'required' } }),
-    ),
-  );
+function verifyModels(model: string, policy: AttestationPolicy): Promise<VerifiedModelAttestation[]> {
+  return withRetry(async () => {
+    const fetched = await client().fetchModelAttestations({ model, signingAlgo: SIGNING_ALGO });
+    if (fetched.attestations.length === 0) throw new Error(`gateway returned no model attestation for ${model}`);
+    return Promise.all(
+      fetched.attestations.map((attestation) => verifyModelAttestation({ attestation, clientBinding: fetched.clientBinding, policy: { ...policy, gpuEvidence: 'required' } })),
+    );
+  });
 }
 
 /** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min. */
-export async function verifyDeployment(model: string): Promise<VerifiedDeployment> {
+export async function verifyDeployment(model: string, policy: AttestationPolicy): Promise<VerifiedDeployment> {
   const cached = deploymentCache.get(model);
   if (cached) return { ...cached, tookMs: 0 };
   const t0 = performance.now();
-  const [gateway, models] = await Promise.all([verifyGateway(), verifyModels(model)]);
+  const [gateway, models] = await Promise.all([verifyGateway(policy), verifyModels(model, policy)]);
   return deploymentCache.set(model, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
 }
 
+// No Accept-Encoding here: browsers drop it as a forbidden header; the proxy asks upstream for identity itself.
 function chatRequest(model: string, messages: ChatMessage[]): Request {
   return new Request(`${baseUrl()}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept-Encoding': 'identity', [NO_ALIASING_HEADER]: 'true' },
+    headers: { 'Content-Type': 'application/json', [NO_ALIASING_HEADER]: 'true' },
     body: JSON.stringify({ model, messages, stream: false }),
   });
 }
 
 async function toExchange(requestBody: Uint8Array, rawResponse: Response, decrypted: Response): Promise<Exchange> {
   const [responseBytes, plaintext] = await Promise.all([rawResponse.arrayBuffer(), decrypted.text()]);
-  if (!decrypted.ok) throw new Error(`chat completion failed: HTTP ${decrypted.status} ${plaintext.slice(0, 200)}`);
   const completion = JSON.parse(plaintext) as { id: string; choices: Array<{ message: { content: string | null } }> };
   return { completionId: completion.id, requestBody, responseBody: new Uint8Array(responseBytes), reply: completion.choices[0]?.message.content ?? '', sentAt: new Date().toISOString() };
+}
+
+async function httpError(response: Response): Promise<Error> {
+  return new Error(`chat completion failed: HTTP ${response.status} ${(await response.text()).slice(0, 200)}`);
 }
 
 /** Encrypt to the verified model key, send through the proxy, decrypt; keep the exact bytes for the proof. */
@@ -124,27 +148,22 @@ export async function sendE2ee(model: string, messages: ChatMessage[], modelAtte
   });
   const requestBody = new Uint8Array(await prepared.request.clone().arrayBuffer());
   const encrypted = await fetch(prepared.request);
+  if (!encrypted.ok) throw await httpError(encrypted); // error bodies are plain JSON, not ciphertext
   return toExchange(requestBody, encrypted.clone(), await prepared.decryptResponse(encrypted));
 }
 
-/** Plaintext request for models without model attestation (Incognito tier): no E2EE is possible, only a gateway signature. */
+/** Plaintext request for the user-chosen Incognito model (no model attestation): no E2EE is possible, only a gateway signature. */
 export async function sendPlain(model: string, messages: ChatMessage[]): Promise<Exchange> {
   const request = chatRequest(model, messages);
   const requestBody = new Uint8Array(await request.clone().arrayBuffer());
   const response = await fetch(request);
+  if (!response.ok) throw await httpError(response);
   return toExchange(requestBody, response.clone(), response);
 }
 
-/** The signature is cached on the node that served the completion, so a lookup can land elsewhere for a moment: retry. */
-export async function fetchSignature(completionId: string, attempts = 4): Promise<CompletionSignature> {
-  for (let i = 1; ; i++) {
-    try {
-      return await client().fetchCompletionSignature({ completionId, signingAlgo: SIGNING_ALGO });
-    } catch (err) {
-      if (i >= attempts) throw err;
-      await new Promise((r) => setTimeout(r, 1500 * i));
-    }
-  }
+/** The signature is cached on the node that served the completion, so a lookup can land elsewhere for a moment: the SDK marks that retryable. */
+export function fetchSignature(completionId: string): Promise<CompletionSignature> {
+  return withRetry(() => client().fetchCompletionSignature({ completionId, signingAlgo: SIGNING_ALGO }), 4);
 }
 
 /** SDK byte-exact check against the verified model signer; returns the matching report. Throws on any mismatch, including a non-TEE signature kind. */

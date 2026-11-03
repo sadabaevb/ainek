@@ -3,6 +3,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
+import { describeError } from '@/lib/errors';
 import { runChat, type ChatMessage, type ChatOutcome, type StepEvent } from '@/lib/flow';
 import { useConfig, useT } from './providers';
 
@@ -55,13 +56,16 @@ export default function ChatPage() {
     if (!content || busy) return;
     setInput('');
     setBusy(true);
-    const history: ChatMessage[] = turns.flatMap((x) => (x.outcome && 'reply' in x.outcome ? [x.message, { role: 'assistant' as const, content: x.outcome.reply }] : []));
+    const history: ChatMessage[] = turns.flatMap((x) => (x.outcome && 'reply' in x.outcome && typeof x.outcome.reply === 'string' ? [x.message, { role: 'assistant' as const, content: x.outcome.reply }] : []));
     const messages = [...history, { role: 'user' as const, content }];
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
       const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) })) });
       patch(idx, (turn) => ({ ...turn, outcome }));
+    } catch (err) {
+      // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
+      patch(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err) } }));
     } finally {
       setBusy(false);
     }

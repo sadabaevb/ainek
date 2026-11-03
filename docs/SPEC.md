@@ -56,7 +56,10 @@ split-view индикатор), `/auditor` (раскрытие одного ли
 Байт-точный прокси на `cloud-api.near.ai` с серверным API-ключом для четырёх путей SDK (`/v1/model/{model}`,
 `/v1/attestation/report`, `/v1/chat/completions`, `/v1/signature/{id}`); наверх уходит закрытый список заголовков
 (content-type, accept, x-no-aliasing, x-model-pub-key и E2EE-заголовки). Видит только шифртекст, размер и IP.
-Никакого логирования тел запросов. PCCS/NRAS браузер ходит через прокси NEAR AI, свой не нужен.
+Никакого логирования тел запросов. PCCS/NRAS браузер ходит через прокси NEAR AI, свой не нужен. Прокси принимает только
+same-origin запросы, модель из белого списка (`NEARAI_MODEL`, `NEARAI_INCOGNITO_MODEL`), без `stream`/`n`, тело ≤ 64 КБ, с
+лимитом на IP; ключ защищён ещё и spend limit на стороне NEAR AI. Исключение, о котором карточка и `/trust` говорят прямо:
+Incognito-маршрут (§3.9) пользователь выбирает сам, E2EE там невозможно, и открытый текст проходит через прокси и шлюз.
 
 ### 3.5 Policy job `jobs/policy` (Rust, OutLayer WASI-P1) — Дастан
 Чистая функция: stdin JSON → stdout JSON ≤ 900 байт. Читает политику из секрета `POLICY_JSON`,
@@ -221,6 +224,15 @@ EIP-191 recover через `ethers` для ecdsa). Сырые байты и `sal
 кнопки «Перепроверить самому», «Открыть в Verification Center», «Раскрыть аудитору».
 Красные состояния (отдельный дизайн, крупно, с причиной): «ключ не в публичном логе — не отправлено»,
 «ответ прошёл через не-аттестованную модель», «агент предложил действие вне мандата — контракт отклонил».
+
+### 5.4 Раскрытие аудитору (файл «Disclose to auditor»)
+```json
+{ "v": 1, "kind": "disclosure", "proof": <ModelProof с salt и commit>, "logEntry": <KeyEntry>,
+  "rawRequestBase64": "<точные байты запроса, base64>", "rawResponseBase64": "<точные байты ответа, base64>",
+  "disclosedAt": "2026-11-05T10:00:00Z", "note": "<необязательно>" }
+```
+Байты — шифртекст E2EE как был отправлен/получен, открытого текста в файле нет. Схема `Disclosure`, `toDisclosure`,
+`parseDisclosure` — в `packages/proof`; `/verify` и `/auditor` принимают этот файл и пересчитывают хеши и коммит.
 
 ## 6. Политика и решение (jobs/policy)
 

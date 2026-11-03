@@ -1,5 +1,6 @@
 // SPEC §7.1 step 2: is the attested key confirmed by the public log? The contract's `latest_keys(model, max_age)`
 // returns the window; this function applies the client-side trust policy (TRUSTED_VERIFIERS + QUORUM) to it.
+import { shortHex } from './hash.ts';
 import type { KeyEntry } from './schema.ts';
 
 export interface KeyLogQuery {
@@ -69,12 +70,9 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   );
   const confirmedBy = [...new Set(matching.map((e) => e.verifier))];
   if (confirmedBy.length >= query.quorum) {
-    return { status: 'ok', confirmedBy, matching, untrusted, detail: `key ${short(wanted)} confirmed by ${confirmedBy.join(', ')}` };
+    return { status: 'ok', confirmedBy, matching, untrusted, detail: `key ${shortHex(wanted)} confirmed by ${confirmedBy.join(', ')}` };
   }
-  const why = matching.length === 0 ? `key ${short(wanted)} is not in the public log` : `only ${confirmedBy.length} of ${query.quorum} required confirmations`;
+  const why = matching.length === 0 ? `key ${shortHex(wanted)} is not in the public log` : `only ${confirmedBy.length} of ${query.quorum} required confirmations`;
   return { status: 'not-logged', confirmedBy, matching, untrusted, detail: `${why}: not sent (fail-closed)` };
 }
 
-function short(hex: string): string {
-  return `…${hex.slice(-4)}`;
-}

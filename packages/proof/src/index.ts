@@ -1,6 +1,6 @@
 export { canonicalJson, canonicalBytes, compareCodePoints, CanonicalError } from './canonical.ts';
 export type { JsonValue } from './canonical.ts';
-export { sha256Hex, utf8Bytes, bytesToHex, hexToBytes, concatBytes, isHex64, randomHex32 } from './hash.ts';
+export { sha256Hex, utf8Bytes, bytesToHex, hexToBytes, concatBytes, isHex64, randomHex32, shortHex } from './hash.ts';
 export { parseSignedText } from './signed-text.ts';
 export type { SignedText } from './signed-text.ts';
 export { verifySignedText, decodeSignature } from './signature.ts';

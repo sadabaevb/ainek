@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { memo, useMemo, type ReactNode } from 'react';
 import { toDisclosure } from '@ainek/proof';
 import { useT } from '@/app/providers';
-import type { ChatOutcome } from '@/lib/flow';
+import { STEPS_AFTER_SEND, type ChatOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
 import { seconds, short } from '@/lib/format';
 import { verificationCenterUrl } from '@/lib/links';
@@ -28,7 +28,10 @@ export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOut
   const { t } = useT();
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
-  if (outcome.kind === 'failed') return <RedCard title={t.failedTitle} lines={[`${outcome.step}: ${outcome.reason}`]} />;
+  if (outcome.kind === 'failed') {
+    const afterSend = STEPS_AFTER_SEND.has(outcome.step);
+    return <RedCard title={afterSend ? t.failedAfterSendTitle : t.failedTitle} {...(afterSend ? { body: t.failedAfterSendBody } : {})} lines={[`${outcome.step}: ${outcome.reason}`]} />;
+  }
   if (outcome.kind === 'refused') {
     return (
       <RedCard
@@ -53,6 +56,7 @@ export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOut
           `signature_kind: ${outcome.signature.kind} (signer ${short(outcome.signature.signer.signingAddress)} = gateway ${short(outcome.gateway.signer.signingAddress)})`,
           `gateway TCB: ${outcome.gateway.tcbStatus}`,
           `completion: ${outcome.exchange.completionId}`,
+          'transport: plaintext through our proxy and the gateway (no model key to encrypt to)',
         ]}
       />
     );
