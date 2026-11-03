@@ -8,7 +8,7 @@ import {
   verifyModelResponse,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { evaluateKeyLog, verifyModelProof, type KeyEntry } from '@ainek/proof';
+import { evaluateKeyLog, shortHex as short, verifyModelProof, type KeyEntry } from '@ainek/proof';
 import { loadRecording } from './evidence.ts';
 import { toGatewayAttestation, toModelAttestation } from './report.ts';
 import { createRecordedGpuVerifier, createRecordedTdxVerifier, type RecordedGpuVerdict } from './verifiers.ts';
@@ -23,7 +23,6 @@ const NA = '—';
 let failures = 0;
 function head(title: string): void { console.log(`\n${title}`); }
 function line(mark: string, text: string): void { if (mark === FAIL) failures += 1; console.log(`  ${mark} ${text}`); }
-function short(hex: string): string { return `${hex.slice(0, 8)}…${hex.slice(-4)}`; }
 function describe(err: unknown): string {
   const sdk = getSdkError(err);
   if (sdk) return `${sdk.failure.code}${'details' in sdk.failure && sdk.failure.details ? ' ' + JSON.stringify(sdk.failure.details) : ''}`;

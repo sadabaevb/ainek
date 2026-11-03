@@ -51,3 +51,8 @@ export function randomHex32(): string {
   globalThis.crypto.getRandomValues(bytes);
   return bytesToHex(bytes);
 }
+
+/** `5a0210f2…caff` for anything longer than 16 chars; shorter strings are returned as is. One format for card, CLI and verdicts. */
+export function shortHex(hex: string): string {
+  return hex.length > 16 ? `${hex.slice(0, 8)}…${hex.slice(-4)}` : hex;
+}

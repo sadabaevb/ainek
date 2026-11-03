@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateKeyLog } from './key-log.ts';
+import { evaluateKeyLog, findSplitView } from './key-log.ts';
 import type { KeyEntry } from './schema.ts';
 import { readRepoJson } from './fixtures.ts';
 
@@ -36,6 +36,8 @@ test('quorum 2 needs two distinct trusted verifiers', () => {
 test('split view: two trusted verifiers with disjoint key sets → refuse even if our key is logged', () => {
   const v = evaluateKeyLog([entry, logged({ index: 1, verifier: 'v2.ainek.testnet', signing_address: KEY_B, signing_public_key: KEY_B })], base);
   assert.equal(v.status, 'split-view');
+  assert.equal(findSplitView([entry, logged({ index: 1, verifier: 'v2.ainek.testnet', signing_address: KEY_B, signing_public_key: KEY_B })], entry.model, base.trustedVerifiers)?.verifierB, 'v2.ainek.testnet');
+  assert.equal(findSplitView([entry], entry.model, base.trustedVerifiers), null);
 });
 
 test('compose hash is enforced only when asked', () => {

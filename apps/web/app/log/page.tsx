@@ -1,164 +1,97 @@
 'use client';
-
-// Day-1 NEAR quickstart on the page that will later become the key-log explorer (SPEC §3.3).
-// Dastan's contract is not deployed yet, so this talks to the docs' example contract:
-//   view   get_greeting  — free, no wallet, answered by an RPC node from the latest state
-//   change set_greeting  — a signed transaction; the wallet (or the function-call key it added at
-//                          login) signs it, the network executes it and charges gas
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+// The public key log as the client sees it: who logged which key for which model, and whether two trusted
+// verifiers disagree (split view). Wallet login here adds the function-call key later used for commit_proof.
+import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
+import { findSplitView, type KeyEntry } from '@ainek/proof';
+import { describeError } from '@/lib/errors';
+import { short } from '@/lib/format';
+import { keyLogFor } from '@/lib/key-log';
+import { useConfig } from '../providers';
 
-const CONTRACT = 'hello.near-examples.testnet'; // placeholder until ainek.testnet exists
-const EXPLORER = 'https://testnet.nearblocks.io';
-
-// 0.25 NEAR gas allowance for the function-call key the wallet adds at login (docs' default).
-const FC_KEY_ALLOWANCE = '250000000000000000000000';
-
-// Access-key list as near-api-js returns it through the hook (nonce is a bigint there).
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
-
-function functionCallPermission(key: AccessKeyInfo): { receiver_id: string; method_names: string[] } | null {
-  const permission = key.access_key.permission;
-  if (typeof permission === 'object' && 'FunctionCall' in permission) return permission.FunctionCall;
-  return null;
-}
+const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
 
 export default function LogPage() {
-  const { loading, network, signedAccountId, signIn, signOut, viewFunction, callFunctionRaw, getAccessKeyList } =
-    useNearWallet();
-
-  const [greeting, setGreeting] = useState<string | null>(null);
-  const [viewError, setViewError] = useState<string | null>(null);
-  const [keys, setKeys] = useState<AccessKeyInfo[] | null>(null);
-  const [newGreeting, setNewGreeting] = useState('Hello from Ainek');
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // View call: no wallet needed, runs on every visit.
-  const refreshGreeting = useCallback(async () => {
-    try {
-      const value = (await viewFunction({ contractId: CONTRACT, method: 'get_greeting', args: {} })) as string;
-      setGreeting(value);
-      setViewError(null);
-    } catch (err) {
-      setViewError(err instanceof Error ? err.message : String(err));
-    }
-  }, [viewFunction]);
+  const cfg = useConfig();
+  const [entries, setEntries] = useState<KeyEntry[] | null>(null);
+  const [error, setError] = useState('');
+  const { signedAccountId, signIn, signOut, getAccessKeyList, loading } = useNearWallet();
+  const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
   useEffect(() => {
-    void refreshGreeting();
-  }, [refreshGreeting]);
+    keyLogFor(cfg).latestKeys(cfg.model).then(setEntries).catch((e: unknown) => setError(describeError(e)));
+  }, [cfg]);
 
-  // After login, list the account's access keys so the function-call key is visible.
   useEffect(() => {
     if (!signedAccountId) {
-      setKeys(null);
+      setKeys([]);
       return;
     }
-    getAccessKeyList(signedAccountId)
-      .then((list) => setKeys(list.keys))
-      .catch(() => setKeys(null));
-  }, [signedAccountId, getAccessKeyList]);
+    getAccessKeyList(signedAccountId).then((r) => setKeys(r.keys)).catch(() => setKeys([]));
+    // getAccessKeyList is rebuilt on every provider render; the account id is the only real dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedAccountId]);
 
-  async function connect() {
-    setError(null);
-    try {
-      // Ask the wallet to also add a function-call key limited to set_greeting on CONTRACT:
-      // later calls to that method are signed locally without a wallet popup.
-      await signIn({
-        addFunctionCallKey: {
-          contractId: CONTRACT,
-          allowMethods: { anyMethod: false, methodNames: ['set_greeting'] },
-          gasAllowance: { kind: 'limited', amount: FC_KEY_ALLOWANCE },
-        },
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
+  const split = entries ? findSplitView(entries, cfg.model, cfg.trustedVerifiers) : null;
 
-  async function onSetGreeting(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    setTxHash(null);
-    try {
-      const outcome = await callFunctionRaw({
-        contractId: CONTRACT,
-        method: 'set_greeting',
-        args: { greeting: newGreeting },
-        gas: '30000000000000', // 30 TGas
-        deposit: '0',
-      });
-      setTxHash(outcome.transaction.hash);
-      await refreshGreeting();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const fcKeys = (keys ?? []).filter((k) => functionCallPermission(k)?.receiver_id === CONTRACT);
+  const connect = () =>
+    signIn({ addFunctionCallKey: { contractId: cfg.contract, allowMethods: { anyMethod: false, methodNames: ['commit_proof'] }, gasAllowance: { kind: 'limited', amount: FC_KEY_ALLOWANCE } } });
 
   return (
-    <main>
-      <h1>/log — NEAR wallet spike ({network})</h1>
-      <p>
-        Placeholder contract <code>{CONTRACT}</code> until <code>ainek.testnet</code> is deployed.{' '}
-        <a href={`${EXPLORER}/address/${CONTRACT}`} target="_blank" rel="noreferrer">
-          explorer
-        </a>
+    <main className="page">
+      <h1>Public key log</h1>
+      <p className="muted">
+        Contract <span className="mono">{cfg.contract}</span> on {cfg.network}; trusted verifiers {cfg.trustedVerifiers.join(', ')}; quorum {cfg.quorum}.
+        {cfg.logSource === 'sample' && ' Showing the recorded sample entry until the contract is deployed (AINEK_LOG_SOURCE=sample).'}
       </p>
+      {error && <p className="card red">{error}</p>}
+      {split && (
+        <section className="card red">
+          <h3>Split view</h3>
+          <p>{split.detail}</p>
+        </section>
+      )}
+      {entries && (
+        <table>
+          <thead>
+            <tr><th>#</th><th>model</th><th>verifier</th><th>signing key</th><th>compose</th><th>TCB</th><th>observed</th></tr>
+          </thead>
+          <tbody>
+            {entries.map((e) => (
+              <tr key={e.index}>
+                <td>{e.index}</td>
+                <td className="mono">{e.model}</td>
+                <td className="mono">{e.verifier}{cfg.trustedVerifiers.includes(e.verifier) ? '' : ' (not in trust set)'}</td>
+                <td className="mono">{short(e.signing_address)}</td>
+                <td className="mono">{short(e.compose_hash)}</td>
+                <td>{e.tcb_status}</td>
+                <td>{new Date(Number(e.observed_at)).toISOString().slice(0, 16).replace('T', ' ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
-      <h2>view call: get_greeting</h2>
-      {viewError ? <p style={{ color: 'crimson' }}>view error: {viewError}</p> : <p>{greeting ?? 'loading…'}</p>}
-
-      <h2>wallet</h2>
-      {loading ? (
-        <p>initialising wallet connector…</p>
-      ) : signedAccountId ? (
-        <p>
-          signed in as <b>{signedAccountId}</b>{' '}
-          <button type="button" onClick={() => void signOut()}>
-            disconnect
-          </button>
-        </p>
+      <h2 style={{ fontSize: '1.1rem', marginTop: '2rem' }}>Wallet</h2>
+      <p className="muted small">Logging in adds a function-call key limited to <span className="mono">commit_proof</span> on the contract, so the chat can commit salted proof hashes without asking the wallet each time.</p>
+      {signedAccountId ? (
+        <>
+          <p>Connected as <span className="mono">{signedAccountId}</span> <button type="button" className="btn small" onClick={() => void signOut()}>Disconnect</button></p>
+          <details>
+            <summary>Access keys ({keys.length})</summary>
+            <ul className="mono">
+              {keys.map((k) => {
+                const p = k.access_key.permission;
+                const fc = typeof p === 'object' && p !== null && 'FunctionCall' in p ? p.FunctionCall : null;
+                return <li key={k.public_key}>{k.public_key.slice(0, 20)}… · {fc ? `FunctionCall on ${fc.receiver_id}, methods [${fc.method_names.join(', ')}]` : 'FullAccess'}</li>;
+              })}
+            </ul>
+          </details>
+        </>
       ) : (
-        <button type="button" onClick={() => void connect()}>
-          Connect wallet
-        </button>
+        <button type="button" className="btn primary" onClick={() => void connect()} disabled={loading}>Connect wallet</button>
       )}
-      {signedAccountId && keys && (
-        <p>
-          access keys on this account: {keys.length}; function-call keys for {CONTRACT}: {fcKeys.length}
-          {fcKeys.map((k) => (
-            <span key={String(k.public_key)}>
-              <br />
-              <code>{String(k.public_key)}</code> → methods {JSON.stringify(functionCallPermission(k)?.method_names ?? [])}
-            </span>
-          ))}
-        </p>
-      )}
-
-      <h2>change call: set_greeting</h2>
-      <form onSubmit={onSetGreeting}>
-        <input value={newGreeting} onChange={(e) => setNewGreeting(e.target.value)} disabled={busy || !signedAccountId} />{' '}
-        <button type="submit" disabled={busy || !signedAccountId || !newGreeting.trim()}>
-          {busy ? 'sending…' : 'set greeting'}
-        </button>
-        {!signedAccountId && <span> (connect a wallet first)</span>}
-      </form>
-      {txHash && (
-        <p>
-          tx <code>{txHash}</code>{' '}
-          <a href={`${EXPLORER}/txns/${txHash}`} target="_blank" rel="noreferrer">
-            open on nearblocks
-          </a>
-        </p>
-      )}
-      {error && <p style={{ color: 'crimson' }}>error: {error}</p>}
     </main>
   );
 }
