@@ -1,0 +1,24 @@
+{
+  "_note": "SAMPLE model proof assembled from signature.json + chat-*.raw.json (captured 2026-11-02, no E2EE). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value, commitTx is a placeholder (nothing was committed on-chain).",
+  "proof": {
+    "v": 1,
+    "kind": "model",
+    "completionId": "7556638665c34ec6ac6cb69579bd8ef2",
+    "model": "z-ai/glm-5.3-flash",
+    "signatureKind": "provider_tee",
+    "signingAlgo": "ed25519",
+    "signingAddress": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+    "signedText": "z-ai/glm-5.3-flash:3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80:8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60",
+    "signature": "d4ec7af5606397890fe66cb769a49adaf302808a1f05d2df8966e94f24edc8b8eae8d29bbb7779d77dd63bf3a99235dde5537f82ca86edadbd34b20321289104",
+    "requestSha256": "3af4edc6ae5308b4534c8c5cd8074c8207938d1ac6e91402d9806b1b653ceb80",
+    "responseSha256": "8ffcb1660d98dffd7d81c43347d18ebcc538ce43d578b6f6f501d26fd48e1f60",
+    "e2ee": false,
+    "toolNames": [],
+    "logIndex": 0,
+    "verifier": "v1.ainek.testnet",
+    "verifiedAt": "2026-11-02T16:14:00Z",
+    "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "commit": "f415f768dc1fa81dfed5a6d1cf421f90b7fa70bba60f7815ea32f995b5810dbf",
+    "commitTx": "SAMPLE-not-committed"
+  }
+}

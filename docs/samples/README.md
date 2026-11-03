@@ -10,6 +10,8 @@ are the *public* signing keys of the gateway and model TEEs, which is the whole 
 | `chat-request.raw.json` | exact request body bytes of one `POST /v1/chat/completions` (no E2EE, `stream: false`) | `Accept-Encoding: identity` |
 | `chat-response.raw.json` | exact response body bytes (1038 B) | these bytes, not a re-serialised object, are what the model TEE hashed |
 | `signature.json` | `GET /v1/signature/7556638665c34ec6ac6cb69579bd8ef2?model=…&signing_algo=ed25519` | `signature_kind: provider_tee`, `text = model:sha256(req):sha256(resp)`, signature = 64 bytes hex |
+| `key-entry.sample.json` | **sample** `KeyEntry` (SPEC §4.1) as a verifier would log it from `attestation-report.json`; not read from the chain | real: model, signing keys, `compose_hash`, `image_digests`, nonce, `report_hash`; placeholders: index 0, `prev_hash ""`, `nras_result_hash ""`, `block_height 0`; `entry_hash` per `packages/proof` |
+| `model-proof.sample.json` | **sample** `ModelProof` (SPEC §5.1) assembled from `signature.json` + the raw bytes, with a fixed test salt and its `commit` | `commitTx` is a placeholder: nothing was committed on-chain; `pnpm -F @ainek/proof test` verifies it end to end |
 
 Re-verify offline: `sha256(chat-request.raw.json)` and `sha256(chat-response.raw.json)` must equal the two hashes
 in `signature.text`; the ed25519 signature over the UTF-8 bytes of `text` must verify under `signing_address`

@@ -196,3 +196,39 @@ Receipts (транзакция → receipt в шарде получателя �
 Чего там нет: содержимого — только аргументы. Для `commit_proof` в аргументах будут видны лишь `commit`, `kind`,
 `log_index`; для `propose_action` — действие целиком (сумма и получатель на публичном testnet видны, об этом честно пишем в
 README, SPEC §4.3).
+
+## 2026-11-03 — `packages/proof` (Бектур): канонические байты, схемы, локальная проверка
+
+Пакет `@ainek/proof` (`packages/proof`), 34 теста на `node:test` поверх `docs/samples/` и `docs/test-vectors/canonical.json`:
+`pnpm -F @ainek/proof test`, из корня — `pnpm test`. Без сборки: точка входа — исходный `.ts`, Node 24 исполняет его напрямую
+(type stripping; поэтому в tsconfig `erasableSyntaxOnly` + `verbatimModuleSyntax`, импорты с расширением `.ts`, никаких `enum`).
+Зависимости только те, что уже тянет SDK: `ethers` 6.17.0 (sha256 + EIP-191 recover для ecdsa), `tweetnacl` 1.0.3 (ed25519), `zod` 4.6.7.
+
+**Что проверено на живых данных 2 ноября.** `verifyModelProof` на `model-proof.sample.json` + сырых байтах + `key-entry.sample.json`
+даёт 8/8 ✓; тесты ломают по одному: `signature_kind: gateway` → красная строка `route`; один перевёрнутый бит в ответе →
+`response-hash ✗`; подменённый `signing_address` в записи лога → `key-in-log ✗`; `logEntry = null` → `key-in-log ✗` (fail-closed);
+без сырых байт — `skipped`, не `fail`, чтобы `/verify` по одному JSON тоже работал.
+
+**Канонический JSON — две ловушки, которые тест-векторы ловят.**
+1. JS `sort()` сравнивает UTF-16-единицы, Rust `BTreeMap` — байты UTF-8 (= code point). Для ключей `z`, `ﬁ` (U+FB01), `😀` (U+1F600)
+   порядок отличается; вектор «key order is by code point» — ровно этот случай. Сортируем по code point явно.
+2. Числа: JS печатает `1e+21`, Rust — `1e21`; дроби тоже расходятся. Канонизатор принимает только целые до 2^53−1 и бросает
+   `CanonicalError` на всё остальное; U64/U128 — десятичные строки, как их и сериализует near-sdk (`observed_at`, `amount`, `expires_at`).
+Независимая сверка: все 13 векторов и 3 коммит-правила совпали с Python `json.dumps(sort_keys=True, separators=(',',':'), ensure_ascii=False)`.
+
+**Что Дастану сделать у себя (5 минут).** `serde_json::to_string(&serde_json::to_value(&x)?)` при выключенной фиче
+`preserve_order` (`cargo tree -e features -i serde_json | grep preserve_order` — пусто) даёт те же байты; `to_string(&struct)`
+напрямую — нет (порядок полей объявления). Юнит-тест по `docs/test-vectors/canonical.json`: `vectors[].canonical`/`sha256`,
+`commits.action_commit`, `commits.entry_hash`. Проверить фичи near-sdk: не включает ли он `preserve_order` транзитивно.
+
+**Три конвенции, которых в SPEC не было — вписал в SPEC §4.1/§4.2/§6.2, подтвердить на синке:**
+- `entry_hash = sha256(prev_hash ‖ canonical_json(input) ‖ verifier)` — три UTF-8-строки подряд, `prev_hash` как hex-текст (не 32 байта),
+  у первой записи `prev_hash = ""`. Альтернатива (сырые байты) — 2 строки в обоих языках, но решить надо одинаково.
+- `commit` считается по proof **без** `salt`, `commit`, `commitTx` (иначе рекурсия); соль — сырые 32 байта.
+- `image_digests` — строки `sha256:<hex>` как в compose (в отчёте 4 образа у модели).
+
+**Relay (п. ROADMAP «relay без логирования тел»).** В `app/api/relay/route.ts` в лог уходят только коды ошибок SDK
+(`sdk.toJSON()`, без контента) и объект ошибки; тел запросов/ответов нет. Известная дыра из шага 2 остаётся: SDK с `e2ee: true`
+живёт на сервере, то есть шифрует relay, а не браузер — переезд шифрования в клиент входит в сессию 3 (`tier1-client.md`, п. 3).
+
+Следующий шаг: replay-режим `pnpm demo` на `docs/samples/` (офлайн-проверка + печать карточки в терминал), затем сессия 3.
