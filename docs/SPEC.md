@@ -123,6 +123,9 @@ KeyEntryInput {
 KeyEntry = KeyEntryInput + { index: u64, verifier: AccountId, prev_hash: String, entry_hash: String, block_height: u64 }
 entry_hash = sha256(prev_hash || canonical_json(KeyEntryInput) || verifier)   // hash chain, like CT
 ```
+Конкатенация в `entry_hash` — три UTF-8-строки подряд: `prev_hash` как 64 hex-символа (не 32 байта), канонический JSON,
+`verifier` как account id; у первой записи `prev_hash = ""`. `image_digests` — строки вида `sha256:<hex>` как в compose.
+Эталон: `docs/test-vectors/canonical.json` → `commits.entry_hash` (TS: `entryHashOf` в `packages/proof`).
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
 
 **Предложение к синку 3.11 — открытая регистрация.** Owner-регистрация делает лог «реестром владельца» — ровно то, что мы
@@ -139,7 +142,9 @@ demo; the log format and the client policy do not depend on it».
 commit_proof(commit: String, kind: String, log_index: u64)       // any account; FC key allowed
 view proof_commit(account: AccountId, commit: String) -> Option<{ kind, log_index, block_height }>
 ```
-`commit = sha256(salt_32_bytes || canonical_json(Proof))` hex. `kind` = `"model" | "action"`.
+`commit = sha256(salt_32_bytes || canonical_json(Proof))` hex, где `Proof` — proof **без** полей `salt`, `commit`, `commitTx`
+(они появляются после коммита и не могут входить в него); `salt_32_bytes` — сырые байты соли, не hex-текст.
+Эталон: `docs/test-vectors/canonical.json` → `commits.proof_commit` (TS: `commitOf`). `kind` = `"model" | "action"`.
 Событие `proof_committed {account, commit, kind, log_index}`. Storage: один коммит ≈ 100 байт — депозит за
 хранение владелец аккаунта кладёт заранее полным ключом (FC-ключ депозит прикладывать не может).
 
@@ -233,8 +238,11 @@ policy_hash = sha256(canonical_json(policy))  // публикуется в regis
 Выход (stdout, ≤ 900 байт): `{ "decision": Decision, "sig": "<base64 ed25519 over canonical_bytes(decision)>", "pubkey": "<hex>", "wasm_hash": "<hex>" }`.
 Логика: receiver ∈ whitelist, иначе Deny; amount ≤ per_action и spent_today+amount ≤ per_day, иначе Deny;
 amount > needs_approval_above → NeedsApproval; иначе Allow. `nonce` = sha256(action_commit || now).
-Канонические байты: детерминированный JSON (ключи отсортированы, без пробелов) — одна и та же функция
-в Rust и TS (`packages/proof/canonical.ts`, `jobs/policy/src/canonical.rs`), с тест-векторами.
+Канонические байты: детерминированный JSON — одна и та же функция в Rust и TS (`packages/proof/src/canonical.ts`,
+`jobs/policy/src/canonical.rs`), тест-векторы в `docs/test-vectors/canonical.json`. Правила: ключи отсортированы по
+Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в JS сортировать явно, `sort()` сравнивает UTF-16),
+без пробелов, строки экранируются как `JSON.stringify`/`serde_json` (не-ASCII и `/` не экранируются), числа — только
+целые до 2^53−1 (U64/U128 — десятичные строки, как в near-sdk), `undefined`-поля опускаются.
 
 ## 7. Потоки
 
