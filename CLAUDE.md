@@ -40,6 +40,7 @@ Three questions the product answers: "Is this key real?", "Did this answer come 
 
 ```
 apps/web/            Next.js app: chat, proof card, /verify, /log, /auditor         (web)
+apps/demo/           Node 24 CLI: `pnpm demo` replay / `demo:tamper` on docs/samples, offline  (web)
 services/verifier/   Node 24 daemon: attestation -> KeyEntry -> contract.log_key    (services)
 services/agent/      Node 24 service: NL -> NEAR AI -> OutLayer -> contract         (services)
 packages/proof/      Shared TS: proof schema, canonical bytes, hashing, verify fns  (shared)

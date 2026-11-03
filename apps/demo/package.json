@@ -1,0 +1,23 @@
+{
+  "name": "demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ainek replay demo: re-verifies recorded NEAR AI evidence offline and prints the proof card",
+  "type": "module",
+  "scripts": {
+    "replay": "node src/replay.ts",
+    "tamper": "node src/replay.ts --tamper",
+    "record": "node scripts/record-evidence.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ainek/proof": "workspace:*",
+    "@nearai/inference-sdk": "0.2.1",
+    "@phala/dcap-qvl": "0.7.0",
+    "jose": "6.2.13"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

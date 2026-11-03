@@ -12,6 +12,10 @@ are the *public* signing keys of the gateway and model TEEs, which is the whole 
 | `signature.json` | `GET /v1/signature/7556638665c34ec6ac6cb69579bd8ef2?model=…&signing_algo=ed25519` | `signature_kind: provider_tee`, `text = model:sha256(req):sha256(resp)`, signature = 64 bytes hex |
 | `key-entry.sample.json` | **sample** `KeyEntry` (SPEC §4.1) as a verifier would log it from `attestation-report.json`; not read from the chain | real: model, signing keys, `compose_hash`, `image_digests`, nonce, `report_hash`; placeholders: index 0, `prev_hash ""`, `nras_result_hash ""`, `block_height 0`; `entry_hash` per `packages/proof` |
 | `model-proof.sample.json` | **sample** `ModelProof` (SPEC §5.1) assembled from `signature.json` + the raw bytes, with a fixed test salt and its `commit` | `commitTx` is a placeholder: nothing was committed on-chain; `pnpm -F @ainek/proof test` verifies it end to end |
+| `intel-collateral.json` | Intel PCS collateral (TCB info, QE identity, CRLs, issuer chains; all public) for the three quotes in the report, keyed by `sha256(quote hex)`; recorded 2026-11-03 | lets `@phala/dcap-qvl` verify the quotes offline at `replay-manifest.nowSecs`; Intel rotates TCB info roughly monthly, so re-record if the replay starts failing on collateral validity |
+| `nras-response.json` | NVIDIA NRAS verdict for the recorded `nvidia_payload`, verbatim (`[["JWT", overall], {"GPU-0": …}]`), recorded 2026-11-03 | NRAS re-attests a recorded payload; `eat_nonce` equals the report nonce; JWT lifetime 1 h, so the replay verifies it at its `iat` |
+| `nvidia-jwks.json` | NVIDIA NRAS public keys (`/.well-known/jwks.json`), verbatim | the JWT above is checked against the key with `replay-manifest.nras.kid` |
+| `replay-manifest.json` | when each piece of evidence was recorded and the instant the replay evaluates it at | freshness is not re-checked in replay; the demo prints that line explicitly |
 
 Re-verify offline: `sha256(chat-request.raw.json)` and `sha256(chat-response.raw.json)` must equal the two hashes
 in `signature.text`; the ed25519 signature over the UTF-8 bytes of `text` must verify under `signing_address`

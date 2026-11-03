@@ -51,14 +51,16 @@ Other teams shipped adjacent pieces in the first days — we think naming them i
 git clone https://github.com/<org>/ainek && cd ainek
 cp .env.example .env            # fill NEARAI_API_KEY (cloud.near.ai → API Keys) — testnet needs nothing else
 pnpm i
-pnpm demo                        # replay mode, no API key: verifies recorded attestation reports + signed responses offline,
-                                 #   reads the public key log on testnet, prints ✓/✗ per check
+pnpm demo                        # replay mode, no API key, no network (~1 s): re-verifies the recorded attestation with the
+                                 #   NEAR AI SDK's own checks (Intel TDX quote + recorded collateral, NVIDIA NRAS verdict,
+                                 #   compose measurements), applies the fail-closed log rule, re-checks the signed response,
+                                 #   prints ✓/✗ per step and the proof card
 pnpm demo:live                   # needs NEARAI_API_KEY: live E2EE request → proof → on-chain commit (tx …)
 pnpm -F web dev                  # → open http://localhost:3000, send "hello" → proof card with ✓ rows and a nearblocks link
 ```
 
 1. **See the log:** open `/log` → entries from `v1.ainek.testnet` and `v2.ainek.testnet` for `z-ai/glm-5.3-flash`.
-2. **See fail-closed:** `pnpm demo:tamper` → the client refuses to send ("key …a3f1 not in log").
+2. **See fail-closed:** `pnpm demo:tamper` → the client refuses to send ("key …abab is not in the public log: not sent").
 3. **Re-verify a proof yourself:** paste the proof JSON into `/verify` → hashes recomputed, signature checked, log entry matched.
 4. **(Tier 2) Watch the agent:** `pnpm -F agent start` → in Telegram send "pay aibek.testnet 300 for October"
    → `action_executed` on nearblocks; send "pay newguy.testnet 5000" → `NeedsApproval` → tap Reject.
