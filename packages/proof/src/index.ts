@@ -21,5 +21,9 @@ export {
   SigningAlgo,
   hex64,
 } from './schema.ts';
-export { evaluateKeyLog } from './key-log.ts';
-export type { KeyLogQuery, KeyLogVerdict, KeyLogStatus } from './key-log.ts';
+export { evaluateKeyLog, findSplitView } from './key-log.ts';
+export type { KeyLogQuery, KeyLogVerdict, KeyLogStatus, SplitView } from './key-log.ts';
+export { buildModelProof } from './build.ts';
+export type { BuildModelProofInput } from './build.ts';
+export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
+export type { DisclosedExchange } from './disclosure.ts';

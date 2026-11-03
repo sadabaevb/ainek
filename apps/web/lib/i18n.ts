@@ -1,11 +1,8 @@
-'use client';
-// Card and page texts: English for the judges, Russian toggle (tier1-client.md). Kept flat on purpose.
-import { useEffect, useState } from 'react';
-
+// Card and page texts: English for the judges, Russian toggle (tier1-client.md). The active language lives in
+// <Providers> (one toggle in the nav); components call useT() from app/providers.
 export type Lang = 'en' | 'ru';
 
 const en = {
-  title: 'Ainek',
   tagline: 'Ask a private model. Get a proof you can check yourself.',
   model: 'Model',
   teeModel: 'Private TEE model',
@@ -30,7 +27,6 @@ const en = {
   hashesOk: 'hashes recomputed here match the signature made inside the model TEE',
   rowE2ee: 'End-to-end encryption',
   e2eeYes: 'yes, encrypted to the attested model key',
-  e2eeNo: 'no',
   rowChain: 'On NEAR',
   chainPending: 'only a salted hash will go on-chain; contract not deployed yet',
   chainTx: (commit: string) => `only the hash ${commit}`,
@@ -47,7 +43,6 @@ const en = {
 };
 
 const ru: typeof en = {
-  title: 'Ainek',
   tagline: 'Спроси приватную модель. Получи proof, который проверишь сам.',
   model: 'Модель',
   teeModel: 'Приватная TEE-модель',
@@ -72,7 +67,6 @@ const ru: typeof en = {
   hashesOk: 'хеши, пересчитанные здесь, совпадают с подписью из TEE модели',
   rowE2ee: 'Сквозное шифрование',
   e2eeYes: 'да, на аттестованный ключ модели',
-  e2eeNo: 'нет',
   rowChain: 'В NEAR',
   chainPending: 'в цепочку уйдёт только солёный хеш; контракт ещё не задеплоен',
   chainTx: (commit) => `только хеш ${commit}`,
@@ -90,25 +84,3 @@ const ru: typeof en = {
 
 export const dict = { en, ru };
 export type Dict = typeof en;
-
-export function useLang(): [Lang, Dict, () => void] {
-  const [lang, setLang] = useState<Lang>('en');
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem('ainek.lang');
-      if (saved === 'ru' || saved === 'en') setLang(saved);
-    } catch {
-      /* private window */
-    }
-  }, []);
-  const toggle = () => {
-    const next: Lang = lang === 'en' ? 'ru' : 'en';
-    setLang(next);
-    try {
-      window.localStorage.setItem('ainek.lang', next);
-    } catch {
-      /* ignore */
-    }
-  };
-  return [lang, dict[lang], toggle];
-}

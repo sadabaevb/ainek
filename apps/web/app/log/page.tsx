@@ -3,33 +3,25 @@
 // verifiers disagree (split view). Wallet login here adds the function-call key later used for commit_proof.
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
-import { evaluateKeyLog, type KeyEntry } from '@ainek/proof';
-import { getConfig } from '@/lib/config';
-import type { PublicConfig } from '@/app/api/config/route';
-import { fetchLatestKeys, type KeyLogSnapshot } from '@/lib/key-log';
+import { findSplitView, type KeyEntry } from '@ainek/proof';
+import { describeError } from '@/lib/errors';
+import { short } from '@/lib/format';
+import { keyLogFor } from '@/lib/key-log';
+import { useConfig } from '../providers';
 
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
 const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
 
-function short(hex: string): string {
-  return hex.length > 16 ? `${hex.slice(0, 8)}…${hex.slice(-4)}` : hex;
-}
-
 export default function LogPage() {
-  const [cfg, setCfg] = useState<PublicConfig | null>(null);
-  const [snap, setSnap] = useState<KeyLogSnapshot | null>(null);
+  const cfg = useConfig();
+  const [entries, setEntries] = useState<KeyEntry[] | null>(null);
   const [error, setError] = useState('');
   const { signedAccountId, signIn, signOut, getAccessKeyList, loading } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
   useEffect(() => {
-    getConfig()
-      .then(async (c) => {
-        setCfg(c);
-        setSnap(await fetchLatestKeys(c.model));
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
+    keyLogFor(cfg).latestKeys(cfg.model).then(setEntries).catch((e: unknown) => setError(describeError(e)));
+  }, [cfg]);
 
   useEffect(() => {
     if (!signedAccountId) {
@@ -37,44 +29,40 @@ export default function LogPage() {
       return;
     }
     getAccessKeyList(signedAccountId).then((r) => setKeys(r.keys)).catch(() => setKeys([]));
-  }, [signedAccountId, getAccessKeyList]);
+    // getAccessKeyList is rebuilt on every provider render; the account id is the only real dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedAccountId]);
 
-  const split = cfg && snap ? evaluateKeyLog(snap.entries, { model: cfg.model, signingAddress: '', trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }) : null;
+  const split = entries ? findSplitView(entries, cfg.model, cfg.trustedVerifiers) : null;
 
-  async function connect() {
-    if (!cfg) return;
-    await signIn({
-      addFunctionCallKey: { contractId: cfg.contract, allowMethods: { anyMethod: false, methodNames: ['commit_proof'] }, gasAllowance: { kind: 'limited', amount: FC_KEY_ALLOWANCE } },
-    });
-  }
+  const connect = () =>
+    signIn({ addFunctionCallKey: { contractId: cfg.contract, allowMethods: { anyMethod: false, methodNames: ['commit_proof'] }, gasAllowance: { kind: 'limited', amount: FC_KEY_ALLOWANCE } } });
 
   return (
     <main className="page">
       <h1>Public key log</h1>
-      {cfg && (
-        <p className="muted">
-          Contract <span className="mono">{cfg.contract}</span> on {cfg.network}; trusted verifiers {cfg.trustedVerifiers.join(', ')}; quorum {cfg.quorum}.
-          {snap?.source === 'sample' && ' Showing the recorded sample entry until the contract is deployed (AINEK_LOG_SOURCE=sample).'}
-        </p>
-      )}
+      <p className="muted">
+        Contract <span className="mono">{cfg.contract}</span> on {cfg.network}; trusted verifiers {cfg.trustedVerifiers.join(', ')}; quorum {cfg.quorum}.
+        {cfg.logSource === 'sample' && ' Showing the recorded sample entry until the contract is deployed (AINEK_LOG_SOURCE=sample).'}
+      </p>
       {error && <p className="card red">{error}</p>}
-      {split?.status === 'split-view' && (
+      {split && (
         <section className="card red">
           <h3>Split view</h3>
           <p>{split.detail}</p>
         </section>
       )}
-      {snap && (
+      {entries && (
         <table>
           <thead>
             <tr><th>#</th><th>model</th><th>verifier</th><th>signing key</th><th>compose</th><th>TCB</th><th>observed</th></tr>
           </thead>
           <tbody>
-            {snap.entries.map((e: KeyEntry) => (
+            {entries.map((e) => (
               <tr key={e.index}>
                 <td>{e.index}</td>
                 <td className="mono">{e.model}</td>
-                <td className="mono">{e.verifier}{cfg && !cfg.trustedVerifiers.includes(e.verifier) ? ' (not in trust set)' : ''}</td>
+                <td className="mono">{e.verifier}{cfg.trustedVerifiers.includes(e.verifier) ? '' : ' (not in trust set)'}</td>
                 <td className="mono">{short(e.signing_address)}</td>
                 <td className="mono">{short(e.compose_hash)}</td>
                 <td>{e.tcb_status}</td>
@@ -102,7 +90,7 @@ export default function LogPage() {
           </details>
         </>
       ) : (
-        <button type="button" className="btn primary" onClick={() => void connect()} disabled={loading || !cfg}>Connect wallet</button>
+        <button type="button" className="btn primary" onClick={() => void connect()} disabled={loading}>Connect wallet</button>
       )}
     </main>
   );

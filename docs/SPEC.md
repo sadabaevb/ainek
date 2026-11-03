@@ -44,16 +44,19 @@ testnet, верификатор пишет ключи, клиент верифи
 «Run a verifier in 5 minutes». Цель: к 10.11 в логе есть записи `v3`, запущенного человеком не из команды.
 
 ### 3.3 Клиент `apps/web` (Next.js) — Бектур
-Чат с E2EE через relay-роут; клиентская верификация (браузерная сборка SDK: dcap-qvl + Phala PCCS,
-NRAS через `/api/nras` прокси, подписи через tweetnacl/ethers); fail-closed сверка с логом; хранение
-сырых байт запроса/ответа и proof-ов в IndexedDB; `commit_proof` FC-ключом пользователя; страницы
+SDK NEAR AI работает в браузере (generic-вход, manual-flow из verification-guide): `AttestationClient` через наш прокси,
+`verifyGatewayAttestation` / `verifyModelAttestation` (dcap-qvl + PCCS/NRAS через прокси NEAR AI), `prepareE2eeChatRequest`,
+`verifyModelResponse`; поверх — `@ainek/proof` (пересчёт хешей, привязка к логу, коммит). Fail-closed сверка с логом стоит
+между проверкой отчёта и отправкой; сырые байты запроса/ответа и proof-ы — в IndexedDB; `commit_proof` FC-ключом пользователя; страницы
 `/` (чат), `/verify` (перепроверка proof по вставленному JSON или ссылке), `/log` (обозреватель лога,
 split-view индикатор), `/auditor` (раскрытие одного листа + соль → сверка с коммитом), `/trust`
 (таблица «кто что видит»).
 
-### 3.4 Relay `apps/web/app/api/relay` — Бектур
-Проксирует `POST /v1/chat/completions` на `cloud-api.near.ai` с серверным API-ключом; видит только
-шифртекст, размер и IP. Прокси для NRAS. Никакого логирования тел запросов.
+### 3.4 Прокси `apps/web/app/api/nearai/[...path]` — Бектур
+Байт-точный прокси на `cloud-api.near.ai` с серверным API-ключом для четырёх путей SDK (`/v1/model/{model}`,
+`/v1/attestation/report`, `/v1/chat/completions`, `/v1/signature/{id}`); наверх уходит закрытый список заголовков
+(content-type, accept, x-no-aliasing, x-model-pub-key и E2EE-заголовки). Видит только шифртекст, размер и IP.
+Никакого логирования тел запросов. PCCS/NRAS браузер ходит через прокси NEAR AI, свой не нужен.
 
 ### 3.5 Policy job `jobs/policy` (Rust, OutLayer WASI-P1) — Дастан
 Чистая функция: stdin JSON → stdout JSON ≤ 900 байт. Читает политику из секрета `POLICY_JSON`,

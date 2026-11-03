@@ -311,6 +311,14 @@ Incognito `anthropic/claude-haiku-5-5` → `provider external, model attestation
 запрашивается при логине на `/log`); кеш проверки в IndexedDB (сейчас только память, перезагрузка = 24 с заново);
 `/auditor`; переключатель RU покрывает чат и карточку, `/verify` и `/log` на английском; `pnpm demo:live`.
 
-Мелочи: NEXT_PUBLIC_* из корневого `.env` в клиент не попадают (инлайн на этапе сборки) — публичная конфигурация идёт через
-`/api/config`; `useEffect(() => el.scrollIntoView())` без фигурных скобок ломает React 19 («destroy is not a function»);
+Мелочи: NEXT_PUBLIC_* из корневого `.env` в клиент не попадают (инлайн на этапе сборки) — публичную конфигурацию читает
+layout на сервере (`lib/config.server.ts`, `force-dynamic`) и отдаёт в контекст `<Providers>`, страницы берут `useConfig()`; `useEffect(() => el.scrollIntoView())` без фигурных скобок ломает React 19 («destroy is not a function»);
 `allowImportingTsExtensions` нужен и в tsconfig web, раз `@ainek/proof` импортируется исходниками с `.ts`.
+
+**После `/simplify` (4 ревью-агента, 3 ноября):** поток переписан на один `runStep` + `StepFailed` вместо девяти копий try/catch;
+`buildModelProof`, формат раскрытия (`Disclosure`, `toDisclosure`/`parseDisclosure`) и `findSplitView` переехали в `@ainek/proof`
+(43 теста), чтобы агент Дастана собирал proof тем же кодом; конфиг — из layout в контекст, роуты `/api/config` и `/api/log/sample`
+удалены, образец лога — статический импорт JSON; прокси пропускает наверх закрытый список заголовков SDK, а не «всё кроме»;
+шлюз и модель проверяются параллельно (холодный старт 24 → 13 с), метаданные модели кешируются, лог читается параллельно с
+аттестацией; карточки мемоизированы, статусы/ссылки/ошибки — в общих помощниках. Поведение не менялось, три исхода
+перепроверены в браузере.
