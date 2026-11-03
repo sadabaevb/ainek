@@ -8,9 +8,11 @@ import {
   getSdkError,
   prepareE2eeChatRequest,
   verifyGatewayAttestation,
+  verifyGatewayResponse,
   verifyModelAttestation,
   verifyModelResponse,
   type CompletionSignature,
+  type ModelMetadata,
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
@@ -51,6 +53,25 @@ function client(): AttestationClient {
 }
 
 const deploymentCache = new Map<string, VerifiedDeployment>();
+let gatewayCache: { gateway: VerifiedGatewayAttestation; verifiedAt: number } | null = null;
+
+/** Metadata only (no cryptographic check): tells whether the model supports model attestation at all. */
+export function fetchModelMetadata(model: string): Promise<ModelMetadata> {
+  return client().fetchModelMetadata(model);
+}
+
+/** Gateway evidence verified on this device (no-TLS layout: a browser cannot observe the TLS peer). Cached 60 min. */
+export async function verifyGateway({ force = false } = {}): Promise<VerifiedGatewayAttestation> {
+  if (gatewayCache && !force && Date.now() - gatewayCache.verifiedAt < CACHE_TTL_MS) return gatewayCache.gateway;
+  const fetchedGateway = await client().fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO });
+  const gateway = await verifyGatewayAttestation({
+    attestation: fetchedGateway.attestation,
+    clientBinding: fetchedGateway.clientBinding,
+    policy: { acceptedTcbStatuses: ['UpToDate'] },
+  });
+  gatewayCache = { gateway, verifiedAt: Date.now() };
+  return gateway;
+}
 
 /** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). Cached 60 min in memory. */
 export async function verifyDeployment(model: string, { force = false } = {}): Promise<VerifiedDeployment> {
@@ -58,12 +79,7 @@ export async function verifyDeployment(model: string, { force = false } = {}): P
   if (cached && !force && Date.now() - Date.parse(cached.verifiedAt) < CACHE_TTL_MS) return { ...cached, tookMs: 0 };
   const t0 = performance.now();
   const c = client();
-  const fetchedGateway = await c.fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO });
-  const gateway = await verifyGatewayAttestation({
-    attestation: fetchedGateway.attestation,
-    clientBinding: fetchedGateway.clientBinding,
-    policy: { acceptedTcbStatuses: ['UpToDate'] },
-  });
+  const gateway = await verifyGateway({ force });
   const fetchedModels = await c.fetchModelAttestations({ model, signingAlgo: SIGNING_ALGO });
   if (fetchedModels.attestations.length === 0) throw new Error(`gateway returned no model attestation for ${model}`);
   const models = await Promise.all(
@@ -103,6 +119,29 @@ export async function sendE2ee(params: { model: string; messages: Array<{ role: 
   return { completionId: completion.id, requestBody, responseBody: new Uint8Array(responseBytes), completion, modelAttestation, sentAt: new Date().toISOString() };
 }
 
+/** Plaintext request for models without model attestation (Incognito tier): no E2EE is possible, only a gateway signature. */
+export async function sendPlain(params: { model: string; messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> }): Promise<PlainExchange> {
+  const request = new Request(`${baseUrl()}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept-Encoding': 'identity', [NO_ALIASING_HEADER]: 'true' },
+    body: JSON.stringify({ model: params.model, messages: params.messages, stream: false }),
+  });
+  const requestBody = new Uint8Array(await request.clone().arrayBuffer());
+  const response = await fetch(request);
+  const responseBody = new Uint8Array(await response.arrayBuffer());
+  if (!response.ok) throw new Error(`chat completion failed: HTTP ${response.status} ${new TextDecoder().decode(responseBody).slice(0, 200)}`);
+  const completion = JSON.parse(new TextDecoder().decode(responseBody)) as Exchange['completion'];
+  return { completionId: completion.id, requestBody, responseBody, completion, sentAt: new Date().toISOString() };
+}
+
+export interface PlainExchange {
+  completionId: string;
+  requestBody: Uint8Array;
+  responseBody: Uint8Array;
+  completion: Exchange['completion'];
+  sentAt: string;
+}
+
 export async function fetchSignature(completionId: string): Promise<CompletionSignature> {
   return client().fetchCompletionSignature({ completionId, signingAlgo: SIGNING_ALGO });
 }
@@ -112,6 +151,12 @@ export function checkResponse(exchange: Exchange, signature: CompletionSignature
   if (signature.kind !== 'provider_tee') throw new Error(`signature_kind is ${signature.kind}: not signed inside the model TEE`);
   const attestation = findModelAttestationForSignature({ attestations: deployment.models, signature });
   verifyModelResponse({ requestBody: exchange.requestBody, responseBody: exchange.responseBody, signature, attestation });
+}
+
+/** Gateway-only check for the non-TEE route: proves the gateway signed these bytes, not where the model ran. */
+export function checkGatewayResponse(exchange: PlainExchange, signature: CompletionSignature, gateway: VerifiedGatewayAttestation): void {
+  if (signature.kind !== 'gateway') throw new Error(`unexpected signature_kind ${signature.kind} for a gateway-only model`);
+  verifyGatewayResponse({ requestBody: exchange.requestBody, responseBody: exchange.responseBody, signature, attestation: gateway });
 }
 
 export function describeSdkError(err: unknown): string {

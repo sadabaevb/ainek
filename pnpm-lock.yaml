@@ -32,6 +32,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@ainek/proof':
+        specifier: workspace:*
+        version: link:../../packages/proof
       '@hot-labs/near-connect':
         specifier: 0.11.4
         version: 0.11.4
