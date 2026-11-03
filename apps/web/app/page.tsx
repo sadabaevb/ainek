@@ -1,10 +1,15 @@
 'use client';
 // Chat with a proof card per reply. The page only renders; lib/flow.ts does the work step by step.
+// The page owns the wallet, so the on-chain commit (SPEC §4.2) runs here after a verified outcome.
 import { memo, useEffect, useRef, useState } from 'react';
+import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
 import { describeError } from '@/lib/errors';
 import { runChat, type ChatMessage, type ChatOutcome, type StepEvent } from '@/lib/flow';
+import { short } from '@/lib/format';
+import { putExchange } from '@/lib/store';
+import { commitProofOnChain, fcKeyLogin, isMethodNotFound } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
 
 interface Turn {
@@ -13,7 +18,7 @@ interface Turn {
   outcome?: ChatOutcome;
 }
 
-const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
+const TurnView = memo(function TurnView({ turn, walletConnected }: { turn: Turn; walletConnected: boolean }) {
   const { t } = useT();
   return (
     <article className="turn">
@@ -27,7 +32,7 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
       {turn.outcome && 'reply' in turn.outcome && (
         <div className="bubble assistant"><span className="who">{t.assistant}</span>{turn.outcome.reply}</div>
       )}
-      {turn.outcome && <ProofCard outcome={turn.outcome} />}
+      {turn.outcome && <ProofCard outcome={turn.outcome} walletConnected={walletConnected} />}
     </article>
   );
 });
@@ -35,6 +40,7 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
 export default function ChatPage() {
   const cfg = useConfig();
   const { t } = useT();
+  const { signedAccountId, signIn, signOut, callFunctionRaw, loading: walletLoading } = useNearWallet();
   const [model, setModel] = useState(cfg.model);
   const [tamper, setTamper] = useState(false);
   const [input, setInput] = useState('');
@@ -50,6 +56,26 @@ export default function ChatPage() {
   }, [turns.length]);
 
   const patch = (idx: number, fn: (turn: Turn) => Turn) => setTurns((prev) => prev.map((turn, i) => (i === idx ? fn(turn) : turn)));
+  const step = (idx: number, e: StepEvent) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) }));
+
+  /** After a verified reply: commit the salted hash with the function-call key, or explain why not. Never blocks the card. */
+  async function commit(idx: number, outcome: ChatOutcome) {
+    if (outcome.kind !== 'verified') return;
+    if (!signedAccountId) {
+      step(idx, { id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
+      return;
+    }
+    step(idx, { id: 'commit', status: 'running', detail: `commit_proof on ${cfg.contract} as ${signedAccountId}` });
+    try {
+      const tx = await commitProofOnChain(callFunctionRaw, cfg, outcome.proof);
+      const proof = { ...outcome.proof, commitTx: tx };
+      step(idx, { id: 'commit', status: 'ok', detail: `commit ${short(proof.commit ?? '')} recorded in transaction ${short(tx)}` });
+      patch(idx, (turn) => ({ ...turn, outcome: { ...outcome, proof } }));
+      await putExchange({ completionId: outcome.exchange.completionId, model: outcome.proof.model, sentAt: outcome.exchange.sentAt, requestBody: outcome.exchange.requestBody, responseBody: outcome.exchange.responseBody, reply: outcome.reply, proof, logEntry: outcome.logEntry }).catch(() => undefined);
+    } catch (err) {
+      step(idx, { id: 'commit', status: 'skipped', detail: isMethodNotFound(err) ? `commit_proof is not in ${cfg.contract} yet (SPEC §4.2 lands next): commit kept locally` : `commit failed: ${describeError(err)}; commit kept locally` });
+    }
+  }
 
   async function send() {
     const content = input.trim();
@@ -61,8 +87,9 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) })) });
+      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => step(idx, e) });
       patch(idx, (turn) => ({ ...turn, outcome }));
+      await commit(idx, outcome);
     } catch (err) {
       // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
       patch(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err) } }));
@@ -74,8 +101,17 @@ export default function ChatPage() {
   return (
     <main className="page">
       <header className="top">
-        <h1>Ainek</h1>
-        <p className="muted">{t.tagline}</p>
+        <div>
+          <h1>Ainek</h1>
+          <p className="muted">{t.tagline}</p>
+        </div>
+        <div className="wallet">
+          {signedAccountId ? (
+            <span className="muted small">{t.wallet}: <span className="mono">{signedAccountId}</span> <button type="button" className="btn small" onClick={() => void signOut()}>{t.disconnect}</button></span>
+          ) : (
+            <button type="button" className="btn small" onClick={() => void fcKeyLogin(signIn, cfg)} disabled={walletLoading}>{t.connectWallet}</button>
+          )}
+        </div>
       </header>
 
       <div className="controls">
@@ -92,7 +128,7 @@ export default function ChatPage() {
       </div>
 
       <section className="thread">
-        {turns.map((turn, i) => <TurnView key={i} turn={turn} />)}
+        {turns.map((turn, i) => <TurnView key={i} turn={turn} walletConnected={Boolean(signedAccountId)} />)}
         <div ref={bottom} />
       </section>
 

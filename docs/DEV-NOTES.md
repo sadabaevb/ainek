@@ -418,3 +418,14 @@ https://testnet.nearblocks.io/txns/3wE9RBaubngqhyWXKMqWygKsokCbyEKwUDvtTsNMcEs8)
 SPEC: `head()` → `Option`, `null` для пустого лога; клиент `head` не использует, `check-contract` принимает `null`.
 Осталось от §4.2: `commit_proof` / `proof_commit` / `deposit_storage` — у него следующим шагом; у нас строка «On NEAR» ждёт их.
 OutLayer по-прежнему упирается в 502 от `test.fastfs.io` (проверено в 21:45), срок решения — 12:00 4 ноября.
+
+## 2026-11-03 — commit_proof на клиенте и кеш проверки (Бектур)
+
+- Шаг `commit` живёт на странице, а не в `lib/flow.ts`: кошелёк это React-хук, а поток должен оставаться чистым. После зелёной
+  карточки страница зовёт `commit_proof(commit, "model", log_index)` FC-ключом (`lib/wallet.ts`), пишет `commitTx` в proof и в
+  IndexedDB, строка «On NEAR» становится ✓ со ссылкой на nearblocks. Без кошелька шаг честно `skipped`; пока в контракте нет
+  метода, `MethodNotFound` показывается как «commit_proof is not in the contract yet», карточка не краснеет. Кнопка «Connect
+  wallet» теперь и на чате, тот же FC-ключ только на `commit_proof`, что и на `/log`.
+- Результат проверки деплоя кешируется в IndexedDB (store `deployments`, версия БД 2) на те же 60 минут, что и в памяти.
+  Проверено: после перезагрузки шаг attestation = `cached`, вместо 4–25 с. Это доверие к собственной записи на том же origin,
+  ровно как кеш SDK в памяти; TTL общий. Для видео и прогона судей это убирает самую длинную паузу.

@@ -17,6 +17,7 @@ import {
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
+import { getDeployment, putDeployment } from './store';
 
 const SIGNING_ALGO = 'ed25519' as const;
 const CACHE_TTL_MS = 60 * 60 * 1000;
@@ -111,13 +112,28 @@ function verifyModels(model: string, policy: AttestationPolicy): Promise<Verifie
   });
 }
 
-/** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min. */
+/** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min in memory and in IndexedDB (same TTL the SDK uses), so a reload does not repeat the cold check. */
 export async function verifyDeployment(model: string, policy: AttestationPolicy): Promise<VerifiedDeployment> {
-  const cached = deploymentCache.get(model);
+  const cached = deploymentCache.get(model) ?? (await fromIndexedDb(model));
   if (cached) return { ...cached, tookMs: 0 };
   const t0 = performance.now();
   const [gateway, models] = await Promise.all([verifyGateway(policy), verifyModels(model, policy)]);
-  return deploymentCache.set(model, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
+  const verified = deploymentCache.set(model, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
+  gatewayCache.set('gateway', gateway);
+  putDeployment({ model, verifiedAt: verified.verifiedAt, deployment: verified }).catch(() => undefined); // best effort
+  return verified;
+}
+
+async function fromIndexedDb(model: string): Promise<VerifiedDeployment | undefined> {
+  try {
+    const stored = await getDeployment<VerifiedDeployment>(model);
+    if (!stored || Date.now() - Date.parse(stored.verifiedAt) >= CACHE_TTL_MS) return undefined;
+    deploymentCache.set(model, stored.deployment);
+    gatewayCache.set('gateway', stored.deployment.gateway);
+    return stored.deployment;
+  } catch {
+    return undefined;
+  }
 }
 
 // No Accept-Encoding here: browsers drop it as a forbidden header; the proxy asks upstream for identity itself.

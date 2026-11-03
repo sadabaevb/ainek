@@ -7,10 +7,10 @@ import { findSplitView, type KeyEntry } from '@ainek/proof';
 import { describeError } from '@/lib/errors';
 import { short } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
+import { fcKeyLogin } from '@/lib/wallet';
 import { useConfig } from '../providers';
 
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
-const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
 
 export default function LogPage() {
   const cfg = useConfig();
@@ -35,8 +35,7 @@ export default function LogPage() {
 
   const split = entries ? findSplitView(entries, cfg.model, cfg.trustedVerifiers) : null;
 
-  const connect = () =>
-    signIn({ addFunctionCallKey: { contractId: cfg.contract, allowMethods: { anyMethod: false, methodNames: ['commit_proof'] }, gasAllowance: { kind: 'limited', amount: FC_KEY_ALLOWANCE } } });
+  const connect = () => fcKeyLogin(signIn, cfg);
 
   return (
     <main className="page">

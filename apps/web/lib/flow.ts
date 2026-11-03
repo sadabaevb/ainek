@@ -23,7 +23,7 @@ import { putExchange } from './store';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
-export type StepId = 'metadata' | 'attestation' | 'key-log' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store';
+export type StepId = 'metadata' | 'attestation' | 'key-log' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store' | 'commit';
 export type StepStatus = 'running' | 'ok' | 'fail' | 'skipped';
 export interface StepEvent {
   id: StepId;
@@ -32,7 +32,7 @@ export interface StepEvent {
 }
 
 /** Steps that run after the message has left the device: a failure there is "reply not provable", not "nothing was sent". */
-export const STEPS_AFTER_SEND: ReadonlySet<StepId> = new Set<StepId>(['signature', 'sdk-check', 'proof', 'store']);
+export const STEPS_AFTER_SEND: ReadonlySet<StepId> = new Set<StepId>(['signature', 'sdk-check', 'proof', 'store', 'commit']);
 
 export type ChatOutcome =
   | {
