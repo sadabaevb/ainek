@@ -271,3 +271,46 @@ report_data, `app_compose` ↔ MRCONFIGID, повтор RTMR3 по event log, no
 
 Дальше: `pnpm demo:live` через `apps/web` (живой запрос с ключом, коммит в контракт), запись E2EE-сэмпла, чтобы строка
 «End-to-end encryption» в карточке стала ✓, и view-вызовы лога после деплоя контракта.
+
+## 2026-11-03 — сессия 3, часть 1 (Бектур): клиент в браузере — проверка, fail-closed, E2EE, карточка
+
+**Главное решение: SDK работает в браузере по официальному manual-flow, без полифилов.** В verification-guide есть раздел
+«Connect through an application proxy»: generic-вход `@nearai/inference-sdk` + `baseUrl` на наш прокси, который только
+добавляет API-ключ. Все проверки (dcap-qvl, NRAS, привязки nonce/ключа/compose) идут на устройстве пользователя. Turbopack
+собрал root-вход как есть: `crypto`/`buffer`/`stream`, которых боялся промпт, не понадобились (dcap-qvl — чистый JS, SDK
+тянет `buffer`). Холодная проверка в браузере 24–29 с (PCCS/NRAS через прокси NEAR AI), повтор из кеша 0 мс.
+
+Почему manual-flow, а не `InferenceClient` в браузере: `verifyResponse(id)` не отдаёт сырые байты, а опции `fetch` у
+клиента нет; proof требует байты у пользователя. Поэтому `lib/nearai-browser.ts` — это `AttestationClient` +
+`verifyGatewayAttestation` / `verifyModelAttestation` + `prepareE2eeChatRequest` + `fetch(prepared.request)` с клоном ответа
+до расшифровки + `fetchCompletionSignature` + `findModelAttestationForSignature` + `verifyModelResponse`. Между
+«проверил отчёт» и «отправил» встаёт сверка с логом (SPEC §7.1), чего в `InferenceClient` не вставить.
+
+**Прокси `/api/nearai/[...path]`** (вместо старого relay, который шифровал на сервере и видел открытый текст): allow-list
+`GET v1/model/*`, `GET v1/attestation/report`, `POST v1/chat/completions`, `GET v1/signature/*`; путь берётся сырым из URL,
+чтобы `z-ai%2Fglm-5.3-flash` дошёл без перекодирования; `Accept-Encoding: identity` наверх; тело наверх как ArrayBuffer,
+вниз — потоком без перекодирования; срезаются `content-encoding`/`content-length`; `Authorization`/`cookie` клиента не
+пропускаются. Логов тел нет вовсе: сервер видит только шифртекст и размеры (таблица §8 теперь правда).
+
+**Поток (`lib/flow.ts`), восемь шагов с живым статусом на странице:** metadata (`attestationSupported`) → attestation →
+key-log (fail-closed) → send (E2EE) → signature (ретрай ×4: подпись кешируется на узле, обслужившем запрос) → sdk-check →
+proof (`@ainek/proof`: пересчёт хешей, привязка к записи лога, соль + commit) → store (IndexedDB). Три исхода на карточке:
+`verified` (зелёная), `refused` (красная, ничего не отправлено), `non-tee` (красная: только подпись шлюза).
+
+**Проверено в браузере (Playwright, 3 ноября):** зелёная карточка (24 с холодная проверка, ответ «Exactly three words.»,
+`provider_tee`, 8/8 проверок proof, консоль чистая); tamper → «Key not in the public log. Message not sent.» за 3 с;
+Incognito `anthropic/claude-haiku-5-5` → `provider external, model attestation not supported`, plaintext, подпись `gateway`
+проверена против аттестованного шлюза, красная карточка «This answer went through a non-attested model». `/verify?id=…`
+перечитывает запись лога и даёт 8/8; `/log` показывает образец и баннер split-view; `/trust` — таблица §8. `next build` зелёный.
+
+**Compose в сверке не участвует — пока.** В живом прогоне модель обслужил хост с compose `5f7ebd85…`, а в образце лога
+`a0e3c6f4…`: если бы клиент требовал совпадения пары, честный запрос отказали бы. Это ровно сценарий из заметки 2 ноября;
+в `evaluateKeyLog` compose сверяется только если передан, в `flow.ts` не передаётся. Решение по ABI — на синке.
+
+**Что ещё не сделано в сессии 3:** `commit_proof` кошельком (контракт не задеплоен; FC-ключ на `commit_proof` уже
+запрашивается при логине на `/log`); кеш проверки в IndexedDB (сейчас только память, перезагрузка = 24 с заново);
+`/auditor`; переключатель RU покрывает чат и карточку, `/verify` и `/log` на английском; `pnpm demo:live`.
+
+Мелочи: NEXT_PUBLIC_* из корневого `.env` в клиент не попадают (инлайн на этапе сборки) — публичная конфигурация идёт через
+`/api/config`; `useEffect(() => el.scrollIntoView())` без фигурных скобок ломает React 19 («destroy is not a function»);
+`allowImportingTsExtensions` нужен и в tsconfig web, раз `@ainek/proof` импортируется исходниками с `.ts`.

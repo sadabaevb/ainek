@@ -56,12 +56,15 @@ pnpm demo                        # replay mode, no API key, no network (~1 s): r
                                  #   compose measurements), applies the fail-closed log rule, re-checks the signed response,
                                  #   prints ✓/✗ per step and the proof card
 pnpm demo:live                   # needs NEARAI_API_KEY: live E2EE request → proof → on-chain commit (tx …)
-pnpm -F web dev                  # → open http://localhost:3000, send "hello" → proof card with ✓ rows and a nearblocks link
+pnpm -F web dev                  # needs NEARAI_API_KEY (server-side only): open http://localhost:3000, send "hello" →
+                                 #   the browser verifies the TEE evidence itself (~25 s cold, then cached 60 min), encrypts to the
+                                 #   attested model key, checks the signature and shows the proof card with ✓ rows
 ```
 
 1. **See the log:** open `/log` → entries from `v1.ainek.testnet` and `v2.ainek.testnet` for `z-ai/glm-5.3-flash`.
-2. **See fail-closed:** `pnpm demo:tamper` → the client refuses to send ("key …abab is not in the public log: not sent").
-3. **Re-verify a proof yourself:** paste the proof JSON into `/verify` → hashes recomputed, signature checked, log entry matched.
+2. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" on the chat page (or open `/?tamper=1`) → the client refuses to send: "Key not in the public log. Message not sent."
+   **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only).
+3. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste the proof / the "Disclose to auditor" file into `/verify` → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "Open in Verification Center" shows the same signature on NEAR AI's own page.
 4. **(Tier 2) Watch the agent:** `pnpm -F agent start` → in Telegram send "pay aibek.testnet 300 for October"
    → `action_executed` on nearblocks; send "pay newguy.testnet 5000" → `NeedsApproval` → tap Reject.
 5. **Stop button:** `pnpm demo:stop` → `DeleteKey` for the agent key → next proposal fails on-chain.
