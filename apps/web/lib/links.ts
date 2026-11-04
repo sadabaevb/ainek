@@ -18,5 +18,5 @@ export function verificationCenterUrl(proof: ModelProof): string {
 }
 
 export function explorerTxUrl(explorer: string, tx: string): string {
-  return `${explorer}/txns/${tx}`;
+  return `${explorer}/txns/${encodeURIComponent(tx)}`; // tx comes from a proof, i.e. from whoever wrote the file
 }

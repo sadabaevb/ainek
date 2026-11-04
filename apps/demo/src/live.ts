@@ -1,8 +1,9 @@
-// `pnpm demo:live [--record] [--message "…"]`: the Tier-1 flow from Node with the server-side API key.
+// `pnpm demo:live [--record] [--disclose <file>] [--message "…"]`: the Tier-1 flow from Node with the server-side API key.
 // Mirror of apps/web/lib/flow.ts (same steps, same order; keep them in sync): verify gateway + model evidence
 // (TLS pinned to the attested gateway), fail-closed check against the public log, one E2EE request with the exact
 // bytes kept, signature, SDK byte-exact check, our proof, card. `--record` writes the exchange into docs/samples
-// so the offline replay (`pnpm demo`) has an E2EE sample.
+// so the offline replay (`pnpm demo`) has an E2EE sample. `--disclose <file>` writes the "Disclose to auditor" file of this
+// run (SPEC §5.4), the same bytes a proof card downloads, for /auditor and /verify.
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -19,13 +20,19 @@ import {
   type CompletionSignature,
   type TcbStatus,
 } from '@nearai/inference-sdk/node';
-import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, keyLogReader, normalizeHex, shortHex as short, verifyModelProof, type KeyEntry, type ModelProof } from '@ainek/proof';
+import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, keyLogReader, normalizeHex, shortHex as short, toDisclosure, verifyModelProof, type KeyEntry, type ModelProof } from '@ainek/proof';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
 import { FAIL, NA, OK, describe, head, line, markOf } from './term.ts';
 
-const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
+const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, disclose: { type: 'string' }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
 const record = flags.record === true;
 const message = String(flags.message);
+// `--disclose` needs a file; parseArgs (strict: false) would otherwise swallow the next flag as the value or yield `true` for a bare one.
+if (flags.disclose !== undefined && (typeof flags.disclose !== 'string' || flags.disclose.startsWith('-'))) usage('--disclose needs a file path');
+// INIT_CWD is where pnpm ran: the repo root for `pnpm demo:live` (the root script nests a second pnpm), the shell's directory for
+// `pnpm -F demo live`. An absolute path works from anywhere.
+const discloseFile = typeof flags.disclose === 'string' ? path.resolve(process.env.INIT_CWD ?? process.cwd(), flags.disclose) : '';
+if (discloseFile && !existsSync(path.dirname(discloseFile))) usage(`--disclose: directory ${path.dirname(discloseFile)} does not exist`);
 
 // Root .env (CLAUDE.md: secrets live in one file). loadEnvFile never overrides variables already set, so the shell wins.
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
@@ -36,6 +43,8 @@ if (!apiKey) {
   process.exit(2);
 }
 const cfg = ainekConfigFromEnv(process.env);
+// A disclosure binds the proof to the log entry it embeds; the recorded sample entry is one no auditor can confirm on-chain.
+if (discloseFile && cfg.logSource === 'sample') usage('--disclose needs the contract log (AINEK_LOG_SOURCE=contract): a proof bound to the sample entry cannot be audited');
 const { model, nearaiBaseUrl: baseUrl } = cfg;
 const SIGNING_ALGO = 'ed25519' as const;
 const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] }; // validated in ainekConfigFromEnv; same names as the SDK's
@@ -114,11 +123,22 @@ console.log(`│ ${OK} End-to-end encryption: yes, encrypted to the attested mod
 console.log(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);
 console.log(`└─ Result: ${report.ok ? 'VERIFIED' : 'FAILED'}`);
 
-if (record && report.ok) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
-else if (record) console.log('\nnot recorded: the run did not verify');
+if (report.ok) {
+  if (record) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
+  if (discloseFile) {
+    writeJson(discloseFile, toDisclosure({ proof, logEntry, requestBody, responseBody }));
+    console.log(`\ndisclosure written: ${discloseFile} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
+  }
+} else if (record || discloseFile) console.log('\nnothing written: the run did not verify');
 process.exit(report.ok ? 0 : 1);
 
 // ---- helpers ----
+/** A flag the run cannot proceed with: say so before any network call or spend. */
+function usage(reason: string): never {
+  console.error(`${reason}\nusage: pnpm demo:live [--record] [--disclose <file>] [--message "…"]`);
+  return process.exit(2);
+}
+
 /** Fail-closed exit: prints the reason as a ✗ line and the REFUSED result. */
 function refuse(reason: string): never {
   line(FAIL, `${reason}: not sent (fail-closed)`);
@@ -156,11 +176,16 @@ function proofBoundToSampleLog(x: { completionId: string; requestBody: Uint8Arra
 
 function recordSamples(x: { completionId: string; requestBody: Uint8Array; responseBody: Uint8Array; signature: CompletionSignature; reply: string }): void {
   const bound = proofBoundToSampleLog(x); // throws before anything is written
-  const write = (name: string, data: string | Uint8Array) => writeFileSync(new URL(name, samplesDir), data);
-  write('e2ee-chat-request.raw.json', x.requestBody);
-  write('e2ee-chat-response.raw.json', x.responseBody);
-  write('e2ee-signature.json', `${JSON.stringify({ text: x.signature.signedText, signature: x.signature.signature, signing_address: x.signature.signer.signingAddress, signing_algo: x.signature.signer.signingAlgo, signature_kind: x.signature.kind }, null, 2)}\n`);
-  write('e2ee-plaintext.json', `${JSON.stringify({ _note: 'What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.', model, prompt: message, reply: x.reply, completionId: x.completionId, recordedAt: new Date().toISOString() }, null, 2)}\n`);
-  write('model-proof-e2ee.sample.json', `${JSON.stringify({ _note: 'SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.', proof: bound }, null, 2)}\n`);
+  const at = (name: string) => new URL(name, samplesDir);
+  writeFileSync(at('e2ee-chat-request.raw.json'), x.requestBody);
+  writeFileSync(at('e2ee-chat-response.raw.json'), x.responseBody);
+  writeJson(at('e2ee-signature.json'), { text: x.signature.signedText, signature: x.signature.signature, signing_address: x.signature.signer.signingAddress, signing_algo: x.signature.signer.signingAlgo, signature_kind: x.signature.kind });
+  writeJson(at('e2ee-plaintext.json'), { _note: 'What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.', model, prompt: message, reply: x.reply, completionId: x.completionId, recordedAt: new Date().toISOString() });
+  writeJson(at('model-proof-e2ee.sample.json'), { _note: 'SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.', proof: bound });
   console.log('\nrecorded: e2ee-chat-request.raw.json, e2ee-chat-response.raw.json, e2ee-signature.json, e2ee-plaintext.json, model-proof-e2ee.sample.json');
+}
+
+/** Pretty JSON with a trailing newline, the way every file in docs/samples is written. */
+function writeJson(file: string | URL, value: unknown): void {
+  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }

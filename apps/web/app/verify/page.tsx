@@ -2,11 +2,13 @@
 // Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, or from a disclosure file
 // (proof + raw bytes + log entry). Hashes are recomputed here; the log entry is re-read from the public log.
 import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { isDisclosure, parseDisclosure, verifyModelProof, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type KeyEntry, type VerifyReport } from '@ainek/proof';
 import { CheckList } from '@/components/checks';
+import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { describeError } from '@/lib/errors';
-import { keyLogFor } from '@/lib/key-log';
+import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
 import { useConfig } from '../providers';
@@ -15,15 +17,14 @@ interface Input {
   proof: unknown;
   requestBody?: Uint8Array;
   responseBody?: Uint8Array;
-  /** Entry embedded in the input; used only when the public log cannot answer. */
-  logEntryHint?: KeyEntry;
+  /** Entry embedded in the input; the public log is still asked first, and a mismatch is reported. */
+  embeddedEntry?: KeyEntry;
   origin: string;
 }
 
 interface Result {
   report: VerifyReport;
   origin: string;
-  logNote: string;
 }
 
 function VerifyInner() {
@@ -41,7 +42,7 @@ function VerifyInner() {
     getExchange(id)
       .then((x) => {
         if (!x) setError(`no exchange ${id} in this browser's store`);
-        else setInput({ proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, logEntryHint: x.logEntry, origin: 'this browser (IndexedDB)' });
+        else setInput({ proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, embeddedEntry: x.logEntry, origin: 'this browser (IndexedDB)' });
       })
       .catch((e: unknown) => setError(describeError(e)));
   }, [id]);
@@ -50,22 +51,11 @@ function VerifyInner() {
     if (!input) return;
     let cancelled = false;
     (async () => {
-      const logIndex = (input.proof as { logIndex?: unknown }).logIndex;
-      let entry: KeyEntry | null = null;
-      let logNote = '';
-      if (typeof logIndex === 'number') {
-        try {
-          entry = await keyLogFor(cfg).entry(logIndex);
-          logNote = entry ? `log entry #${logIndex} re-read from the public log (${cfg.logSource})` : `log entry #${logIndex} not found in the public log`;
-        } catch (e) {
-          logNote = `public log unavailable (${describeError(e)})`;
-        }
-      }
-      if (!entry && input.logEntryHint) {
-        entry = input.logEntryHint;
-        logNote += `${logNote ? '; ' : ''}using the entry embedded in the input (weaker: not re-read from the chain)`;
-      }
-      if (!cancelled) setResult({ report: verifyModelProof(input.proof, input.requestBody, input.responseBody, entry), origin: input.origin, logNote });
+      // The chain is asked only for a schema-valid proof; a malformed one is reported by verifyModelProof without a view call.
+      const parsed = ModelProof.safeParse(input.proof);
+      const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
+      const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
+      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin });
     })();
     return () => {
       cancelled = true;
@@ -78,7 +68,7 @@ function VerifyInner() {
       const parsed = JSON.parse(text) as unknown;
       if (isDisclosure(parsed)) {
         const d = parseDisclosure(parsed);
-        setInput({ proof: d.proof, requestBody: d.requestBody, responseBody: d.responseBody, logEntryHint: d.logEntry, origin: 'disclosure file (proof + raw bytes)' });
+        setInput({ proof: d.proof, requestBody: d.requestBody, responseBody: d.responseBody, embeddedEntry: d.logEntry, origin: 'disclosure file (proof + raw bytes)' });
       } else {
         setInput({ proof: parsed, origin: 'pasted proof JSON (no raw bytes: hash checks skipped)' });
       }
@@ -91,15 +81,13 @@ function VerifyInner() {
   return (
     <main className="page">
       <h1>Verify a proof</h1>
-      <p className="muted">Paste a proof, drop a disclosure file, or pick one of the exchanges this browser has kept. Hashes are recomputed here, the signature is checked here, and the log entry is re-read from the public log.</p>
+      <p className="muted">Paste a proof, drop a disclosure file, or pick one of the exchanges this browser has kept. Hashes are recomputed here, the signature is checked here, and the log entry is re-read from the public log. Received a disclosure from someone else? <Link href="/auditor">/auditor</Link> says what it proves.</p>
 
       <div className="controls">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} placeholder='{"v":1,"kind":"model",...}  or the "Disclose to auditor" file' />
+        <JsonTextarea value={text} onChange={setText} placeholder='{"v":1,"kind":"model",...}  or the "Disclose to auditor" file' />
         <div className="actions">
           <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>Verify</button>
-          <label className="btn">
-            Load file <input type="file" accept="application/json" style={{ display: 'none' }} onChange={(e) => void e.target.files?.[0]?.text().then(setText)} />
-          </label>
+          <LoadFileButton onText={setText} onError={setError} />
         </div>
       </div>
 
@@ -119,7 +107,7 @@ function VerifyInner() {
       {result && (
         <section className={`card ${result.report.ok ? '' : 'red'}`}>
           <h3>{result.report.ok ? '✓ Proof verified' : '✗ Proof failed'}</h3>
-          <p className="muted small">source: {result.origin}{result.logNote ? `; ${result.logNote}` : ''}</p>
+          <p className="muted small">source: {result.origin}</p>
           <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">

@@ -22,7 +22,9 @@ export type CheckId =
   | 'response-hash'
   | 'signature'
   | 'key-in-log'
-  | 'commit';
+  | 'commit'
+  | 'log-entry' // the chain re-read of the entry the proof points at (resolveLogEntry)
+  | 'on-chain-commit'; // the proof_commit record (checkProofCommit)
 
 export interface VerifyReport {
   /** True only when no check failed. Skipped checks (no raw bytes given) do not make it false. */
@@ -122,4 +124,10 @@ export function verifyModelProof(
     if (e.verifier !== p.verifier) problems.push(`entry was logged by ${e.verifier}, proof says ${p.verifier}`);
     push('key-in-log', problems.length === 0 ? 'ok' : 'fail', problems.length === 0 ? `key #${e.index} logged by ${e.verifier} (tcb ${e.tcb_status})` : problems.join('; '));
   }
+}
+
+/** A report with checks made outside verifyModelProof folded in (the chain re-read, the on-chain commit); `ok` is recomputed. */
+export function withChecks(report: VerifyReport, ...extra: Check[]): VerifyReport {
+  const checks = [...report.checks, ...extra];
+  return { ...report, checks, ok: checks.every((c) => c.status !== 'fail') };
 }
