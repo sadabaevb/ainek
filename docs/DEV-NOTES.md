@@ -404,3 +404,38 @@ https://testnet.nearblocks.io/txns/3wE9RBaubngqhyWXKMqWygKsokCbyEKwUDvtTsNMcEs8)
   координатора. Для нас: `Action` и так виден в `propose_action`; политика — только через секреты, никогда через stdin.
 - (г) Да, если `PROTECTED_…:ed25519` даёт seed/ключ в env (см. (а)); аттестация коммитит `wasm_hash`, hash входа и выхода, TDX quote.
 - Оплата: HTTPS API требует payment key (стейбл ≥ $1, на testnet `keys topup --usd`); режим NEAR платит NEAR с аккаунта — работает без ключа.
+
+## 2026-11-04 — спайк B (OutLayer): прогон прошёл, аттестация проверена — Дастан
+
+FastFS ожил (`test.fastfs.io` отдаёт наш wasm, HTTP 200, sha256 совпадает с локальной сборкой). Два прогона
+`outlayer run ainek-dev-dastan.testnet/policy '{…}' --target wasm32-wasip1` в режиме NEAR:
+
+| run | вход | выход | tx | job_id | списано |
+|---|---|---|---|---|---|
+| 3 | `{"action":{"amount":"300"},"cap":"500"}` | `{"verdict":"Allow"}` | `DFnTFr9GBt2wxKZi1c2tVXmhuLoB6kS1YNfHVmVgrZAc` | 19003 | 0.00114 NEAR (из депозита 0.002, остаток вернулся) |
+| 4 | `{"action":{"amount":"900"},"cap":"500"}` | `{"verdict":"Deny"}`  | `CLjjrtdscmHAZz2mCisYBJ9S1YKH4mgbbyGoV79WdWpt` | 19006 | 0.00102 NEAR (wasm уже в кэше) |
+
+Ресурсы: 9.2 k инструкций, 192 мс; первая компиляция 1.2 с. Сырые receipts и аттестации — `docs/spike-outlayer/run{3,4}-*.json`.
+
+**Как достать аттестацию** (в доках только «кнопка View Attestation»): публичный API координатора
+`GET https://testnet-api.outlayer.ai/attestations/<job_id>` (job_id — из `GET /public/jobs?project=<owner>/<name>`).
+Поля: `tdx_quote` (base64, 5006 байт), `worker_measurement` (RTMR3), `wasm_hash` = `executed_wasm_sha256`,
+`input_hash`, `output_hash`, `transaction_hash`, `block_height`, `caller_account_id`, `project_id`, `timestamp`.
+Проверено скриптом (python, без доверия к дашборду): `sha256(stdin)` == `input_hash`, `sha256(stdout)` == `output_hash`,
+`wasm_hash` == sha256 нашего `.wasm`, и **Task Hash == REPORTDATA[568:600] квоты** для обоих прогонов. Раскладка
+Task Hash (из js дашборда, в доках неполная): `sha256(task_type ‖ task_id i64 LE ‖ [repo_url ‖ commit_hash ‖] build_target
+‖ wasm_hash ‖ input_hash ‖ output_hash (hex как UTF-8) ‖ block_height u64 LE ‖ caller_account_id ‖ project_id ‖ [secrets_ref ‖]
+timestamp i64 LE ‖ attached_usd)`; хвост REPORTDATA — 32 нуля. Цепочку подписи квоты до Intel и `is_measurements_approved`
+на `worker.outlayer.*` мы не проверяли — это делает кнопка «Verify» дашборда (DCAP в wasm), для /verify-страницы хватит
+ссылки на неё плюс наших трёх хэшей.
+
+**Для контракта (SPEC §4.2 / Tier 2):** `request_execution` принимает `source: Project{project_id}`, `resource_limits: {}`
+(обязательно, иначе ничего не выполняется), `input_data`, `secrets_ref: {account_id, profile}`, `response_format: Json`;
+результат приходит в callback-promise (`env::promise_result(0)`), плюс события `execution_requested`/`execution_completed`
+стандарта `near-outlayer`. В `execution_completed` есть `code_source.hash` — это и есть привязка решения к сборке политики.
+
+**(г) живой формат `PROTECTED_*:ed25519`:** job расширен (`jobs/policy`, версия `882c5c5a…`, upload tx
+`5vW8XnqibHZwettQmrZSjTTQvcErPWraK3J2iCdkFMYJ`, активна): если в env есть `PROTECTED_SIGNING_KEY`, в выход добавляется
+`key` — длина/префикс/какие декодирования дают 32 или 64 байта, публичный ключ и подпись над `"ainek spike B"`; сам
+секрет никогда не печатается (юнит-тест). Команда `outlayer secrets set --project ainek-dev-dastan.testnet/policy
+--generate PROTECTED_SIGNING_KEY:ed25519` — выполнить вручную, затем прогон; результат дописать сюда.
