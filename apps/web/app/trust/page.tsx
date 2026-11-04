@@ -1,14 +1,12 @@
 // Who sees what (SPEC §8), verbatim in README as well. Static.
 const rows: Array<[party: string, sees: string, doesNotSee: string, guarantee: string]> = [
-  ['Relay (our server)', 'ciphertext, size, timing, IP, API key', 'prompt, response and tool-call contents', 'E2EE to the model key from the verified attestation report'],
-  ['Relay on the Incognito demo route (user-chosen)', 'the plaintext prompt and reply', '—', 'none: no model key exists to encrypt to; the red card says so. This route exists to show what a non-attested model looks like'],
-  ['NEAR AI gateway', 'ciphertext, token accounting', 'contents', 'E2EE; the gateway is attested'],
+  ['Relay (our server)', 'ciphertext, size, timing, IP, API key; model id, message count and roles, token usage, completion ids', 'prompt, response and tool-call contents', 'E2EE to the model key from the verified attestation report'],
+  ['Relay on the Incognito demo route (user-chosen)', 'the plaintext prompt and reply', '—', 'none (no model key to encrypt to); the red card says so'],
+  ['NEAR AI gateway and proxy', "ciphertext, token accounting; the browser's IP during collateral and NVIDIA calls", 'contents', "E2EE; the gateway is attested; the proxy cannot forge the NVIDIA verdict (checked against NVIDIA's keys)"],
   ['Model enclave', 'plaintext for the duration of inference', '—', 'TDX + GPU attestation; retention inside the enclave is not provable by attestation'],
-  ['OutLayer job', 'the action and the policy', 'the conversation', 'TDX; decision key generated in the TEE; what the OutLayer API gateway sees is being clarified'],
-  ['NEAR blockchain', 'provider keys and measurements, policy hash, decisions, salted commits, executed transfers (testnet)', 'the policy, the conversation, the proofs', 'salted commits; transfer details are hidden only with Confidential Intents (stretch)'],
-  ['Policy job (TEE)', 'the action and the policy while computing', 'the conversation', 'WASI-P1 without network or disk, reproducible build: retention impossible by construction (does not apply to the model)'],
-  ['Auditor', 'one disclosed proof + its salt', 'the others', 'selective disclosure'],
-  ['Not solved', '—', '—', 'size/timing side channels; identity of the weights (the deployment is attested); operator code inside the enclave (partly: provenance via Sigstore)'],
+  ['NEAR blockchain', 'provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash', 'the policy contents, the conversation, the proofs', 'salted commits; transfer details are hidden only with Confidential Intents (out of scope)'],
+  ['OutLayer policy job (Tier 2, planned)', 'the action and the policy, while computing', 'the conversation', 'TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open'],
+  ['Auditor', 'one disclosed proof, its salt and the ciphertext bytes', 'the plaintext, the other exchanges', 'selective disclosure (/auditor)'],
 ];
 
 export default function TrustPage() {
