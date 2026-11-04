@@ -1,13 +1,13 @@
 'use client';
 // Chat with a proof card per reply. The page only renders; lib/flow.ts does the work step by step.
-// The wallet is a React hook, so the page hands flow a committer callback for the on-chain step (SPEC §4.2).
-import { memo, useEffect, useRef, useState } from 'react';
+// The wallet is a React hook, so the page hands flow a committer resolver for the on-chain step (SPEC §4.2).
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
 import { describeError } from '@/lib/errors';
-import { commitOutcome, runChat, type ChatMessage, type ChatOutcome, type Committer, type StepEvent } from '@/lib/flow';
-import { commitProofOnChain } from '@/lib/wallet';
+import { canCommitNow, commitOutcome, runChat, type ChatMessage, type ChatOutcome, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
+import { walletCommitter } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
 
 interface Turn {
@@ -16,8 +16,14 @@ interface Turn {
   outcome?: ChatOutcome;
 }
 
-const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
+// Updaters for one turn of the thread, built outside the component so the callbacks below close over setTurns only.
+const atTurn = (idx: number, fn: (turn: Turn) => Turn) => (prev: Turn[]) => prev.map((turn, i) => (i === idx ? fn(turn) : turn));
+const withStep = (e: StepEvent) => (turn: Turn): Turn => ({ ...turn, steps: upsert(turn.steps, e) });
+const withOutcome = (outcome: ChatOutcome) => (turn: Turn): Turn => ({ ...turn, outcome });
+
+const TurnView = memo(function TurnView({ turn, idx, onCommit }: { turn: Turn; idx: number; onCommit: (idx: number, outcome: VerifiedOutcome) => void }) {
   const { t } = useT();
+  const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>
@@ -30,7 +36,7 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
       {turn.outcome && 'reply' in turn.outcome && (
         <div className="bubble assistant"><span className="who">{t.assistant}</span>{turn.outcome.reply}</div>
       )}
-      {turn.outcome && <ProofCard outcome={turn.outcome} />}
+      {turn.outcome && <ProofCard outcome={turn.outcome} onCommit={commit} />}
     </article>
   );
 });
@@ -39,8 +45,6 @@ export default function ChatPage() {
   const cfg = useConfig();
   const { t } = useT();
   const wallet = useNearWallet();
-  const walletRef = useRef(wallet); // the commit runs after an await: read the wallet as it is then, not as it was
-  walletRef.current = wallet;
   const [model, setModel] = useState(cfg.model);
   const [tamper, setTamper] = useState(false);
   const [input, setInput] = useState('');
@@ -55,14 +59,21 @@ export default function ChatPage() {
     bottom.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns.length]);
 
-  /** NearProvider restores a saved session asynchronously; a cached flow can finish first, so give it a moment before deciding there is no wallet. */
-  const walletReady = async () => {
-    for (let i = 0; i < 50 && walletRef.current.loading; i++) await new Promise((r) => setTimeout(r, 100));
-  };
-
-  const patch = (idx: number, fn: (turn: Turn) => Turn) => setTurns((prev) => prev.map((turn, i) => (i === idx ? fn(turn) : turn)));
-  const step = (idx: number, e: StepEvent) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) }));
-  const setOutcome = (idx: number, outcome: ChatOutcome) => patch(idx, (turn) => ({ ...turn, outcome }));
+  /** Step 8 for one turn, off the critical path: the card is already on screen, the commit lands when it lands. `connect` asks the wallet to sign in first (the card's button); the automatic pass after a reply never pops the wallet up. */
+  const commitTurn = useCallback(
+    async (idx: number, outcome: VerifiedOutcome, connect: boolean) => {
+      if (outcome.commit !== 'pending') setTurns(atTurn(idx, withOutcome({ ...outcome, commit: 'pending' }))); // the automatic pass already is
+      const committed = await commitOutcome(outcome, () => walletCommitter(wallet, cfg, connect), (e) => setTurns(atTurn(idx, withStep(e))));
+      setTurns(atTurn(idx, withOutcome(committed)));
+    },
+    [wallet, cfg],
+  );
+  const onCommitClick = useCallback(
+    (idx: number, outcome: VerifiedOutcome) => {
+      if (canCommitNow(outcome.commit)) void commitTurn(idx, outcome, true);
+    },
+    [commitTurn],
+  );
 
   async function send() {
     const content = input.trim();
@@ -74,20 +85,12 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => step(idx, e) });
-      setOutcome(idx, outcome);
-      if (outcome.kind === 'verified') {
-        // Off the critical path: the card is already on screen, the composer unlocks, the commit lands when it lands.
-        void (async () => {
-          await walletReady();
-          const { signedAccountId, callFunctionRaw } = walletRef.current;
-          const committer: Committer | null = signedAccountId ? (proof) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
-          setOutcome(idx, await commitOutcome(outcome, committer, (e) => step(idx, e)));
-        })().catch((err: unknown) => step(idx, { id: 'commit', status: 'skipped', detail: `commit failed: ${describeError(err)}; commit kept locally` }));
-      }
+      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => setTurns(atTurn(idx, withStep(e))) });
+      setTurns(atTurn(idx, withOutcome(outcome)));
+      if (outcome.kind === 'verified') void commitTurn(idx, outcome, false);
     } catch (err) {
       // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
-      patch(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err) } }));
+      setTurns(atTurn(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err) } })));
     } finally {
       setBusy(false);
     }
@@ -114,7 +117,7 @@ export default function ChatPage() {
       </div>
 
       <section className="thread">
-        {turns.map((turn, i) => <TurnView key={i} turn={turn} />)}
+        {turns.map((turn, i) => <TurnView key={i} turn={turn} idx={i} onCommit={onCommitClick} />)}
         <div ref={bottom} />
       </section>
 

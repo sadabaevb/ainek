@@ -45,6 +45,9 @@ const en = {
   reverify: 'Re-verify yourself',
   openVc: 'Open in Verification Center',
   disclose: 'Disclose to auditor',
+  commitConnect: 'Connect wallet and commit',
+  commitRetry: 'Retry the commit',
+  commitNow: 'Commit now',
   details: 'Technical details',
   lang: 'RU',
 };
@@ -92,6 +95,9 @@ const ru: typeof en = {
   reverify: 'Перепроверить самому',
   openVc: 'Открыть в Verification Center',
   disclose: 'Раскрыть аудитору',
+  commitConnect: 'Подключить кошелёк и записать',
+  commitRetry: 'Повторить запись',
+  commitNow: 'Записать сейчас',
   details: 'Технические детали',
   lang: 'EN',
 };

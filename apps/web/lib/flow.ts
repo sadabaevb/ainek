@@ -20,7 +20,7 @@ import {
   type Exchange,
   type VerifiedDeployment,
 } from './nearai-browser';
-import { putExchange, type StoredExchange } from './store';
+import { getExchange, putExchange, type StoredExchange } from './store';
 import { isMethodNotFound } from './wallet';
 import { seconds, short } from './format';
 
@@ -163,26 +163,47 @@ function storedExchangeOf(o: VerifiedOutcome): StoredExchange {
   return { completionId: exchange.completionId, model: o.proof.model, sentAt: exchange.sentAt, requestBody: exchange.requestBody, responseBody: exchange.responseBody, reply: exchange.reply, proof: o.proof, logEntry: o.logEntry };
 }
 
-/** Step 8, after the card is already on screen: commit the salted hash on NEAR (SPEC §4.2) through the caller's wallet, or record why not. Never throws. */
+/** Step 8, after the card is already on screen: commit the salted hash on NEAR (SPEC §4.2) through the caller's wallet, or record why not. */
 export type Committer = (proof: ModelProof) => Promise<string>;
 
-export async function commitOutcome(outcome: VerifiedOutcome, committer: Committer | null, emit: Emit): Promise<VerifiedOutcome> {
-  if (!committer) {
-    emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
-    return { ...outcome, commit: 'no-wallet' };
-  }
-  emit({ id: 'commit', status: 'running', detail: `commit_proof(${short(outcome.proof.commit ?? '')}, "model", ${outcome.proof.logIndex})` });
+/** Commit states a click can move forward: no wallet yet, or a commit that failed. `not-deployed` waits for the contract, not for the user. */
+export function canCommitNow(status: CommitStatus): boolean {
+  return status === 'no-wallet' || status === 'failed';
+}
+
+/**
+ * Step 8 on an exchange kept in this browser: resolve the wallet, call commit_proof and record the transaction in the stored
+ * row. One boundary for the chat (right after a reply, or from the card's button) and for /verify (an older exchange). Never throws.
+ */
+export async function commitExchange(x: StoredExchange, resolveCommitter: () => Promise<Committer | null>, emit: Emit): Promise<{ commit: CommitStatus; exchange: StoredExchange }> {
   try {
-    const commitTx = await committer(outcome.proof);
-    const committed: VerifiedOutcome = { ...outcome, proof: { ...outcome.proof, commitTx }, commit: 'committed' };
-    emit({ id: 'commit', status: 'ok', detail: `commit ${short(outcome.proof.commit ?? '')} recorded in transaction ${short(commitTx)}` });
-    putExchange(storedExchangeOf(committed)).catch(() => undefined);
-    return committed;
+    // The chat's automatic pass and a click on /verify can race for the same exchange: the stored row is the source of truth.
+    const fresh = await getExchange(x.completionId).catch(() => undefined);
+    if (fresh?.proof.commitTx) {
+      emit({ id: 'commit', status: 'ok', detail: `already committed in transaction ${short(fresh.proof.commitTx)}` });
+      return { commit: 'committed', exchange: fresh };
+    }
+    const committer = await resolveCommitter();
+    if (!committer) {
+      emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
+      return { commit: 'no-wallet', exchange: x };
+    }
+    emit({ id: 'commit', status: 'running', detail: `commit_proof(${short(x.proof.commit ?? '')}, "model", ${x.proof.logIndex})` });
+    const commitTx = await committer(x.proof);
+    const committed: StoredExchange = { ...x, proof: { ...x.proof, commitTx } };
+    emit({ id: 'commit', status: 'ok', detail: `commit ${short(x.proof.commit ?? '')} recorded in transaction ${short(commitTx)}` });
+    putExchange(committed).catch(() => undefined);
+    return { commit: 'committed', exchange: committed };
   } catch (err) {
     const notDeployed = isMethodNotFound(err);
     emit({ id: 'commit', status: 'skipped', detail: notDeployed ? 'commit_proof is not in the contract yet (SPEC §4.2 lands next): commit kept locally' : `commit failed: ${describeError(err)}; commit kept locally` });
-    return { ...outcome, commit: notDeployed ? 'not-deployed' : 'failed' };
+    return { commit: notDeployed ? 'not-deployed' : 'failed', exchange: x };
   }
+}
+
+export async function commitOutcome(outcome: VerifiedOutcome, resolveCommitter: () => Promise<Committer | null>, emit: Emit): Promise<VerifiedOutcome> {
+  const r = await commitExchange(storedExchangeOf(outcome), resolveCommitter, emit);
+  return { ...outcome, proof: r.exchange.proof, commit: r.commit };
 }
 
 /** The user picked the Incognito model (SPEC §3.9): no model evidence, no E2EE; plaintext goes through our proxy and the gateway, and the card says so. */

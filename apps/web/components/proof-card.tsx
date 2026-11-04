@@ -2,9 +2,10 @@
 // The card a person sees after each reply (SPEC §5.3): one line per guarantee, ✓/✗/—, red states in their own design.
 import Link from 'next/link';
 import { memo, useMemo, type ReactNode } from 'react';
+import { useNearWallet } from 'near-connect-hooks';
 import { toDisclosure } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
-import { STEPS_AFTER_SEND, type ChatOutcome } from '@/lib/flow';
+import { STEPS_AFTER_SEND, canCommitNow, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
 import { seconds, short } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
@@ -24,9 +25,10 @@ function RedCard({ title, body, lines }: { title: string; body?: string; lines: 
   );
 }
 
-export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOutcome }) {
+export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcome: ChatOutcome; onCommit?: (outcome: VerifiedOutcome) => void }) {
   const { t } = useT();
   const cfg = useConfig();
+  const { signedAccountId } = useNearWallet(); // the button's label follows the wallet as it is now, not the turn's frozen status
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
   if (outcome.kind === 'failed') {
@@ -83,6 +85,12 @@ export const ProofCard = memo(function ProofCard({ outcome }: { outcome: ChatOut
           <>{t.chainTx(commitShort)} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>
         ) : (
           `${chainText} (commit ${commitShort})`
+        )}
+        {onCommit && canCommitNow(outcome.commit) && (
+          <>
+            {' '}
+            <button type="button" className="btn small" onClick={() => onCommit(outcome)}>{!signedAccountId ? t.commitConnect : outcome.commit === 'failed' ? t.commitRetry : t.commitNow}</button>
+          </>
         )}
       </Row>
       <div className="actions">
