@@ -4,6 +4,7 @@ import type { NearContextValue } from 'near-connect-hooks';
 import { ContractMethodNotFoundError } from 'near-api-js/rpc-errors';
 import type { ModelProof } from '@ainek/proof';
 import type { PublicConfig } from './config';
+import type { Committer } from './flow';
 
 const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
 
@@ -37,4 +38,19 @@ function safeString(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+/**
+ * The committer for the wallet as it is *now*. Session restore and sign-in are asynchronous, so callers hand over a getter
+ * and this waits for the wallet to settle after awaiting. With `connect`, a wallet that is not signed in is asked to sign in
+ * first (with the commit_proof key); null when no account is signed in afterwards (the user closed the dialog).
+ */
+export async function walletCommitter(getWallet: () => NearContextValue, cfg: PublicConfig, connect: boolean): Promise<Committer | null> {
+  // A closed or rejected dialog is "no account signed in", handled below, not an error of the commit. After a successful
+  // sign-in the hook publishes the account on its next render, so that one case is waited for briefly.
+  let signedIn = false;
+  if (connect && !getWallet().signedAccountId) signedIn = await fcKeyLogin(getWallet().signIn, cfg).then(() => true, () => false);
+  for (let i = 0; i < 50 && (getWallet().loading || (signedIn && !getWallet().signedAccountId)); i++) await new Promise((r) => setTimeout(r, 100));
+  const { signedAccountId, callFunctionRaw } = getWallet();
+  return signedAccountId ? (proof) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
 }

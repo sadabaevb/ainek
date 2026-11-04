@@ -1,16 +1,19 @@
 'use client';
 // Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, or from a disclosure file
-// (proof + raw bytes + log entry). Hashes are recomputed here; the log entry is re-read from the public log.
-import { Suspense, useEffect, useState } from 'react';
+// (proof + raw bytes + log entry). Hashes are recomputed here; the log entry is re-read from the public log. An exchange
+// kept in this browser whose proof was never committed can be committed from here (SPEC §4.2), wallet connected on demand.
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useNearWallet } from 'near-connect-hooks';
 import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type KeyEntry, type VerifyReport } from '@ainek/proof';
 import { CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { describeError } from '@/lib/errors';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
-import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
+import { getExchange, listExchanges, putExchange, type StoredExchange } from '@/lib/store';
+import { isMethodNotFound, walletCommitter } from '@/lib/wallet';
 import { useConfig } from '../providers';
 
 interface Input {
@@ -34,7 +37,12 @@ function VerifyInner() {
   const [input, setInput] = useState<Input | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [stored, setStored] = useState<StoredExchange[]>([]);
+  const [exchange, setExchange] = useState<StoredExchange | null>(null); // the ?id= exchange: the one this page can commit
+  const [committing, setCommitting] = useState(false);
   const [error, setError] = useState('');
+  const wallet = useNearWallet();
+  const walletRef = useRef(wallet);
+  walletRef.current = wallet;
 
   useEffect(() => {
     listExchanges().then(setStored).catch(() => undefined);
@@ -42,7 +50,10 @@ function VerifyInner() {
     getExchange(id)
       .then((x) => {
         if (!x) setError(`no exchange ${id} in this browser's store`);
-        else setInput({ proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, embeddedEntry: x.logEntry, origin: 'this browser (IndexedDB)' });
+        else {
+          setExchange(x);
+          setInput({ proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, embeddedEntry: x.logEntry, origin: 'this browser (IndexedDB)' });
+        }
       })
       .catch((e: unknown) => setError(describeError(e)));
   }, [id]);
@@ -62,7 +73,31 @@ function VerifyInner() {
     };
   }, [input, cfg]);
 
+  /** commit_proof for an exchange kept here (the salt is in its proof); the stored row gets the transaction so the card and this page show it from now on. */
+  async function commitStored() {
+    if (!exchange || exchange.proof.commitTx) return;
+    setError('');
+    setCommitting(true);
+    try {
+      const committer = await walletCommitter(() => walletRef.current, cfg, true);
+      if (!committer) {
+        setError('no wallet connected: the commit stays local');
+        return;
+      }
+      const commitTx = await committer(exchange.proof);
+      const committed: StoredExchange = { ...exchange, proof: { ...exchange.proof, commitTx } };
+      await putExchange(committed).catch(() => undefined);
+      setExchange(committed);
+      setInput({ proof: committed.proof, requestBody: committed.requestBody, responseBody: committed.responseBody, embeddedEntry: committed.logEntry, origin: 'this browser (IndexedDB), just committed' });
+    } catch (err) {
+      setError(isMethodNotFound(err) ? 'commit_proof is not in the contract yet (SPEC §4.2 lands next): the commit stays local' : `commit failed: ${describeError(err)}; the commit stays local`);
+    } finally {
+      setCommitting(false);
+    }
+  }
+
   function parsePasted() {
+    setExchange(null);
     setError('');
     try {
       const parsed = JSON.parse(text) as unknown;
@@ -112,6 +147,9 @@ function VerifyInner() {
           {proof && (
             <div className="actions">
               {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">Commit on nearblocks</a>}
+              {exchange && !proof.commitTx && result.report.ok && (
+                <button type="button" className="btn" onClick={() => void commitStored()} disabled={committing}>{committing ? 'Committing…' : 'Commit on NEAR'}</button>
+              )}
               <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">NEAR AI Verification Center</a>
             </div>
           )}
