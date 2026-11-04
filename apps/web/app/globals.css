@@ -66,6 +66,7 @@ table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
 th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-top: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 600; }
 table.kv th { width: 11rem; }
+table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not widen the page on a phone */
 .page h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
 textarea.json { width: 100%; font-family: var(--mono); font-size: 12px; }
 .controls input[type="text"] { width: 100%; padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
