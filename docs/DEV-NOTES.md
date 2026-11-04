@@ -533,7 +533,7 @@ IndexedDB и, если транзакция уже есть (чат успел �
 уйти (шлюз вернул ошибку, ответ не расшифровался). Граница «ушло / не ушло» теперь граница шага, а не флаг: `prepareE2ee`
 (проверка ключа + шифрование, ничего не уходит) — шаг `encrypt`, `transmitE2ee` (fetch + расшифровка) — шаг `send`; у
 plaintext-маршрута только `send`. Фаза падения — чистая функция `failurePhase(step)`: до `send` — «Nothing was sent», `send` —
-«The message went out, but no reply could be verified», после — «Reply received, but its proof could not be completed».
+«The message may have gone out, but no reply could be verified», после — «Reply received, but its proof could not be completed».
 `runChat` превращает любую ошибку в outcome (неожиданную — на шаг, который последним был `running`), страница ничего не
 вычисляет. Первый вариант с колбэком `onRequestSent` и полем `sent` /simplify забраковал как четыре кодировки одного факта.
 (2) `/log` при пустом 24-часовом окне `latest_keys` показывал пустую таблицу без объяснения, а это ровно то, что судья увидит,

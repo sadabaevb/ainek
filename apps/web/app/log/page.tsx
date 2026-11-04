@@ -13,15 +13,15 @@ type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['
 
 const WINDOW_HOURS = Number(LOG_WINDOW_NS) / 3_600_000_000_000;
 
-interface Window {
+interface LogWindow {
   entries: KeyEntry[];
-  /** The newest entry for the model regardless of age; looked up only when the window is empty, to say how stale the log is. */
-  newest: KeyEntry | null;
+  /** The newest entry for the model regardless of age, looked up only when the window is empty to say how stale the log is: undefined while that lookup is in flight or failed, null when the log has none. */
+  newest?: KeyEntry | null;
 }
 
 export default function LogPage() {
   const cfg = useConfig();
-  const [log, setLog] = useState<Window | null>(null);
+  const [log, setLog] = useState<LogWindow | null>(null);
   const [error, setError] = useState('');
   const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
@@ -30,7 +30,15 @@ export default function LogPage() {
     const reader = keyLogFor(cfg);
     reader
       .latestKeys(cfg.model)
-      .then(async (entries) => setLog({ entries, newest: entries.length === 0 ? ((await reader.latestKeys(cfg.model, ANY_AGE_NS))[0] ?? null) : null }))
+      .then((entries) => {
+        setLog({ entries }); // the window (and the explanation card) first; the staleness lookup must not delay or hide it
+        if (entries.length === 0) {
+          reader
+            .latestKeys(cfg.model, ANY_AGE_NS)
+            .then((all) => setLog({ entries, newest: all[0] ?? null }))
+            .catch(() => undefined);
+        }
+      })
       .catch((e: unknown) => setError(describeError(e)));
   }, [cfg]);
 
@@ -65,7 +73,8 @@ export default function LogPage() {
           <h3>No entry younger than {WINDOW_HOURS} hours for {cfg.model}</h3>
           <p>
             The client trusts only entries in that window, so the chat refuses to send until a verifier logs a fresh one. That is the fail-closed rule working, not an outage.
-            {log.newest ? <> Newest entry for this model: #{log.newest.index} by {log.newest.verifier}, observed {observedUtc(log.newest.observed_at)} ({hoursSince(log.newest.observed_at)} h ago).</> : <> The log has no entry for this model at all.</>}
+            {log.newest && <> Newest entry for this model: #{log.newest.index} by {log.newest.verifier}, observed {observedUtc(log.newest.observed_at)} ({hoursSince(log.newest.observed_at)} h ago).</>}
+            {log.newest === null && <> The log has no entry for this model at all.</>}
           </p>
         </section>
       ) : (

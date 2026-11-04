@@ -1,14 +1,12 @@
 // The public key log as the browser reads it (SPEC §4.1 views). The source is chosen once from config:
 // live view calls to the contract (shared reader in @ainek/proof), or the recorded sample entry (offline).
-import { KeyEntry, keyLogReader, resolveLogEntry as resolveFromLog, type ResolvedEntry } from '@ainek/proof';
+import { KeyEntry, keyLogReader, resolveLogEntry as resolveFromLog, type KeyLogReader, type ResolvedEntry } from '@ainek/proof';
 import sample from '../../../docs/samples/key-entry.sample.json';
 import type { PublicConfig } from './config';
 
-export interface KeyLog {
+/** The two views the pages use, with the shared reader's signatures (one source of truth), plus where they come from. */
+export interface KeyLog extends Pick<KeyLogReader, 'latestKeys' | 'entry'> {
   source: 'contract' | 'sample';
-  /** Newest first; the fail-closed window (24 h) by default, `ANY_AGE_NS` for the whole history of a model. */
-  latestKeys(model: string, maxAgeNs?: string): Promise<KeyEntry[]>;
-  entry(index: number): Promise<KeyEntry | null>;
 }
 
 function sampleLog(): KeyLog {

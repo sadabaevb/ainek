@@ -7,7 +7,7 @@ import { toDisclosure } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
 import { canCommitNow, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
-import { seconds, short } from '@/lib/format';
+import { observedUtc, seconds, short } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { CheckList, Row } from './checks';
 
@@ -68,7 +68,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
 
   const { proof, deployment, modelAttestation: m, logEntry, keyVerdict, exchange, report, logSource } = outcome;
   const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
-  const since = new Date(Number(logEntry.observed_at)).toISOString().slice(0, 10);
+  const since = observedUtc(logEntry.observed_at).slice(0, 10);
   const commitShort = short(proof.commit ?? '');
   const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
   const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));

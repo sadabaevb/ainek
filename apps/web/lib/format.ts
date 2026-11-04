@@ -14,6 +14,7 @@ export function observedUtc(observedAtMs: string): string {
   return utcMinute(new Date(Number(observedAtMs)).toISOString());
 }
 
+/** Clamped at zero: the verifier's clock may run slightly ahead of this browser's. */
 export function hoursSince(observedAtMs: string): string {
-  return ((Date.now() - Number(observedAtMs)) / 3_600_000).toFixed(1);
+  return (Math.max(0, Date.now() - Number(observedAtMs)) / 3_600_000).toFixed(1);
 }

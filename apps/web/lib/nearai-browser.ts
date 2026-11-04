@@ -158,7 +158,6 @@ async function httpError(response: Response): Promise<Error> {
   return new Error(`chat completion failed: HTTP ${response.status} ${(await response.text()).slice(0, 200)}`);
 }
 
-/** Encrypt to the verified model key, send through the proxy, decrypt; keep the exact bytes for the proof. */
 /** Everything that happens before the request leaves the browser: the E2EE key check and the encryption. */
 export interface PreparedE2ee {
   prepared: Awaited<ReturnType<typeof prepareE2eeChatRequest>>;
