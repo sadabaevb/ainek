@@ -94,11 +94,13 @@ function VerifyInner() {
     const r = await commitExchange(x, () => walletCommitter(wallet, cfg, true), (e) => {
       if (e.status === 'skipped') setError(e.detail);
     });
-    if (r.commit === 'committed') setResult((prev) => prev && { ...prev, stored: r.exchange, report: { ...prev.report, proof: r.exchange.proof } });
+    // The page may be showing something else by now (a pasted proof): only the same exchange takes the transaction.
+    if (r.commit === 'committed') setResult((prev) => (prev?.stored?.completionId === x.completionId ? { ...prev, stored: r.exchange } : prev));
     setCommitting(false);
   }
 
-  const proof = result?.report.proof;
+  // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
+  const proof = result?.stored?.proof ?? result?.report.proof;
   const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
   return (
     <main className="page">

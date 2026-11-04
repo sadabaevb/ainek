@@ -20,7 +20,7 @@ import {
   type Exchange,
   type VerifiedDeployment,
 } from './nearai-browser';
-import { putExchange, type StoredExchange } from './store';
+import { getExchange, putExchange, type StoredExchange } from './store';
 import { isMethodNotFound } from './wallet';
 import { seconds, short } from './format';
 
@@ -177,6 +177,12 @@ export function canCommitNow(status: CommitStatus): boolean {
  */
 export async function commitExchange(x: StoredExchange, resolveCommitter: () => Promise<Committer | null>, emit: Emit): Promise<{ commit: CommitStatus; exchange: StoredExchange }> {
   try {
+    // The chat's automatic pass and a click on /verify can race for the same exchange: the stored row is the source of truth.
+    const fresh = await getExchange(x.completionId).catch(() => undefined);
+    if (fresh?.proof.commitTx) {
+      emit({ id: 'commit', status: 'ok', detail: `already committed in transaction ${short(fresh.proof.commitTx)}` });
+      return { commit: 'committed', exchange: fresh };
+    }
     const committer = await resolveCommitter();
     if (!committer) {
       emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });

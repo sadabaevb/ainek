@@ -62,7 +62,7 @@ export default function ChatPage() {
   /** Step 8 for one turn, off the critical path: the card is already on screen, the commit lands when it lands. `connect` asks the wallet to sign in first (the card's button); the automatic pass after a reply never pops the wallet up. */
   const commitTurn = useCallback(
     async (idx: number, outcome: VerifiedOutcome, connect: boolean) => {
-      setTurns(atTurn(idx, withOutcome({ ...outcome, commit: 'pending' })));
+      if (outcome.commit !== 'pending') setTurns(atTurn(idx, withOutcome({ ...outcome, commit: 'pending' }))); // the automatic pass already is
       const committed = await commitOutcome(outcome, () => walletCommitter(wallet, cfg, connect), (e) => setTurns(atTurn(idx, withStep(e))));
       setTurns(atTurn(idx, withOutcome(committed)));
     },

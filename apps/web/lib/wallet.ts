@@ -17,13 +17,21 @@ export function fcKeyLogin(signIn: NearContextValue['signIn'], cfg: PublicConfig
 /** `commit_proof(commit, "model", log_index)` (SPEC §4.2) with the function-call key (default 30 TGas, no deposit); returns the transaction hash. */
 export async function commitProofOnChain(callFunctionRaw: NearContextValue['callFunctionRaw'], cfg: PublicConfig, proof: ModelProof): Promise<string> {
   if (!proof.commit) throw new Error('proof has no commit');
-  const outcome = await callFunctionRaw({ contractId: cfg.contract, method: 'commit_proof', args: { commit: proof.commit, kind: 'model', log_index: proof.logIndex } });
-  // The local FC-key path throws on failure; the wallet-popup path resolves with the outcome and leaves the status to us.
-  const status = outcome.status as unknown;
-  if (typeof status === 'object' && status !== null && 'Failure' in status) throw new Error(`commit_proof failed: ${safeString((status as { Failure: unknown }).Failure)}`);
-  const hash = outcome.transaction_outcome?.id;
-  if (typeof hash !== 'string') throw new Error('commit_proof: no transaction hash in the outcome');
-  return hash;
+  // A key the wallet added seconds ago may not be visible yet on the node that signs locally: that one error is retried briefly.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const outcome = await callFunctionRaw({ contractId: cfg.contract, method: 'commit_proof', args: { commit: proof.commit, kind: 'model', log_index: proof.logIndex } });
+      // The local FC-key path throws on failure; the wallet-popup path resolves with the outcome and leaves the status to us.
+      const status = outcome.status as unknown;
+      if (typeof status === 'object' && status !== null && 'Failure' in status) throw new Error(`commit_proof failed: ${safeString((status as { Failure: unknown }).Failure)}`);
+      const hash = outcome.transaction_outcome?.id;
+      if (typeof hash !== 'string') throw new Error('commit_proof: no transaction hash in the outcome');
+      return hash;
+    } catch (err) {
+      if (attempt >= 4 || !/AccessKeyDoesNotExist|access key .{0,80}does not exist/i.test(err instanceof Error ? err.message : safeString(err))) throw err;
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
+  }
 }
 
 /** The contract is deployed but the method is not there yet (SPEC §4.2 lands after §4.1). Typed error on the FC-key path; text match for the wallet-popup path. */
@@ -40,19 +48,36 @@ function safeString(value: unknown): string {
   }
 }
 
+const CONNECTOR_DEADLINE_MS = 10_000;
+/** Connector round trips (manifest fetch, wallet iframe) have no timeout of their own; a stalled one must not leave a card in "committing…" forever. */
+function withDeadline<T>(p: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), CONNECTOR_DEADLINE_MS))]);
+}
+
+/** The user closed the wallet dialog (or the wallet window) without signing in: not an error, just no account. */
+function isDialogClosed(err: unknown): boolean {
+  return /User rejected|Wallet closed/i.test(err instanceof Error ? err.message : safeString(err));
+}
+
 /**
- * The committer for the wallet as it is now, read from the connector rather than from the hook's copy of its state (that copy
- * is one render behind after sign-in or session restore). With `connect`, a wallet that is not signed in is asked to sign in
- * first (with the commit_proof key); a closed dialog is "no account", so null. `callFunctionRaw` resolves the wallet through
- * the connector at call time, so the hook value from any render is fine here.
+ * The committer for the wallet as it is now. The hook's `signedAccountId` is authoritative once set; only while the provider is
+ * still restoring a session (`loading`) is the connector asked directly. With `connect`, a wallet that is not signed in is asked
+ * to sign in first (with the commit_proof key): a closed dialog is "no account", so null; any other sign-in failure is thrown for
+ * the caller to report. `callFunctionRaw` resolves the wallet through the connector at call time, so the hook value from any
+ * render is fine here.
  */
 export async function walletCommitter(wallet: NearContextValue, cfg: PublicConfig, connect: boolean): Promise<Committer | null> {
-  const { connector, signIn, callFunctionRaw } = wallet;
-  const connectedAccount = () => connector.getConnectedWallet().then((c) => c.accounts[0]?.accountId ?? null, () => null);
-  let accountId = await connectedAccount();
-  if (!accountId && connect) {
-    await fcKeyLogin(signIn, cfg).catch(() => undefined);
-    accountId = await connectedAccount();
+  const { connector, signIn, callFunctionRaw, signedAccountId, loading } = wallet;
+  const committer: Committer = (proof) => commitProofOnChain(callFunctionRaw, cfg, proof);
+  if (signedAccountId) return committer;
+  const connectedAccount = () => withDeadline(connector.getConnectedWallet().then((c) => c.accounts[0]?.accountId ?? null, () => null), null);
+  if (loading && (await connectedAccount())) return committer;
+  if (!connect) return null;
+  try {
+    await fcKeyLogin(signIn, cfg);
+  } catch (err) {
+    if (isDialogClosed(err)) return null;
+    throw err;
   }
-  return accountId ? (proof) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
+  return (await connectedAccount()) ? committer : null;
 }

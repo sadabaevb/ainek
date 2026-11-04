@@ -47,6 +47,7 @@ const en = {
   disclose: 'Disclose to auditor',
   commitConnect: 'Connect wallet and commit',
   commitRetry: 'Retry the commit',
+  commitNow: 'Commit now',
   details: 'Technical details',
   lang: 'RU',
 };
@@ -96,6 +97,7 @@ const ru: typeof en = {
   disclose: 'Раскрыть аудитору',
   commitConnect: 'Подключить кошелёк и записать',
   commitRetry: 'Повторить запись',
+  commitNow: 'Записать сейчас',
   details: 'Технические детали',
   lang: 'EN',
 };
