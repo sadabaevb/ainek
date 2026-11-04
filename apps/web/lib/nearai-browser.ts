@@ -158,14 +158,23 @@ async function httpError(response: Response): Promise<Error> {
   return new Error(`chat completion failed: HTTP ${response.status} ${(await response.text()).slice(0, 200)}`);
 }
 
-/** Encrypt to the verified model key, send through the proxy, decrypt; keep the exact bytes for the proof. */
-export async function sendE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation): Promise<Exchange> {
+/** Everything that happens before the request leaves the browser: the E2EE key check and the encryption. */
+export interface PreparedE2ee {
+  prepared: Awaited<ReturnType<typeof prepareE2eeChatRequest>>;
+  requestBody: Uint8Array;
+}
+
+export async function prepareE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation): Promise<PreparedE2ee> {
   if (modelAttestation.signingPublicKey === undefined) throw new Error('verified model report has no E2EE public key');
   const prepared = await prepareE2eeChatRequest({
     request: chatRequest(model, messages),
     modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelAttestation.signingPublicKey },
   });
-  const requestBody = new Uint8Array(await prepared.request.clone().arrayBuffer());
+  return { prepared, requestBody: new Uint8Array(await prepared.request.clone().arrayBuffer()) };
+}
+
+/** From here on the message has left the browser: send through the proxy, keep the exact bytes, decrypt the reply. */
+export async function transmitE2ee({ prepared, requestBody }: PreparedE2ee): Promise<Exchange> {
   const encrypted = await fetch(prepared.request);
   if (!encrypted.ok) throw await httpError(encrypted); // error bodies are plain JSON, not ciphertext
   return toExchange(requestBody, encrypted.clone(), await prepared.decryptResponse(encrypted));

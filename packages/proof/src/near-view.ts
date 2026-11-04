@@ -46,12 +46,15 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
 
 class Transient extends Error {}
 
-const DAY_NS = '86400000000000'; // 24 h in nanoseconds, as a U64 string
+/** The window the fail-closed check accepts a log entry from: 24 h in nanoseconds, as a U64 string. */
+export const LOG_WINDOW_NS = '86400000000000';
+/** u64::MAX: `latest_keys` subtracts it with saturation, so this asks for every entry of a model, newest first. */
+export const ANY_AGE_NS = '18446744073709551615';
 const Head = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64 }).nullable();
 
 export interface KeyLogReader {
-  /** `latest_keys(model, max_age_ns)`, 24 h window. */
-  latestKeys(model: string): Promise<KeyEntry[]>;
+  /** `latest_keys(model, max_age_ns)`: newest first, the fail-closed window by default. */
+  latestKeys(model: string, maxAgeNs?: string): Promise<KeyEntry[]>;
   /** `entry(index)`; null when the index does not exist. */
   entry(index: number): Promise<KeyEntry | null>;
   /** `entries_since(index, limit)`. */
@@ -63,7 +66,7 @@ export interface KeyLogReader {
 export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
   const view = (method: string, args: Record<string, unknown>) => viewFunction(rpcUrl, contractId, method, args);
   return {
-    latestKeys: async (model) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: DAY_NS })),
+    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs })),
     entry: async (index) => {
       const raw = await view('entry', { index });
       return raw == null ? null : KeyEntry.parse(raw);

@@ -86,3 +86,14 @@ test('readProofCommit: null or boolean u64 fields are rejected, not coerced to 0
   rpcAnswering(viewResult({ kind: 'model', log_index: null, block_height: true }));
   await assert.rejects(lookup);
 });
+
+test('keyLogReader.latestKeys: the fail-closed window by default, any age when asked (the contract subtracts with saturation)', async () => {
+  const { keyLogReader, LOG_WINDOW_NS, ANY_AGE_NS } = await import('./near-view.ts');
+  const calls = rpcAnswering(viewResult([]));
+  const reader = keyLogReader('http://rpc.test', 'ainek.testnet');
+  await reader.latestKeys('z-ai/glm-5.3-flash');
+  await reader.latestKeys('z-ai/glm-5.3-flash', ANY_AGE_NS);
+  assert.deepEqual(calls.map((c) => c.args), [{ model: 'z-ai/glm-5.3-flash', max_age_ns: LOG_WINDOW_NS }, { model: 'z-ai/glm-5.3-flash', max_age_ns: ANY_AGE_NS }]);
+  assert.equal(LOG_WINDOW_NS, '86400000000000');
+  assert.equal(ANY_AGE_NS, String(2n ** 64n - 1n));
+});

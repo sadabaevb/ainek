@@ -5,9 +5,9 @@ import { memo, useMemo, type ReactNode } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { toDisclosure } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
-import { STEPS_AFTER_SEND, canCommitNow, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
+import { canCommitNow, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
-import { seconds, short } from '@/lib/format';
+import { observedUtc, seconds, short } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { CheckList, Row } from './checks';
 
@@ -32,8 +32,9 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
   if (outcome.kind === 'failed') {
-    const afterSend = STEPS_AFTER_SEND.has(outcome.step);
-    return <RedCard title={afterSend ? t.failedAfterSendTitle : t.failedTitle} {...(afterSend ? { body: t.failedAfterSendBody } : {})} lines={[`${outcome.step}: ${outcome.reason}`]} />;
+    const phase = failurePhase(outcome.step);
+    const [title, body] = phase === 'answered' ? [t.failedAfterSendTitle, t.failedAfterSendBody] : phase === 'sent' ? [t.failedSentTitle, t.failedSentBody] : [t.failedTitle, undefined];
+    return <RedCard title={title} body={body} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
     return (
@@ -67,7 +68,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
 
   const { proof, deployment, modelAttestation: m, logEntry, keyVerdict, exchange, report, logSource } = outcome;
   const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
-  const since = new Date(Number(logEntry.observed_at)).toISOString().slice(0, 10);
+  const since = observedUtc(logEntry.observed_at).slice(0, 10);
   const commitShort = short(proof.commit ?? '');
   const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
   const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
