@@ -43,7 +43,9 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **Independence from hardware vendors.** The root of trust is Intel and NVIDIA. A compromised CPU/GPU
   breaks every guarantee here, as it does for every TEE product.
 - **Side-channel protection.** Message size and timing are visible to our relay and to NEAR AI.
-- **An audited contract.** The contract is tested with `near-workspaces` invariants but not audited.
+- **An audited contract.** The contract is tested with unit tests and `near-sandbox` invariants but not audited.
+- **That the E2EE flag in a disclosed file is proven.** The signature covers the request and response bytes; whether those
+  bytes were ciphertext is the sender's claim, and `/auditor` labels it as such.
 
 ## Known issues we inherited (say so)
 
