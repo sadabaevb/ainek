@@ -12,30 +12,29 @@ import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import type { PublicConfig } from '@/lib/config';
 import { describeError } from '@/lib/errors';
 import { short, utcMinute } from '@/lib/format';
-import type { Dict } from '@/lib/i18n';
+import { fill } from '@/lib/fill';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { useConfig, useT } from '../providers';
 
 type Line = Omit<Check, 'id'>;
-type Texts = Dict['auditor'];
 
 interface Result {
   d: ParsedDisclosure;
   report: VerifyReport;
 }
 
-/** The on-chain record for this commit (SPEC §4.2), or why it was not looked up. */
-async function lookupCommit(cfg: PublicConfig, ta: Texts, d: ParsedDisclosure, account: string): Promise<Check> {
+/** The on-chain record for this commit (SPEC §4.2), or why it was not looked up. English like every other check detail. */
+async function lookupCommit(cfg: PublicConfig, d: ParsedDisclosure, account: string): Promise<Check> {
   const id = 'on-chain-commit';
   const { commit, commitTx } = d.proof;
-  if (commit === undefined || commitTx === undefined) return { id, status: 'skipped', detail: ta.chainNotCommitted };
-  if (cfg.logSource === 'sample') return { id, status: 'skipped', detail: ta.chainSample };
-  if (!account) return { id, status: 'skipped', detail: ta.chainNoAccount };
+  if (commit === undefined || commitTx === undefined) return { id, status: 'skipped', detail: 'the proof was never committed on NEAR (no commit transaction in the file): nothing to look up' };
+  if (cfg.logSource === 'sample') return { id, status: 'skipped', detail: 'chain not consulted (AINEK_LOG_SOURCE=sample)' };
+  if (!account) return { id, status: 'skipped', detail: 'enter the NEAR account that committed to look the commit up on-chain' };
   try {
     return checkProofCommit(d.proof, await readProofCommit(cfg.rpcUrl, cfg.contract, account, commit), account);
   } catch (err) {
-    return { id, status: 'skipped', detail: ta.chainLookupFailed(describeError(err)) };
+    return { id, status: 'skipped', detail: `lookup failed: ${describeError(err)}` };
   }
 }
 
@@ -88,11 +87,11 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
   const ta = t.auditor;
   const { proof } = d;
   const rows: Array<[string, string]> = [
-    [ta.model, proof.model],
-    [ta.completion, proof.completionId],
+    [t.rowModel, proof.model],
+    ['Completion', proof.completionId],
     [ta.request, ta.bytesLine(d.requestBody.length, short(proof.requestSha256))],
     [ta.response, ta.bytesLine(d.responseBody.length, short(proof.responseSha256))],
-    [ta.e2ee, ta.e2eeLine(proof.e2ee)],
+    [t.rowE2ee, ta.e2eeLine(proof.e2ee)],
     [ta.tools, proof.toolNames.length > 0 ? proof.toolNames.join(', ') : ta.noTools],
     [ta.salt, proof.salt ? ta.saltIncluded : ta.saltMissing],
     [ta.plaintext, ta.plaintextLine],
@@ -114,15 +113,14 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
 }
 
 function Claims({ d, report }: Result) {
-  const { t } = useT();
-  const ta = t.auditor;
+  const ta = useT().t.auditor;
   return (
     <section>
       <h2>{ta.provesTitle}</h2>
       {report.ok ? (
         <ul>
           <li>{ta.proves1(d.proof.model)}</li>
-          <li>{ta.proves2Before} <span className="mono">proof_commit</span> {ta.proves2After}</li>
+          <li>{fill(ta.proves2, { method: <span className="mono">proof_commit</span> })}</li>
         </ul>
       ) : (
         <p>{ta.provesNothing}</p>
@@ -150,7 +148,7 @@ export default function AuditorPage() {
     setBusy(true);
     try {
       const d = parseDisclosure(JSON.parse(text));
-      const [log, chain] = await Promise.all([resolveLogEntry(cfg, d.proof.logIndex, d.logEntry), lookupCommit(cfg, ta, d, account.trim())]);
+      const [log, chain] = await Promise.all([resolveLogEntry(cfg, d.proof.logIndex, d.logEntry), lookupCommit(cfg, d, account.trim())]);
       setResult({ d, report: withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, chain) });
     } catch (err) {
       setResult(null);
@@ -162,11 +160,11 @@ export default function AuditorPage() {
 
   return (
     <main className="page">
-      <h1>{ta.title}</h1>
+      <h1>{t.nav.auditor}</h1>
       <p className="muted">{ta.intro}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} placeholder={ta.placeholder} />
+        <JsonTextarea value={text} onChange={setText} placeholder='{"v":1,"kind":"disclosure",...}' />
         <input type="text" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={ta.accountPlaceholder} />
         <div className="actions">
           <button type="button" className="btn primary" onClick={() => void run()} disabled={busy || !text.trim()}>{busy ? ta.checking : ta.check}</button>

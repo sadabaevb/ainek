@@ -4,7 +4,9 @@
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
 import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
+import { StackTable, type Column } from '@/components/stack-table';
 import { describeError } from '@/lib/errors';
+import { fill } from '@/lib/fill';
 import { hoursSince, observedUtc, short } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
 import { useConfig, useT } from '../providers';
@@ -56,12 +58,21 @@ export default function LogPage() {
 
   const split = log ? findSplitView(log.entries, cfg.model, cfg.trustedVerifiers) : null;
   const c = tl.columns;
+  const columns: Column<KeyEntry>[] = [
+    { label: c.index, cell: (e) => e.index },
+    { label: c.model, cell: (e) => e.model, className: 'mono' },
+    { label: c.verifier, cell: (e) => (cfg.trustedVerifiers.includes(e.verifier) ? e.verifier : `${e.verifier} ${tl.notTrusted}`), className: 'mono' },
+    { label: c.key, cell: (e) => short(e.signing_address), className: 'mono' },
+    { label: c.compose, cell: (e) => short(e.compose_hash), className: 'mono' },
+    { label: c.tcb, cell: (e) => e.tcb_status },
+    { label: c.observed, cell: (e) => observedUtc(e.observed_at) },
+  ];
 
   return (
     <main className="page">
       <h1>{tl.title}</h1>
       <p className="muted">
-        {tl.contract} <span className="mono">{cfg.contract}</span> {tl.introRest(cfg.network, cfg.trustedVerifiers.join(', '), cfg.quorum)}
+        {fill(tl.intro(cfg.network, cfg.trustedVerifiers.join(', '), cfg.quorum), { contract: <span className="mono">{cfg.contract}</span> })}
         {cfg.logSource === 'sample' && ` ${tl.sampleNote}`}
       </p>
       {error && <p className="card red">{error}</p>}
@@ -76,33 +87,15 @@ export default function LogPage() {
           <h3>{tl.emptyTitle(WINDOW_HOURS, cfg.model)}</h3>
           <p>
             {tl.emptyBody}
-            {log.newest && ` ${tl.newest(log.newest.index, log.newest.verifier, observedUtc(log.newest.observed_at), hoursSince(log.newest.observed_at))}`}
-            {log.newest === null && ` ${tl.none}`}
+            {log.newest !== undefined && ` ${log.newest ? tl.newest(log.newest.index, log.newest.verifier, observedUtc(log.newest.observed_at), hoursSince(log.newest.observed_at)) : tl.none}`}
           </p>
         </section>
       ) : (
-        <table className="stack">
-          <thead>
-            <tr><th>{c.index}</th><th>{c.model}</th><th>{c.verifier}</th><th>{c.key}</th><th>{c.compose}</th><th>{c.tcb}</th><th>{c.observed}</th></tr>
-          </thead>
-          <tbody>
-            {log.entries.map((e) => (
-              <tr key={e.index}>
-                <td data-label={c.index}>{e.index}</td>
-                <td className="mono" data-label={c.model}>{e.model}</td>
-                <td className="mono" data-label={c.verifier}>{e.verifier}{cfg.trustedVerifiers.includes(e.verifier) ? '' : tl.notTrusted}</td>
-                <td className="mono" data-label={c.key}>{short(e.signing_address)}</td>
-                <td className="mono" data-label={c.compose}>{short(e.compose_hash)}</td>
-                <td data-label={c.tcb}>{e.tcb_status}</td>
-                <td data-label={c.observed}>{observedUtc(e.observed_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <StackTable columns={columns} rows={log.entries} rowKey={(e) => String(e.index)} />
       ))}
 
       <h2>{tl.wallet}</h2>
-      <p className="muted small">{tl.walletBefore} <span className="mono">commit_proof</span> {tl.walletAfter}</p>
+      <p className="muted small">{fill(tl.walletNote, { method: <span className="mono">commit_proof</span> })}</p>
       {signedAccountId ? (
         <>
           <p>{tl.connectedAs} <span className="mono">{signedAccountId}</span></p>

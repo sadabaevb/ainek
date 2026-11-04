@@ -10,6 +10,7 @@ import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks
 import { CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { describeError } from '@/lib/errors';
+import { fill } from '@/lib/fill';
 import { commitExchange } from '@/lib/flow';
 import type { Dict } from '@/lib/i18n';
 import { resolveLogEntry } from '@/lib/key-log';
@@ -54,6 +55,7 @@ function VerifyInner() {
   const [result, setResult] = useState<Result | null>(null);
   const [stored, setStored] = useState<StoredExchange[]>([]);
   const [committing, setCommitting] = useState(false);
+  const [missingId, setMissingId] = useState<string | null>(null); // ?id= not in this browser's store: worded at render, so it follows the language
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -61,12 +63,10 @@ function VerifyInner() {
     if (!id) return;
     getExchange(id)
       .then((x) => {
-        if (!x) setError(tv.noExchange(id));
+        if (!x) setMissingId(id);
         else setInput(inputOf(x, 'store', x));
       })
       .catch((e: unknown) => setError(describeError(e)));
-    // The wording of a one-off error follows the language at the time; the lookup itself depends on the id only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -113,7 +113,7 @@ function VerifyInner() {
   return (
     <main className="page">
       <h1>{tv.title}</h1>
-      <p className="muted">{tv.introBefore} <Link href="/auditor">/auditor</Link> {tv.introAfter}</p>
+      <p className="muted">{fill(tv.intro, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
 
       <div className="controls">
         <JsonTextarea value={text} onChange={setText} placeholder={tv.placeholder} />
@@ -134,6 +134,7 @@ function VerifyInner() {
         </details>
       )}
 
+      {missingId && <p className="card red">{tv.noExchange(missingId)}</p>}
       {error && <p className="card red">{error}</p>}
 
       {result && (
@@ -145,9 +146,9 @@ function VerifyInner() {
             <div className="actions">
               {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{tv.commitTx}</a>}
               {committable && (
-                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? tv.committing : tv.commit}</button>
+                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? tv.committing : t.commitNow}</button>
               )}
-              <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">{tv.vc}</a>
+              <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">{t.openVc}</a>
             </div>
           )}
         </section>
