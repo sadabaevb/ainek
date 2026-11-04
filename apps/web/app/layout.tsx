@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { LangToggle } from '@/components/lang-toggle';
+import { NavLinks } from '@/components/nav-links';
 import { WalletButton } from '@/components/wallet-button';
 import { readPublicConfig } from '@/lib/config.server';
 import { Providers } from './providers';
@@ -18,13 +19,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Providers config={config}>
           <nav className="nav">
             <Link href="/" className="brand">Ainek</Link>
-            <Link href="/log">Log</Link>
-            <Link href="/verify">Verify</Link>
-            <Link href="/auditor">Auditor</Link>
-            <Link href="/trust">Trust</Link>
-            <span className="spacer" />
-            <WalletButton />
-            <LangToggle />
+            <NavLinks />
+            <span className="right">
+              <WalletButton />
+              <LangToggle />
+            </span>
           </nav>
           {children}
         </Providers>

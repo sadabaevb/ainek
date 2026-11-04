@@ -12,11 +12,13 @@ import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import type { PublicConfig } from '@/lib/config';
 import { describeError } from '@/lib/errors';
 import { short, utcMinute } from '@/lib/format';
+import type { Dict } from '@/lib/i18n';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
-import { useConfig } from '../providers';
+import { useConfig, useT } from '../providers';
 
 type Line = Omit<Check, 'id'>;
+type Texts = Dict['auditor'];
 
 interface Result {
   d: ParsedDisclosure;
@@ -24,20 +26,18 @@ interface Result {
 }
 
 /** The on-chain record for this commit (SPEC §4.2), or why it was not looked up. */
-async function lookupCommit(cfg: PublicConfig, d: ParsedDisclosure, account: string): Promise<Check> {
+async function lookupCommit(cfg: PublicConfig, ta: Texts, d: ParsedDisclosure, account: string): Promise<Check> {
   const id = 'on-chain-commit';
   const { commit, commitTx } = d.proof;
-  if (commit === undefined || commitTx === undefined) return { id, status: 'skipped', detail: 'the proof was never committed on NEAR (no commit transaction in the file): nothing to look up' };
-  if (cfg.logSource === 'sample') return { id, status: 'skipped', detail: 'chain not consulted (AINEK_LOG_SOURCE=sample)' };
-  if (!account) return { id, status: 'skipped', detail: 'enter the NEAR account that committed to look the commit up on-chain' };
+  if (commit === undefined || commitTx === undefined) return { id, status: 'skipped', detail: ta.chainNotCommitted };
+  if (cfg.logSource === 'sample') return { id, status: 'skipped', detail: ta.chainSample };
+  if (!account) return { id, status: 'skipped', detail: ta.chainNoAccount };
   try {
     return checkProofCommit(d.proof, await readProofCommit(cfg.rpcUrl, cfg.contract, account, commit), account);
   } catch (err) {
-    return { id, status: 'skipped', detail: `lookup failed: ${describeError(err)}` };
+    return { id, status: 'skipped', detail: ta.chainLookupFailed(describeError(err)) };
   }
 }
-
-const check = (report: VerifyReport, id: CheckId): Line => report.checks.find((c) => c.id === id) ?? { status: 'skipped', detail: 'not run' };
 
 /** One card row from several checks: every failure's detail, else every skip's, else the ok wording. */
 function combine(okText: string, ...lines: Line[]): Line {
@@ -49,58 +49,63 @@ function combine(okText: string, ...lines: Line[]): Line {
 }
 
 function VerdictCard({ d, report, cfg }: Result & { cfg: PublicConfig }) {
+  const { t } = useT();
+  const ta = t.auditor;
   const { proof } = d;
-  const commit = combine(`sha256(salt ‖ canonical proof) = ${short(proof.commit ?? '')}: the public hash is this exchange's`, check(report, 'commit'));
-  const bytes = combine(`request ${d.requestBody.length} B and response ${d.responseBody.length} B hash to the values the model TEE signed`, check(report, 'request-hash'), check(report, 'response-hash'));
-  const signed = combine(`${proof.signingAlgo} signature by model key ${short(proof.signingAddress)} over model:sha256(request):sha256(response)`, check(report, 'route'), check(report, 'signed-text'), check(report, 'signature'));
-  const keyInLog = check(report, 'key-in-log');
-  const logEntry = check(report, 'log-entry');
+  const check = (id: CheckId): Line => report.checks.find((c) => c.id === id) ?? { status: 'skipped', detail: ta.notRun };
+  const commit = combine(ta.commitOk(short(proof.commit ?? '')), check('commit'));
+  const bytes = combine(ta.bytesOk(d.requestBody.length, d.responseBody.length), check('request-hash'), check('response-hash'));
+  const signed = combine(ta.signedOk(proof.signingAlgo, short(proof.signingAddress)), check('route'), check('signed-text'), check('signature'));
+  const keyInLog = check('key-in-log');
+  const logEntry = check('log-entry');
   const key = combine(`${keyInLog.detail}; ${logEntry.detail}`, keyInLog, logEntry);
-  const chain = check(report, 'on-chain-commit');
+  const chain = check('on-chain-commit');
   // "Checks out" only when the public log itself answered: an internally consistent file whose key was confirmed by
   // nothing but the sender's own copy of the entry is a weaker thing, and the headline says so.
-  const title = !report.ok ? '✗ This disclosure does not check out' : logEntry.status === 'ok' ? '✓ This disclosure checks out' : '✓ Internally consistent; the public log was not consulted';
+  const title = !report.ok ? ta.verdictFail : logEntry.status === 'ok' ? ta.verdictOk : ta.verdictLocal;
 
   return (
     <section className={`card ${report.ok ? '' : 'red'}`}>
       <h3>{title}</h3>
-      <p className="muted small">verified {utcMinute(proof.verifiedAt)}, disclosed {utcMinute(d.disclosedAt)}</p>
-      <Row status={commit.status} label="Commit">{commit.detail}</Row>
-      <Row status={bytes.status} label="Disclosed bytes">{bytes.detail}</Row>
-      <Row status={signed.status} label="Signed inside the model TEE">{signed.detail}</Row>
-      <Row status={key.status} label="Key in the public log">{key.detail}</Row>
-      <Row status={chain.status} label="On NEAR">
+      <p className="muted small">{ta.when(utcMinute(proof.verifiedAt), utcMinute(d.disclosedAt))}</p>
+      <Row status={commit.status} label={ta.rowCommit}>{commit.detail}</Row>
+      <Row status={bytes.status} label={ta.rowBytes}>{bytes.detail}</Row>
+      <Row status={signed.status} label={ta.rowSigned}>{signed.detail}</Row>
+      <Row status={key.status} label={t.rowKey}>{key.detail}</Row>
+      <Row status={chain.status} label={t.rowChain}>
         {chain.detail}
-        {proof.commitTx && <> · sender&apos;s transaction: <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>}
+        {proof.commitTx && <> · {ta.senderTx} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>}
       </Row>
       <div className="actions">
-        <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">Same signature in NEAR AI Verification Center</a>
+        <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">{ta.vcSame}</a>
       </div>
     </section>
   );
 }
 
 function Disclosed({ d }: { d: ParsedDisclosure }) {
+  const { t } = useT();
+  const ta = t.auditor;
   const { proof } = d;
   const rows: Array<[string, string]> = [
-    ['Model', proof.model],
-    ['Completion', proof.completionId],
-    ['Request', `${d.requestBody.length} bytes, sha256 ${short(proof.requestSha256)}`],
-    ['Response', `${d.responseBody.length} bytes, sha256 ${short(proof.responseSha256)}`],
-    ['End-to-end encrypted', `${proof.e2ee ? 'yes' : 'no'}, as stated by the sender: the flag is not covered by the signature. What the signature covers is the bytes above, whatever they contain.`],
-    ['Tools', proof.toolNames.length > 0 ? proof.toolNames.join(', ') : 'none'],
-    ['Salt', proof.salt ? 'included (32 bytes): needed to recompute the commit; it makes this file private' : 'not included'],
-    ['Plaintext', 'not part of the proof. Any text the sender shows you is not bound by this file.'],
-    ['Log entry', `#${d.logEntry.index} by ${d.logEntry.verifier}, embedded in the file (compared with the chain above)`],
+    [ta.model, proof.model],
+    [ta.completion, proof.completionId],
+    [ta.request, ta.bytesLine(d.requestBody.length, short(proof.requestSha256))],
+    [ta.response, ta.bytesLine(d.responseBody.length, short(proof.responseSha256))],
+    [ta.e2ee, ta.e2eeLine(proof.e2ee)],
+    [ta.tools, proof.toolNames.length > 0 ? proof.toolNames.join(', ') : ta.noTools],
+    [ta.salt, proof.salt ? ta.saltIncluded : ta.saltMissing],
+    [ta.plaintext, ta.plaintextLine],
+    [ta.logEntry, ta.logEntryLine(d.logEntry.index, d.logEntry.verifier)],
   ];
-  if (d.note) rows.push(['Note', d.note]);
+  if (d.note) rows.push([ta.note, d.note]);
   return (
     <section>
-      <h2>What was disclosed</h2>
-      <table>
+      <h2>{ta.disclosedTitle}</h2>
+      <table className="kv">
         <tbody>
           {rows.map(([k, v]) => (
-            <tr key={k}><th style={{ width: '11rem' }}>{k}</th><td>{v}</td></tr>
+            <tr key={k}><th>{k}</th><td>{v}</td></tr>
           ))}
         </tbody>
       </table>
@@ -109,27 +114,22 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
 }
 
 function Claims({ d, report }: Result) {
+  const { t } = useT();
+  const ta = t.auditor;
   return (
     <section>
+      <h2>{ta.provesTitle}</h2>
       {report.ok ? (
-        <>
-          <h2>What this file proves</h2>
-          <ul>
-            <li>The disclosed bytes were signed inside an attested deployment of {d.proof.model} on NEAR AI Cloud: the signing key was logged on NEAR by a verifier that checked the Intel TDX and NVIDIA GPU evidence, and the signature over these exact bytes verifies here.</li>
-            <li>The public commit is this exchange&apos;s: it equals sha256(salt ‖ canonical proof) for the proof and salt in this file, so the sender cannot swap in another exchange after the fact. The on-chain record, once <span className="mono">proof_commit</span> is live, fixes the block at which that commit was made.</li>
-          </ul>
-        </>
+        <ul>
+          <li>{ta.proves1(d.proof.model)}</li>
+          <li>{ta.proves2Before} <span className="mono">proof_commit</span> {ta.proves2After}</li>
+        </ul>
       ) : (
-        <>
-          <h2>What this file proves</h2>
-          <p>Nothing: at least one check above failed, so none of the guarantees below are established for this file.</p>
-        </>
+        <p>{ta.provesNothing}</p>
       )}
-      <h2>What it does not prove</h2>
+      <h2>{ta.notProvesTitle}</h2>
       <ul>
-        <li>What the plaintext said: the proof binds bytes, not meaning, and the bytes of an E2EE exchange are ciphertext.</li>
-        <li>What the model enclave did with the data after inference: retention inside the enclave is not provable by attestation. The deployment is attested, not the model weights.</li>
-        <li>Anything about the sender&apos;s other exchanges: this is a selective disclosure of one.</li>
+        {ta.notProves.map((line) => <li key={line}>{line}</li>)}
       </ul>
     </section>
   );
@@ -137,6 +137,8 @@ function Claims({ d, report }: Result) {
 
 export default function AuditorPage() {
   const cfg = useConfig();
+  const { t } = useT();
+  const ta = t.auditor;
   const [text, setText] = useState('');
   const [account, setAccount] = useState('');
   const [busy, setBusy] = useState(false);
@@ -148,11 +150,11 @@ export default function AuditorPage() {
     setBusy(true);
     try {
       const d = parseDisclosure(JSON.parse(text));
-      const [log, chain] = await Promise.all([resolveLogEntry(cfg, d.proof.logIndex, d.logEntry), lookupCommit(cfg, d, account.trim())]);
+      const [log, chain] = await Promise.all([resolveLogEntry(cfg, d.proof.logIndex, d.logEntry), lookupCommit(cfg, ta, d, account.trim())]);
       setResult({ d, report: withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, chain) });
     } catch (err) {
       setResult(null);
-      setError(`not a disclosure file: ${describeError(err)}. A bare proof can be checked on /verify.`);
+      setError(ta.notDisclosure(describeError(err)));
     } finally {
       setBusy(false);
     }
@@ -160,18 +162,16 @@ export default function AuditorPage() {
 
   return (
     <main className="page">
-      <h1>Auditor</h1>
-      <p className="muted">
-        Someone sent you a &quot;Disclose to auditor&quot; file: one exchange, its proof with the salt, the exact bytes and the log entry. This page recomputes the hashes and the commit here, re-reads the log entry from the public log on NEAR, and looks the commit up on-chain. The file is read in this browser and not uploaded.
-      </p>
+      <h1>{ta.title}</h1>
+      <p className="muted">{ta.intro}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} placeholder='{"v":1,"kind":"disclosure",...}' />
-        <input type="text" value={account} onChange={(e) => setAccount(e.target.value)} placeholder="NEAR account that committed (optional), e.g. alice.testnet" />
+        <JsonTextarea value={text} onChange={setText} placeholder={ta.placeholder} />
+        <input type="text" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={ta.accountPlaceholder} />
         <div className="actions">
-          <button type="button" className="btn primary" onClick={() => void run()} disabled={busy || !text.trim()}>{busy ? 'Checking…' : 'Check'}</button>
+          <button type="button" className="btn primary" onClick={() => void run()} disabled={busy || !text.trim()}>{busy ? ta.checking : ta.check}</button>
           <LoadFileButton onText={setText} onError={setError} />
-          <button type="button" className="btn" onClick={() => setText(JSON.stringify(sampleFile, null, 2))}>Use the sample file</button>
+          <button type="button" className="btn" onClick={() => setText(JSON.stringify(sampleFile, null, 2))}>{ta.useSample}</button>
         </div>
       </div>
 
@@ -183,7 +183,7 @@ export default function AuditorPage() {
           <Disclosed d={result.d} />
           <Claims {...result} />
           <details style={{ marginTop: '1rem' }}>
-            <summary>Technical details</summary>
+            <summary>{t.details}</summary>
             <CheckList items={result.report.checks} />
             <pre className="mono small">{JSON.stringify(result.d.proof, null, 2)}</pre>
           </details>

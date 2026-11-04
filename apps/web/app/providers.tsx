@@ -12,6 +12,9 @@ const LangContext = createContext<{ lang: Lang; t: Dict; toggle: () => void } | 
 export function Providers({ config, children }: { config: PublicConfig; children: ReactNode }) {
   const [lang, setLang] = useState<Lang>('en');
   useEffect(() => {
+    document.documentElement.lang = lang; // screen readers and hyphenation follow the toggle
+  }, [lang]);
+  useEffect(() => {
     try {
       const saved = window.localStorage.getItem('ainek.lang');
       if (saved === 'ru' || saved === 'en') setLang(saved);

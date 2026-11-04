@@ -11,11 +11,15 @@ import { CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { describeError } from '@/lib/errors';
 import { commitExchange } from '@/lib/flow';
+import type { Dict } from '@/lib/i18n';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
 import { walletCommitter } from '@/lib/wallet';
-import { useConfig } from '../providers';
+import { useConfig, useT } from '../providers';
+
+/** Where the input came from; the wording follows the language toggle, so only the key is kept. */
+type Origin = keyof Dict['verify']['origin'];
 
 interface Input {
   proof: unknown;
@@ -25,22 +29,24 @@ interface Input {
   embeddedEntry?: KeyEntry;
   /** Set when the input is an exchange kept in this browser: the one this page can commit. */
   stored?: StoredExchange;
-  origin: string;
+  origin: Origin;
 }
 
 interface Result {
   report: VerifyReport;
-  origin: string;
+  origin: Origin;
   stored?: StoredExchange;
 }
 
 /** A disclosure file and a stored exchange carry the same four things. */
-function inputOf(x: DisclosedExchange, origin: string, stored?: StoredExchange): Input {
+function inputOf(x: DisclosedExchange, origin: Origin, stored?: StoredExchange): Input {
   return { proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, embeddedEntry: x.logEntry, origin, ...(stored ? { stored } : {}) };
 }
 
 function VerifyInner() {
   const cfg = useConfig();
+  const { t } = useT();
+  const tv = t.verify;
   const wallet = useNearWallet();
   const id = useSearchParams().get('id');
   const [text, setText] = useState('');
@@ -55,10 +61,12 @@ function VerifyInner() {
     if (!id) return;
     getExchange(id)
       .then((x) => {
-        if (!x) setError(`no exchange ${id} in this browser's store`);
-        else setInput(inputOf(x, 'this browser (IndexedDB)', x));
+        if (!x) setError(tv.noExchange(id));
+        else setInput(inputOf(x, 'store', x));
       })
       .catch((e: unknown) => setError(describeError(e)));
+    // The wording of a one-off error follows the language at the time; the lookup itself depends on the id only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -80,10 +88,10 @@ function VerifyInner() {
     setError('');
     try {
       const parsed = JSON.parse(text) as unknown;
-      if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure file (proof + raw bytes)'));
-      else setInput({ proof: parsed, origin: 'pasted proof JSON (no raw bytes: hash checks skipped)' });
+      if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
+      else setInput({ proof: parsed, origin: 'pasted' });
     } catch (e) {
-      setError(`not a proof or disclosure: ${describeError(e)}`);
+      setError(tv.notProof(describeError(e)));
     }
   }
 
@@ -104,20 +112,20 @@ function VerifyInner() {
   const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
   return (
     <main className="page">
-      <h1>Verify a proof</h1>
-      <p className="muted">Paste a proof, drop a disclosure file, or pick one of the exchanges this browser has kept. Hashes are recomputed here, the signature is checked here, and the log entry is re-read from the public log. Received a disclosure from someone else? <Link href="/auditor">/auditor</Link> says what it proves.</p>
+      <h1>{tv.title}</h1>
+      <p className="muted">{tv.introBefore} <Link href="/auditor">/auditor</Link> {tv.introAfter}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} placeholder='{"v":1,"kind":"model",...}  or the "Disclose to auditor" file' />
+        <JsonTextarea value={text} onChange={setText} placeholder={tv.placeholder} />
         <div className="actions">
-          <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>Verify</button>
+          <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>{tv.verify}</button>
           <LoadFileButton onText={setText} onError={setError} />
         </div>
       </div>
 
       {stored.length > 0 && (
         <details>
-          <summary>Exchanges kept in this browser ({stored.length})</summary>
+          <summary>{tv.kept(stored.length)}</summary>
           <ul className="mono">
             {stored.map((x) => (
               <li key={x.completionId}><a href={`/verify?id=${encodeURIComponent(x.completionId)}`}>{x.completionId}</a> · {x.model} · {x.sentAt.slice(0, 19)}</li>
@@ -130,16 +138,16 @@ function VerifyInner() {
 
       {result && (
         <section className={`card ${result.report.ok ? '' : 'red'}`}>
-          <h3>{result.report.ok ? '✓ Proof verified' : '✗ Proof failed'}</h3>
-          <p className="muted small">source: {result.origin}</p>
+          <h3>{result.report.ok ? tv.ok : tv.failed}</h3>
+          <p className="muted small">{tv.source(tv.origin[result.origin])}</p>
           <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">
-              {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">Commit on nearblocks</a>}
+              {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{tv.commitTx}</a>}
               {committable && (
-                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? 'Committing…' : 'Commit on NEAR'}</button>
+                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? tv.committing : tv.commit}</button>
               )}
-              <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">NEAR AI Verification Center</a>
+              <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">{tv.vc}</a>
             </div>
           )}
         </section>
@@ -149,8 +157,9 @@ function VerifyInner() {
 }
 
 export default function VerifyPage() {
+  const { t } = useT();
   return (
-    <Suspense fallback={<main className="page"><p className="muted">Loading…</p></main>}>
+    <Suspense fallback={<main className="page"><p className="muted">{t.loading}</p></main>}>
       <VerifyInner />
     </Suspense>
   );

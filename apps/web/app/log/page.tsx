@@ -7,7 +7,7 @@ import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/
 import { describeError } from '@/lib/errors';
 import { hoursSince, observedUtc, short } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
-import { useConfig } from '../providers';
+import { useConfig, useT } from '../providers';
 
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
 
@@ -21,6 +21,8 @@ interface LogWindow {
 
 export default function LogPage() {
   const cfg = useConfig();
+  const { t } = useT();
+  const tl = t.log;
   const [log, setLog] = useState<LogWindow | null>(null);
   const [error, setError] = useState('');
   const { signedAccountId, getAccessKeyList } = useNearWallet();
@@ -53,58 +55,59 @@ export default function LogPage() {
   }, [signedAccountId]);
 
   const split = log ? findSplitView(log.entries, cfg.model, cfg.trustedVerifiers) : null;
+  const c = tl.columns;
 
   return (
     <main className="page">
-      <h1>Public key log</h1>
+      <h1>{tl.title}</h1>
       <p className="muted">
-        Contract <span className="mono">{cfg.contract}</span> on {cfg.network}; trusted verifiers {cfg.trustedVerifiers.join(', ')}; quorum {cfg.quorum}.
-        {cfg.logSource === 'sample' && ' Showing the recorded sample entry until the contract is deployed (AINEK_LOG_SOURCE=sample).'}
+        {tl.contract} <span className="mono">{cfg.contract}</span> {tl.introRest(cfg.network, cfg.trustedVerifiers.join(', '), cfg.quorum)}
+        {cfg.logSource === 'sample' && ` ${tl.sampleNote}`}
       </p>
       {error && <p className="card red">{error}</p>}
       {split && (
         <section className="card red">
-          <h3>Split view</h3>
+          <h3>{tl.split}</h3>
           <p>{split.detail}</p>
         </section>
       )}
       {log && (log.entries.length === 0 ? (
         <section className="card">
-          <h3>No entry younger than {WINDOW_HOURS} hours for {cfg.model}</h3>
+          <h3>{tl.emptyTitle(WINDOW_HOURS, cfg.model)}</h3>
           <p>
-            The client trusts only entries in that window, so the chat refuses to send until a verifier logs a fresh one. That is the fail-closed rule working, not an outage.
-            {log.newest && <> Newest entry for this model: #{log.newest.index} by {log.newest.verifier}, observed {observedUtc(log.newest.observed_at)} ({hoursSince(log.newest.observed_at)} h ago).</>}
-            {log.newest === null && <> The log has no entry for this model at all.</>}
+            {tl.emptyBody}
+            {log.newest && ` ${tl.newest(log.newest.index, log.newest.verifier, observedUtc(log.newest.observed_at), hoursSince(log.newest.observed_at))}`}
+            {log.newest === null && ` ${tl.none}`}
           </p>
         </section>
       ) : (
-        <table>
+        <table className="stack">
           <thead>
-            <tr><th>#</th><th>model</th><th>verifier</th><th>signing key</th><th>compose</th><th>TCB</th><th>observed</th></tr>
+            <tr><th>{c.index}</th><th>{c.model}</th><th>{c.verifier}</th><th>{c.key}</th><th>{c.compose}</th><th>{c.tcb}</th><th>{c.observed}</th></tr>
           </thead>
           <tbody>
             {log.entries.map((e) => (
               <tr key={e.index}>
-                <td>{e.index}</td>
-                <td className="mono">{e.model}</td>
-                <td className="mono">{e.verifier}{cfg.trustedVerifiers.includes(e.verifier) ? '' : ' (not in trust set)'}</td>
-                <td className="mono">{short(e.signing_address)}</td>
-                <td className="mono">{short(e.compose_hash)}</td>
-                <td>{e.tcb_status}</td>
-                <td>{observedUtc(e.observed_at)}</td>
+                <td data-label={c.index}>{e.index}</td>
+                <td className="mono" data-label={c.model}>{e.model}</td>
+                <td className="mono" data-label={c.verifier}>{e.verifier}{cfg.trustedVerifiers.includes(e.verifier) ? '' : tl.notTrusted}</td>
+                <td className="mono" data-label={c.key}>{short(e.signing_address)}</td>
+                <td className="mono" data-label={c.compose}>{short(e.compose_hash)}</td>
+                <td data-label={c.tcb}>{e.tcb_status}</td>
+                <td data-label={c.observed}>{observedUtc(e.observed_at)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       ))}
 
-      <h2>Wallet</h2>
-      <p className="muted small">Connecting (top right) adds a function-call key limited to <span className="mono">commit_proof</span> on the contract, so the chat can commit salted proof hashes without asking the wallet each time.</p>
+      <h2>{tl.wallet}</h2>
+      <p className="muted small">{tl.walletBefore} <span className="mono">commit_proof</span> {tl.walletAfter}</p>
       {signedAccountId ? (
         <>
-          <p>Connected as <span className="mono">{signedAccountId}</span></p>
+          <p>{tl.connectedAs} <span className="mono">{signedAccountId}</span></p>
           <details>
-            <summary>Access keys ({keys.length})</summary>
+            <summary>{tl.accessKeys(keys.length)}</summary>
             <ul className="mono">
               {keys.map((k) => {
                 const p = k.access_key.permission;
@@ -115,7 +118,7 @@ export default function LogPage() {
           </details>
         </>
       ) : (
-        <p className="muted">No wallet connected.</p>
+        <p className="muted">{tl.noWallet}</p>
       )}
     </main>
   );
