@@ -1,5 +1,6 @@
 // A table that stacks into labelled blocks below 640 px (globals.css `table.stack`). The header cells and each cell's
-// data-label come from the same column list, so they cannot drift apart.
+// data-label come from the same column list, so they cannot drift apart. The cell content is one <span>, so the stacked
+// grid (label | content) holds whatever a cell renders.
 import type { ReactNode } from 'react';
 
 export interface Column<Row> {
@@ -17,7 +18,7 @@ export function StackTable<Row>({ columns, rows, rowKey }: { columns: Column<Row
       <tbody>
         {rows.map((row) => (
           <tr key={rowKey(row)}>
-            {columns.map((c) => <td key={c.label} className={c.className} data-label={c.label}>{c.cell(row)}</td>)}
+            {columns.map((c) => <td key={c.label} className={c.className} data-label={c.label}><span>{c.cell(row)}</span></td>)}
           </tr>
         ))}
       </tbody>

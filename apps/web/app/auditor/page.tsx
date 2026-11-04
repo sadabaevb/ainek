@@ -88,7 +88,7 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
   const { proof } = d;
   const rows: Array<[string, string]> = [
     [t.rowModel, proof.model],
-    ['Completion', proof.completionId],
+    [ta.completion, proof.completionId],
     [ta.request, ta.bytesLine(d.requestBody.length, short(proof.requestSha256))],
     [ta.response, ta.bytesLine(d.responseBody.length, short(proof.responseSha256))],
     [t.rowE2ee, ta.e2eeLine(proof.e2ee)],
@@ -183,7 +183,7 @@ export default function AuditorPage() {
           <details style={{ marginTop: '1rem' }}>
             <summary>{t.details}</summary>
             <CheckList items={result.report.checks} />
-            <pre className="mono small">{JSON.stringify(result.d.proof, null, 2)}</pre>
+            <pre className="mono small" lang="en">{JSON.stringify(result.d.proof, null, 2)}</pre>
           </details>
         </>
       )}

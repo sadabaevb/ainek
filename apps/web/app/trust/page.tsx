@@ -14,7 +14,7 @@ const COLUMNS: Column<TrustRow>[] = [
 
 export default function TrustPage() {
   return (
-    <main className="page">
+    <main className="page" lang="en">
       <h1>Who sees what</h1>
       <p className="muted">The trust boundary of Ainek, as stated in the spec. We say "our server cannot read", not "nobody can".</p>
       <StackTable columns={COLUMNS} rows={rows} rowKey={(r) => r[0] ?? ''} />

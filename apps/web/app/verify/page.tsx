@@ -60,6 +60,7 @@ function VerifyInner() {
 
   useEffect(() => {
     listExchanges().then(setStored).catch(() => undefined);
+    setMissingId(null);
     if (!id) return;
     getExchange(id)
       .then((x) => {
@@ -86,6 +87,7 @@ function VerifyInner() {
 
   function parsePasted() {
     setError('');
+    setMissingId(null);
     try {
       const parsed = JSON.parse(text) as unknown;
       if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
