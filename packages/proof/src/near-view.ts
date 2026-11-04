@@ -61,3 +61,29 @@ export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
     head: async () => Head.parse((await view('head', {})) ?? null),
   };
 }
+
+// ---- proof_commit (SPEC §4.2) --------------------------------------------------------------------
+/** What `proof_commit(account, commit)` returns for a committed hash. `log_index` and `block_height` are u64 in the contract: numbers on the wire, decimal strings accepted too. */
+export const ProofCommitRecord = z.object({ kind: z.enum(['model', 'action']), log_index: z.coerce.number().int().nonnegative(), block_height: z.coerce.number().int().nonnegative() });
+export type ProofCommitRecord = z.infer<typeof ProofCommitRecord>;
+
+export type ProofCommitLookup = { status: 'found'; record: ProofCommitRecord } | { status: 'none' } | { status: 'not-deployed' };
+
+/** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
+export function isMethodNotFoundMessage(text: string): boolean {
+  return /MethodNotFound|MethodResolveError|method is not found/i.test(text);
+}
+
+/**
+ * `proof_commit(account, commit)`: the on-chain record for a salted commit. `none` when that account never committed it,
+ * `not-deployed` while the contract has no such view yet. Other failures (RPC down, malformed account id) throw.
+ */
+export async function readProofCommit(rpcUrl: string, contractId: string, account: string, commit: string): Promise<ProofCommitLookup> {
+  try {
+    const raw = await viewFunction(rpcUrl, contractId, 'proof_commit', { account, commit });
+    return raw == null ? { status: 'none' } : { status: 'found', record: ProofCommitRecord.parse(raw) };
+  } catch (err) {
+    if (err instanceof Error && isMethodNotFoundMessage(err.message)) return { status: 'not-deployed' };
+    throw err;
+  }
+}

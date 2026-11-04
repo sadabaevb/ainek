@@ -57,7 +57,7 @@ pnpm demo                        # replay mode, no API key, no network (~1 s): r
                                  #   prints ✓/✗ per step and the proof card
 pnpm demo:live                   # needs NEARAI_API_KEY: live verification from Node (chat request pinned to the attested gateway's TLS key),
                                  #   fail-closed check against the public log, one E2EE request, signature, proof card;
-                                 #   add --record to refresh the E2EE sample in docs/samples
+                                 #   add --record to refresh the E2EE sample in docs/samples, --disclose <file> to write the auditor file of the run
 pnpm -F web dev                  # needs NEARAI_API_KEY (server-side only): open http://localhost:3000, send "hello" →
                                  #   the browser verifies the TEE evidence itself (~25 s cold, then cached 60 min), encrypts to the
                                  #   attested model key, checks the signature and shows the proof card with ✓ rows
@@ -67,9 +67,10 @@ pnpm -F web dev                  # needs NEARAI_API_KEY (server-side only): open
 2. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" on the chat page (or open `/?tamper=1`) → the client refuses to send: "Key not in the public log. Message not sent."
    **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only).
 3. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste the proof / the "Disclose to auditor" file into `/verify` → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "Open in Verification Center" shows the same signature on NEAR AI's own page.
-4. **(Tier 2) Watch the agent:** `pnpm -F agent start` → in Telegram send "pay aibek.testnet 300 for October"
+4. **Audit a disclosure:** open `/auditor` → "Use the sample file" (or a file someone sent you from "Disclose to auditor") → the commit is recomputed from salt + proof, the hashes from the disclosed ciphertext bytes, the log entry is re-read from the chain and compared with the one in the file, and the commit is looked up on NEAR once `commit_proof` is live. The page says what the file proves and what it does not.
+5. **(Tier 2) Watch the agent:** `pnpm -F agent start` → in Telegram send "pay aibek.testnet 300 for October"
    → `action_executed` on nearblocks; send "pay newguy.testnet 5000" → `NeedsApproval` → tap Reject.
-5. **Stop button:** `pnpm demo:stop` → `DeleteKey` for the agent key → next proposal fails on-chain.
+6. **Stop button:** `pnpm demo:stop` → `DeleteKey` for the agent key → next proposal fails on-chain.
 
 ## Who sees what
 

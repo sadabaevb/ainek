@@ -20,6 +20,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link href="/" className="brand">Ainek</Link>
             <Link href="/log">Log</Link>
             <Link href="/verify">Verify</Link>
+            <Link href="/auditor">Auditor</Link>
             <Link href="/trust">Trust</Link>
             <span className="spacer" />
             <WalletButton />

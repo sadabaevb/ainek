@@ -2,6 +2,7 @@
 // `commit_proof` on the log contract, so committing a proof hash never pops the wallet up again.
 import type { NearContextValue } from 'near-connect-hooks';
 import { ContractMethodNotFoundError } from 'near-api-js/rpc-errors';
+import { isMethodNotFoundMessage } from '@ainek/proof';
 import type { ModelProof } from '@ainek/proof';
 import type { PublicConfig } from './config';
 
@@ -27,7 +28,7 @@ export async function commitProofOnChain(callFunctionRaw: NearContextValue['call
 
 /** The contract is deployed but the method is not there yet (SPEC §4.2 lands after §4.1). Typed error on the FC-key path; text match for the wallet-popup path. */
 export function isMethodNotFound(err: unknown): boolean {
-  return err instanceof ContractMethodNotFoundError || /MethodNotFound|MethodResolveError|method is not found/i.test(err instanceof Error ? err.message : safeString(err));
+  return err instanceof ContractMethodNotFoundError || isMethodNotFoundMessage(err instanceof Error ? err.message : safeString(err));
 }
 
 /** Wallet errors can be structured-cloned objects (BigInt fields included); never let the description itself throw. */

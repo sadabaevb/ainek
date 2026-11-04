@@ -1,8 +1,9 @@
-// `pnpm demo:live [--record] [--message "…"]`: the Tier-1 flow from Node with the server-side API key.
+// `pnpm demo:live [--record] [--disclose <file>] [--message "…"]`: the Tier-1 flow from Node with the server-side API key.
 // Mirror of apps/web/lib/flow.ts (same steps, same order; keep them in sync): verify gateway + model evidence
 // (TLS pinned to the attested gateway), fail-closed check against the public log, one E2EE request with the exact
 // bytes kept, signature, SDK byte-exact check, our proof, card. `--record` writes the exchange into docs/samples
-// so the offline replay (`pnpm demo`) has an E2EE sample.
+// so the offline replay (`pnpm demo`) has an E2EE sample. `--disclose <file>` writes the "Disclose to auditor" file of this
+// run (SPEC §5.4; a relative path is taken from the repo root), the same bytes a proof card downloads, for /auditor and /verify.
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -19,13 +20,14 @@ import {
   type CompletionSignature,
   type TcbStatus,
 } from '@nearai/inference-sdk/node';
-import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, keyLogReader, normalizeHex, shortHex as short, verifyModelProof, type KeyEntry, type ModelProof } from '@ainek/proof';
+import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, keyLogReader, normalizeHex, shortHex as short, toDisclosure, verifyModelProof, type KeyEntry, type ModelProof } from '@ainek/proof';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
 import { FAIL, NA, OK, describe, head, line, markOf } from './term.ts';
 
-const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
+const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, disclose: { type: 'string' }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
 const record = flags.record === true;
 const message = String(flags.message);
+const disclosePath = typeof flags.disclose === 'string' ? flags.disclose : '';
 
 // Root .env (CLAUDE.md: secrets live in one file). loadEnvFile never overrides variables already set, so the shell wins.
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
@@ -116,6 +118,10 @@ console.log(`└─ Result: ${report.ok ? 'VERIFIED' : 'FAILED'}`);
 
 if (record && report.ok) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
 else if (record) console.log('\nnot recorded: the run did not verify');
+if (disclosePath && report.ok) {
+  writeFileSync(path.resolve(repoRoot, disclosePath), `${JSON.stringify(toDisclosure({ proof, logEntry, requestBody, responseBody }), null, 2)}\n`);
+  console.log(`\ndisclosure written: ${disclosePath} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
+} else if (disclosePath) console.log('\ndisclosure not written: the run did not verify');
 process.exit(report.ok ? 0 : 1);
 
 // ---- helpers ----
