@@ -241,7 +241,7 @@ EIP-191 recover через `ethers` для ecdsa). Сырые байты и `sal
 ```
 Байты — шифртекст E2EE как был отправлен/получен, открытого текста в файле нет. Схема `Disclosure`, `toDisclosure`,
 `parseDisclosure` — в `packages/proof`; `/verify` и `/auditor` принимают этот файл и пересчитывают хеши и коммит.
-`/auditor` дополнительно сверяет вложенный `logEntry` с записью `logIndex` в контракте (по `entry_hash`; расхождение — ✗) и ищет коммит
+`/auditor` дополнительно сверяет вложенный `logEntry` с записью `logIndex` в контракте (целиком, канонический JSON записи; расхождение или отсутствие — ✗) и ищет коммит
 через `proof_commit(account, commit)`, аккаунт отправителя аудитор вводит сам. Пока view не задеплоен, строка «On NEAR» — «—», не «✗».
 Образец файла: `docs/samples/disclosure.sample.json` (`pnpm demo:live --disclose <file>`).
 

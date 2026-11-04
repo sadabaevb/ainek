@@ -76,3 +76,13 @@ test('checkProofCommit: no record is a failure, a contract without the view is a
   assert.deepEqual(checkProofCommit(proof, { status: 'none' }, 'alice.testnet'), { id: 'on-chain-commit', status: 'fail', detail: 'alice.testnet never committed this hash' });
   assert.equal(checkProofCommit(proof, { status: 'not-deployed' }, 'alice.testnet').status, 'skipped');
 });
+
+test('readProofCommit: a MethodResolveError other than MethodNotFound (a broken export) is an error, not "not-deployed"', async () => {
+  rpcAnswering({ jsonrpc: '2.0', id: '1', result: { error: 'wasm execution failed with error: MethodResolveError(MethodInvalidSignature)', logs: [], block_height: 1 } });
+  await assert.rejects(lookup, /MethodInvalidSignature/);
+});
+
+test('readProofCommit: null or boolean u64 fields are rejected, not coerced to 0', async () => {
+  rpcAnswering(viewResult({ kind: 'model', log_index: null, block_height: true }));
+  await assert.rejects(lookup);
+});

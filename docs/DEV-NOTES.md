@@ -486,7 +486,15 @@ SPEC §4.2; аккаунт отправителя аудитор вводит с
 этот обмен) и чего не доказывает (содержимое открытого текста — в файле шифртекст; хранение внутри анклава; веса модели; другие
 обмены отправителя) — формулировки по CLAIMS.md. `parseDisclosure` отдаёт и `disclosedAt`/`note`, чтобы файл не парсить дважды.
 Образец: `docs/samples/disclosure.sample.json` — один живой обмен 4 ноября (`pnpm demo:live --disclose <file>`; относительный путь
-от `INIT_CWD`, то есть откуда набрана команда pnpm, а не от `apps/demo`), привязан к записи #0 `ainek-log-dastan.testnet`
+от `INIT_CWD`: для корневого скрипта это корень репо, потому что pnpm вкладывает второй pnpm, для `pnpm -F demo live` — каталог шелла; в sample-режиме флаг отказывает, такой файл никто не подтвердит), привязан к записи #0 `ainek-log-dastan.testnet`
 (verifier `ainek-dev-dastan.testnet`), без `commitTx`. Кнопка «Use the sample file» даёт судьям кликабельный `/auditor` без чата.
 Тесты в `packages/proof`: образец проверяем офлайн по вложенной записи; `resolveLogEntry` на фальшивом ридере (равна / отличается /
 нет / RPC лежит); `readProofCommit` и `checkProofCommit` на заглушке RPC. Страница на английском, как `/verify` и `/log`.
+После `/code-review` (13 находок): раздел «What this file proves» показывается только при зелёном вердикте, при ✗ — «ничего»;
+заголовок различает «checks out» (лог ответил) и «internally consistent; the public log was not consulted» (лог недоступен,
+использована вложенная копия); поля, не покрытые подписью TEE (`e2ee`, `commitTx`), подписаны как утверждения отправителя;
+`proof_commit` ищется только если в файле есть `commitTx` (некоммиченный proof — «—», а не ✗ при введённом аккаунте); ответ лога
+без валидной записи (нет view, схема не прошла) — ✗, а не «RPC недоступен»; u64 в `ProofCommitRecord` — число или десятичная
+строка, `null`/`true` отклоняются; «not deployed» только по `MethodNotFound`, `MethodResolveError(MethodInvalidSignature)` всплывает
+как ошибка; `commitTx` в ссылке на обозреватель кодируется; `--disclose` проверяет путь и каталог до первого сетевого вызова и
+отказывает в sample-режиме; кнопка «Load file» сбрасывает input и показывает ошибку чтения.

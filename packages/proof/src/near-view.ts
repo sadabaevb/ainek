@@ -19,10 +19,11 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
     params: { request_type: 'call_function', finality: 'final', account_id: contractId, method_name: method, args_base64: bytesToBase64(new TextEncoder().encode(JSON.stringify(args))) },
   });
   // A failing view answers HTTP 200 with a text error (the typed cause exists only on the EXPERIMENTAL RPC), so the
-  // method-not-found case is classified here once, for every view that lands later.
+  // method-not-found case is classified here once, for every view that lands later. Only MethodNotFound itself: a
+  // MethodResolveError for a bad export signature is a broken deploy and must surface, not read as "not deployed yet".
   const contractError = (text: string): Error => {
     const message = `${contractId}.${method}: ${text}`;
-    return /MethodNotFound|MethodResolveError/i.test(text) ? new ContractMethodNotFound(message) : new Error(message);
+    return /\bMethodNotFound\b/.test(text) ? new ContractMethodNotFound(message) : new Error(message);
   };
   for (let attempt = 1; ; attempt++) {
     try {

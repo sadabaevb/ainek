@@ -77,3 +77,14 @@ test('resolveLogEntry: an unreachable log is a skip that falls back to the embed
   assert.match(r.check.detail, /unavailable \(rpc down\); using the embedded entry/);
   assert.deepEqual(r.entry, entry);
 });
+
+test('resolveLogEntry: a log that answers without a valid entry (no view, malformed shape) fails and the embedded copy does not stand in', async () => {
+  const { ContractMethodNotFound } = await import('./near-view.ts');
+  const { ZodError } = await import('zod');
+  for (const err of [new ContractMethodNotFound('ainek.testnet.entry: MethodNotFound'), new ZodError([])]) {
+    const r = await resolveLogEntry(reader(async () => { throw err; }), entry.index, entry);
+    assert.equal(r.check.status, 'fail');
+    assert.match(r.check.detail, /did not answer with a valid entry/);
+    assert.equal(r.entry, null);
+  }
+});

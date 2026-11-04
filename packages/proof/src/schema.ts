@@ -138,8 +138,9 @@ export const SignatureResponse = z.object({
 export type SignatureResponse = z.infer<typeof SignatureResponse>;
 
 // ---- SPEC §4.2 (what proof_commit returns) ---------------------------------------------------------
-/** `log_index` and `block_height` are u64 in the contract: numbers on the wire, decimal strings accepted too. */
+/** `log_index` and `block_height` are u64 in the contract: a non-negative integer on the wire, or its decimal string. */
+const u64 = z.union([z.number().int().nonnegative(), u64String.transform(Number)]);
 export const ProofCommitRecord = z
-  .object({ kind: z.enum(['model', 'action']), log_index: z.coerce.number().int().nonnegative(), block_height: z.coerce.number().int().nonnegative() })
+  .object({ kind: z.enum(['model', 'action']), log_index: u64, block_height: u64 })
   .strict();
 export type ProofCommitRecord = z.infer<typeof ProofCommitRecord>;

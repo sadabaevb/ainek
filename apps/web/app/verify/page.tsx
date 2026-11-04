@@ -87,7 +87,7 @@ function VerifyInner() {
         <JsonTextarea value={text} onChange={setText} placeholder='{"v":1,"kind":"model",...}  or the "Disclose to auditor" file' />
         <div className="actions">
           <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>Verify</button>
-          <LoadFileButton onText={setText} />
+          <LoadFileButton onText={setText} onError={setError} />
         </div>
       </div>
 

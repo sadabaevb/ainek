@@ -27,7 +27,12 @@ import { FAIL, NA, OK, describe, head, line, markOf } from './term.ts';
 const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, disclose: { type: 'string' }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
 const record = flags.record === true;
 const message = String(flags.message);
-const disclosePath = typeof flags.disclose === 'string' ? flags.disclose : '';
+// `--disclose` needs a file; parseArgs (strict: false) would otherwise swallow the next flag as the value or yield `true` for a bare one.
+if (flags.disclose !== undefined && (typeof flags.disclose !== 'string' || flags.disclose.startsWith('-'))) usage('--disclose needs a file path');
+// INIT_CWD is where pnpm ran: the repo root for `pnpm demo:live` (the root script nests a second pnpm), the shell's directory for
+// `pnpm -F demo live`. An absolute path works from anywhere.
+const discloseFile = typeof flags.disclose === 'string' ? path.resolve(process.env.INIT_CWD ?? process.cwd(), flags.disclose) : '';
+if (discloseFile && !existsSync(path.dirname(discloseFile))) usage(`--disclose: directory ${path.dirname(discloseFile)} does not exist`);
 
 // Root .env (CLAUDE.md: secrets live in one file). loadEnvFile never overrides variables already set, so the shell wins.
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
@@ -38,6 +43,8 @@ if (!apiKey) {
   process.exit(2);
 }
 const cfg = ainekConfigFromEnv(process.env);
+// A disclosure binds the proof to the log entry it embeds; the recorded sample entry is one no auditor can confirm on-chain.
+if (discloseFile && cfg.logSource === 'sample') usage('--disclose needs the contract log (AINEK_LOG_SOURCE=contract): a proof bound to the sample entry cannot be audited');
 const { model, nearaiBaseUrl: baseUrl } = cfg;
 const SIGNING_ALGO = 'ed25519' as const;
 const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] }; // validated in ainekConfigFromEnv; same names as the SDK's
@@ -118,15 +125,20 @@ console.log(`└─ Result: ${report.ok ? 'VERIFIED' : 'FAILED'}`);
 
 if (report.ok) {
   if (record) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
-  if (disclosePath) {
-    const file = path.resolve(process.env.INIT_CWD ?? process.cwd(), disclosePath); // INIT_CWD: where the pnpm command was typed, not apps/demo
-    writeJson(file, toDisclosure({ proof, logEntry, requestBody, responseBody }));
-    console.log(`\ndisclosure written: ${file} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
+  if (discloseFile) {
+    writeJson(discloseFile, toDisclosure({ proof, logEntry, requestBody, responseBody }));
+    console.log(`\ndisclosure written: ${discloseFile} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
   }
-} else if (record || disclosePath) console.log('\nnothing written: the run did not verify');
+} else if (record || discloseFile) console.log('\nnothing written: the run did not verify');
 process.exit(report.ok ? 0 : 1);
 
 // ---- helpers ----
+/** A flag the run cannot proceed with: say so before any network call or spend. */
+function usage(reason: string): never {
+  console.error(`${reason}\nusage: pnpm demo:live [--record] [--disclose <file>] [--message "…"]`);
+  return process.exit(2);
+}
+
 /** Fail-closed exit: prints the reason as a ✗ line and the REFUSED result. */
 function refuse(reason: string): never {
   line(FAIL, `${reason}: not sent (fail-closed)`);
