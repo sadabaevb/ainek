@@ -35,7 +35,7 @@ export interface StepEvent {
 
 /** Steps that run after the message has left the device: a failure there is "reply not provable", not "nothing was sent". */
 /** The steps in the order they run; the failure phase is a position relative to `send`, so a new step cannot be misread. */
-const STEP_ORDER: readonly StepId[] = ['metadata', 'attestation', 'key-log', 'encrypt', 'send', 'signature', 'sdk-check', 'proof', 'store', 'commit'];
+export const STEP_ORDER: readonly StepId[] = ['metadata', 'attestation', 'key-log', 'encrypt', 'send', 'signature', 'sdk-check', 'proof', 'store', 'commit'];
 
 export type FailurePhase = 'not-sent' | 'sent' | 'answered';
 /** What a failure at `step` means for the message: nothing left the browser; it was handed to the network but no reply could be verified; a reply came and a later check failed. `send` starts at fetch, so the boundary is exact. */

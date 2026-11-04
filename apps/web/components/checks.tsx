@@ -20,12 +20,14 @@ export function CheckList({ items }: { items: ReadonlyArray<{ id: string; status
   );
 }
 
-export function Row({ status, label, children }: { status: Exclude<Status, 'running'>; label: string; children: ReactNode }) {
+/** One guarantee line; `hint` is the plain-language explanation shown when the card's "What do these rows mean?" is open. */
+export function Row({ status, label, hint, children }: { status: Exclude<Status, 'running'>; label: string; hint?: string; children: ReactNode }) {
   return (
     <div className={`row ${status}`}>
       <span className="mark" aria-hidden>{mark(status)}</span>
       <span className="label">{label}</span>
       <span className="value">{children}</span>
+      {hint && <span className="hint">{hint}</span>}
     </div>
   );
 }

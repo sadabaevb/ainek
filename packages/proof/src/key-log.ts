@@ -76,7 +76,14 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   if (confirmedBy.length >= query.quorum) {
     return { status: 'ok', confirmedBy, matching, untrusted, detail: `key ${shortHex(wanted)} confirmed by ${confirmedBy.join(', ')}` };
   }
-  const why = matching.length === 0 ? `key ${shortHex(wanted)} is not in the public log` : `only ${confirmedBy.length} of ${query.quorum} required confirmations`;
+  // An entry from a verifier outside the trust set is named, not counted: the reader should see why a logged key was refused.
+  const onlyUntrusted = [...new Set(untrusted.filter((e) => normalizeHex(e.signing_address) === wanted).map((e) => e.verifier))];
+  const why =
+    matching.length > 0
+      ? `only ${confirmedBy.length} of ${query.quorum} required confirmations`
+      : onlyUntrusted.length > 0
+        ? `key ${shortHex(wanted)} is logged only by ${onlyUntrusted.join(', ')}, outside the trust set`
+        : `key ${shortHex(wanted)} is not in the public log`;
   return { status: 'not-logged', confirmedBy, matching, untrusted, detail: `${why}: not sent (fail-closed)` };
 }
 
