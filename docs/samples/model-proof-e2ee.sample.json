@@ -1,0 +1,24 @@
+{
+  "_note": "SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.",
+  "proof": {
+    "v": 1,
+    "kind": "model",
+    "completionId": "8e20a4232d22466ebb01105193efd290",
+    "model": "z-ai/glm-5.3-flash",
+    "signatureKind": "provider_tee",
+    "signingAlgo": "ed25519",
+    "signingAddress": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+    "signedText": "z-ai/glm-5.3-flash:d8c6dfb12b6cf2776d97593dc3d7ff38a98e0cbef5483d01c33cef43da7ffe6d:24a7e424e2e4898b24d3c119353ac00a731b91200a84e5dce75f1673a7f6cfcf",
+    "signature": "b28b92ebc2e7472776533afbf86eec1c91900a8b5b200fda102dd21b94b86258ed73b020032dc2467eb03c03257a87e59566a88dcaf7e267121c1e605aac7408",
+    "requestSha256": "d8c6dfb12b6cf2776d97593dc3d7ff38a98e0cbef5483d01c33cef43da7ffe6d",
+    "responseSha256": "24a7e424e2e4898b24d3c119353ac00a731b91200a84e5dce75f1673a7f6cfcf",
+    "e2ee": true,
+    "toolNames": [],
+    "logIndex": 0,
+    "verifier": "v1.ainek.testnet",
+    "verifiedAt": "2026-11-03T16:54:15.261Z",
+    "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "commit": "2d62962b05059dc441e603f718beeb12c1a0d1f9730baaa25d3e95f14b7addc8",
+    "commitTx": "SAMPLE-not-committed"
+  }
+}

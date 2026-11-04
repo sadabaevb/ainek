@@ -1,0 +1,8 @@
+{
+  "_note": "What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.",
+  "model": "z-ai/glm-5.3-flash",
+  "prompt": "Reply with exactly three words.",
+  "reply": "Exactly three words",
+  "completionId": "8e20a4232d22466ebb01105193efd290",
+  "recordedAt": "2026-11-03T16:54:20.853Z"
+}

@@ -5,7 +5,7 @@ import type { KeyEntry, ModelProof, RawReport } from '@ainek/proof';
 
 export type { RawReport } from '@ainek/proof';
 
-const samplesDir = new URL('../../../docs/samples/', import.meta.url);
+export const samplesDir = new URL('../../../docs/samples/', import.meta.url);
 
 export function readBytes(name: string): Uint8Array {
   return new Uint8Array(readFileSync(new URL(name, samplesDir)));
@@ -38,11 +38,36 @@ export interface Recording {
   collateralByQuote: Record<string, unknown>;
   nrasResponse: string;
   jwks: unknown;
+  logEntry: KeyEntry;
+  /** Recorded exchanges, oldest first: the plaintext one from Nov 2 and the E2EE one from Nov 3. */
+  exchanges: RecordedExchange[];
+}
+
+export interface RecordedExchange {
+  label: string;
   rawRequest: Uint8Array;
   rawResponse: Uint8Array;
   signature: SignatureFile;
-  logEntry: KeyEntry;
   proof: ModelProof;
+  /** Present for the E2EE exchange only: what the recording client sent and decrypted; not covered by the proof. */
+  plaintext?: { prompt: string; reply: string; recordedAt: string };
+}
+
+/** The recorded sample log entry (a fixture, not read from the chain). */
+export function loadSampleLogEntry(): KeyEntry {
+  return readJson<{ entry: KeyEntry }>('key-entry.sample.json').entry;
+}
+
+function e2eeExchange(): RecordedExchange {
+  const plaintext = readJson<{ prompt: string; reply: string; recordedAt: string }>('e2ee-plaintext.json');
+  return {
+    label: `E2EE exchange (recorded ${plaintext.recordedAt.slice(0, 10)})`,
+    rawRequest: readBytes('e2ee-chat-request.raw.json'),
+    rawResponse: readBytes('e2ee-chat-response.raw.json'),
+    signature: readJson<SignatureFile>('e2ee-signature.json'),
+    proof: readJson<{ proof: ModelProof }>('model-proof-e2ee.sample.json').proof,
+    plaintext,
+  };
 }
 
 export function loadRecording(): Recording {
@@ -52,10 +77,16 @@ export function loadRecording(): Recording {
     collateralByQuote: readJson<{ byQuoteSha256: Record<string, unknown> }>('intel-collateral.json').byQuoteSha256,
     nrasResponse: readText('nras-response.json'),
     jwks: readJson<unknown>('nvidia-jwks.json'),
-    rawRequest: readBytes('chat-request.raw.json'),
-    rawResponse: readBytes('chat-response.raw.json'),
-    signature: readJson<SignatureFile>('signature.json'),
-    logEntry: readJson<{ entry: KeyEntry }>('key-entry.sample.json').entry,
-    proof: readJson<{ proof: ModelProof }>('model-proof.sample.json').proof,
+    logEntry: loadSampleLogEntry(),
+    exchanges: [
+      {
+        label: 'plaintext exchange (recorded 2026-11-02)',
+        rawRequest: readBytes('chat-request.raw.json'),
+        rawResponse: readBytes('chat-response.raw.json'),
+        signature: readJson<SignatureFile>('signature.json'),
+        proof: readJson<{ proof: ModelProof }>('model-proof.sample.json').proof,
+      },
+      e2eeExchange(),
+    ],
   };
 }
