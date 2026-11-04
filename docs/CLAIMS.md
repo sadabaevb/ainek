@@ -13,7 +13,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   log, the client refuses to send.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
-  plaintext metadata (model id, message roles, token usage, completion ids), never the contents.
+  plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this holds while
+  no hop swapped the reply key: see the first item under "Known issues we inherited".
 - Every response is **signed inside the enclave** over `sha256(request)` and `sha256(response)`. We keep the
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
 - Only a **salted hash** of each proof goes on-chain (once `commit_proof` is deployed; until then the commit stays in the
@@ -62,10 +63,19 @@ Honest limitations won prizes at previous NEAR hackathons.
 
 ## Known issues we inherited (say so)
 
-- NEAR AI's E2EE route had a reply-key-substitution finding (NEAR issue 1061, Miller registry). We pin the model key from a
-  verified report via `X-Model-Pub-Key`, which protects the request; the client's reply key travels as an unsigned header
-  (`x-client-pub-key`), so a relay that swapped it could read one reply, and the client would only see the failure afterwards.
-  Status of the upstream fix: <check before submission>.
+- NEAR AI's E2EE route has an open reply-key-substitution finding ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061),
+  cited by the Miller registry). We pin the model key from a verified report via `X-Model-Pub-Key`, which protects the request.
+  The reply key travels as an unsigned header (`x-client-pub-key`), so any hop that swapped it could read each reply it
+  diverted, and the card would only fail afterwards. Upstream status, checked 2026-11-04: NEAR AI's fix is "E2EE v3" (design:
+  [inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)), which binds the reply key and the field label
+  into the AEAD associated data of every encrypted request field, so the proxy rejects a swapped key before inference. The
+  gateway and proxy sides were merged on Oct 28 2026 ([cloud-api#1296](https://github.com/nearai/cloud-api/pull/1296),
+  [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)); v1/v2 requests keep their old, unauthenticated
+  format for compatibility, and we have not checked whether production runs the new code. The SDK side
+  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)) is still open: SDK 0.2.1, which we use, sends
+  `X-Encryption-Version: 2` (with ed25519, which we always request), so the exposure above stands for us. We will move to v3
+  when the SDK ships it; if that happens before Nov 14 and a live chat shows the gateway accepting v3, the demo moves to v3.
+  <!-- TODO Nov 12: re-check inference-sdk#127, the SDK version and the issue state; update the date above -->
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Today the log is written by our own verifier; a verifier run by someone outside the team is planned
-  (<by Nov 12: name/nick with consent, or the honest line "all verifiers in the demo are ours">).
+  write to it. Today the log is written by our own verifier; a verifier run by someone outside the team is planned.
+  <!-- TODO by Nov 12: name/nick with consent, or the honest line "all verifiers in the demo are ours" -->

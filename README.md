@@ -125,6 +125,10 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | OutLayer policy job (Tier 2, planned) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
+The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until the SDK
+ships E2EE v3, a relay that did so could read the replies it diverted, and the card would only fail afterwards (see
+"Known issues we inherited" below).
+
 ## What we do not claim
 
 - **Verified model weights.** Attestation measures the deployment (container image digests, compose hash), not the
@@ -157,11 +161,19 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 
 Known issues we inherited (and say so):
 
-- NEAR AI's E2EE route had a reply-key-substitution finding (NEAR issue 1061, Miller registry). We pin the model key from a
-  verified report via `X-Model-Pub-Key`, which protects the request; the client's reply key travels as an unsigned header
-  (`x-client-pub-key`), so a relay that swapped it could read one reply, and the client would only see the failure afterwards.
-  Status of the upstream fix:
-  <!-- TODO check before submission -->
+- NEAR AI's E2EE route has an open reply-key-substitution finding ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061),
+  cited by the Miller registry). We pin the model key from a verified report via `X-Model-Pub-Key`, which protects the request.
+  The reply key travels as an unsigned header (`x-client-pub-key`), so any hop that swapped it could read each reply it
+  diverted, and the card would only fail afterwards. Upstream status, checked 2026-11-04: NEAR AI's fix is "E2EE v3" (design:
+  [inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)), which binds the reply key and the field label
+  into the AEAD associated data of every encrypted request field, so the proxy rejects a swapped key before inference. The
+  gateway and proxy sides were merged on Oct 28 2026 ([cloud-api#1296](https://github.com/nearai/cloud-api/pull/1296),
+  [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)); v1/v2 requests keep their old, unauthenticated
+  format for compatibility, and we have not checked whether production runs the new code. The SDK side
+  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)) is still open: SDK 0.2.1, which we use, sends
+  `X-Encryption-Version: 2` (with ed25519, which we always request), so the exposure above stands for us. We will move to v3
+  when the SDK ships it; if that happens before Nov 14 and a live chat shows the gateway accepting v3, the demo moves to v3.
+  <!-- TODO Nov 12: re-check inference-sdk#127, the SDK version and the issue state; update the date above -->
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Today the log is written by our own verifier; a verifier run by someone outside the team is planned.
   <!-- TODO by Nov 12: name/nick with consent, or the honest line "all verifiers in the demo are ours" -->

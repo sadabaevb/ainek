@@ -26,6 +26,7 @@
 - npm: https://registry.npmjs.org/@nearai/inference-sdk
 - Reference verifier (Node): https://github.com/near-examples/nearai-cloud-verification-example
 - Reference verifier (Py+TS): https://github.com/nearai/nearai-cloud-verifier
+- E2EE reply-key substitution and its v3 fix: https://github.com/nearai/cloud-api/issues/1061 · gateway https://github.com/nearai/cloud-api/pull/1296 · proxy https://github.com/nearai/inference-proxy/issues/312 + https://github.com/nearai/inference-proxy/pull/321 · SDK https://github.com/nearai/inference-sdk/pull/127
 - Intel Trust Authority integration: https://near.ai/blog/near-ai-cloud-integrates-intel-trust-authority
 - Blog (context): https://near.ai/blog · "Zero Data Retention Isn't Enough" (Oct 22 2026): https://near.ai/blog/zero-data-retention-isnt-enough
 
