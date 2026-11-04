@@ -13,7 +13,7 @@ export function CopyButton({ text }: { text: string }) {
       setTimeout(() => setCopied(false), 1500);
     }, () => undefined);
   return (
-    <button type="button" className="btn small" onClick={copy} aria-label={`${t.copy} ${text}`}>
+    <button type="button" className="btn small" onClick={copy}>
       {copied ? t.copied : t.copy}
     </button>
   );

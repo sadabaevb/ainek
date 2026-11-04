@@ -29,11 +29,11 @@ const withOutcome = (outcome: ChatOutcome) => (turn: Turn): Turn => ({ ...turn, 
 /** The step in flight, in plain words (flow says which wording fits the route), over an indeterminate bar: the cold attestation alone can take ten seconds and no step index would show that. */
 function Progress({ steps }: { steps: StepEvent[] }) {
   const { t } = useT();
-  const running = steps.find((s) => s.status === 'running') ?? steps[steps.length - 1];
-  if (!running) return null;
+  if (steps.length === 0) return null;
+  const running = steps.find((s) => s.status === 'running');
   return (
     <div className="progress" role="status">
-      <span>{t.progress[running.say ?? running.id]}</span>
+      <span>{running ? t.progress[running.say ?? running.id] : t.working}</span>
       <span className="bar"><span /></span>
     </div>
   );
@@ -61,16 +61,16 @@ const TurnView = memo(function TurnView({ turn, idx, onCommit }: { turn: Turn; i
 });
 
 /** First screen: what the page is about and the three catches as one-click prompts. Shown until the first message. */
-function Intro({ onPick, busy }: { onPick: (chip: Chip) => void; busy: boolean }) {
+function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
   const { t } = useT();
-  const chips: Chip[] = ['ask', 'tamper', 'incognito'];
+  const chips = Object.keys(t.intro.chips) as Chip[];
   return (
     <section className="card intro">
       <h2>{t.intro.title}</h2>
       <ol>{t.intro.lines.map((line) => <li key={line}>{line}</li>)}</ol>
       <p className="try">{t.intro.tryTitle}</p>
       <div className="chips">
-        {chips.map((chip) => <button key={chip} type="button" className="btn chip" disabled={busy} onClick={() => onPick(chip)}>{t.intro.chips[chip]}</button>)}
+        {chips.map((chip) => <button key={chip} type="button" className="btn chip" onClick={() => onPick(chip)}>{t.intro.chips[chip]}</button>)}
       </div>
     </section>
   );
@@ -143,7 +143,7 @@ export default function ChatPage() {
         <p className="muted">{t.tagline}</p>
       </header>
 
-      {turns.length === 0 && <Intro onPick={pick} busy={busy} />}
+      {turns.length === 0 && <Intro onPick={pick} />}
 
       <div className="controls">
         <label className="field">

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { memo, useMemo, useState, type ReactNode } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { toDisclosure } from '@ainek/proof';
+import { toDisclosure, type KeyLogReason } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
 import { canCommitNow, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
@@ -40,9 +40,15 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
     return <RedCard title={title} body={body} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
-    // The decision is the same (nothing sent); the explanation follows the verdict's data: a disagreement, a key logged only by strangers, or no entry at all.
+    // The decision is the same (nothing sent); the wording follows the verdict's reason, decided once in @ainek/proof.
     const v = outcome.keyVerdict;
-    const [title, body] = v.status === 'split-view' ? [t.refusedSplitTitle, t.refusedSplitBody] : v.loggedByUntrusted.length > 0 ? [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))] : [t.refusedTitle, t.refusedBody];
+    const texts: Record<Exclude<KeyLogReason, 'ok'>, [string, string]> = {
+      'split-view': [t.refusedSplitTitle, t.refusedSplitBody],
+      'below-quorum': [t.refusedQuorumTitle, t.refusedQuorumBody(v.confirmedBy.length, cfg.quorum)],
+      'untrusted-only': [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))],
+      absent: [t.refusedTitle, t.refusedBody],
+    };
+    const [title, body] = texts[v.reason === 'ok' ? 'absent' : v.reason];
     return (
       <RedCard
         title={title}
@@ -84,14 +90,14 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
     <section className="card">
       <header className="card-head">
         <span>{mark('ok')} {t.cardVerified}</span>
-        <span className="when">{utcMinute(proof.verifiedAt)}</span>
+        <span className="when">{utcMinute(exchange.sentAt)}</span>
       </header>
       <Row status="ok" label={t.rowModel} hint={hint('model')}>{proof.model}, {t.attested} (compose {short(composeHash)})</Row>
       <Row status="ok" label={t.rowHardware} hint={hint('hardware')}>Intel TDX {m.tcbStatus}, NVIDIA GPU {m.gpuEvidence} ({deployment.tookMs === 0 ? t.cached : `${t.checkedInBrowser}, ${seconds(deployment.tookMs)}`})</Row>
       <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}</Row>
       <Row status="ok" label={t.rowHashes} hint={hint('hashes')}>{t.hashesOk}</Row>
       <Row status="ok" label={t.rowE2ee} hint={hint('e2ee')}>{t.e2eeYes}</Row>
-      <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain} hint={hint('chain')}>
+      <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain} hint={hint(proof.commitTx ? 'chain' : 'chainPending')}>
         {proof.commitTx ? (
           <>{t.chainTx(short(commit))} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a> <CopyButton text={proof.commitTx} /></>
         ) : (
