@@ -45,6 +45,12 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
 3. **Agent over its mandate.** (Tier 2, planned) A prompt-injected "urgent transfer to a new vendor" → policy job says Deny inside TDX → contract refuses → `action_denied` with a signed reason.
 
+| Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
+| --- | --- |
+| ![The proof card: model, hardware, key in the public log, hashes, E2EE, on NEAR](docs/screenshots/proof-card.png) | ![Red card: key not in the public log, message not sent](docs/screenshots/refused.png) |
+| The public key log (`/log`) | A disclosure checked by an auditor (`/auditor`) |
+| ![The public key log page](docs/screenshots/log.png) | ![The auditor verdict card](docs/screenshots/auditor.png) |
+
 ## How NEAR is used
 
 | Layer | NEAR provides (shipped) | Ainek adds |

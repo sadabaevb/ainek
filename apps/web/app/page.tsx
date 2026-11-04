@@ -100,8 +100,8 @@ export default function ChatPage() {
       </header>
 
       <div className="controls">
-        <label>
-          {t.model}{' '}
+        <label className="field">
+          {t.model}
           <select value={model} onChange={(e) => setModel(e.target.value)} disabled={busy}>
             <option value={cfg.model}>{cfg.model} · {t.teeModel}</option>
             <option value={cfg.incognitoModel}>{cfg.incognitoModel} · {t.incognitoModel}</option>

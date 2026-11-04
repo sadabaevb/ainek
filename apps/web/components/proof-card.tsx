@@ -102,7 +102,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
       <details>
         <summary>{t.details}</summary>
         <CheckList items={report.checks} />
-        <pre className="mono small">{JSON.stringify({ ...proof, salt: '(kept on this device)' }, null, 2)}</pre>
+        <pre className="mono small" lang="en">{JSON.stringify({ ...proof, salt: '(kept on this device)' }, null, 2)}</pre>
       </details>
     </section>
   );
