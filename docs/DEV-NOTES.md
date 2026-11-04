@@ -434,8 +434,19 @@ timestamp i64 LE ‖ attached_usd)`; хвост REPORTDATA — 32 нуля. Це
 результат приходит в callback-promise (`env::promise_result(0)`), плюс события `execution_requested`/`execution_completed`
 стандарта `near-outlayer`. В `execution_completed` есть `code_source.hash` — это и есть привязка решения к сборке политики.
 
-**(г) живой формат `PROTECTED_*:ed25519`:** job расширен (`jobs/policy`, версия `882c5c5a…`, upload tx
-`5vW8XnqibHZwettQmrZSjTTQvcErPWraK3J2iCdkFMYJ`, активна): если в env есть `PROTECTED_SIGNING_KEY`, в выход добавляется
-`key` — длина/префикс/какие декодирования дают 32 или 64 байта, публичный ключ и подпись над `"ainek spike B"`; сам
-секрет никогда не печатается (юнит-тест). Команда `outlayer secrets set --project ainek-dev-dastan.testnet/policy
---generate PROTECTED_SIGNING_KEY:ed25519` — выполнить вручную, затем прогон; результат дописать сюда.
+**(г) живой формат `PROTECTED_*:ed25519` — проверен.** Job расширен (`jobs/policy`, версия `882c5c5a…`, upload tx
+`5vW8XnqibHZwettQmrZSjTTQvcErPWraK3J2iCdkFMYJ`): если в env есть `PROTECTED_SIGNING_KEY`, в выход добавляется `key` —
+длина/префикс/какие декодирования дают 32 или 64 байта, публичный ключ и подпись над `"ainek spike B"`; сам секрет никогда
+не печатается (юнит-тест). Секрет создан вручную: `outlayer secrets set --project ainek-dev-dastan.testnet/policy
+--generate PROTECTED_SIGNING_KEY:ed25519` (профиль `default`). Прогон с `--secrets-account ainek-dev-dastan.testnet
+--secrets-profile default`, tx `9CKuwxWJWANzbfEnfBiEmdMQc3p9FgSq9R8vjuLd4E6s`, job 19025:
+
+- Значение в env: **`ed25519:<base58(32-байтный seed RFC 8032)>`**, 52 символа (NEAR-формат, но только seed, без публичного
+  ключа — `b58=32`). Читается `ed25519-dalek::SigningKey::from_bytes(seed)`.
+- Публичный ключ `cfce3d5780ebc330116014731e9f3409e7a9a23cb986dd1dbf9c6477c1c3a043`; подпись проверена офлайн `tweetnacl`
+  → `true`. Контракт сможет проверять такие подписи нативно через `env::ed25519_verify` (~1 TGas).
+- Аттестация этого прогона (`run5-secret-allow.attestation.json`): `wasm_hash` = новая сборка, `secrets_ref` =
+  `ainek-dev-dastan.testnet/default` входит в Task Hash, Task Hash == REPORTDATA. Т.е. квота связывает решение и с кодом
+  политики, и с тем, какой именно секрет (ключ) был подключён.
+- Следствие для SPEC §6: `policy_pubkey` в контракт пишем один раз (owner), получив его из первого прогона job; привязка
+  секрета к сборке — `secrets set --build <wasm sha256>`, иначе любая новая версия job прочитает тот же ключ.
