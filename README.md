@@ -88,8 +88,10 @@ pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live fr
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
 pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. The chat needs NEARAI_API_KEY
                                  #   (server-side only); /log, /verify, /auditor and /trust work without it. Send "hello" → the
-                                 #   browser verifies the TEE evidence itself (5–30 s cold in our runs, then cached 60 min),
-                                 #   encrypts to the attested model key, checks the signature and shows the proof card
+                                 #   browser verifies the TEE evidence itself (up to ~40 s cold, then cached 60 min), encrypts to
+                                 #   the attested model key, checks the signature and shows the proof card. Needs a log entry
+                                 #   younger than 24 h (see step 1); otherwise the red "Key not in the public log" card is the
+                                 #   expected result
 ```
 
 With `pnpm -F web dev` running, at `http://localhost:3000`:
@@ -98,9 +100,9 @@ With `pnpm -F web dev` running, at `http://localhost:3000`:
 2. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
 3. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
 4. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet; until `commit_proof` is deployed the click ends in "commit_proof is not in the contract yet").
-5. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row says the sample was never committed, which is expected until `commit_proof` is live. The page says what the file does and does not prove.
+5. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row says the sample was never committed, which is expected until `commit_proof` is live. The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 4–5 end in "differs from the embedded entry".
 
-**Tier 2 (not in the repo yet):** Telegram "pay aibek.testnet 300 for October" → `action_executed`; "pay newguy.testnet 5000" (new vendor) → Deny; "pay aibek.testnet 3000" (over the threshold) → `NeedsApproval` → Reject; stop button: `DeleteKey` + `pause_agent` → the next proposal fails on-chain.
+**Tier 2 flow (not in the repo yet; only the cap-check spike under `jobs/policy`):** Telegram "pay aibek.testnet 300 for October" → `action_executed`; "pay newguy.testnet 5000" (new vendor) → Deny; "pay aibek.testnet 3000" (over the threshold) → `NeedsApproval` → Reject; stop button: `DeleteKey` + `pause_agent` → the next proposal fails on-chain.
 
 ## Who sees what
 
@@ -110,7 +112,8 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | --- | --- | --- | --- |
 | Relay (our server) | ciphertext, size, timing, IP, API key; model id, message count and roles, token usage, completion ids | prompt, response and tool-call contents | E2EE to the model key from the verified attestation report |
 | Relay on the Incognito demo route (user-chosen) | the plaintext prompt and reply | — | none (no model key to encrypt to); the red card says so |
-| NEAR AI gateway and proxy | ciphertext, token accounting; the browser's IP during collateral and NVIDIA calls | contents | E2EE; the gateway is attested; the proxy cannot forge the NVIDIA verdict (checked against NVIDIA's keys) |
+| NEAR AI gateway and proxy | ciphertext, token accounting; the browser's IP during collateral and NRAS calls | contents | E2EE; the gateway is attested; the proxy cannot forge the NVIDIA verdict (checked against NVIDIA's keys) |
+| NVIDIA key server | the browser's IP and timing of each cold verification (the SDK fetches NVIDIA's public keys directly) | anything about the exchange | public keys only; the NRAS verdict itself goes through NEAR AI's proxy |
 | Model enclave | plaintext for the duration of inference | — | TDX + GPU attestation; retention inside the enclave is not provable by attestation |
 | NEAR blockchain | provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash | the policy contents, the conversation, the proofs | salted commits; transfer details are hidden only with Confidential Intents (out of scope) |
 | OutLayer policy job (Tier 2, planned) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
@@ -128,7 +131,9 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
 - **A measurement allowlist.** Our log is a *key* allowlist: the client sends only to a key a trusted verifier logged. The
-  compose hash is shown on the card, not compared, and acceptable compose hashes are not governed yet (next steps).
+  offline replay also compares the attested compose hash with the logged one; the browser and `demo:live` show it on the
+  card but do not compare it yet (SPEC §7.1 asks for it; enforcing it is a pending team decision), and acceptable compose
+  hashes are not governed yet (next steps).
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.

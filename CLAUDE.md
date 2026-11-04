@@ -52,7 +52,7 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
 ## Stack and versions (check npm/crates before pinning; pin exact versions in lockfiles)
 
 - `@nearai/inference-sdk` 0.2.1 (published 2026-10-29). Server code uses `@nearai/inference-sdk/node`
-  on **Node 24+**; browser uses the root entry; the NVIDIA NRAS POST goes through NEAR AI's own proxy, our relay only forwards the four SDK paths.
+  on **Node 24+**; browser uses the root entry; the NVIDIA NRAS POST and the Intel PCCS collateral go through NEAR AI's own proxies; our relay only forwards the four SDK paths.
 - Model: `z-ai/glm-5.3-flash` (Private TEE tier). Always pass `signingAlgo: 'ed25519'` explicitly,
   header `x-no-aliasing: true`, `Accept-Encoding: identity` when hashing bytes yourself, `e2ee: true`
   and `X-Encrypt-All-Fields: true` (tool calls encrypted). Use `/v1/chat/completions`, never

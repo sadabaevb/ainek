@@ -12,7 +12,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   NEAR** written by verifiers (today: one, ours; the log is designed for independent verifiers). If the key is not in the
   log, the client refuses to send.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
-  tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing and IP.
+  tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
+  plaintext metadata (model id, message roles, token usage, completion ids), never the contents.
 - Every response is **signed inside the enclave** over `sha256(request)` and `sha256(response)`. We keep the
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
 - Only a **salted hash** of each proof goes on-chain (once `commit_proof` is deployed; until then the commit stays in the
@@ -41,7 +42,9 @@ Honest limitations won prizes at previous NEAR hackathons.
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
 - **A measurement allowlist.** Our log is a *key* allowlist: the client sends only to a key a trusted verifier logged. The
-  compose hash is shown on the card, not compared, and acceptable compose hashes are not governed yet (next steps).
+  offline replay also compares the attested compose hash with the logged one; the browser and `demo:live` show it on the
+  card but do not compare it yet (SPEC §7.1 asks for it; enforcing it is a pending team decision), and acceptable compose
+  hashes are not governed yet (next steps).
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
