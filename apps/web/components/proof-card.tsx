@@ -5,7 +5,7 @@ import { memo, useMemo, type ReactNode } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { toDisclosure } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
-import { STEPS_AFTER_SEND, canCommitNow, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
+import { canCommitNow, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
 import { seconds, short } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
@@ -32,11 +32,9 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
   if (outcome.kind === 'failed') {
-    // Three honest titles: the reply came and a later step failed; the request left but no verified reply came back; nothing left the browser.
-    const afterSend = STEPS_AFTER_SEND.has(outcome.step);
-    const title = afterSend ? t.failedAfterSendTitle : outcome.sent ? t.failedSentTitle : t.failedTitle;
-    const body = afterSend ? t.failedAfterSendBody : outcome.sent ? t.failedSentBody : undefined;
-    return <RedCard title={title} {...(body === undefined ? {} : { body })} lines={[`${outcome.step}: ${outcome.reason}`]} />;
+    const phase = failurePhase(outcome.step);
+    const [title, body] = phase === 'answered' ? [t.failedAfterSendTitle, t.failedAfterSendBody] : phase === 'sent' ? [t.failedSentTitle, t.failedSentBody] : [t.failedTitle, undefined];
+    return <RedCard title={title} body={body} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
     return (

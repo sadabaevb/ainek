@@ -6,33 +6,22 @@ import type { PublicConfig } from './config';
 
 export interface KeyLog {
   source: 'contract' | 'sample';
-  latestKeys(model: string): Promise<KeyEntry[]>;
+  /** Newest first; the fail-closed window (24 h) by default, `ANY_AGE_NS` for the whole history of a model. */
+  latestKeys(model: string, maxAgeNs?: string): Promise<KeyEntry[]>;
   entry(index: number): Promise<KeyEntry | null>;
-  /** The newest entry overall (any model, any age); null while the log is empty. */
-  newest(): Promise<KeyEntry | null>;
 }
 
 function sampleLog(): KeyLog {
   const entries = [KeyEntry.parse(sample.entry)];
   return {
     source: 'sample',
-    latestKeys: async (model) => entries.filter((e) => e.model === model),
+    latestKeys: async (model) => entries.filter((e) => e.model === model), // the sample never ages out
     entry: async (index) => entries.find((e) => e.index === index) ?? null,
-    newest: async () => entries[entries.length - 1] ?? null,
   };
 }
 
 export function keyLogFor(cfg: PublicConfig): KeyLog {
-  if (cfg.logSource !== 'contract') return sampleLog();
-  const reader = keyLogReader(cfg.rpcUrl, cfg.contract);
-  return {
-    source: 'contract',
-    ...reader,
-    newest: async () => {
-      const head = await reader.head();
-      return head ? reader.entry(head.index) : null;
-    },
-  };
+  return cfg.logSource === 'contract' ? { source: 'contract', ...keyLogReader(cfg.rpcUrl, cfg.contract) } : sampleLog();
 }
 
 /**

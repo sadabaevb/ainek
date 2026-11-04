@@ -5,7 +5,6 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
-import { describeError } from '@/lib/errors';
 import { canCommitNow, commitOutcome, runChat, type ChatMessage, type ChatOutcome, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
 import { walletCommitter } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
@@ -85,12 +84,9 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => setTurns(atTurn(idx, withStep(e))) });
+      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
       setTurns(atTurn(idx, withOutcome(outcome)));
       if (outcome.kind === 'verified') void commitTurn(idx, outcome, false);
-    } catch (err) {
-      // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
-      setTurns(atTurn(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err), sent: turn.steps.some((s) => s.id === 'send' && s.status !== 'running') } })));
     } finally {
       setBusy(false);
     }

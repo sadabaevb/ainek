@@ -8,3 +8,12 @@ export function seconds(ms: number): string {
 export function utcMinute(iso: string): string {
   return `${iso.slice(0, 16).replace('T', ' ')} UTC`;
 }
+
+/** A log entry's `observed_at` (ms since epoch, as a U64 string) at minute precision, UTC. */
+export function observedUtc(observedAtMs: string): string {
+  return utcMinute(new Date(Number(observedAtMs)).toISOString());
+}
+
+export function hoursSince(observedAtMs: string): string {
+  return ((Date.now() - Number(observedAtMs)) / 3_600_000).toFixed(1);
+}

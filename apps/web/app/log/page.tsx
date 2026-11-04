@@ -3,32 +3,34 @@
 // verifiers disagree (split view). Wallet login here adds the function-call key later used for commit_proof.
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
-import { findSplitView, type KeyEntry } from '@ainek/proof';
+import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
 import { describeError } from '@/lib/errors';
-import { short, utcMinute } from '@/lib/format';
+import { hoursSince, observedUtc, short } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
 import { useConfig } from '../providers';
 
-const hoursAgo = (observedAtMs: string): string => ((Date.now() - Number(observedAtMs)) / 3_600_000).toFixed(1);
-
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
+
+const WINDOW_HOURS = Number(LOG_WINDOW_NS) / 3_600_000_000_000;
+
+interface Window {
+  entries: KeyEntry[];
+  /** The newest entry for the model regardless of age; looked up only when the window is empty, to say how stale the log is. */
+  newest: KeyEntry | null;
+}
 
 export default function LogPage() {
   const cfg = useConfig();
-  const [entries, setEntries] = useState<KeyEntry[] | null>(null);
-  const [newest, setNewest] = useState<KeyEntry | null>(null); // shown when the 24 h window is empty: how stale the log is
+  const [log, setLog] = useState<Window | null>(null);
   const [error, setError] = useState('');
   const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
   useEffect(() => {
-    const log = keyLogFor(cfg);
-    log
+    const reader = keyLogFor(cfg);
+    reader
       .latestKeys(cfg.model)
-      .then(async (window) => {
-        setEntries(window);
-        if (window.length === 0) setNewest(await log.newest());
-      })
+      .then(async (entries) => setLog({ entries, newest: entries.length === 0 ? ((await reader.latestKeys(cfg.model, ANY_AGE_NS))[0] ?? null) : null }))
       .catch((e: unknown) => setError(describeError(e)));
   }, [cfg]);
 
@@ -42,7 +44,7 @@ export default function LogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedAccountId]);
 
-  const split = entries ? findSplitView(entries, cfg.model, cfg.trustedVerifiers) : null;
+  const split = log ? findSplitView(log.entries, cfg.model, cfg.trustedVerifiers) : null;
 
   return (
     <main className="page">
@@ -58,23 +60,21 @@ export default function LogPage() {
           <p>{split.detail}</p>
         </section>
       )}
-      {entries && entries.length === 0 && (
+      {log && (log.entries.length === 0 ? (
         <section className="card">
-          <h3>No entry younger than 24 hours for {cfg.model}</h3>
+          <h3>No entry younger than {WINDOW_HOURS} hours for {cfg.model}</h3>
           <p>
             The client trusts only entries in that window, so the chat refuses to send until a verifier logs a fresh one. That is the fail-closed rule working, not an outage.
-            {newest && <> Newest entry overall: #{newest.index} for {newest.model} by {newest.verifier}, observed {utcMinute(new Date(Number(newest.observed_at)).toISOString())} ({hoursAgo(newest.observed_at)} h ago).</>}
-            {' '}Until the verifier daemon runs, the log is refreshed by hand.
+            {log.newest ? <> Newest entry for this model: #{log.newest.index} by {log.newest.verifier}, observed {observedUtc(log.newest.observed_at)} ({hoursSince(log.newest.observed_at)} h ago).</> : <> The log has no entry for this model at all.</>}
           </p>
         </section>
-      )}
-      {entries && entries.length > 0 && (
+      ) : (
         <table>
           <thead>
             <tr><th>#</th><th>model</th><th>verifier</th><th>signing key</th><th>compose</th><th>TCB</th><th>observed</th></tr>
           </thead>
           <tbody>
-            {entries.map((e) => (
+            {log.entries.map((e) => (
               <tr key={e.index}>
                 <td>{e.index}</td>
                 <td className="mono">{e.model}</td>
@@ -82,12 +82,12 @@ export default function LogPage() {
                 <td className="mono">{short(e.signing_address)}</td>
                 <td className="mono">{short(e.compose_hash)}</td>
                 <td>{e.tcb_status}</td>
-                <td>{utcMinute(new Date(Number(e.observed_at)).toISOString())}</td>
+                <td>{observedUtc(e.observed_at)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      )}
+      ))}
 
       <h2>Wallet</h2>
       <p className="muted small">Connecting (top right) adds a function-call key limited to <span className="mono">commit_proof</span> on the contract, so the chat can commit salted proof hashes without asking the wallet each time.</p>

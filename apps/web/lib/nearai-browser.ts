@@ -159,25 +159,32 @@ async function httpError(response: Response): Promise<Error> {
 }
 
 /** Encrypt to the verified model key, send through the proxy, decrypt; keep the exact bytes for the proof. */
-/** `onRequestSent` fires right before the request leaves the browser: a failure after that point is "sent, no verified reply", never "nothing was sent". */
-export async function sendE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation, onRequestSent?: () => void): Promise<Exchange> {
+/** Everything that happens before the request leaves the browser: the E2EE key check and the encryption. */
+export interface PreparedE2ee {
+  prepared: Awaited<ReturnType<typeof prepareE2eeChatRequest>>;
+  requestBody: Uint8Array;
+}
+
+export async function prepareE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation): Promise<PreparedE2ee> {
   if (modelAttestation.signingPublicKey === undefined) throw new Error('verified model report has no E2EE public key');
   const prepared = await prepareE2eeChatRequest({
     request: chatRequest(model, messages),
     modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelAttestation.signingPublicKey },
   });
-  const requestBody = new Uint8Array(await prepared.request.clone().arrayBuffer());
-  onRequestSent?.();
+  return { prepared, requestBody: new Uint8Array(await prepared.request.clone().arrayBuffer()) };
+}
+
+/** From here on the message has left the browser: send through the proxy, keep the exact bytes, decrypt the reply. */
+export async function transmitE2ee({ prepared, requestBody }: PreparedE2ee): Promise<Exchange> {
   const encrypted = await fetch(prepared.request);
   if (!encrypted.ok) throw await httpError(encrypted); // error bodies are plain JSON, not ciphertext
   return toExchange(requestBody, encrypted.clone(), await prepared.decryptResponse(encrypted));
 }
 
 /** Plaintext request for the user-chosen Incognito model (no model attestation): no E2EE is possible, only a gateway signature. */
-export async function sendPlain(model: string, messages: ChatMessage[], onRequestSent?: () => void): Promise<Exchange> {
+export async function sendPlain(model: string, messages: ChatMessage[]): Promise<Exchange> {
   const request = chatRequest(model, messages);
   const requestBody = new Uint8Array(await request.clone().arrayBuffer());
-  onRequestSent?.();
   const response = await fetch(request);
   if (!response.ok) throw await httpError(response);
   return toExchange(requestBody, response.clone(), response);

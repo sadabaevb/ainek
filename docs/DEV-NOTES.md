@@ -530,10 +530,13 @@ IndexedDB и, если транзакция уже есть (чат успел �
 ## 2026-11-04 — честные заголовки падения и пустой `/log` (Бектур)
 
 Два бага из ревью текстов. (1) Падение на шаге `send` показывало «Verification failed. Nothing was sent.», хотя запрос мог
-уйти (шлюз вернул ошибку, ответ не расшифровался). Теперь `sendE2ee`/`sendPlain` дёргают `onRequestSent` прямо перед `fetch`,
-`runChat` кладёт `sent: boolean` в outcome `failed`, и карточка различает три случая: ответ был, упал поздний шаг («Reply
-received, but its proof could not be completed»); запрос ушёл, проверенного ответа нет («The message went out, but no verified
-reply came back»); ничего не ушло («Nothing was sent», только если упало до `fetch`: подготовка, шифрование). (2) `/log` при
-пустом 24-часовом окне `latest_keys` показывал пустую таблицу без объяснения, а это ровно то, что судья увидит, если запись
-устарела. Теперь `KeyLog.newest()` (head → entry) и карточка «No entry younger than 24 hours for <model>» с самой свежей записью
-лога, её возрастом и фразой, что это fail-closed, а не поломка. Проверено подменой `NEARAI_MODEL` на модель без записей.
+уйти (шлюз вернул ошибку, ответ не расшифровался). Граница «ушло / не ушло» теперь граница шага, а не флаг: `prepareE2ee`
+(проверка ключа + шифрование, ничего не уходит) — шаг `encrypt`, `transmitE2ee` (fetch + расшифровка) — шаг `send`; у
+plaintext-маршрута только `send`. Фаза падения — чистая функция `failurePhase(step)`: до `send` — «Nothing was sent», `send` —
+«The message went out, but no reply could be verified», после — «Reply received, but its proof could not be completed».
+`runChat` превращает любую ошибку в outcome (неожиданную — на шаг, который последним был `running`), страница ничего не
+вычисляет. Первый вариант с колбэком `onRequestSent` и полем `sent` /simplify забраковал как четыре кодировки одного факта.
+(2) `/log` при пустом 24-часовом окне `latest_keys` показывал пустую таблицу без объяснения, а это ровно то, что судья увидит,
+если запись устарела. У общего ридера `latestKeys(model, maxAgeNs = LOG_WINDOW_NS)`, и страница при пустом окне спрашивает
+`latestKeys(model, ANY_AGE_NS)` (u64::MAX; контракт вычитает с насыщением) — самая свежая запись именно этой модели, её возраст и
+фраза, что это fail-closed, а не поломка. Проверено подменой `NEARAI_MODEL` на модель без записей.
