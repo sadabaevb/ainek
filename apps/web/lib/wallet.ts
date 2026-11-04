@@ -41,16 +41,18 @@ function safeString(value: unknown): string {
 }
 
 /**
- * The committer for the wallet as it is *now*. Session restore and sign-in are asynchronous, so callers hand over a getter
- * and this waits for the wallet to settle after awaiting. With `connect`, a wallet that is not signed in is asked to sign in
- * first (with the commit_proof key); null when no account is signed in afterwards (the user closed the dialog).
+ * The committer for the wallet as it is now, read from the connector rather than from the hook's copy of its state (that copy
+ * is one render behind after sign-in or session restore). With `connect`, a wallet that is not signed in is asked to sign in
+ * first (with the commit_proof key); a closed dialog is "no account", so null. `callFunctionRaw` resolves the wallet through
+ * the connector at call time, so the hook value from any render is fine here.
  */
-export async function walletCommitter(getWallet: () => NearContextValue, cfg: PublicConfig, connect: boolean): Promise<Committer | null> {
-  // A closed or rejected dialog is "no account signed in", handled below, not an error of the commit. After a successful
-  // sign-in the hook publishes the account on its next render, so that one case is waited for briefly.
-  let signedIn = false;
-  if (connect && !getWallet().signedAccountId) signedIn = await fcKeyLogin(getWallet().signIn, cfg).then(() => true, () => false);
-  for (let i = 0; i < 50 && (getWallet().loading || (signedIn && !getWallet().signedAccountId)); i++) await new Promise((r) => setTimeout(r, 100));
-  const { signedAccountId, callFunctionRaw } = getWallet();
-  return signedAccountId ? (proof) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
+export async function walletCommitter(wallet: NearContextValue, cfg: PublicConfig, connect: boolean): Promise<Committer | null> {
+  const { connector, signIn, callFunctionRaw } = wallet;
+  const connectedAccount = () => connector.getConnectedWallet().then((c) => c.accounts[0]?.accountId ?? null, () => null);
+  let accountId = await connectedAccount();
+  if (!accountId && connect) {
+    await fcKeyLogin(signIn, cfg).catch(() => undefined);
+    accountId = await connectedAccount();
+  }
+  return accountId ? (proof) => commitProofOnChain(callFunctionRaw, cfg, proof) : null;
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { memo, useMemo, type ReactNode } from 'react';
 import { toDisclosure } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
-import { STEPS_AFTER_SEND, type ChatOutcome, type CommitStatus } from '@/lib/flow';
+import { STEPS_AFTER_SEND, canCommitNow, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
 import { seconds, short } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
@@ -24,10 +24,7 @@ function RedCard({ title, body, lines }: { title: string; body?: string; lines: 
   );
 }
 
-/** Commit states a click can move forward: no wallet yet, or a commit that failed. `not-deployed` waits for the contract, not for the user. */
-const RETRYABLE = new Set<CommitStatus>(['no-wallet', 'failed']);
-
-export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcome: ChatOutcome; onCommit?: () => void }) {
+export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcome: ChatOutcome; onCommit?: (outcome: VerifiedOutcome) => void }) {
   const { t } = useT();
   const cfg = useConfig();
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
@@ -87,10 +84,10 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
         ) : (
           `${chainText} (commit ${commitShort})`
         )}
-        {onCommit && RETRYABLE.has(outcome.commit) && (
+        {onCommit && canCommitNow(outcome.commit) && (
           <>
             {' '}
-            <button type="button" className="btn small" onClick={onCommit}>{outcome.commit === 'no-wallet' ? t.commitConnect : t.commitRetry}</button>
+            <button type="button" className="btn small" onClick={() => onCommit(outcome)}>{outcome.commit === 'no-wallet' ? t.commitConnect : t.commitRetry}</button>
           </>
         )}
       </Row>

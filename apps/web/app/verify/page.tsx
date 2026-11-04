@@ -2,18 +2,19 @@
 // Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, or from a disclosure file
 // (proof + raw bytes + log entry). Hashes are recomputed here; the log entry is re-read from the public log. An exchange
 // kept in this browser whose proof was never committed can be committed from here (SPEC §4.2), wallet connected on demand.
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
-import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
 import { CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { describeError } from '@/lib/errors';
+import { commitExchange } from '@/lib/flow';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
-import { getExchange, listExchanges, putExchange, type StoredExchange } from '@/lib/store';
-import { isMethodNotFound, walletCommitter } from '@/lib/wallet';
+import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
+import { walletCommitter } from '@/lib/wallet';
 import { useConfig } from '../providers';
 
 interface Input {
@@ -22,27 +23,32 @@ interface Input {
   responseBody?: Uint8Array;
   /** Entry embedded in the input; the public log is still asked first, and a mismatch is reported. */
   embeddedEntry?: KeyEntry;
+  /** Set when the input is an exchange kept in this browser: the one this page can commit. */
+  stored?: StoredExchange;
   origin: string;
 }
 
 interface Result {
   report: VerifyReport;
   origin: string;
+  stored?: StoredExchange;
+}
+
+/** A disclosure file and a stored exchange carry the same four things. */
+function inputOf(x: DisclosedExchange, origin: string, stored?: StoredExchange): Input {
+  return { proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, embeddedEntry: x.logEntry, origin, ...(stored ? { stored } : {}) };
 }
 
 function VerifyInner() {
   const cfg = useConfig();
+  const wallet = useNearWallet();
   const id = useSearchParams().get('id');
   const [text, setText] = useState('');
   const [input, setInput] = useState<Input | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [stored, setStored] = useState<StoredExchange[]>([]);
-  const [exchange, setExchange] = useState<StoredExchange | null>(null); // the ?id= exchange: the one this page can commit
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState('');
-  const wallet = useNearWallet();
-  const walletRef = useRef(wallet);
-  walletRef.current = wallet;
 
   useEffect(() => {
     listExchanges().then(setStored).catch(() => undefined);
@@ -50,10 +56,7 @@ function VerifyInner() {
     getExchange(id)
       .then((x) => {
         if (!x) setError(`no exchange ${id} in this browser's store`);
-        else {
-          setExchange(x);
-          setInput({ proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, embeddedEntry: x.logEntry, origin: 'this browser (IndexedDB)' });
-        }
+        else setInput(inputOf(x, 'this browser (IndexedDB)', x));
       })
       .catch((e: unknown) => setError(describeError(e)));
   }, [id]);
@@ -66,53 +69,37 @@ function VerifyInner() {
       const parsed = ModelProof.safeParse(input.proof);
       const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
       const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
-      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin });
+      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin, ...(input.stored ? { stored: input.stored } : {}) });
     })();
     return () => {
       cancelled = true;
     };
   }, [input, cfg]);
 
-  /** commit_proof for an exchange kept here (the salt is in its proof); the stored row gets the transaction so the card and this page show it from now on. */
-  async function commitStored() {
-    if (!exchange || exchange.proof.commitTx) return;
-    setError('');
-    setCommitting(true);
-    try {
-      const committer = await walletCommitter(() => walletRef.current, cfg, true);
-      if (!committer) {
-        setError('no wallet connected: the commit stays local');
-        return;
-      }
-      const commitTx = await committer(exchange.proof);
-      const committed: StoredExchange = { ...exchange, proof: { ...exchange.proof, commitTx } };
-      await putExchange(committed).catch(() => undefined);
-      setExchange(committed);
-      setInput({ proof: committed.proof, requestBody: committed.requestBody, responseBody: committed.responseBody, embeddedEntry: committed.logEntry, origin: 'this browser (IndexedDB), just committed' });
-    } catch (err) {
-      setError(isMethodNotFound(err) ? 'commit_proof is not in the contract yet (SPEC §4.2 lands next): the commit stays local' : `commit failed: ${describeError(err)}; the commit stays local`);
-    } finally {
-      setCommitting(false);
-    }
-  }
-
   function parsePasted() {
-    setExchange(null);
     setError('');
     try {
       const parsed = JSON.parse(text) as unknown;
-      if (isDisclosure(parsed)) {
-        const d = parseDisclosure(parsed);
-        setInput({ proof: d.proof, requestBody: d.requestBody, responseBody: d.responseBody, embeddedEntry: d.logEntry, origin: 'disclosure file (proof + raw bytes)' });
-      } else {
-        setInput({ proof: parsed, origin: 'pasted proof JSON (no raw bytes: hash checks skipped)' });
-      }
+      if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure file (proof + raw bytes)'));
+      else setInput({ proof: parsed, origin: 'pasted proof JSON (no raw bytes: hash checks skipped)' });
     } catch (e) {
       setError(`not a proof or disclosure: ${describeError(e)}`);
     }
   }
 
+  /** commit_proof for an exchange kept here (its salt is in the proof). commitTx is an envelope field outside the signed and committed bytes, so the report stays as it is; only the transaction link appears. */
+  async function commitStored(x: StoredExchange) {
+    setError('');
+    setCommitting(true);
+    const r = await commitExchange(x, () => walletCommitter(wallet, cfg, true), (e) => {
+      if (e.status === 'skipped') setError(e.detail);
+    });
+    if (r.commit === 'committed') setResult((prev) => prev && { ...prev, stored: r.exchange, report: { ...prev.report, proof: r.exchange.proof } });
+    setCommitting(false);
+  }
+
   const proof = result?.report.proof;
+  const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
   return (
     <main className="page">
       <h1>Verify a proof</h1>
@@ -147,8 +134,8 @@ function VerifyInner() {
           {proof && (
             <div className="actions">
               {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">Commit on nearblocks</a>}
-              {exchange && !proof.commitTx && result.report.ok && (
-                <button type="button" className="btn" onClick={() => void commitStored()} disabled={committing}>{committing ? 'Committing…' : 'Commit on NEAR'}</button>
+              {committable && (
+                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? 'Committing…' : 'Commit on NEAR'}</button>
               )}
               <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">NEAR AI Verification Center</a>
             </div>
