@@ -90,7 +90,7 @@ export default function ChatPage() {
       if (outcome.kind === 'verified') void commitTurn(idx, outcome, false);
     } catch (err) {
       // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
-      setTurns(atTurn(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err) } })));
+      setTurns(atTurn(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err), sent: turn.steps.some((s) => s.id === 'send' && s.status !== 'running') } })));
     } finally {
       setBusy(false);
     }

@@ -32,8 +32,11 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
   if (outcome.kind === 'failed') {
+    // Three honest titles: the reply came and a later step failed; the request left but no verified reply came back; nothing left the browser.
     const afterSend = STEPS_AFTER_SEND.has(outcome.step);
-    return <RedCard title={afterSend ? t.failedAfterSendTitle : t.failedTitle} {...(afterSend ? { body: t.failedAfterSendBody } : {})} lines={[`${outcome.step}: ${outcome.reason}`]} />;
+    const title = afterSend ? t.failedAfterSendTitle : outcome.sent ? t.failedSentTitle : t.failedTitle;
+    const body = afterSend ? t.failedAfterSendBody : outcome.sent ? t.failedSentBody : undefined;
+    return <RedCard title={title} {...(body === undefined ? {} : { body })} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
     return (

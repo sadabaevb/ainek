@@ -57,8 +57,8 @@ export type ChatOutcome =
   | VerifiedOutcome
   | { kind: 'refused'; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
-  /** `reply` is present when the failure happened after the model had already answered. */
-  | { kind: 'failed'; step: StepId; reason: string; reply?: string };
+  /** `sent` is true once the request left the browser; `reply` is present when the model had already answered. */
+  | { kind: 'failed'; step: StepId; reason: string; sent: boolean; reply?: string };
 
 const TAMPERED_KEY = 'ab'.repeat(32);
 
@@ -88,6 +88,12 @@ async function runStep<T>(emit: Emit, id: StepId, running: string | null, fn: ()
   return value;
 }
 
+/** What the card may say about a failure: whether the request left the browser, and the reply if one came back. */
+interface Sent {
+  out: boolean;
+  reply?: string;
+}
+
 export interface ChatParams {
   model: string;
   messages: ChatMessage[];
@@ -96,16 +102,16 @@ export interface ChatParams {
 }
 
 export async function runChat(cfg: PublicConfig, params: ChatParams): Promise<ChatOutcome> {
-  const sent: { reply?: string } = {};
+  const sent: Sent = { out: false };
   try {
     return await (params.model === cfg.incognitoModel ? nonTeeRoute(cfg, params, sent) : teeRoute(cfg, params, sent));
   } catch (err) {
-    if (err instanceof StepFailed) return { kind: 'failed', step: err.step, reason: err.reason, ...(sent.reply === undefined ? {} : { reply: sent.reply }) };
+    if (err instanceof StepFailed) return { kind: 'failed', step: err.step, reason: err.reason, sent: sent.out, ...(sent.reply === undefined ? {} : { reply: sent.reply }) };
     throw err;
   }
 }
 
-async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: emit }: ChatParams, sent: { reply?: string }): Promise<ChatOutcome> {
+async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: emit }: ChatParams, sent: Sent): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
 
   // 0. The user chose the private model: it must support model attestation, otherwise nothing is sent (never a silent downgrade to plaintext).
@@ -132,7 +138,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });
 
   // 3. Encrypt to the verified key and send through the proxy.
-  const exchange = await runStep(emit, 'send', 'encrypting to the attested model key and sending', () => sendE2ee(model, messages, modelAttestation), (x) => `completion ${x.completionId}, ${x.requestBody.length} B sent, ${x.responseBody.length} B received (ciphertext kept)`);
+  const exchange = await runStep(emit, 'send', 'encrypting to the attested model key and sending', () => sendE2ee(model, messages, modelAttestation, () => { sent.out = true; }), (x) => `completion ${x.completionId}, ${x.requestBody.length} B sent, ${x.responseBody.length} B received (ciphertext kept)`);
   sent.reply = exchange.reply;
 
   // 4. Signature from the gateway, 5. SDK byte-exact check against the verified model signer.
@@ -207,13 +213,13 @@ export async function commitOutcome(outcome: VerifiedOutcome, resolveCommitter: 
 }
 
 /** The user picked the Incognito model (SPEC §3.9): no model evidence, no E2EE; plaintext goes through our proxy and the gateway, and the card says so. */
-async function nonTeeRoute(cfg: PublicConfig, { model, messages, onStep: emit }: ChatParams, sent: { reply?: string }): Promise<ChatOutcome> {
+async function nonTeeRoute(cfg: PublicConfig, { model, messages, onStep: emit }: ChatParams, sent: Sent): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
   const meta = await runStep(emit, 'metadata', `asking the gateway about ${model}`, () => fetchModelMetadata(model), (m) => `${model}: provider ${String(m.providerType)}, model attestation ${m.attestationSupported === true ? 'supported' : 'not supported'}`);
   if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, onStep: emit }, sent); // it is attested after all: use the real path
   const gateway = await runStep(emit, 'attestation', 'verifying the gateway only (this model has no model attestation)', () => verifyGateway(policy), (g) => `gateway ${g.tcbStatus}; no model evidence exists for ${model}`);
   emit({ id: 'key-log', status: 'skipped', detail: 'no model key to look up: nothing to verify against the log' });
-  const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`);
+  const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages, () => { sent.out = true; }), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`);
   sent.reply = exchange.reply;
   const signature = await runStep(emit, 'signature', 'fetching the completion signature', () => fetchSignature(exchange.completionId), (s) => `signature_kind ${s.kind}`);
   await runStep(emit, 'sdk-check', null, async () => checkGatewayResponse(exchange, signature, gateway), () => 'SDK: the gateway signed these bytes; this says nothing about where the model ran');

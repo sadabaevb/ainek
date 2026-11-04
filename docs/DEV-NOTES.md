@@ -526,3 +526,14 @@ proof с солью лежал в IndexedDB, а дорога к `commit_proof` �
 IndexedDB и, если транзакция уже есть (чат успел закоммитить, пока открыт `/verify`), не шлёт второй `commit_proof`; на `/verify`
 результат коммита применяется только если на экране всё ещё тот же обмен; подпись кнопки на карточке берётся из текущего состояния
 кошелька («Connect wallet and commit» / «Commit now» / «Retry the commit»), а не из замороженного статуса хода.
+
+## 2026-11-04 — честные заголовки падения и пустой `/log` (Бектур)
+
+Два бага из ревью текстов. (1) Падение на шаге `send` показывало «Verification failed. Nothing was sent.», хотя запрос мог
+уйти (шлюз вернул ошибку, ответ не расшифровался). Теперь `sendE2ee`/`sendPlain` дёргают `onRequestSent` прямо перед `fetch`,
+`runChat` кладёт `sent: boolean` в outcome `failed`, и карточка различает три случая: ответ был, упал поздний шаг («Reply
+received, but its proof could not be completed»); запрос ушёл, проверенного ответа нет («The message went out, but no verified
+reply came back»); ничего не ушло («Nothing was sent», только если упало до `fetch`: подготовка, шифрование). (2) `/log` при
+пустом 24-часовом окне `latest_keys` показывал пустую таблицу без объяснения, а это ровно то, что судья увидит, если запись
+устарела. Теперь `KeyLog.newest()` (head → entry) и карточка «No entry younger than 24 hours for <model>» с самой свежей записью
+лога, её возрастом и фразой, что это fail-closed, а не поломка. Проверено подменой `NEARAI_MODEL` на модель без записей.

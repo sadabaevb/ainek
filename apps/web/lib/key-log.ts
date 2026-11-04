@@ -8,6 +8,8 @@ export interface KeyLog {
   source: 'contract' | 'sample';
   latestKeys(model: string): Promise<KeyEntry[]>;
   entry(index: number): Promise<KeyEntry | null>;
+  /** The newest entry overall (any model, any age); null while the log is empty. */
+  newest(): Promise<KeyEntry | null>;
 }
 
 function sampleLog(): KeyLog {
@@ -16,11 +18,21 @@ function sampleLog(): KeyLog {
     source: 'sample',
     latestKeys: async (model) => entries.filter((e) => e.model === model),
     entry: async (index) => entries.find((e) => e.index === index) ?? null,
+    newest: async () => entries[entries.length - 1] ?? null,
   };
 }
 
 export function keyLogFor(cfg: PublicConfig): KeyLog {
-  return cfg.logSource === 'contract' ? { source: 'contract', ...keyLogReader(cfg.rpcUrl, cfg.contract) } : sampleLog();
+  if (cfg.logSource !== 'contract') return sampleLog();
+  const reader = keyLogReader(cfg.rpcUrl, cfg.contract);
+  return {
+    source: 'contract',
+    ...reader,
+    newest: async () => {
+      const head = await reader.head();
+      return head ? reader.entry(head.index) : null;
+    },
+  };
 }
 
 /**

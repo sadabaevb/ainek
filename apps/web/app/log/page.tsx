@@ -9,17 +9,27 @@ import { short, utcMinute } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
 import { useConfig } from '../providers';
 
+const hoursAgo = (observedAtMs: string): string => ((Date.now() - Number(observedAtMs)) / 3_600_000).toFixed(1);
+
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
 
 export default function LogPage() {
   const cfg = useConfig();
   const [entries, setEntries] = useState<KeyEntry[] | null>(null);
+  const [newest, setNewest] = useState<KeyEntry | null>(null); // shown when the 24 h window is empty: how stale the log is
   const [error, setError] = useState('');
   const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
   useEffect(() => {
-    keyLogFor(cfg).latestKeys(cfg.model).then(setEntries).catch((e: unknown) => setError(describeError(e)));
+    const log = keyLogFor(cfg);
+    log
+      .latestKeys(cfg.model)
+      .then(async (window) => {
+        setEntries(window);
+        if (window.length === 0) setNewest(await log.newest());
+      })
+      .catch((e: unknown) => setError(describeError(e)));
   }, [cfg]);
 
   useEffect(() => {
@@ -48,7 +58,17 @@ export default function LogPage() {
           <p>{split.detail}</p>
         </section>
       )}
-      {entries && (
+      {entries && entries.length === 0 && (
+        <section className="card">
+          <h3>No entry younger than 24 hours for {cfg.model}</h3>
+          <p>
+            The client trusts only entries in that window, so the chat refuses to send until a verifier logs a fresh one. That is the fail-closed rule working, not an outage.
+            {newest && <> Newest entry overall: #{newest.index} for {newest.model} by {newest.verifier}, observed {utcMinute(new Date(Number(newest.observed_at)).toISOString())} ({hoursAgo(newest.observed_at)} h ago).</>}
+            {' '}Until the verifier daemon runs, the log is refreshed by hand.
+          </p>
+        </section>
+      )}
+      {entries && entries.length > 0 && (
         <table>
           <thead>
             <tr><th>#</th><th>model</th><th>verifier</th><th>signing key</th><th>compose</th><th>TCB</th><th>observed</th></tr>
