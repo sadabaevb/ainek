@@ -9,7 +9,8 @@ import { canCommitNow, failurePhase, type ChatOutcome, type VerifiedOutcome } fr
 import { downloadJson } from '@/lib/encoding';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
-import { CheckList, Row } from './checks';
+import { fill } from '@/lib/fill';
+import { CheckList, Row, mark } from './checks';
 import { CopyButton } from './copy-button';
 
 function RedCard({ title, body, lines }: { title: string; body?: string; lines: ReactNode[] }) {
@@ -39,10 +40,13 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
     return <RedCard title={title} body={body} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
+    // The decision is the same (nothing sent); the explanation follows the verdict's data: a disagreement, a key logged only by strangers, or no entry at all.
+    const v = outcome.keyVerdict;
+    const [title, body] = v.status === 'split-view' ? [t.refusedSplitTitle, t.refusedSplitBody] : v.loggedByUntrusted.length > 0 ? [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))] : [t.refusedTitle, t.refusedBody];
     return (
       <RedCard
-        title={t.refusedTitle}
-        body={t.refusedBody}
+        title={title}
+        body={body}
         lines={[
           `key seen by the client: ${outcome.seenKey}`,
           `verdict: ${outcome.keyVerdict.status}: ${outcome.keyVerdict.detail}`,
@@ -79,7 +83,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
   return (
     <section className="card">
       <header className="card-head">
-        <span>✓ {t.cardVerified}</span>
+        <span>{mark('ok')} {t.cardVerified}</span>
         <span className="when">{utcMinute(proof.verifiedAt)}</span>
       </header>
       <Row status="ok" label={t.rowModel} hint={hint('model')}>{proof.model}, {t.attested} (compose {short(composeHash)})</Row>
@@ -89,9 +93,9 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
       <Row status="ok" label={t.rowE2ee} hint={hint('e2ee')}>{t.e2eeYes}</Row>
       <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain} hint={hint('chain')}>
         {proof.commitTx ? (
-          <>{t.chainTx(short(commit))} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a><CopyButton text={proof.commitTx} /></>
+          <>{t.chainTx(short(commit))} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a> <CopyButton text={proof.commitTx} /></>
         ) : (
-          <>{chainText} (commit {short(commit)})<CopyButton text={commit} /></>
+          <>{chainText} (commit {short(commit)}) <CopyButton text={commit} /></>
         )}
         {onCommit && canCommitNow(outcome.commit) && (
           <>
@@ -100,13 +104,13 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
           </>
         )}
       </Row>
-      <p className="small hint-line"><button type="button" className="btn link" onClick={() => setExplain((v) => !v)}>{explain ? t.hideRows : t.explainRows}</button></p>
+      <p className="small hint-line"><button type="button" className="linklike" onClick={() => setExplain((v) => !v)}>{explain ? t.hideRows : t.explainRows}</button></p>
       <div className="actions">
         <Link className="btn" href={`/verify?id=${encodeURIComponent(proof.completionId)}`}>{t.reverify}</Link>
         <a className="btn" href={vcUrl} target="_blank" rel="noreferrer">{t.openVc}</a>
         <button type="button" className="btn" onClick={disclose}>{t.disclose}</button>
       </div>
-      <p className="muted small">{t.discloseHint}</p>
+      <p className="muted small">{fill(t.discloseHint, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
       <details>
         <summary>{t.details}</summary>
         <CheckList items={report.checks} />

@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
-import { STEP_ORDER, canCommitNow, commitOutcome, runChat, type ChatMessage, type ChatOutcome, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
+import { canCommitNow, commitOutcome, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
@@ -17,10 +17,7 @@ interface Turn {
 }
 
 /** What the composer sends with: the selected model and the tamper switch, taken at the moment of sending. */
-interface SendOptions {
-  model: string;
-  tamper: boolean;
-}
+type SendOptions = Pick<ChatParams, 'model' | 'tamper'>;
 
 type Chip = keyof Dict['intro']['chips'];
 
@@ -29,16 +26,15 @@ const atTurn = (idx: number, fn: (turn: Turn) => Turn) => (prev: Turn[]) => prev
 const withStep = (e: StepEvent) => (turn: Turn): Turn => ({ ...turn, steps: upsert(turn.steps, e) });
 const withOutcome = (outcome: ChatOutcome) => (turn: Turn): Turn => ({ ...turn, outcome });
 
-/** The step in flight, in plain words, with a bar over the whole route: the cold attestation alone can take ten seconds. */
+/** The step in flight, in plain words (flow says which wording fits the route), over an indeterminate bar: the cold attestation alone can take ten seconds and no step index would show that. */
 function Progress({ steps }: { steps: StepEvent[] }) {
   const { t } = useT();
   const running = steps.find((s) => s.status === 'running') ?? steps[steps.length - 1];
   if (!running) return null;
-  const width = `${Math.round(((STEP_ORDER.indexOf(running.id) + 1) / STEP_ORDER.length) * 100)}%`;
   return (
     <div className="progress" role="status">
-      <span>{t.progress[running.id]}</span>
-      <span className="bar"><span style={{ width }} /></span>
+      <span>{t.progress[running.say ?? running.id]}</span>
+      <span className="bar"><span /></span>
     </div>
   );
 }
@@ -69,12 +65,12 @@ function Intro({ onPick, busy }: { onPick: (chip: Chip) => void; busy: boolean }
   const { t } = useT();
   const chips: Chip[] = ['ask', 'tamper', 'incognito'];
   return (
-    <section className="intro">
+    <section className="card intro">
       <h2>{t.intro.title}</h2>
       <ol>{t.intro.lines.map((line) => <li key={line}>{line}</li>)}</ol>
       <p className="try">{t.intro.tryTitle}</p>
       <div className="chips">
-        {chips.map((chip) => <button key={chip} type="button" className="chip" disabled={busy} onClick={() => onPick(chip)}>{t.intro.chips[chip]}</button>)}
+        {chips.map((chip) => <button key={chip} type="button" className="btn chip" disabled={busy} onClick={() => onPick(chip)}>{t.intro.chips[chip]}</button>)}
       </div>
     </section>
   );
@@ -124,7 +120,7 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { model: opts.model, messages, tamper: opts.tamper, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
+      const outcome = await runChat(cfg, { ...opts, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
       setTurns(atTurn(idx, withOutcome(outcome)));
       if (outcome.kind === 'verified') void commitTurn(idx, outcome, false);
     } finally {

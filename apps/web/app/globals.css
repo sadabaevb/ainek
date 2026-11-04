@@ -48,7 +48,7 @@ h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
 .row { display: grid; grid-template-columns: 1.6rem 1fr; gap: 0 0.5rem; padding: 0.35rem 0; border-top: 1px solid var(--line); }
 .row:first-of-type { border-top: 0; }
 .row .mark { font-size: 1.25rem; line-height: 1.2; grid-row: 1 / span 3; }
-.row .label, .row .value, .row .hint { grid-column: 2; }
+.row > :not(.mark) { grid-column: 2; } /* the mark spans the rows; everything else stacks in the second column */
 .row.ok .mark { color: var(--ok); }
 .row.fail .mark { color: var(--fail); }
 .row.skipped .mark { color: var(--na); }
@@ -81,21 +81,20 @@ textarea.json { width: 100%; font-family: var(--mono); font-size: 12px; }
 }
 @media (max-width: 480px) { .top { flex-direction: column; } .row { grid-template-columns: 1.4rem 1fr; } .nav { gap: 0.25rem 0.75rem; } }
 /* Chat first screen, waiting state and the card header (UX pass). */
-.intro { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.25rem; margin: 1rem 0; }
+.intro { margin: 1rem 0; }
 .intro h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
 .intro ol { margin: 0; padding-left: 1.25rem; }
 .intro ol li { margin: 0.25rem 0; }
 .intro .try { margin: 0.9rem 0 0.4rem; font-weight: 600; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.chip { border: 1px solid var(--accent); color: var(--accent); background: #fff; border-radius: 999px; padding: 0.35rem 0.9rem; font: inherit; cursor: pointer; }
+.chip { border-color: var(--accent); color: var(--accent); border-radius: 999px; padding: 0.35rem 0.9rem; }
 .chip:hover { background: #eef2ff; }
-.chip:disabled { opacity: 0.5; cursor: default; }
 .progress { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.6rem 0.9rem; background: #fff; border: 1px dashed var(--line); border-radius: 12px; color: var(--muted); }
 .progress .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
-.progress .bar > span { display: block; height: 100%; background: var(--accent); transition: width 0.4s; }
+.progress .bar > span { display: block; height: 100%; width: 40%; background: var(--accent); animation: slide 1.4s ease-in-out infinite; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.25rem 1rem; margin: -1rem -1rem 0.75rem; padding: 0.6rem 1rem; border-radius: 12px 12px 0 0; background: var(--ok-bg); color: var(--ok); font-weight: 700; }
 .card-head .when { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
-.row .hint { grid-column: 2; color: var(--muted); font-size: 0.85rem; }
-.btn.link { border: 0; background: none; color: var(--accent); padding: 0; text-decoration: underline; }
-.btn.tiny { padding: 0 0.4rem; font-size: 0.75rem; margin-left: 0.3rem; vertical-align: baseline; }
+.row .hint { color: var(--muted); font-size: 0.85rem; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .hint-line { margin: 0 0 0.5rem; }

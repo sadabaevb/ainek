@@ -25,6 +25,7 @@ test('entries from verifiers outside the trust set are shown but never counted',
   const v = evaluateKeyLog([logged({ verifier: 'stranger.testnet', index: 1 })], base);
   assert.equal(v.status, 'not-logged');
   assert.equal(v.untrusted.length, 1);
+  assert.deepEqual(v.loggedByUntrusted, ['stranger.testnet']);
   assert.match(v.detail, /logged only by stranger\.testnet, outside the trust set/);
   assert.match(evaluateKeyLog([], base).detail, /is not in the public log/);
 });
