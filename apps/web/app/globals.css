@@ -62,3 +62,6 @@ table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
 th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.5rem; border-top: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 600; }
 @media (max-width: 480px) { .top { flex-direction: column; } .row { grid-template-columns: 1.4rem 1fr; } }
+.page h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+textarea.json { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.controls input[type="text"] { width: 100%; padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: 8px; font: inherit; }

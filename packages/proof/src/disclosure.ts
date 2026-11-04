@@ -40,9 +40,15 @@ export function toDisclosure(x: DisclosedExchange): Disclosure {
   });
 }
 
-export function parseDisclosure(value: unknown): DisclosedExchange {
+/** A parsed file: the exchange plus when it was disclosed and the note it carried. */
+export interface ParsedDisclosure extends DisclosedExchange {
+  disclosedAt: string;
+  note?: string;
+}
+
+export function parseDisclosure(value: unknown): ParsedDisclosure {
   const d = Disclosure.parse(value);
-  return { proof: d.proof, logEntry: d.logEntry, requestBody: base64ToBytes(d.rawRequestBase64), responseBody: base64ToBytes(d.rawResponseBase64) };
+  return { proof: d.proof, logEntry: d.logEntry, requestBody: base64ToBytes(d.rawRequestBase64), responseBody: base64ToBytes(d.rawResponseBase64), disclosedAt: d.disclosedAt, ...(d.note === undefined ? {} : { note: d.note }) };
 }
 
 export function isDisclosure(value: unknown): boolean {

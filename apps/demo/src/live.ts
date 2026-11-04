@@ -3,7 +3,7 @@
 // (TLS pinned to the attested gateway), fail-closed check against the public log, one E2EE request with the exact
 // bytes kept, signature, SDK byte-exact check, our proof, card. `--record` writes the exchange into docs/samples
 // so the offline replay (`pnpm demo`) has an E2EE sample. `--disclose <file>` writes the "Disclose to auditor" file of this
-// run (SPEC §5.4; a relative path is taken from the repo root), the same bytes a proof card downloads, for /auditor and /verify.
+// run (SPEC §5.4), the same bytes a proof card downloads, for /auditor and /verify.
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -116,12 +116,14 @@ console.log(`│ ${OK} End-to-end encryption: yes, encrypted to the attested mod
 console.log(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);
 console.log(`└─ Result: ${report.ok ? 'VERIFIED' : 'FAILED'}`);
 
-if (record && report.ok) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
-else if (record) console.log('\nnot recorded: the run did not verify');
-if (disclosePath && report.ok) {
-  writeFileSync(path.resolve(repoRoot, disclosePath), `${JSON.stringify(toDisclosure({ proof, logEntry, requestBody, responseBody }), null, 2)}\n`);
-  console.log(`\ndisclosure written: ${disclosePath} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
-} else if (disclosePath) console.log('\ndisclosure not written: the run did not verify');
+if (report.ok) {
+  if (record) recordSamples({ completionId: completion.id, requestBody, responseBody, signature, reply });
+  if (disclosePath) {
+    const file = path.resolve(process.env.INIT_CWD ?? process.cwd(), disclosePath); // INIT_CWD: where the pnpm command was typed, not apps/demo
+    writeJson(file, toDisclosure({ proof, logEntry, requestBody, responseBody }));
+    console.log(`\ndisclosure written: ${file} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
+  }
+} else if (record || disclosePath) console.log('\nnothing written: the run did not verify');
 process.exit(report.ok ? 0 : 1);
 
 // ---- helpers ----
@@ -162,11 +164,16 @@ function proofBoundToSampleLog(x: { completionId: string; requestBody: Uint8Arra
 
 function recordSamples(x: { completionId: string; requestBody: Uint8Array; responseBody: Uint8Array; signature: CompletionSignature; reply: string }): void {
   const bound = proofBoundToSampleLog(x); // throws before anything is written
-  const write = (name: string, data: string | Uint8Array) => writeFileSync(new URL(name, samplesDir), data);
-  write('e2ee-chat-request.raw.json', x.requestBody);
-  write('e2ee-chat-response.raw.json', x.responseBody);
-  write('e2ee-signature.json', `${JSON.stringify({ text: x.signature.signedText, signature: x.signature.signature, signing_address: x.signature.signer.signingAddress, signing_algo: x.signature.signer.signingAlgo, signature_kind: x.signature.kind }, null, 2)}\n`);
-  write('e2ee-plaintext.json', `${JSON.stringify({ _note: 'What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.', model, prompt: message, reply: x.reply, completionId: x.completionId, recordedAt: new Date().toISOString() }, null, 2)}\n`);
-  write('model-proof-e2ee.sample.json', `${JSON.stringify({ _note: 'SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.', proof: bound }, null, 2)}\n`);
+  const at = (name: string) => new URL(name, samplesDir);
+  writeFileSync(at('e2ee-chat-request.raw.json'), x.requestBody);
+  writeFileSync(at('e2ee-chat-response.raw.json'), x.responseBody);
+  writeJson(at('e2ee-signature.json'), { text: x.signature.signedText, signature: x.signature.signature, signing_address: x.signature.signer.signingAddress, signing_algo: x.signature.signer.signingAlgo, signature_kind: x.signature.kind });
+  writeJson(at('e2ee-plaintext.json'), { _note: 'What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.', model, prompt: message, reply: x.reply, completionId: x.completionId, recordedAt: new Date().toISOString() });
+  writeJson(at('model-proof-e2ee.sample.json'), { _note: 'SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.', proof: bound });
   console.log('\nrecorded: e2ee-chat-request.raw.json, e2ee-chat-response.raw.json, e2ee-signature.json, e2ee-plaintext.json, model-proof-e2ee.sample.json');
+}
+
+/** Pretty JSON with a trailing newline, the way every file in docs/samples is written. */
+function writeJson(file: string | URL, value: unknown): void {
+  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
 import { findSplitView, type KeyEntry } from '@ainek/proof';
 import { describeError } from '@/lib/errors';
-import { short } from '@/lib/format';
+import { short, utcMinute } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
 import { useConfig } from '../providers';
 
@@ -62,14 +62,14 @@ export default function LogPage() {
                 <td className="mono">{short(e.signing_address)}</td>
                 <td className="mono">{short(e.compose_hash)}</td>
                 <td>{e.tcb_status}</td>
-                <td>{new Date(Number(e.observed_at)).toISOString().slice(0, 16).replace('T', ' ')}</td>
+                <td>{utcMinute(new Date(Number(e.observed_at)).toISOString())}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
 
-      <h2 style={{ fontSize: '1.1rem', marginTop: '2rem' }}>Wallet</h2>
+      <h2>Wallet</h2>
       <p className="muted small">Connecting (top right) adds a function-call key limited to <span className="mono">commit_proof</span> on the contract, so the chat can commit salted proof hashes without asking the wallet each time.</p>
       {signedAccountId ? (
         <>

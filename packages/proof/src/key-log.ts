@@ -1,6 +1,9 @@
 // SPEC §7.1 step 2: is the attested key confirmed by the public log? The contract's `latest_keys(model, max_age)`
 // returns the window; this function applies the client-side trust policy (TRUSTED_VERIFIERS + QUORUM) to it.
+import { canonicalJson } from './canonical.ts';
 import { normalizeHex, shortHex } from './hash.ts';
+import type { KeyLogReader } from './near-view.ts';
+import type { Check } from './verify.ts';
 import type { KeyEntry } from './schema.ts';
 
 export interface KeyLogQuery {
@@ -76,3 +79,29 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   return { status: 'not-logged', confirmedBy, matching, untrusted, detail: `${why}: not sent (fail-closed)` };
 }
 
+
+// ---- The entry a proof points at, with the public log as the source of truth -----------------------
+export interface ResolvedEntry {
+  /** What the proof is checked against: the chain's entry when it answered, else the embedded copy, else nothing. */
+  entry: KeyEntry | null;
+  check: Check;
+}
+
+/**
+ * Re-reads entry `logIndex` through `reader` and compares it with the copy embedded in the input (a disclosure file, a
+ * stored exchange) when there is one. Missing or different is a failure. An unreachable log is a skip that falls back to
+ * the embedded copy and says so, so a reader never mistakes the sender's copy for the chain's word.
+ */
+export async function resolveLogEntry(reader: Pick<KeyLogReader, 'entry'>, logIndex: number, embedded?: KeyEntry, logName = 'the public log'): Promise<ResolvedEntry> {
+  const id = 'log-entry';
+  let fromChain: KeyEntry | null;
+  try {
+    fromChain = await reader.entry(logIndex);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    return { entry: embedded ?? null, check: { id, status: 'skipped', detail: `${logName} unavailable (${why})${embedded ? '; using the embedded entry, not re-read from the chain' : ''}` } };
+  }
+  if (!fromChain) return { entry: embedded ?? null, check: { id, status: 'fail', detail: `entry #${logIndex} is not in ${logName}${embedded ? ': the embedded entry cannot be confirmed' : ''}` } };
+  if (embedded && canonicalJson(embedded) !== canonicalJson(fromChain)) return { entry: fromChain, check: { id, status: 'fail', detail: `entry #${logIndex} in ${logName} differs from the embedded entry` } };
+  return { entry: fromChain, check: { id, status: 'ok', detail: `entry #${logIndex} re-read from ${logName}${embedded ? ', equal to the embedded entry' : ''}` } };
+}

@@ -4,10 +4,11 @@
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { isDisclosure, parseDisclosure, verifyModelProof, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type KeyEntry, type VerifyReport } from '@ainek/proof';
 import { CheckList } from '@/components/checks';
+import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { describeError } from '@/lib/errors';
-import { resolveLogEntry, type ResolvedEntry } from '@/lib/key-log';
+import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
 import { useConfig } from '../providers';
@@ -24,7 +25,6 @@ interface Input {
 interface Result {
   report: VerifyReport;
   origin: string;
-  log: ResolvedEntry;
 }
 
 function VerifyInner() {
@@ -50,9 +50,13 @@ function VerifyInner() {
   useEffect(() => {
     if (!input) return;
     let cancelled = false;
-    resolveLogEntry(cfg, (input.proof as { logIndex?: unknown }).logIndex, input.embeddedEntry).then((log) => {
-      if (!cancelled) setResult({ report: verifyModelProof(input.proof, input.requestBody, input.responseBody, log.entry), origin: input.origin, log });
-    });
+    (async () => {
+      // The chain is asked only for a schema-valid proof; a malformed one is reported by verifyModelProof without a view call.
+      const parsed = ModelProof.safeParse(input.proof);
+      const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
+      const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
+      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin });
+    })();
     return () => {
       cancelled = true;
     };
@@ -74,19 +78,16 @@ function VerifyInner() {
   }
 
   const proof = result?.report.proof;
-  const ok = result !== null && result.report.ok && result.log.status !== 'fail';
   return (
     <main className="page">
       <h1>Verify a proof</h1>
       <p className="muted">Paste a proof, drop a disclosure file, or pick one of the exchanges this browser has kept. Hashes are recomputed here, the signature is checked here, and the log entry is re-read from the public log. Received a disclosure from someone else? <Link href="/auditor">/auditor</Link> says what it proves.</p>
 
       <div className="controls">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} placeholder='{"v":1,"kind":"model",...}  or the "Disclose to auditor" file' />
+        <JsonTextarea value={text} onChange={setText} placeholder='{"v":1,"kind":"model",...}  or the "Disclose to auditor" file' />
         <div className="actions">
           <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>Verify</button>
-          <label className="btn">
-            Load file <input type="file" accept="application/json" style={{ display: 'none' }} onChange={(e) => void e.target.files?.[0]?.text().then(setText)} />
-          </label>
+          <LoadFileButton onText={setText} />
         </div>
       </div>
 
@@ -104,10 +105,10 @@ function VerifyInner() {
       {error && <p className="card red">{error}</p>}
 
       {result && (
-        <section className={`card ${ok ? '' : 'red'}`}>
-          <h3>{ok ? '✓ Proof verified' : '✗ Proof failed'}</h3>
-          <p className="muted small">source: {result.origin}; {result.log.detail}</p>
-          <CheckList items={[{ id: 'log-entry', ...result.log }, ...result.report.checks]} />
+        <section className={`card ${result.report.ok ? '' : 'red'}`}>
+          <h3>{result.report.ok ? '✓ Proof verified' : '✗ Proof failed'}</h3>
+          <p className="muted small">source: {result.origin}</p>
+          <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">
               {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">Commit on nearblocks</a>}
