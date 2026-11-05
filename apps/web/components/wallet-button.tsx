@@ -5,8 +5,8 @@ import { useConfig, useT } from '@/app/providers';
 import { short } from '@/lib/format';
 import { fcKeyLogin } from '@/lib/wallet';
 
-/** Implicit (hex) accounts are 64 characters; named ones are short enough to show whole. */
-const shortAccount = (id: string) => (id.length > 24 ? short(id) : id);
+/** Implicit (hex) accounts are 64 characters; named ones show whole. */
+const shortAccount = (id: string) => (/^[0-9a-f]{64}$/.test(id) ? short(id) : id);
 
 export function WalletButton() {
   const cfg = useConfig();

@@ -9,6 +9,7 @@ import { useNearWallet } from 'near-connect-hooks';
 import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
 import { CardHead, CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
+import { RedCard } from '@/components/red-card';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
 import { commitExchange } from '@/lib/flow';
@@ -136,8 +137,8 @@ function VerifyInner() {
         </details>
       )}
 
-      {missingId && <p className="card red">{tv.noExchange(missingId)}</p>}
-      {error && <p className="card red">{error}</p>}
+      {missingId && <RedCard title={tv.noExchange(missingId)} />}
+      {error && <RedCard title={error} />}
 
       {result && (
         <section className="card">

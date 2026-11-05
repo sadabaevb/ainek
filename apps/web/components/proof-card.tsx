@@ -1,7 +1,7 @@
 'use client';
 // The card a person sees after each reply (SPEC §5.3): one line per guarantee, ✓/✗/—, red states in their own design.
 import Link from 'next/link';
-import { memo, useMemo, useState, type ReactNode } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { toDisclosure, type KeyLogReason } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
@@ -11,31 +11,8 @@ import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { fill } from '@/lib/fill';
 import { CardHead, CheckList, Row } from './checks';
+import { RedCard } from './red-card';
 import { CopyButton } from './copy-button';
-
-const WARN = (
-  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
-    <path d="M12 3 2.5 20h19L12 3Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-    <path d="M12 9v5M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
-
-/** A refusal or failure, in its own red design; `lines` are the English technical details, collapsed. */
-export function RedCard({ title, body, lines }: { title: string; body?: string; lines?: ReactNode[] }) {
-  const { t } = useT();
-  return (
-    <section className="card red">
-      <h3>{WARN}<span>{title}</span></h3>
-      {body && <p>{body}</p>}
-      {lines && (
-        <details>
-          <summary>{t.details}</summary>
-          <ul className="mono" lang="en">{lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
-        </details>
-      )}
-    </section>
-  );
-}
 
 export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcome: ChatOutcome; onCommit?: (outcome: VerifiedOutcome) => void }) {
   const { t } = useT();

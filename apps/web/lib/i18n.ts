@@ -6,7 +6,7 @@ export type Lang = 'en' | 'ru';
 export const LANG_COOKIE = 'ainek.lang';
 
 const en = {
-  hero: ['Ask a private model.', 'Get a proof you can check yourself.'],
+  hero: ['Ask a private model.', 'Get a proof you can check yourself.'] as [string, string],
   model: 'Model',
   teeModel: 'Private TEE model',
   incognitoModel: 'Incognito model (no hardware proof): demo of the red card',
@@ -67,7 +67,7 @@ const en = {
     ],
     tryTitle: 'Try one of the three catches',
     chips: { ask: 'Ask a private question', tamper: 'Swap the key before sending', incognito: 'A model without hardware proof' },
-    subs: { ask: 'Encrypted to the attested key, answered with a proof you can re-check.', tamper: 'The fail-closed rule: nothing leaves the browser.', incognito: 'Privacy by contract only, and the card says so.' },
+    subs: { ask: 'Encrypted to the attested key, answered with a proof you can re-check.', tamper: 'The fail-closed rule: the prompt never leaves the browser.', incognito: 'Privacy by contract only, and the card says so.' },
     prompts: { ask: 'In two sentences: what is a TEE, and why would I want my AI to run inside one?', tamper: 'hello', incognito: 'hello' },
   },
   progress: {
@@ -106,7 +106,8 @@ const en = {
   loading: 'Loading…',
   loadFile: 'Load file',
   readFailed: (name: string, reason: string) => `could not read ${name}: ${reason}`,
-  fileTooBig: (name: string) => `${name} is larger than 2 MB; a proof or a disclosure file is a few kilobytes`,
+  fileTooBig: (name: string, mb: number) => `${name} is larger than ${mb} MB; a proof or a disclosure file is a few kilobytes`,
+  notJsonFile: (name: string) => `${name} is not a .json file`,
   log: {
     title: 'Public key log',
     intro: (network: string, verifiers: string, quorum: number) => `Contract {contract} on ${network}; trusted verifiers ${verifiers}; quorum ${quorum}.`,
@@ -251,7 +252,7 @@ const ru: typeof en = {
     ],
     tryTitle: 'Попробуй один из трёх сценариев',
     chips: { ask: 'Задать приватный вопрос', tamper: 'Подменить ключ перед отправкой', incognito: 'Модель без аппаратного доказательства' },
-    subs: { ask: 'Зашифровано на аттестованный ключ, ответ приходит с proof, который можно перепроверить.', tamper: 'Правило fail-closed: из браузера ничего не уходит.', incognito: 'Приватность только по договору, и карточка так и скажет.' },
+    subs: { ask: 'Зашифровано на аттестованный ключ, ответ приходит с proof, который можно перепроверить.', tamper: 'Правило fail-closed: промпт не покидает браузер.', incognito: 'Приватность только по договору, и карточка так и скажет.' },
     prompts: { ask: 'В двух предложениях: что такое TEE и зачем мне, чтобы мой ИИ работал внутри него?', tamper: 'hello', incognito: 'hello' },
   },
   progress: {
@@ -290,7 +291,8 @@ const ru: typeof en = {
   loading: 'Загрузка…',
   loadFile: 'Загрузить файл',
   readFailed: (name, reason) => `не удалось прочитать ${name}: ${reason}`,
-  fileTooBig: (name) => `${name} больше 2 МБ; proof или файл раскрытия весит несколько килобайт`,
+  fileTooBig: (name, mb) => `${name} больше ${mb} МБ; proof или файл раскрытия весит несколько килобайт`,
+  notJsonFile: (name) => `${name} не .json-файл`,
   log: {
     title: 'Публичный лог ключей',
     intro: (network, verifiers, quorum) => `Контракт {contract} в сети ${network}; доверенные верификаторы: ${verifiers}; кворум ${quorum}.`,

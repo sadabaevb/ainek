@@ -9,6 +9,7 @@ import { checkProofCommit, parseDisclosure, readProofCommit, verifyModelProof, w
 import sampleFile from '../../../../docs/samples/disclosure.sample.json';
 import { CardHead, CheckList, Row } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
+import { RedCard } from '@/components/red-card';
 import type { PublicConfig } from '@/lib/config';
 import { describeError } from '@/lib/errors';
 import { short, utcMinute } from '@/lib/format';
@@ -174,7 +175,7 @@ export default function AuditorPage() {
         </div>
       </div>
 
-      {error && <p className="card red">{error}</p>}
+      {error && <RedCard title={error} />}
 
       {result && (
         <>

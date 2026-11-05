@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
 import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
-import { RedCard } from '@/components/proof-card';
+import { RedCard } from '@/components/red-card';
 import { StackTable, type Column } from '@/components/stack-table';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
@@ -76,7 +76,7 @@ export default function LogPage() {
         {fill(tl.intro(cfg.network, cfg.trustedVerifiers.join(', '), cfg.quorum), { contract: <span className="mono">{cfg.contract}</span> })}
         {cfg.logSource === 'sample' && ` ${tl.sampleNote}`}
       </p>
-      {error && <p className="card red">{error}</p>}
+      {error && <RedCard title={error} />}
       {split && <RedCard title={tl.split} body={split.detail} />}
       {log && (log.entries.length === 0 ? (
         <section className="card">

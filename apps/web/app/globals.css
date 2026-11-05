@@ -180,6 +180,7 @@ pre { white-space: pre-wrap; }
 .table-wrap { overflow: hidden; box-shadow: var(--shadow); }
 table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
 th, td { text-align: left; vertical-align: top; padding: 0.6rem 0.85rem; border-top: 1px solid var(--line); }
+.table-wrap tr:first-child > * { border-top: 0; } /* the wrapper already draws the top edge */
 thead th { border-top: 0; background: var(--surface-2); }
 tbody th { color: var(--muted); font-weight: 600; }
 table.kv th { width: 11rem; }

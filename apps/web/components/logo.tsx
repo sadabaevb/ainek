@@ -1,4 +1,4 @@
-/** The glass box: a rounded square with a check, in the brand gradient (the accent tokens, so it follows the theme). Inline SVG so it needs no asset request. */
+/** The glass box: a rounded square with a check, in the brand gradient (the accent tokens, so it follows the theme). Inline SVG so it needs no asset request. Rendered once per page (the nav): the gradient id is fixed. */
 export function Logo() {
   return (
     <svg width={22} height={22} viewBox="0 0 64 64" aria-hidden>

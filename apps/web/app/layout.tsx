@@ -20,9 +20,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const lang: Lang = (await cookies()).get(LANG_COOKIE)?.value === 'ru' ? 'ru' : 'en';
   return (
     <html lang={lang}>
+      <head>
+        {/* The self-hosted font subsets, preloaded so the first paint does not reflow when they land. */}
+        <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        {lang === 'ru' && <link rel="preload" href="/fonts/inter-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />}
+      </head>
       <body>
         <Providers config={config} lang={lang}>
-          <header className="nav">
+          <nav className="nav">
             <div className="nav-inner">
               <Link href="/" className="brand"><Logo /> Ainek</Link>
               <NavLinks />
@@ -31,7 +36,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <LangToggle />
               </span>
             </div>
-          </header>
+          </nav>
           {children}
         </Providers>
       </body>
