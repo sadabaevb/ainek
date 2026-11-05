@@ -46,17 +46,19 @@ signing key from OutLayer secrets, and prints a signed decision.
 ### 1. Build and hash
 
 ```
-scripts/wasm-hash.sh        # prints: <sha256>  target/wasm32-wasip1/release/ainek-policy.wasm
+scripts/wasm-hash.sh        # needs Docker; prints: <sha256>  target/repro/wasm32-wasip1/release/ainek-policy.wasm
 ```
 
-The toolchain and `Cargo.lock` are pinned and build paths are remapped, so the hash does not depend on where the repo
-is checked out. The `policy-wasm` GitHub Action prints the same number for every push that touches the job. If your
-number differs from the one in the table below, you are not looking at the deployed code.
+The script builds inside a pinned linux/amd64 container with the pinned toolchain and `Cargo.lock`, so the hash is the
+same on every machine. A plain `cargo build` on your own machine gives a working wasm with a **different** hash (why:
+the script's header), so always deploy and compare the file this script produced. The
+`policy-wasm` GitHub Action runs the same script on every push that touches the job and keeps the wasm as an
+artifact. If your number differs from the one in the table below, you are not looking at the deployed code.
 
 ### 2. Upload and deploy (OutLayer testnet)
 
 ```
-outlayer upload jobs/policy/target/wasm32-wasip1/release/ainek-policy.wasm
+outlayer upload jobs/policy/target/repro/wasm32-wasip1/release/ainek-policy.wasm
 outlayer deploy policy <url printed by upload> --target wasm32-wasip1
 ```
 
@@ -69,7 +71,8 @@ outlayer secrets set --project <owner>/policy --build <sha256 from step 1> \
 ```
 
 - `PROTECTED_ED25519` is generated inside the TEE; we never see it. The job prints only its public key (`pubkey`).
-- `POLICY_JSON` is the owner's policy. It is never on-chain and never in git; only `policy_hash` is public.
+- `POLICY_JSON` is the owner's policy. It is never on-chain and never in git; only `policy_hash` is public, and the
+  policy's `salt` (`openssl rand -hex 32`) keeps that hash from confirming guesses about the policy.
 - `WASM_HASH` is the hash from step 1: the job cannot hash itself, so it reports this value in `wasm_hash`.
 - `--build` locks all three to this exact wasm ("one build only"): another build of the job cannot read the key or
   the policy. A new build therefore means new secrets, a **new public key** and `update_policy` on the contract.

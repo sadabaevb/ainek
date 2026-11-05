@@ -1,5 +1,4 @@
-# Builds the policy job on a clean machine and prints the sha256 of the wasm (SPEC §3.5): the number to compare
-# with docs/DEPLOY.md, with OutLayer's attestation and with your own `scripts/wasm-hash.sh`.
+# Runs scripts/wasm-hash.sh on a clean machine and prints the sha256 of the policy wasm; see docs/DEPLOY.md.
 name: policy-wasm
 
 on:
@@ -34,5 +33,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ainek-policy-wasm
-          path: jobs/policy/target/wasm32-wasip1/release/ainek-policy.wasm
+          path: jobs/policy/target/repro/wasm32-wasip1/release/ainek-policy.wasm
           if-no-files-found: error

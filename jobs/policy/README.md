@@ -6,7 +6,7 @@ filesystem, so the code has nowhere to send or store what it reads.
 
 ```
 cargo test                    # every branch of the policy, the signature, the shared test vectors
-../../scripts/wasm-hash.sh    # reproducible release build + sha256 of the wasm
+../../scripts/wasm-hash.sh    # reproducible release build in a pinned container (needs Docker) + sha256 of the wasm
 ```
 
 - Input, output and the decision rules: `docs/SPEC.md` §6.2. Reference outputs: `docs/test-vectors/policy-decision.json`.
@@ -14,12 +14,12 @@ cargo test                    # every branch of the policy, the signature, the s
   `docs/test-vectors/canonical.json`.
 - Secrets (`POLICY_JSON`, `PROTECTED_ED25519`, `WASM_HASH`) and deployment: `docs/DEPLOY.md`.
 
-To try it locally with [wasmtime](https://wasmtime.dev), using the published **test** key from the vectors file (never
-a real key):
+To try it locally (`cargo build --release --locked --target wasm32-wasip1`) with [wasmtime](https://wasmtime.dev),
+using the published **test** key from the vectors file (never a real key):
 
 ```
 wasmtime run \
-  --env 'POLICY_JSON={"version":3,"principal":"owner.ainek.testnet","agent":"agent.ainek.testnet","token_id":"token.ainek.testnet","whitelist":["aibek.testnet"],"caps":{"per_action":"500000000","per_day":"2000000000"},"needs_approval_above":"300000000","deny_new_receivers":true}' \
+  --env 'POLICY_JSON={"version":3,"principal":"owner.ainek.testnet","agent":"agent.ainek.testnet","token_id":"token.ainek.testnet","whitelist":["aibek.testnet"],"caps":{"per_action":"500000000","per_day":"2000000000"},"needs_approval_above":"300000000","deny_new_receivers":true,"salt":"5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"}' \
   --env PROTECTED_ED25519=ed25519:US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx \
   --env WASM_HASH=abababababababababababababababababababababababababababababababab \
   target/wasm32-wasip1/release/ainek-policy.wasm \

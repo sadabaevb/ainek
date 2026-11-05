@@ -2,20 +2,24 @@
 # Builds the policy job and prints the sha256 of ainek-policy.wasm (SPEC §3.5).
 #
 # This hash is the identity of the policy code: OutLayer attests it, the job's secrets are locked to it, and it is
-# published in docs/DEPLOY.md. Anyone can run this script on a clean clone and compare. The toolchain is pinned in
-# jobs/policy/rust-toolchain.toml and the dependencies in Cargo.lock (--locked), so the bytes do not depend on the
-# machine; --remap-path-prefix keeps the checkout path and the cargo home out of the binary.
+# published in docs/DEPLOY.md. Anyone can run this script on a clean clone and compare.
+#
+# The build runs in a pinned linux/amd64 container (needs Docker). A plain `cargo build` on your own machine gives a
+# working but different wasm: cargo mixes the host platform into its symbol hashes, so macOS and Linux lay the code
+# out differently even with the same toolchain and Cargo.lock. Inside the container the host, the toolchain
+# (jobs/policy/rust-toolchain.toml), the dependencies (--locked) and every path are the same for everyone.
 set -euo pipefail
 cd "$(dirname "$0")/../jobs/policy"
 
-# Physical paths (pwd -P): cargo hands rustc resolved paths, so a symlinked checkout would otherwise miss the remap.
-# CARGO_ENCODED_RUSTFLAGS (flags separated by 0x1f) instead of RUSTFLAGS: a path with a space must stay one flag.
-here=$(pwd -P)
-cargo_home=$(cd "${CARGO_HOME:-$HOME/.cargo}" && pwd -P)
-CARGO_ENCODED_RUSTFLAGS=$(printf '%s\037%s' "--remap-path-prefix=$here=/ainek-policy" "--remap-path-prefix=$cargo_home=/cargo")
-export CARGO_ENCODED_RUSTFLAGS
-unset RUSTFLAGS
-cargo build --release --locked --target wasm32-wasip1 >&2
+command -v docker >/dev/null || { echo "wasm-hash.sh needs Docker (see docs/DEPLOY.md)" >&2; exit 1; }
 
-wasm=target/wasm32-wasip1/release/ainek-policy.wasm
+# rust:1.93.0-slim, pinned by digest: a tag can be moved, a digest cannot. Keep in step with rust-toolchain.toml.
+image='rust@sha256:760ad1d638d70ebbd0c61e06210e1289cbe45ff6425e3ea6e01241de3e14d08e'
+
+# Its own target directory: artifacts built by the container must not mix with a native build's.
+# --user: on Linux the files in target/ would otherwise belong to root. --init: Ctrl-C stops the build.
+docker run --rm --init --platform linux/amd64 --user "$(id -u):$(id -g)" -v "$(pwd -P)":/ainek-policy -w /ainek-policy "$image" \
+  cargo build --release --locked --target wasm32-wasip1 --target-dir target/repro >&2
+
+wasm=target/repro/wasm32-wasip1/release/ainek-policy.wasm
 if command -v sha256sum >/dev/null; then sha256sum "$wasm"; else shasum -a 256 "$wasm"; fi

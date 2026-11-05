@@ -40,6 +40,9 @@ struct Policy {
     _principal: String,
     #[serde(rename = "agent")]
     _agent: String,
+    /// 32 random bytes, hex. The policy is low-entropy (round caps, receivers visible in transfers), so without it
+    /// anyone could confirm a guess of the whole policy against the public `policy_hash`.
+    salt: String,
     token_id: String,
     whitelist: Vec<String>,
     caps: Caps,
@@ -179,6 +182,9 @@ fn run(stdin: &str, secrets: &Secrets) -> Result<String, String> {
         .map_err(|_| "POLICY_JSON is not valid JSON".to_string())?;
     let policy = Policy::deserialize(&policy_value)
         .map_err(|_| "POLICY_JSON does not match the policy schema (SPEC §6.1)".to_string())?;
+    if !is_hex64(&policy.salt) {
+        return Err("POLICY_JSON salt must be 64 lowercase hex characters".into());
+    }
     let policy_hash = sha256_hex(
         canonical_json(&policy_value)
             .map_err(|_| "POLICY_JSON holds a number that is not a safe integer".to_string())?
@@ -282,13 +288,14 @@ mod tests {
     const WASM_HASH: &str = "abababababababababababababababababababababababababababababababab";
     const COMMIT: &str = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
     const NOW: u64 = 1_762_200_000_000;
+    const SALT: &str = "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a";
 
     /// The policy of SPEC §6.1: 500 per action, 2000 per day, approval above 300 (6 decimals).
     fn policy_json(deny_new_receivers: bool) -> String {
         format!(
             r#"{{"version":3,"principal":"owner.ainek.testnet","agent":"agent.ainek.testnet","token_id":"token.ainek.testnet",
             "whitelist":["aibek.testnet","vendor1.testnet"],"caps":{{"per_action":"500000000","per_day":"2000000000"}},
-            "needs_approval_above":"300000000","deny_new_receivers":{deny_new_receivers}}}"#
+            "needs_approval_above":"300000000","deny_new_receivers":{deny_new_receivers},"salt":"{SALT}"}}"#
         )
     }
 
@@ -481,6 +488,9 @@ mod tests {
             r#""per_day":"2000000000""#,
             r#""per_day":"2000000000","per_week":"1""#
         )));
+        // Without a salt the public policy_hash would let anyone confirm a guess of the policy.
+        assert!(refused(policy.replace(&format!(r#","salt":"{SALT}""#), "")));
+        assert!(refused(policy.replace(SALT, "1234")));
         // policy_version is u32 in the contract: a decision with a larger one could never be submitted.
         assert!(refused(
             policy.replace(r#""version":3"#, r#""version":4294967296"#)
@@ -580,7 +590,7 @@ mod tests {
             run_with(&stdin, &policy_json(true)).unwrap()
         );
         // The policy hash covers the policy's content, not how its JSON happened to be laid out.
-        let reordered = r#"{"deny_new_receivers":true,"needs_approval_above":"300000000","caps":{"per_day":"2000000000","per_action":"500000000"},
+        let reordered = r#"{"salt":"5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a","deny_new_receivers":true,"needs_approval_above":"300000000","caps":{"per_day":"2000000000","per_action":"500000000"},
             "whitelist":["aibek.testnet","vendor1.testnet"],"token_id":"token.ainek.testnet","agent":"agent.ainek.testnet","principal":"owner.ainek.testnet","version":3}"#;
         assert_eq!(
             run_with(&stdin, reordered).unwrap(),

@@ -71,8 +71,9 @@ Incognito-маршрут (§3.9) пользователь выбирает са�
 **Ретеншн невозможен по конструкции.** WASI-P1 даёт бинарю только stdin/stdout, переменные окружения и случайность — ни сетевых, ни файловых
 интерфейсов по формату исполнения, то есть коду физически некуда сохранить или отправить вход. Чтобы это было
 проверяемо, сборка воспроизводима: `Cargo.lock` закоммичен, `scripts/wasm-hash.sh` (`cargo build --release --locked
---target wasm32-wasip1` в зафиксированной версии toolchain, `jobs/policy/rust-toolchain.toml`) даёт один и тот же
-`wasm_hash`; CI (`.github/workflows/policy-wasm.yml`) печатает его, он же
+--target wasm32-wasip1` в зафиксированном по digest контейнере linux/amd64 и зафиксированной версии toolchain,
+`jobs/policy/rust-toolchain.toml`) даёт один и тот же `wasm_hash` на любой машине; сборка вне контейнера рабочая, но хеш
+у неё зависит от платформы хоста; CI (`.github/workflows/policy-wasm.yml`) печатает его, он же
 публикуется в `register_agent` и совпадает с хешем в аттестации OutLayer. Любой может собрать из репо и сверить.
 Это доказательство невозможности сохранить, а не доказательство удаления — так и формулируем. К модели NEAR AI
 не относится (их serving-образ закрыт).
@@ -270,10 +271,13 @@ EIP-191 recover через `ethers` для ecdsa). Сырые байты и `sal
   "whitelist": ["aibek.testnet", "vendor1.testnet"],
   "caps": { "per_action": "500000000", "per_day": "2000000000" },
   "needs_approval_above": "300000000",
-  "deny_new_receivers": true
+  "deny_new_receivers": true,
+  "salt": "<64 hex, случайные 32 байта: openssl rand -hex 32>"
 }
 policy_hash = sha256(canonical_json(policy))  // публикуется в register_agent
 ```
+`salt` обязателен: политика низкоэнтропийна (круглые лимиты, получатели видны в переводах), и без соли любой мог бы
+подтвердить догадку о всей политике по публичному `policy_hash`. Все поля обязательны, лишние — ошибка.
 ### 6.2 Вход и выход джоба
 Вход (stdin): `{ "action": Action, "model_proof_commit": "<hex>", "spent_today": "<U128>", "now": <unix ms> }`.
 Выход (stdout, ≤ 900 байт): `{ "decision": Decision, "sig": "<base64 ed25519 over canonical_bytes(decision)>", "pubkey": "<hex>", "wasm_hash": "<hex>" }`.

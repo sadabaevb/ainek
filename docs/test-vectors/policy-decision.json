@@ -14,7 +14,8 @@
       "per_day": "2000000000"
     },
     "needs_approval_above": "300000000",
-    "deny_new_receivers": true
+    "deny_new_receivers": true,
+    "salt": "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"
   },
   "policy_hash_rule": "sha256(canonical_json(policy))",
   "nonce_rule": "sha256(utf8(action_commit + ':' + now + ':' + spent_today)), now and spent_today in decimal",
@@ -42,12 +43,12 @@
           "expires_at": "1762200600000",
           "model_proof_commit": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "nonce": "da3a83109e55b1cbfa2d74347e1ea254d1dc8a2282de0ae2f5da584e59540454",
-          "policy_hash": "d0ac0dd6e60753b4653109ec745ba85d3d6665f9e9b1c7f1d8f4fa1ced4af4a9",
+          "policy_hash": "88c765c6c83ed4f68def696da53b8f148c1af973748270a37aa0960443e435ba",
           "policy_version": 3,
           "verdict": "Allow"
         },
         "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
-        "sig": "zSeSSE+n1HTdWBDajGExJoPqoIGZ2/P/hCdNO3wgY3G8JZNQsHQjR3Id3KUB1XeG3Y5Cj+PRdPgSvJBK17NMCw==",
+        "sig": "pJ7ekqg+kT91wdTdLV1PwWVsn74A4kfMLBoGPY6Hq2SeWqCpJaEB6UXwEXhm01AO4fAlVkRbuATJF541HKLCAQ==",
         "wasm_hash": "abababababababababababababababababababababababababababababababab"
       }
     },
@@ -71,12 +72,12 @@
           "expires_at": "1762200600000",
           "model_proof_commit": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "nonce": "9eaec15633bbb011279aca2f60af63a67b52a4f43a8784d643d93a5e1ff2f2a5",
-          "policy_hash": "d0ac0dd6e60753b4653109ec745ba85d3d6665f9e9b1c7f1d8f4fa1ced4af4a9",
+          "policy_hash": "88c765c6c83ed4f68def696da53b8f148c1af973748270a37aa0960443e435ba",
           "policy_version": 3,
           "verdict": "NeedsApproval"
         },
         "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
-        "sig": "9ktlsNtCR+ptZHIPL1zCPNAJZ9UTDwLC1U1OjTETxiXTUQ0d3GGfYOE4B3Dj4Eg5EcKK6UWMHplNDsghcMsnBg==",
+        "sig": "jhWgZeRP2v8o/BEZsbjnKKRinQ5lBGaccCt1pmkEzEphTp5GdsE3f44H8r954bMZl6iObrFy411bWY60z5rgCA==",
         "wasm_hash": "abababababababababababababababababababababababababababababababab"
       }
     },
@@ -100,12 +101,12 @@
           "expires_at": "1762200600000",
           "model_proof_commit": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "nonce": "eeca5ef8b2ca81de6cbbfd3857d5307f43717611885c6767e007c983300e6117",
-          "policy_hash": "d0ac0dd6e60753b4653109ec745ba85d3d6665f9e9b1c7f1d8f4fa1ced4af4a9",
+          "policy_hash": "88c765c6c83ed4f68def696da53b8f148c1af973748270a37aa0960443e435ba",
           "policy_version": 3,
           "verdict": "Deny"
         },
         "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
-        "sig": "aWPWB7d2q46oOj+xlpwT6ujccGPC78XmNgW0zPIfZHa6brZeGI51MCwSTnWX/2uW+Ll2hUmmEHCts+TNeWobDg==",
+        "sig": "DVubEhi5vKni5+xiq4oFrc8mlcwoUhJa4iNtnYLKNSI1ZSbyKkslzzO7XoNS66w4Rh8woJ5yehzu0FOJWyIYAA==",
         "wasm_hash": "abababababababababababababababababababababababababababababababab"
       }
     },
@@ -129,12 +130,12 @@
           "expires_at": "1762200600000",
           "model_proof_commit": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
           "nonce": "40ef1eb9c57165b68ecb3036144fd99c25e82d9d96c99578b34c6c0e1b77b4ae",
-          "policy_hash": "d0ac0dd6e60753b4653109ec745ba85d3d6665f9e9b1c7f1d8f4fa1ced4af4a9",
+          "policy_hash": "88c765c6c83ed4f68def696da53b8f148c1af973748270a37aa0960443e435ba",
           "policy_version": 3,
           "verdict": "Deny"
         },
         "pubkey": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
-        "sig": "pzWd+c6dzpz/FLlu+LCpQZYxulZHNeSBaJ46xSj+v5faUiqW+LxjY9z0IgG7UnRg8bPaEPqdKg1Sf0G7BZbfBA==",
+        "sig": "AzPiAwMNvXuyVGL4V2QBFAKYeGEQtruUQ7f14mdEeD/5Z1PFyc6b5wraA9vxL4EN7cyUSmb1E0vxUUad+d6dBA==",
         "wasm_hash": "abababababababababababababababababababababababababababababababab"
       }
     }
