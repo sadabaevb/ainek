@@ -5,7 +5,8 @@ import { memo, useMemo, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { toDisclosure, type KeyLogReason } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
-import { canCommitNow, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
+import { canCommitNow, commitAction, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
+import { commitLabel } from '@/lib/commit-label';
 import { downloadJson } from '@/lib/encoding';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
@@ -93,7 +94,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
         {onCommit && canCommitNow(outcome.commit) && (
           <>
             {' '}
-            <button type="button" className="btn small" onClick={() => onCommit(outcome)}>{!signedAccountId ? t.commitConnect : outcome.commit === 'no-deposit' ? t.depositAndCommit : outcome.commit === 'failed' ? t.commitRetry : t.commitNow}</button>
+            <button type="button" className="btn small" onClick={() => onCommit(outcome)}>{commitLabel(t, commitAction(outcome.commit, !!signedAccountId))}</button>
           </>
         )}
       </Row>

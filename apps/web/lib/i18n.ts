@@ -35,7 +35,7 @@ const en = {
   chainPending: 'only a salted hash will go on-chain; commit_proof is not in the contract yet',
   chainTx: (commit: string) => `only the hash ${commit}, committed in transaction`,
   chainNoWallet: 'only a salted hash goes on-chain; connect a wallet to commit it',
-  chainNoDeposit: 'only a salted hash goes on-chain; this account has not prepaid storage on the contract yet (0.1 NEAR covers about 60 commits)',
+  chainNoDeposit: 'only a salted hash goes on-chain; this account has not enough prepaid storage on the contract',
   chainFailed: 'only a salted hash goes on-chain; the commit failed and stays local',
   chainCommitting: 'committing the salted hash on NEAR…',
   connectWallet: 'Connect wallet',
@@ -67,7 +67,7 @@ const en = {
   commitConnect: 'Connect wallet and commit',
   commitRetry: 'Retry the commit',
   commitNow: 'Commit now',
-  depositAndCommit: 'Prepay 0.1 NEAR and commit',
+  depositAndCommit: (near: string) => `Prepay ${near} NEAR for storage and commit`,
   intro: {
     title: 'What happens when you send a message',
     lines: [
@@ -228,7 +228,7 @@ const ru: typeof en = {
   chainPending: 'в цепочку уйдёт только солёный хеш; commit_proof в контракте ещё нет',
   chainTx: (commit) => `только хеш ${commit}, записан транзакцией`,
   chainNoWallet: 'в цепочку уходит только солёный хеш; подключи кошелёк, чтобы записать его',
-  chainNoDeposit: 'в цепочку уходит только солёный хеш; у этого аккаунта ещё нет предоплаты за хранение в контракте (0.1 NEAR хватает примерно на 60 записей)',
+  chainNoDeposit: 'в цепочку уходит только солёный хеш; у этого аккаунта не хватает предоплаты за хранение в контракте',
   chainFailed: 'в цепочку уходит только солёный хеш; запись не удалась, хеш остался локально',
   chainCommitting: 'записываю солёный хеш в NEAR…',
   connectWallet: 'Подключить кошелёк',
@@ -259,7 +259,7 @@ const ru: typeof en = {
   commitConnect: 'Подключить кошелёк и записать',
   commitRetry: 'Повторить запись',
   commitNow: 'Записать сейчас',
-  depositAndCommit: 'Внести 0.1 NEAR и записать',
+  depositAndCommit: (near) => `Внести ${near} NEAR за хранение и записать`,
   intro: {
     title: 'Что происходит, когда ты отправляешь сообщение',
     lines: [

@@ -21,7 +21,7 @@ import {
   type VerifiedDeployment,
 } from './nearai-browser';
 import { getExchange, putExchange, type StoredExchange } from './store';
-import { isMethodNotFound, isNoPrepaidStorage } from './wallet';
+import { DEPOSIT_NEAR, isMethodNotFound, isNoDeposit } from './wallet';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
@@ -192,30 +192,36 @@ function storedExchangeOf(o: VerifiedOutcome): StoredExchange {
   return { completionId: exchange.completionId, model: o.proof.model, sentAt: exchange.sentAt, requestBody: exchange.requestBody, responseBody: exchange.responseBody, reply: exchange.reply, proof: o.proof, logEntry: o.logEntry };
 }
 
-/** Step 8, after the card is already on screen: commit the salted hash on NEAR (SPEC §4.2) through the caller's wallet, or record why not. */
-/** A wallet account that can commit (SPEC §4.2): commits cost prepaid storage, which only a full-access key can top up. */
+/** A wallet account that can commit (SPEC §4.2). Commits spend storage the account prepaid; `deposit` is present only when the user clicked for it. */
 export interface Committer {
   account: string;
   /** yoctoNEAR prepaid on the contract for this account. */
-  prepaid: () => Promise<bigint>;
-  /** `deposit_storage` through the wallet dialog; never called without the user's click. */
-  prepay: () => Promise<void>;
+  storageBalance: () => Promise<bigint>;
+  /** `deposit_storage` through the wallet dialog. */
+  deposit?: () => Promise<void>;
   commit: (proof: ModelProof) => Promise<string>;
 }
-/** One commit measured at 161 bytes = 1.61e21 yoctoNEAR on testnet (2026-11-05); below this with headroom the contract would refuse. */
-export const COMMIT_COST_YOCTO = 2n * 10n ** 21n;
 
-/** Commit states a click can move forward: no wallet yet, or a commit that failed. `not-deployed` waits for the contract, not for the user. */
+/** Commit states a click can move forward: no wallet, no prepaid storage, or a commit that failed. `not-deployed` waits for the contract, not for the user. */
 export function canCommitNow(status: CommitStatus): boolean {
   return status === 'no-wallet' || status === 'no-deposit' || status === 'failed';
+}
+
+export type CommitAction = 'connect' | 'deposit' | 'retry' | 'commit';
+/** What the commit button does for this status with the wallet as it is now: the label and the click come from the same answer. */
+export function commitAction(status: CommitStatus, signedIn: boolean): CommitAction {
+  if (!signedIn) return 'connect';
+  if (status === 'no-deposit') return 'deposit';
+  return status === 'failed' ? 'retry' : 'commit';
 }
 
 /**
  * Step 8 on an exchange kept in this browser: resolve the wallet, call commit_proof and record the transaction in the stored
  * row. One boundary for the chat (right after a reply, or from the card's button) and for /verify (an older exchange). Never throws.
+ * The client does not know what a commit costs (it depends on the account name): a committer that may deposit does so first;
+ * otherwise only an account with nothing prepaid is spared the transaction, and the contract decides the rest.
  */
-/** `prepay` is the user's click on the deposit button: only then is the wallet asked for the 0.01 NEAR storage prepayment. */
-export async function commitExchange(x: StoredExchange, resolveCommitter: () => Promise<Committer | null>, emit: Emit, prepay = false): Promise<{ commit: CommitStatus; exchange: StoredExchange }> {
+export async function commitExchange(x: StoredExchange, resolveCommitter: () => Promise<Committer | null>, emit: Emit): Promise<{ commit: CommitStatus; exchange: StoredExchange }> {
   try {
     // The chat's automatic pass and a click on /verify can race for the same exchange: the stored row is the source of truth.
     const fresh = await getExchange(x.completionId).catch(() => undefined);
@@ -228,13 +234,12 @@ export async function commitExchange(x: StoredExchange, resolveCommitter: () => 
       emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
       return { commit: 'no-wallet', exchange: x };
     }
-    if ((await committer.prepaid()) < COMMIT_COST_YOCTO) {
-      if (!prepay) {
-        emit({ id: 'commit', status: 'skipped', detail: `${committer.account} has no prepaid storage on the contract: deposit_storage once (0.1 NEAR covers about 60 commits); commit kept locally` });
-        return { commit: 'no-deposit', exchange: x };
-      }
-      emit({ id: 'commit', status: 'running', detail: 'deposit_storage(0.1 NEAR) through the wallet' });
-      await committer.prepay();
+    if (committer.deposit) {
+      emit({ id: 'commit', status: 'running', detail: `deposit_storage(${DEPOSIT_NEAR} NEAR) through the wallet` });
+      await committer.deposit();
+    } else if ((await committer.storageBalance()) === 0n) {
+      emit({ id: 'commit', status: 'skipped', detail: `${committer.account} has nothing prepaid for storage on the contract (deposit_storage tops it up); commit kept locally` });
+      return { commit: 'no-deposit', exchange: x };
     }
     emit({ id: 'commit', status: 'running', detail: `commit_proof(${short(x.proof.commit ?? '')}, "model", ${x.proof.logIndex})` });
     const commitTx = await committer.commit(x.proof);
@@ -243,18 +248,18 @@ export async function commitExchange(x: StoredExchange, resolveCommitter: () => 
     putExchange(committed).catch(() => undefined);
     return { commit: 'committed', exchange: committed };
   } catch (err) {
-    if (isNoPrepaidStorage(err)) {
-      emit({ id: 'commit', status: 'skipped', detail: 'the contract refused: no prepaid storage for this account (deposit_storage once); commit kept locally' });
+    if (isNoDeposit(err)) {
+      emit({ id: 'commit', status: 'skipped', detail: 'the contract refused: not enough prepaid storage for this account (deposit_storage tops it up); commit kept locally' });
       return { commit: 'no-deposit', exchange: x };
     }
     const notDeployed = isMethodNotFound(err);
-    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? 'commit_proof is not in the contract yet (SPEC §4.2 lands next): commit kept locally' : `commit failed: ${describeError(err)}; commit kept locally` });
+    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? 'commit_proof is not in this contract: commit kept locally' : `commit failed: ${describeError(err)}; commit kept locally` });
     return { commit: notDeployed ? 'not-deployed' : 'failed', exchange: x };
   }
 }
 
-export async function commitOutcome(outcome: VerifiedOutcome, resolveCommitter: () => Promise<Committer | null>, emit: Emit, prepay = false): Promise<VerifiedOutcome> {
-  const r = await commitExchange(storedExchangeOf(outcome), resolveCommitter, emit, prepay);
+export async function commitOutcome(outcome: VerifiedOutcome, resolveCommitter: () => Promise<Committer | null>, emit: Emit): Promise<VerifiedOutcome> {
+  const r = await commitExchange(storedExchangeOf(outcome), resolveCommitter, emit);
   return { ...outcome, proof: r.exchange.proof, commit: r.commit };
 }
 
