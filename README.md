@@ -66,7 +66,7 @@ claim".
 | Key & measurement log | none (TEE Receipts: owner-registered signer list) | append-only, hash-chained log in a NEAR contract designed for independent verifiers (today: one, ours; registration is owner-gated); fail-closed client with a configurable trust set and quorum; split-view detection |
 | Agents in TEE | IronClaw runtime (no policies, limits or proofs); Shade Agents (deprecated Apr 2026) | (Tier 2) agent mandate + policy; decision signed inside TDX (OutLayer); contract executes; public proof without details; stop button |
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
-| NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | sign-in asks the wallet for a function-call key limited to `commit_proof`, so commits are signed without a popup; only the storage prepayment (`deposit_storage`, 0.1 NEAR for 50 to 68 commits depending on the account name, topped up when it runs out) goes through the wallet dialog |
+| NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | sign-in asks the wallet for a function-call key limited to `commit_proof` (the wallet decides: Meteor allows every method of the contract, see [What we do not claim](#what-we-do-not-claim)), so commits are signed without a popup; only the storage prepayment (`deposit_storage`, 0.1 NEAR for 50 to 68 commits depending on the account name, topped up when it runs out) goes through the wallet dialog |
 
 ## Prior art in this hackathon (and what Ainek adds)
 
@@ -155,6 +155,9 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
   answered.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
+- **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants, and Meteor allows
+  every method of the contract. Any function-call key still cannot attach a deposit or call another contract, and spends at most
+  its gas allowance. An ordinary account gains nothing extra today, because the contract's other methods reject it.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
 - **Hidden settlement.** On testnet the executed transfer (token, amount, receiver) is public; the conversation, the reasoning
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.

@@ -1,5 +1,5 @@
-// Wallet helpers shared by the chat and /log pages. The wallet adds a function-call key limited to
-// `commit_proof` on the log contract, so committing a proof hash never pops the wallet up again.
+// Wallet helpers shared by the chat and /log pages. Sign-in asks the wallet for a function-call key limited to
+// `commit_proof` on the log contract (Meteor widens it to every method there), so a commit does not pop the wallet up.
 import type { NearContextValue } from 'near-connect-hooks';
 import { nearToYocto } from 'near-api-js';
 import { ContractMethodNotFoundError } from 'near-api-js/rpc-errors';
@@ -51,7 +51,7 @@ export async function commitProofOnChain(callFunctionRaw: NearContextValue['call
   }
 }
 
-/** `deposit_storage()` with the attached amount; the hook routes it through the wallet since the FC key does not cover this method. */
+/** `deposit_storage()` with the attached amount; the hook routes it through the wallet since a function-call key cannot carry a deposit. */
 async function depositStorage(callFunctionRaw: NearContextValue['callFunctionRaw'], cfg: PublicConfig): Promise<void> {
   assertSucceeded(await callFunctionRaw({ contractId: cfg.contract, method: 'deposit_storage', args: {}, deposit: DEPOSIT_YOCTO.toString() }), 'deposit_storage');
 }

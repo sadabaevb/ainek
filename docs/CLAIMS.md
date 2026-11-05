@@ -56,6 +56,9 @@ Honest limitations won prizes at previous NEAR hackathons.
   (README "Who sees what").
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
+- **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants, and Meteor allows
+  every method of the contract. Any function-call key still cannot attach a deposit or call another contract, and spends at most
+  its gas allowance. An ordinary account gains nothing extra today, because the contract's other methods reject it.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
 - **Hidden settlement.** On testnet the executed transfer (token, amount, receiver) is public; the conversation, the reasoning
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.
