@@ -769,3 +769,8 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
 - Пробный прогон 3 раза (2026-11-05): 3/3 verified, подмена отвергнута 3/3, аттестация медиана 3.8 с, ответ 1.4 с,
   подпись 0.6 с, весь прогон ~10 с, 293 Б шифртекста туда и 841 Б обратно. Чтение `latest_keys` заняло 3.3 с, что для
   view-запроса много; см. замер RPC ниже.
+- **RPC по умолчанию теперь FastNear.** Замер `latest_keys` (view, finality final) 2026-11-05, по три запроса:
+  `rpc.testnet.near.org` 3.25–3.38 с каждый, `rpc.testnet.fastnear.com` и `test.rpc.fastnear.com` 0.25–0.34 с. Чат и `/log`
+  делали этот запрос на каждое сообщение, то есть терял 3 с на ровном месте. `ainekConfigFromEnv` и `.env.example` переведены
+  на `https://rpc.testnet.fastnear.com` (mainnet: `rpc.mainnet.fastnear.com`); у кого в `.env` стоит старый адрес, тот
+  продолжает ходить через него, строку стоит обновить.

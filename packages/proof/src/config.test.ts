@@ -9,7 +9,7 @@ test('defaults point at the deployed testnet log and the demo trust policy', () 
   assert.deepEqual(c.trustedVerifiers, ['ainek-dev-dastan.testnet']);
   assert.equal(c.quorum, 1);
   assert.deepEqual(c.acceptedTcbStatuses, ['UpToDate']);
-  assert.equal(c.rpcUrl, 'https://rpc.testnet.near.org');
+  assert.equal(c.rpcUrl, 'https://rpc.testnet.fastnear.com');
   assert.equal(c.nearaiBaseUrl, 'https://cloud-api.near.ai/v1');
 });
 
@@ -21,7 +21,7 @@ test('sample mode trusts the fixture verifiers by default, so web, live and repl
 test('env overrides, lists and mainnet defaults', () => {
   const c = ainekConfigFromEnv({ NEAR_NETWORK: 'mainnet', AINEK_TRUSTED_VERIFIERS: ' v1.ainek.near, v2.ainek.near ,', AINEK_QUORUM: '2', AINEK_ACCEPTED_TCB: 'UpToDate,SWHardeningNeeded', NEARAI_BASE_URL: 'https://staging.example/v1' });
   assert.equal(c.network, 'mainnet');
-  assert.equal(c.rpcUrl, 'https://rpc.mainnet.near.org');
+  assert.equal(c.rpcUrl, 'https://rpc.mainnet.fastnear.com');
   assert.equal(c.explorer, 'https://nearblocks.io');
   assert.deepEqual(c.trustedVerifiers, ['v1.ainek.near', 'v2.ainek.near']);
   assert.equal(c.quorum, 2);

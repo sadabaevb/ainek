@@ -43,7 +43,8 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     incognitoModel: env['NEARAI_INCOGNITO_MODEL'] ?? 'anthropic/claude-haiku-5-5',
     nearaiBaseUrl: env['NEARAI_BASE_URL'] ?? 'https://cloud-api.near.ai/v1',
     network,
-    rpcUrl: env['NEAR_RPC_URL'] ?? (network === 'mainnet' ? 'https://rpc.mainnet.near.org' : 'https://rpc.testnet.near.org'),
+    // FastNear's public endpoints answer a view call in ~0.3 s; rpc.testnet.near.org took ~3.3 s per call on 2026-11-05 (DEV-NOTES).
+    rpcUrl: env['NEAR_RPC_URL'] ?? (network === 'mainnet' ? 'https://rpc.mainnet.fastnear.com' : 'https://rpc.testnet.fastnear.com'),
     contract: env['AINEK_CONTRACT'] ?? 'ainek-log-dastan.testnet',
     logSource,
     trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], logSource === 'sample' ? SAMPLE_VERIFIERS : CONTRACT_VERIFIERS),
