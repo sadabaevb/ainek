@@ -10,12 +10,14 @@ const WARN = (
   </svg>
 );
 
-export function RedCard({ title, body, lines }: { title: string; body?: string; lines?: ReactNode[] }) {
+export function RedCard({ title, body, note, action, lines }: { title: string; body?: string; note?: string; action?: ReactNode; lines?: ReactNode[] }) {
   const { t } = useT();
   return (
     <section className="card red">
       <h3>{WARN}<span>{title}</span></h3>
       {body && <p>{body}</p>}
+      {note && <p className="muted small">{note}</p>}
+      {action && <div className="actions">{action}</div>}
       {lines && (
         <details>
           <summary>{t.details}</summary>
