@@ -19,7 +19,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
 - Only a **salted hash** of each proof goes on-chain (`commit_proof`, paid from storage the committing account prepays and
   cannot withdraw). Prompts, responses and policy contents never do.
-- (Tier 2) The agent holds **only a function-call key** scoped to `propose_action`. Funds sit in the contract.
+- (Tier 2) The agent holds **only a function-call key** scoped to `propose_action` and `commit_proof`, and refuses to start with any other. Funds sit in the contract.
   Revoking the key (`DeleteKey`) or `pause_agent` stops the agent at the chain level.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer),
   bound to the job's `wasm_hash`; the contract verifies this signature before executing.
@@ -59,9 +59,14 @@ Honest limitations won prizes at previous NEAR hackathons.
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.
 - **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. It and Telegram read the owner's
   messages in plaintext; E2EE covers the hop from the service to the model, not the hop from the owner to the service. Its
-  blast radius is bounded on-chain (function-call key, contract checks, TEE-signed policy decisions), not eliminated.
+  blast radius is bounded on-chain (function-call key, contract checks, TEE-signed policy decisions), not eliminated. Today the
+  server itself supplies `spent_today` to the policy job, so the per-day cap holds only while the server is honest; the whitelist,
+  the per-action cap and the approval threshold do not depend on that. A compromised server can also leave a denied attempt out,
+  and neither the job nor the contract opens the model proof: to them it is a hash the server supplied.
 - **That the model resists prompt injection.** (Tier 2) It may or may not propose what an injected message asks. The limits
   are enforced by the policy and the contract, not by the model.
+- **A policy nobody can infer.** (Tier 2) Its contents stay off-chain, but public actions and verdicts show over time who is on
+  the whitelist and roughly where the thresholds sit.
 - **Compliance or certification** of any kind.
 - **Independence from hardware vendors.** The root of trust is Intel and NVIDIA. A compromised CPU/GPU breaks every
   guarantee here, as it does for every TEE product.

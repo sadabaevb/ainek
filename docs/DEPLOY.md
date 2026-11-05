@@ -43,13 +43,18 @@ Settings names and defaults above are Vercel's as of Nov 2026; confirm them in t
 Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i && pnpm -F agent start`. Variables are in
 `.env.example`, block "Agent service". Before the first message:
 
-1. The agent account exists, with a function-call key scoped to the contract and to `propose_action` and `commit_proof`.
+1. The agent account exists, with a function-call key scoped to the contract and to exactly `propose_action` and
+   `commit_proof`. The service reads the key's scope from the chain at start and refuses anything else. Set an allowance of at
+   least 1 NEAR: it cannot be raised later without a new key, and each `propose_action` ties up about 0.1 NEAR (100 TGas) until
+   the refund.
 2. The account prepaid its commits: `deposit_storage` with a full-access key (two commits per action, SPEC §4.2).
 3. `register_agent` ran with the policy hash, `POLICY_TEE_PUBKEY` and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
 
-The owner's keys never go on this server. `pnpm demo:stop` runs on the owner's machine from `.env.owner`; the service refuses
-to start if it finds them in its environment.
+Give the agent its own env file. The owner's keys never go on this server: `pnpm demo:stop` runs on the owner's machine from
+`.env.owner`, and the service refuses to start if `OWNER_PRIVATE_KEY` or `AGENT_ADMIN_PRIVATE_KEY` is in its environment. Other
+`*_PRIVATE_KEY` variables, such as the verifier's on a shared `.env`, only produce a warning. Run one instance: updates are
+handled one at a time, and pending ones are dropped at start, so a message sent while it is down has to be sent again.
 
 ## Policy job on OutLayer (Tier 2, Dastan)
 
