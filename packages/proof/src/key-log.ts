@@ -102,8 +102,8 @@ const verifiersOf = (entries: readonly KeyEntry[]): string[] => [...new Set(entr
  * that was checked. No such entry is not a refusal (the compose is shown, not enforced: DEV-NOTES 2026-11-02), it means the
  * newest entry for the key. `matching` keeps the contract's newest-first order.
  */
-export function proofEntryOf(verdict: KeyLogVerdict, composeHash: string | undefined): KeyEntry {
-  const compose = composeHash === undefined ? undefined : normalizeHex(composeHash);
+export function proofEntryOf(verdict: KeyLogVerdict, composeHash: string): KeyEntry {
+  const compose = normalizeHex(composeHash);
   return (verdict.matching.find((e) => normalizeHex(e.compose_hash) === compose) ?? verdict.matching[0]) as KeyEntry;
 }
 

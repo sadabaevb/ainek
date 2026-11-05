@@ -19,7 +19,7 @@ import {
   type TcbStatus,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, proofEntryOf, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { buildCheckedModelProof, composeHashOf, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, proofEntryOf, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
@@ -228,7 +228,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
         if (!modelAttestation || !modelPublicKey) throw new Error('no verified model attestation with an E2EE key');
         return { gateway, models, modelAttestation, modelPublicKey, pinnedFetch: createPinnedTlsFetch(gateway.tlsBinding.spkiFingerprint) };
       },
-      (a) => `gateway TCB ${a.gateway.tcbStatus}, signer ${short(a.gateway.signer.signingAddress)}, TLS binding ${a.gateway.tlsBinding.kind}; ${a.models.length} model report${a.models.length === 1 ? '' : 's'}: ${a.models.map((m) => `${short(m.signer.signingAddress)} ${m.tcbStatus}/gpu ${m.gpuEvidence} compose ${short(m.deployment.runtimeMeasurements.composeHash ?? '')}`).join('; ')}`,
+      (a) => `gateway TCB ${a.gateway.tcbStatus}, signer ${short(a.gateway.signer.signingAddress)}, TLS binding ${a.gateway.tlsBinding.kind}; ${a.models.length} model report${a.models.length === 1 ? '' : 's'}: ${a.models.map((m) => `${short(m.signer.signingAddress)} ${m.tcbStatus}/gpu ${m.gpuEvidence} compose ${short(composeHashOf(m.deployment))}`).join('; ')}`,
     );
     const verifiedAt = new Date().toISOString();
 
@@ -244,7 +244,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });
     }
-    const logEntry = proofEntryOf(verdict, modelAttestation.deployment.runtimeMeasurements.composeHash);
+    const logEntry = proofEntryOf(verdict, composeHashOf(modelAttestation.deployment));
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')} (source: ${logSource})`, ms: logMs });
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.

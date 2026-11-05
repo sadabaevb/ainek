@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { memo, useMemo, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { toDisclosure, type KeyLogReason } from '@ainek/proof';
+import { composeHashOf, toDisclosure, type KeyLogReason } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
 import { canCommitNow, commitAction, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { commitLabel } from '@/lib/commit-label';
@@ -71,7 +71,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   }
 
   const { proof, deployment, modelAttestation: m, logEntry, keyVerdict, exchange, report, logSource } = outcome;
-  const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
+  const composeHash = composeHashOf(m.deployment);
   const since = observedUtc(logEntry.observed_at).slice(0, 10);
   const commit = proof.commit ?? '';
   const chainText = { pending: t.chainCommitting, depositing: t.chainDepositing(DEPOSIT_NEAR), 'no-wallet': t.chainNoWallet, 'no-deposit': t.chainNoDeposit, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: t.chainCommittedElsewhere }[outcome.commit];

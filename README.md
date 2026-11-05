@@ -54,8 +54,7 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 | ![The public key log page](docs/screenshots/log.png) | ![The auditor verdict card](docs/screenshots/auditor.png) |
 
 The card's compose hash comes from the attestation checked before sending, and its log entry is the newest one with that
-key and that compose. The provider runs two deployments with one signing key, both in the log, so the signature alone does
-not say which of them answered. See "What we do not claim".
+key and that compose. See "What we do not claim".
 
 ## How NEAR is used
 

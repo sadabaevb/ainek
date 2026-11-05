@@ -18,7 +18,6 @@ test('proofEntryOf: the newest entry with the attested compose, else the newest 
   assert.equal(proofEntryOf(verdict, composeB).index, 5);
   assert.equal(proofEntryOf(verdict, `0x${composeA.toUpperCase()}`).index, 4, 'hex spelling does not matter');
   assert.equal(proofEntryOf(verdict, composeC).index, 5, 'a compose nobody logged is not a refusal');
-  assert.equal(proofEntryOf(verdict, undefined).index, 5);
 });
 
 test('one trusted confirmation satisfies quorum 1', () => {

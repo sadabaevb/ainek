@@ -15,6 +15,11 @@ export interface VerifiedModelEvidence {
   report: { nonce: string };
 }
 
+/** The compose hash of a verified deployment: the measurement from the quote, without one sha256(app_compose) (SPEC §4.1). */
+export function composeHashOf(deployment: VerifiedModelEvidence['deployment']): string {
+  return normalizeHex(deployment.runtimeMeasurements.composeHash ?? sha256Hex(deployment.appCompose));
+}
+
 export interface BuildKeyEntryInputParams {
   model: string;
   verified: VerifiedModelEvidence;
@@ -64,7 +69,7 @@ export function buildKeyEntryInput(p: BuildKeyEntryInputParams): KeyEntryInput {
     signing_address: normalizeHex(verified.signer.signingAddress),
     signing_algo: signingAlgo,
     signing_public_key: normalizeHex(publicKey),
-    compose_hash: normalizeHex(verified.deployment.runtimeMeasurements.composeHash ?? sha256Hex(appCompose)),
+    compose_hash: composeHashOf(verified.deployment),
     image_digests: imageDigests,
     tcb_status: verified.tcbStatus,
     ita_jwt_hash: p.itaJwt ? sha256Hex(p.itaJwt) : '',
