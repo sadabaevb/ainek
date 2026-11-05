@@ -74,7 +74,9 @@ Incognito-маршрут (§3.9) пользователь выбирает са�
 не относится (их serving-образ закрыт).
 
 ### 3.6 Агент `services/agent` (Node 24, TS) — Дастан
-Telegram-бот (grammY) и/или HTTP: текст владельца → NEAR AI (E2EE, structured output) →
+Telegram-бот (grammY) и/или HTTP: текст владельца → NEAR AI (`runTier1` из `packages/tier1-node`: последовательность §7.1
+из Node, напрямую к шлюзу с TLS-пином; E2EE; structured output через function tool `tools` + `tool_choice`, не через
+`response_format` — его SDK не шифрует) →
 `ActionRequest` → OutLayer job (HTTPS API, не через контракт) → `propose_action` FC-ключом агента →
 при `NeedsApproval` кнопка владельцу в Telegram → `approve`. Пишет action proof и коммит.
 
@@ -83,7 +85,7 @@ Telegram-бот (grammY) и/или HTTP: текст владельца → NEAR 
 `docs/samples/` содержит 2–3 отчёта аттестации (сырые байты JSON), подписанные ответы, сырые байты запросов/ответов и
 proof-ы. Демо: проверяет quote/NRAS-JWT из записей (подписи NVIDIA/Intel проверяются по их публичным ключам, свежесть
 не требуется и так и помечается), пересчитывает хеши, проверяет подписи ответов, читает публичный лог с testnet
-view-вызовами и сверяет ключи, печатает ✓/✗ по каждому шагу. `pnpm demo:live` — то же с живым запросом и коммитом
+view-вызовами и сверяет ключи, печатает ✓/✗ по каждому шагу. `pnpm demo:live` — то же с живым запросом (коммит — только в веб-клиенте кошельком)
 (нужен `NEARAI_API_KEY`). `pnpm demo:tamper` — подменяет ключ и показывает отказ.
 
 ### 3.9 Детектор не-TEE маршрута — Бектур
@@ -212,6 +214,8 @@ Fallback (если OutLayer не взлетел): `propose_action(action, model_
   "salt": "<hex 32 bytes>", "commit": "<hex>", "commitTx": "<tx hash>"
 }
 ```
+`toolNames` — имена function tools, предложенных модели в запросе (не вызванных ею): сами определения лежат в зашифрованных байтах
+запроса, поле повторяет их открыто для карточки и аудитора; `[]`, если инструментов не было.
 Правила: `signatureKind` должен быть `provider_tee`; `signingAddress` должен совпадать с записью лога
 `logIndex` (fail-closed); `requestSha256/responseSha256` пересчитываются из сырых байт, хранящихся у
 пользователя, и должны совпадать с `signedText`; подпись проверяется локально (`tweetnacl` для ed25519,
@@ -289,7 +293,7 @@ Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в 
    подпись и хеши локально; собирает model proof; `commit_proof` FC-ключом; показывает карточку.
 
 ### 7.2 Действие агента (ярус 2)
-1. Владелец пишет агенту. Агент → NEAR AI (E2EE, structured output) → `Action` + model proof (как 7.1).
+1. Владелец пишет агенту. Агент → NEAR AI (`runTier1`, E2EE; structured output через function tool, не `response_format`) → `Action` + model proof (как 7.1).
 2. Агент → OutLayer job (HTTPS, вход из §6.2) → `Decision` + подпись.
 3. Агент → `propose_action` FC-ключом. Контракт проверяет и исполняет / ставит в pending / отклоняет.
 4. `NeedsApproval` → Telegram-кнопка владельцу → `approve` полным ключом владельца (через кошелёк/CLI).

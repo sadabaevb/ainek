@@ -17,6 +17,7 @@ import {
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
+import { parseChatCompletion, withRetry } from '@ainek/proof';
 import { getDeployment, putDeployment } from './store';
 
 const SIGNING_ALGO = 'ed25519' as const;
@@ -75,21 +76,12 @@ const metadataCache = new Cache<ModelMetadata>();
 const gatewayCache = new Cache<VerifiedGatewayAttestation>();
 const deploymentCache = new Cache<VerifiedDeployment>();
 
-/** Retries only what the SDK marks retryable (Intel PCS collateral hiccups, NRAS/transport 5xx, a signature not yet on this node). */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 1500): Promise<T> {
-  for (let i = 1; ; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (i >= attempts || getSdkError(err)?.retryable !== true) throw err;
-      await new Promise((r) => setTimeout(r, delayMs * i));
-    }
-  }
-}
+/** Only what the SDK marks retryable (Intel PCS collateral hiccups, NRAS/transport 5xx, a signature not yet on this node); the loop is the shared one in @ainek/proof. */
+const retryable = (err: unknown): boolean => getSdkError(err)?.retryable === true;
 
 /** Metadata only (no cryptographic check): tells whether the model supports model attestation at all. Static per model, cached. */
 export async function fetchModelMetadata(model: string): Promise<ModelMetadata> {
-  return metadataCache.get(model) ?? metadataCache.set(model, await withRetry(() => client().fetchModelMetadata(model)));
+  return metadataCache.get(model) ?? metadataCache.set(model, await withRetry(() => client().fetchModelMetadata(model), { retryable }));
 }
 
 /** Gateway evidence verified on this device (no-TLS layout: a browser cannot observe the TLS peer). Cached 60 min. */
@@ -99,7 +91,7 @@ export async function verifyGateway(policy: AttestationPolicy): Promise<Verified
   const gateway = await withRetry(async () => {
     const fetched = await client().fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO });
     return verifyGatewayAttestation({ attestation: fetched.attestation, clientBinding: fetched.clientBinding, policy });
-  });
+  }, { retryable });
   return gatewayCache.set('gateway', gateway);
 }
 
@@ -110,7 +102,7 @@ function verifyModels(model: string, policy: AttestationPolicy): Promise<Verifie
     return Promise.all(
       fetched.attestations.map((attestation) => verifyModelAttestation({ attestation, clientBinding: fetched.clientBinding, policy: { ...policy, gpuEvidence: 'required' } })),
     );
-  });
+  }, { retryable });
 }
 
 /** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min in memory and in IndexedDB (same TTL the SDK uses), so a reload does not repeat the cold check. */
@@ -150,7 +142,7 @@ function chatRequest(model: string, messages: ChatMessage[]): Request {
 
 async function toExchange(requestBody: Uint8Array, rawResponse: Response, decrypted: Response): Promise<Exchange> {
   const [responseBytes, plaintext] = await Promise.all([rawResponse.arrayBuffer(), decrypted.text()]);
-  const completion = JSON.parse(plaintext) as { id: string; choices: Array<{ message: { content: string | null } }> };
+  const completion = parseChatCompletion(plaintext);
   return { completionId: completion.id, requestBody, responseBody: new Uint8Array(responseBytes), reply: completion.choices[0]?.message.content ?? '', sentAt: new Date().toISOString() };
 }
 
@@ -191,7 +183,7 @@ export async function sendPlain(model: string, messages: ChatMessage[]): Promise
 
 /** The signature is cached on the node that served the completion, so a lookup can land elsewhere for a moment: the SDK marks that retryable. */
 export function fetchSignature(completionId: string): Promise<CompletionSignature> {
-  return withRetry(() => client().fetchCompletionSignature({ completionId, signingAlgo: SIGNING_ALGO }), 4);
+  return withRetry(() => client().fetchCompletionSignature({ completionId, signingAlgo: SIGNING_ALGO }), { retryable, attempts: 4 });
 }
 
 /** SDK byte-exact check against the verified model signer; returns the matching report. Throws on any mismatch, including a non-TEE signature kind. */

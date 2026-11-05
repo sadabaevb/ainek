@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildModelProof } from './build.ts';
+import { buildCheckedModelProof, buildModelProof } from './build.ts';
 import { parseDisclosure, toDisclosure } from './disclosure.ts';
 import { verifyModelProof } from './verify.ts';
 import { readRepoFile, readRepoJson } from './fixtures.ts';
@@ -52,4 +52,12 @@ test('the recorded E2EE exchange verifies end to end (ciphertext bytes, provider
   const report = verifyModelProof(e2ee, readRepoFile('docs/samples/e2ee-chat-request.raw.json'), readRepoFile('docs/samples/e2ee-chat-response.raw.json'), entry);
   assert.equal(report.ok, true, JSON.stringify(report.checks));
   assert.equal(e2ee.e2ee, true);
+});
+
+test('buildCheckedModelProof: an honest exchange comes back with its passing report; one that fails its own checks throws with what failed', () => {
+  const { proof, report } = buildCheckedModelProof(input);
+  assert.equal(report.ok, true);
+  assert.equal(proof.completionId, input.completionId);
+  assert.throws(() => buildCheckedModelProof({ ...input, signature: { ...input.signature, signature: '00'.repeat(64) } }), /signature/);
+  assert.throws(() => buildCheckedModelProof({ ...input, responseBody: new TextEncoder().encode('tampered') }), /signed-text|response-hash/);
 });

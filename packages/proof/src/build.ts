@@ -3,6 +3,7 @@
 import { commitOf } from './commit.ts';
 import { randomHex32, sha256Hex } from './hash.ts';
 import { ModelProof, type KeyEntry, type SigningAlgo } from './schema.ts';
+import { verifyModelProof, type VerifyReport } from './verify.ts';
 
 export interface BuildModelProofInput {
   completionId: string;
@@ -44,4 +45,12 @@ export function buildModelProof(input: BuildModelProofInput): ModelProof {
   };
   const salt = input.salt ?? randomHex32();
   return ModelProof.parse({ ...payload, salt, commit: commitOf(salt, payload) });
+}
+
+/** Build and verify in one step: a proof must pass its own checks before it is shown, stored or committed. Throws with the failed checks joined. One implementation for the web client, the Node runner and the demo recorder. */
+export function buildCheckedModelProof(input: BuildModelProofInput): { proof: ModelProof; report: VerifyReport } {
+  const proof = buildModelProof(input);
+  const report = verifyModelProof(proof, input.requestBody, input.responseBody, input.logEntry);
+  if (!report.ok) throw new Error(report.checks.filter((c) => c.status === 'fail').map((c) => `${c.id}: ${c.detail}`).join('; '));
+  return { proof, report };
 }

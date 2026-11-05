@@ -13,6 +13,9 @@ importers:
       '@ainek/proof':
         specifier: workspace:*
         version: link:../../packages/proof
+      '@ainek/tier1-node':
+        specifier: workspace:*
+        version: link:../../packages/tier1-node
       '@nearai/inference-sdk':
         specifier: 0.2.1
         version: 0.2.1(typescript@5.9.3)(ws@8.21.0)(zod@4.6.7)
@@ -81,6 +84,22 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/tier1-node:
+    dependencies:
+      '@ainek/proof':
+        specifier: workspace:*
+        version: link:../proof
+      '@nearai/inference-sdk':
+        specifier: 0.2.1
+        version: 0.2.1(typescript@5.9.3)(ws@8.21.0)(zod@4.6.7)
     devDependencies:
       '@types/node':
         specifier: 24.19.2

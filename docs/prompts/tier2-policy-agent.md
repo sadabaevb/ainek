@@ -24,8 +24,9 @@
    `policy_hash` не совпадает → ошибка; агент на паузе → ошибка; ключ агента удалён → транзакция не проходит (тест на уровне ключей).
 
 **`services/agent` (Node 24, TS):**
-1. grammY-бот: владелец пишет текст → NEAR AI через relay-логику (E2EE, structured output по zod-схеме `Action`, system prompt
-   «ты казначей, извлеки действие или откажись») → model proof как в клиенте (переиспользуй `packages/proof`).
+1. grammY-бот: владелец пишет текст → NEAR AI через `runTier1` из `packages/tier1-node` (напрямую, TLS-пин к шлюзу, E2EE;
+   structured output через function tool `tools` + `tool_choice`, не `response_format` — его SDK не шифрует; аргументы вызова
+   разбираются zod-схемой `Action`; system prompt «ты казначей, извлеки действие или откажись») → model proof как в клиенте.
 2. → OutLayer HTTPS API (`X-Payment-Key`, вход §6.2, `spent_today` из view контракта) → `Decision` + `sig`.
 3. → `propose_action` FC-ключом агента (`near-api-js`, ключ только на этот метод, allowance выставить).
 4. `NeedsApproval` → inline-кнопки «Approve / Reject» владельцу; Approve → инструкция владельцу подтвердить в кошельке
