@@ -7,6 +7,7 @@ import { toDisclosure, type KeyLogReason } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
 import { canCommitNow, commitAction, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { commitLabel } from '@/lib/commit-label';
+import { DEPOSIT_NEAR } from '@/lib/wallet';
 import { downloadJson } from '@/lib/encoding';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
@@ -73,7 +74,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
   const since = observedUtc(logEntry.observed_at).slice(0, 10);
   const commit = proof.commit ?? '';
-  const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'no-deposit': t.chainNoDeposit, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
+  const chainText = { pending: t.chainCommitting, depositing: t.chainDepositing(DEPOSIT_NEAR), 'no-wallet': t.chainNoWallet, 'no-deposit': t.chainNoDeposit, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: t.chainCommittedElsewhere }[outcome.commit];
   const hint = (key: keyof typeof t.hints) => (explain ? t.hints[key] : undefined);
   const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
 
@@ -85,7 +86,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
       <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}</Row>
       <Row status="ok" label={t.rowHashes} hint={hint('hashes')}>{t.hashesOk}</Row>
       <Row status="ok" label={t.rowE2ee} hint={hint('e2ee')}>{t.e2eeYes}</Row>
-      <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain} hint={hint(proof.commitTx ? 'chain' : 'chainPending')}>
+      <Row status={proof.commitTx || outcome.commit === 'committed' ? 'ok' : 'skipped'} label={t.rowChain} hint={hint(proof.commitTx || outcome.commit === 'committed' ? 'chain' : 'chainPending')}>
         {proof.commitTx ? (
           <>{t.chainTx(short(commit))} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a> <CopyButton text={proof.commitTx} /></>
         ) : (

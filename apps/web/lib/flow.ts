@@ -2,7 +2,7 @@
 //   verify evidence in the browser → fail-closed check against the public log → E2EE send →
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
-import { buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type VerifyReport } from '@ainek/proof';
+import { buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -21,7 +21,7 @@ import {
   type VerifiedDeployment,
 } from './nearai-browser';
 import { getExchange, putExchange, type StoredExchange } from './store';
-import { DEPOSIT_NEAR, isMethodNotFound, isNoDeposit } from './wallet';
+import { DEPOSIT_NEAR, isAlreadyCommitted, isDialogClosed, isMethodNotFound, isNoDeposit, type Consent } from './wallet';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
@@ -50,7 +50,8 @@ export function failurePhase(step: StepId): FailurePhase {
 }
 
 /** What happened to the on-chain commit of a verified reply (SPEC §4.2); `committed` puts `commitTx` on the proof. */
-export type CommitStatus = 'pending' | 'no-wallet' | 'no-deposit' | 'not-deployed' | 'failed' | 'committed';
+/** `depositing` and `pending` are the two in-flight states (the card words them differently); `committed` may lack the transaction when the chain already had the commit. */
+export type CommitStatus = 'pending' | 'depositing' | 'no-wallet' | 'no-deposit' | 'not-deployed' | 'failed' | 'committed';
 
 export interface VerifiedOutcome {
   kind: 'verified';
@@ -197,6 +198,8 @@ export interface Committer {
   account: string;
   /** yoctoNEAR prepaid on the contract for this account. */
   storageBalance: () => Promise<bigint>;
+  /** `proof_commit` for this account: the chain's answer when a local row and the contract disagree. */
+  lookup: (commit: string) => Promise<ProofCommitLookup>;
   /** `deposit_storage` through the wallet dialog. */
   deposit?: () => Promise<void>;
   commit: (proof: ModelProof) => Promise<string>;
@@ -214,6 +217,8 @@ export function commitAction(status: CommitStatus, signedIn: boolean): CommitAct
   if (status === 'no-deposit') return 'deposit';
   return status === 'failed' ? 'retry' : 'commit';
 }
+/** The dialogs a click on that button may open. */
+export const consentFor = (action: CommitAction): Consent => (action === 'deposit' ? 'deposit' : 'connect');
 
 /**
  * Step 8 on an exchange kept in this browser: resolve the wallet, call commit_proof and record the transaction in the stored
@@ -229,6 +234,11 @@ export async function commitExchange(x: StoredExchange, resolveCommitter: () => 
       emit({ id: 'commit', status: 'ok', detail: `already committed in transaction ${short(fresh.proof.commitTx)}` });
       return { commit: 'committed', exchange: fresh };
     }
+    const commit = x.proof.commit;
+    if (!commit) {
+      emit({ id: 'commit', status: 'skipped', detail: 'the proof carries no commit hash: nothing to put on-chain' });
+      return { commit: 'failed', exchange: x };
+    }
     const committer = await resolveCommitter();
     if (!committer) {
       emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
@@ -236,24 +246,39 @@ export async function commitExchange(x: StoredExchange, resolveCommitter: () => 
     }
     if (committer.deposit) {
       emit({ id: 'commit', status: 'running', detail: `deposit_storage(${DEPOSIT_NEAR} NEAR) through the wallet` });
-      await committer.deposit();
+      try {
+        await committer.deposit();
+      } catch (err) {
+        if (!isDialogClosed(err)) throw err;
+        emit({ id: 'commit', status: 'skipped', detail: 'the deposit dialog was closed: nothing paid, commit kept locally' });
+        return { commit: 'no-deposit', exchange: x };
+      }
     } else if ((await committer.storageBalance()) === 0n) {
       emit({ id: 'commit', status: 'skipped', detail: `${committer.account} has nothing prepaid for storage on the contract (deposit_storage tops it up); commit kept locally` });
       return { commit: 'no-deposit', exchange: x };
     }
-    emit({ id: 'commit', status: 'running', detail: `commit_proof(${short(x.proof.commit ?? '')}, "model", ${x.proof.logIndex})` });
-    const commitTx = await committer.commit(x.proof);
-    const committed: StoredExchange = { ...x, proof: { ...x.proof, commitTx } };
-    emit({ id: 'commit', status: 'ok', detail: `commit ${short(x.proof.commit ?? '')} recorded in transaction ${short(commitTx)}` });
-    putExchange(committed).catch(() => undefined);
-    return { commit: 'committed', exchange: committed };
+    emit({ id: 'commit', status: 'running', detail: `commit_proof(${short(commit)}, "model", ${x.proof.logIndex})` });
+    try {
+      const commitTx = await committer.commit(x.proof);
+      const committed: StoredExchange = { ...x, proof: { ...x.proof, commitTx } };
+      emit({ id: 'commit', status: 'ok', detail: `commit ${short(commit)} recorded in transaction ${short(commitTx)}` });
+      putExchange(committed).catch(() => undefined);
+      return { commit: 'committed', exchange: committed };
+    } catch (err) {
+      // The chain may already hold this commit (the row never got its transaction, or the store was cleared): the view decides.
+      if (!isAlreadyCommitted(err)) throw err;
+      const found = await committer.lookup(commit);
+      if (found.status !== 'found') throw err;
+      emit({ id: 'commit', status: 'ok', detail: `commit ${short(commit)} was already on NEAR for ${committer.account} (block ${found.record.block_height}; the transaction is not known to this browser)` });
+      return { commit: 'committed', exchange: x };
+    }
   } catch (err) {
     if (isNoDeposit(err)) {
       emit({ id: 'commit', status: 'skipped', detail: 'the contract refused: not enough prepaid storage for this account (deposit_storage tops it up); commit kept locally' });
       return { commit: 'no-deposit', exchange: x };
     }
     const notDeployed = isMethodNotFound(err);
-    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? 'commit_proof is not in this contract: commit kept locally' : `commit failed: ${describeError(err)}; commit kept locally` });
+    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? `this contract lacks the SPEC §4.2 methods (${describeError(err)}): commit kept locally` : `commit failed: ${describeError(err)}; commit kept locally` });
     return { commit: notDeployed ? 'not-deployed' : 'failed', exchange: x };
   }
 }

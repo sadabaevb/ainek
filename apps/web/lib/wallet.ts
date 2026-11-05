@@ -3,7 +3,7 @@
 import type { NearContextValue } from 'near-connect-hooks';
 import { nearToYocto } from 'near-api-js';
 import { ContractMethodNotFoundError } from 'near-api-js/rpc-errors';
-import { readStorageBalance, type ModelProof } from '@ainek/proof';
+import { readProofCommit, readStorageBalance, type ModelProof } from '@ainek/proof';
 import type { PublicConfig } from './config';
 import type { Committer } from './flow';
 
@@ -61,6 +61,11 @@ export function isNoDeposit(err: unknown): boolean {
   return /not enough prepaid storage/i.test(errorText(err));
 }
 
+/** The contract already holds this commit for this account (SPEC §4.2): the browser's row just never recorded the transaction. */
+export function isAlreadyCommitted(err: unknown): boolean {
+  return /already committed/i.test(errorText(err));
+}
+
 /** The contract is deployed but the method is not there yet (SPEC §4.2 lands after §4.1). Typed error on the FC-key path; text match for the wallet-popup path. */
 export function isMethodNotFound(err: unknown): boolean {
   return err instanceof ContractMethodNotFoundError || /MethodNotFound|MethodResolveError|method is not found/i.test(errorText(err));
@@ -82,7 +87,7 @@ function withDeadline<T>(p: Promise<T>, fallback: T): Promise<T> {
 }
 
 /** The user closed the wallet dialog (or the wallet window) without signing in: not an error, just no account. */
-function isDialogClosed(err: unknown): boolean {
+export function isDialogClosed(err: unknown): boolean {
   return /User rejected|Wallet closed/i.test(errorText(err));
 }
 
@@ -99,6 +104,7 @@ export async function walletCommitter(wallet: NearContextValue, cfg: PublicConfi
   const committerFor = (account: string): Committer => ({
     account,
     storageBalance: () => readStorageBalance(cfg.rpcUrl, cfg.contract, account),
+    lookup: (commit) => readProofCommit(cfg.rpcUrl, cfg.contract, account, commit),
     commit: (proof) => commitProofOnChain(callFunctionRaw, cfg, proof),
     ...(consent === 'deposit' ? { deposit: () => depositStorage(callFunctionRaw, cfg) } : {}),
   });

@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
-import { canCommitNow, commitAction, commitOutcome, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
+import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter, type Consent } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
@@ -103,6 +103,10 @@ export default function ChatPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
+  const turnsRef = useRef(turns); // the latest thread for callbacks that must stay stable across step events
+  useLayoutEffect(() => {
+    turnsRef.current = turns;
+  });
 
   useEffect(() => {
     setTamper(new URLSearchParams(window.location.search).get('tamper') === '1');
@@ -114,18 +118,32 @@ export default function ChatPage() {
   /** Step 8 for one turn, off the critical path: the card is already on screen, the commit lands when it lands. `consent` is what the click allowed (the card's button); the automatic pass after a reply opens no dialog. */
   const commitTurn = useCallback(
     async (idx: number, outcome: VerifiedOutcome, consent: Consent) => {
-      if (outcome.commit !== 'pending') setTurns(atTurn(idx, withOutcome({ ...outcome, commit: 'pending' }))); // the automatic pass already is
+      const inFlight = consent === 'deposit' ? 'depositing' : 'pending';
+      if (outcome.commit !== inFlight) setTurns(atTurn(idx, withOutcome({ ...outcome, commit: inFlight })));
       const committed = await commitOutcome(outcome, () => walletCommitter(wallet, cfg, consent), (e) => setTurns(atTurn(idx, withStep(e))));
       setTurns(atTurn(idx, withOutcome(committed)));
+      return committed.commit;
     },
     [wallet, cfg],
+  );
+  /** The prepayment is per account, not per card: once one card has paid, the others still saying "no deposit" commit through the key with no dialog. */
+  const commitOthersAfterDeposit = useCallback(
+    async (paidIdx: number) => {
+      const pending = turnsRef.current.flatMap((turn, i) => (i !== paidIdx && turn.outcome?.kind === 'verified' && turn.outcome.commit === 'no-deposit' ? [[i, turn.outcome] as const] : []));
+      for (const [i, outcome] of pending) await commitTurn(i, outcome, 'none');
+    },
+    [commitTurn],
   );
   const onCommitClick = useCallback(
     (idx: number, outcome: VerifiedOutcome) => {
       // The button said what it would do (connect, deposit, retry, commit); the click allows exactly that.
-      if (canCommitNow(outcome.commit)) void commitTurn(idx, outcome, commitAction(outcome.commit, !!wallet.signedAccountId) === 'deposit' ? 'deposit' : 'connect');
+      if (!canCommitNow(outcome.commit)) return;
+      const consent = consentFor(commitAction(outcome.commit, !!wallet.signedAccountId));
+      void commitTurn(idx, outcome, consent).then((status) => {
+        if (consent === 'deposit' && status === 'committed') return commitOthersAfterDeposit(idx);
+      });
     },
-    [commitTurn, wallet.signedAccountId],
+    [commitTurn, commitOthersAfterDeposit, wallet.signedAccountId],
   );
 
   /** Sends with the given controls and shows them as sent: the composer, a scenario card and the retry all go through here. */

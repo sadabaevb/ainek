@@ -12,7 +12,7 @@ import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
-import { commitAction, commitExchange, type CommitStatus } from '@/lib/flow';
+import { commitAction, commitExchange, consentFor, type CommitStatus } from '@/lib/flow';
 import { commitLabel } from '@/lib/commit-label';
 import type { Dict } from '@/lib/i18n';
 import { resolveLogEntry } from '@/lib/key-log';
@@ -57,7 +57,7 @@ function VerifyInner() {
   const [result, setResult] = useState<Result | null>(null);
   const [stored, setStored] = useState<StoredExchange[]>([]);
   const [committing, setCommitting] = useState(false);
-  const [lastCommit, setLastCommit] = useState<CommitStatus>('no-wallet'); // what the previous click ended in; decides the button's label and what the next click may open
+  const [commitStatus, setCommitStatus] = useState<Record<string, CommitStatus>>({}); // per exchange, what the previous click ended in: decides the button's label and what the next click may open
   const [missingId, setMissingId] = useState<string | null>(null); // ?id= not in this browser's store: worded at render, so it follows the language
   const [error, setError] = useState('');
 
@@ -100,24 +100,24 @@ function VerifyInner() {
     }
   }
 
+  // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
+  const proof = result?.stored?.proof ?? result?.report.proof;
+  const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
+  const action = commitAction((committable && commitStatus[committable.completionId]) ?? 'no-wallet', !!wallet.signedAccountId);
+
   /** commit_proof for an exchange kept here (its salt is in the proof). commitTx is an envelope field outside the signed and committed bytes, so the report stays as it is; only the transaction link appears. */
   async function commitStored(x: StoredExchange) {
     setError('');
     setCommitting(true);
-    const consent = action === 'deposit' ? 'deposit' : 'connect';
-    const r = await commitExchange(x, () => walletCommitter(wallet, cfg, consent), (e) => {
+    const r = await commitExchange(x, () => walletCommitter(wallet, cfg, consentFor(action)), (e) => {
       if (e.status === 'skipped') setError(e.detail);
     });
-    setLastCommit(r.commit);
+    setCommitStatus((prev) => ({ ...prev, [x.completionId]: r.commit }));
     // The page may be showing something else by now (a pasted proof): only the same exchange takes the transaction.
     if (r.commit === 'committed') setResult((prev) => (prev?.stored?.completionId === x.completionId ? { ...prev, stored: r.exchange } : prev));
     setCommitting(false);
   }
 
-  // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
-  const proof = result?.stored?.proof ?? result?.report.proof;
-  const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
-  const action = commitAction(lastCommit, !!wallet.signedAccountId);
   return (
     <main className="page">
       <h1>{tv.title}</h1>
