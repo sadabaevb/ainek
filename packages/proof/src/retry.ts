@@ -1,4 +1,4 @@
-// One retry loop for the browser client, the Node runner and the JSON-RPC reader. Each caller brings its own
+// The retry loop of the browser client's SDK calls, the Node runner and the JSON-RPC reader. Each caller brings its own
 // `retryable` predicate: the SDK's error classes differ per bundle, and the RPC reader has its own idea of transient.
 export interface RetryOptions {
   retryable: (err: unknown) => boolean;

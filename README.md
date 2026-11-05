@@ -215,7 +215,7 @@ stop button: DeleteKey + pause_agent                                            
 <!-- TODO Nov 10–11: paste the table printed by `pnpm demo:metrics --runs 50` (it also writes docs/metrics.json); add the policy-block and time-to-execute rows from the Tier 2 run if it ships; the same day re-time the browser (3 runs, Ainek's IndexedDB cache cleared, runs > 30 s apart because of the collateral proxy's cache header) and update the browser sentence below, keeping it next to the table -->
 
 Measured by `pnpm demo:metrics --runs N`: N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
-a cold attestation on every run, the public-log check with the honest and a swapped key, one E2EE exchange, the signature
+the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
 and the proof. The browser is not measured by the script. In two runs on Nov 5 with nothing cached in this browser
 (Ainek's IndexedDB cache cleared, page reloaded, runs more than 30 s apart because NEAR AI's collateral proxy lets the
 browser cache for 29 s; the proxies' own caches may have been warm) its attestation took 3.4–3.6 s (13 s on Nov 3 with

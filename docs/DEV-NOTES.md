@@ -835,7 +835,7 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
   образец из `docs/samples` остался в демо и передаётся им явно при `AINEK_LOG_SOURCE=sample`: пакет про образцы не
   знает, и забыть его нельзя — типы не дадут). `loadLiveEnv` остался в демо (`apps/demo/src/env.ts`): у агента свой
   конфиг по образцу верификатора.
-- После `/simplify`: петля ретраев одна — `withRetry` в `@ainek/proof` с предикатом от вызывающего (у браузера и у
+- После `/simplify`: петля ретраев вызовов SDK и JSON-RPC-читалки одна — `withRetry` в `@ainek/proof` с предикатом от вызывающего (отдельные циклы остались у `wallet.ts` на `commit_proof` и в `record-evidence.mjs`) (у браузера и у
   Node-раннера свои `getSdkError`: классы ошибок в двух бандлах SDK разные), ею же пользуется JSON-RPC-читалка; «собрать
   proof и проверить» — одна функция `buildCheckedModelProof` вместо трёх копий (flow.ts, раннер, запись образцов);
   время чтения лога пишется в шаге, а не из `.then`; текст шага `send` больше не содержит открытый ответ модели
@@ -845,6 +845,12 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
   чтение лога получает `AbortSignal` и отменяется, если прогон упал раньше (`viewFunction` принимает сигнал и после отмены
   не ретраит), расшифрованный ответ проверяется на форму `chat.completion`, у упавшего чтения лога честное время, а
   `describe` для реплея берётся из subpath `@ainek/tier1-node/errors`, чтобы офлайн `pnpm demo` не грузил раннер.
+- После второго `/code-review`: исключение открытых полей жило только в типе, а `{...chat}` в рантайме пропускал любой ключ, и прогон всё равно
+  писал `e2ee: true`. Теперь `ChatInput` — список разрешённых полей, а `chatBody` собирает тело из них же и отвергает всё, кроме именованных
+  function tools, до отправки. Форма расшифрованного ответа проверяется в `parseChatCompletion` (`@ainek/proof`, им же пользуется браузер):
+  пустые `choices` и вызов инструмента не типа `function` — это отказ на шаге `send`, а не «модель ничего не сделала». У каждого шага
+  дедлайн 120 с (у SDK на запросах с TLS-пином таймаута нет), после завершения прогона новых ретраев нет, наблюдатель `onStep` не может
+  поменять исход, а `Failed` несёт `unverifiedCompletion`, если ответ уже пришёл (браузер делает так же).
 - **Проба function tool под E2EE (2026-11-05, один живой вызов `runTier1`):** system prompt «казначей», два инструмента
   (`propose_transfer`, `decline`), `tool_choice: 'required'`, запрос «Pay vendor1.testnet 300 tokens for October hosting.»
   `z-ai/glm-5.3-flash` ответил одним вызовом `propose_transfer` с аргументами `{"amount":"300","memo":"October hosting",

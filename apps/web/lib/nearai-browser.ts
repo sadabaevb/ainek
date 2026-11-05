@@ -17,7 +17,7 @@ import {
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
-import { withRetry } from '@ainek/proof';
+import { parseChatCompletion, withRetry } from '@ainek/proof';
 import { getDeployment, putDeployment } from './store';
 
 const SIGNING_ALGO = 'ed25519' as const;
@@ -142,7 +142,7 @@ function chatRequest(model: string, messages: ChatMessage[]): Request {
 
 async function toExchange(requestBody: Uint8Array, rawResponse: Response, decrypted: Response): Promise<Exchange> {
   const [responseBytes, plaintext] = await Promise.all([rawResponse.arrayBuffer(), decrypted.text()]);
-  const completion = JSON.parse(plaintext) as { id: string; choices: Array<{ message: { content: string | null } }> };
+  const completion = parseChatCompletion(plaintext);
   return { completionId: completion.id, requestBody, responseBody: new Uint8Array(responseBytes), reply: completion.choices[0]?.message.content ?? '', sentAt: new Date().toISOString() };
 }
 

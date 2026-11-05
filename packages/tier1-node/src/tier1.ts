@@ -19,11 +19,13 @@ import {
   type TcbStatus,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, evaluateKeyLog, failurePhase, keyLogReader, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { buildCheckedModelProof, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
 const SIGNING_ALGO = 'ed25519' as const;
+/** No step may wait longer: a long-running service handles messages one at a time, and the SDK's pinned requests have no timeout of their own. Well above the slowest step seen (attestation 40 s, reply 23 s). */
+const STEP_TIMEOUT_MS = 120_000;
 
 /** The shared step ids (TIER1_STEPS in @ainek/proof); `store` and `commit` belong to the browser (IndexedDB, wallet). */
 export type StepId = Tier1StepId;
@@ -49,20 +51,55 @@ export interface RunStats {
   retries: number;
 }
 
-// ---- the chat request: OpenAI's Chat Completions shapes as the SDK types them. Under E2EE the SDK encrypts message contents,
-// `tools`, `tool_choice` and the tool calls in the reply; everything else travels in the clear. The fields that would carry
-// content in the clear are left out of the type: `response_format` (a JSON schema names the fields the answer must have, so
-// structured output goes through a function tool), `metadata`, `user`, `store`, and `n` (one choice is what the proof expects).
+// ---- the chat request: OpenAI's Chat Completions shapes as the SDK types them. Under E2EE the SDK encrypts message contents, function
+// tools, the named function in `tool_choice` and the tool calls in the reply; every other field travels in the clear. So this is an
+// allowlist, in the type and again at runtime (chatBody): `response_format` would show the gateway a JSON schema naming the fields of
+// the answer (structured output goes through a function tool), `metadata`, `user`, `stop`, `prediction` and custom tools would carry
+// content in the clear, and `n` would give choices nobody reads. `temperature` and `max_tokens` are in the clear and say nothing.
 type CreateBody = Parameters<InferenceChatCompletions['create']>[0];
-export type ChatInput = Omit<CreateBody, 'model' | 'stream' | 'response_format' | 'metadata' | 'user' | 'store' | 'n'>;
 export type ChatMessage = CreateBody['messages'][number];
-export type ChatTool = NonNullable<CreateBody['tools']>[number];
+export type ChatTool = Extract<NonNullable<CreateBody['tools']>[number], { type: 'function' }>;
+export interface ChatInput {
+  messages: ChatMessage[];
+  tools?: ChatTool[];
+  tool_choice?: 'none' | 'auto' | 'required' | Extract<NonNullable<CreateBody['tool_choice']>, { type: 'function' }>;
+  temperature?: number;
+  max_tokens?: number;
+}
 export type ChatCompletion = Extract<Awaited<ReturnType<InferenceChatCompletions['create']>>, { object: 'chat.completion' }>;
 export type ToolCall = NonNullable<ChatCompletion['choices'][number]['message']['tool_calls']>[number];
 
+/** The request body: the listed fields and nothing else, whatever the object carries at runtime (a variable gets no excess-property check). A tool the SDK would forward in the clear stops here, before anything is sent. */
+export function chatBody(model: string, chat: ChatInput): string {
+  const { messages, tools, tool_choice, temperature, max_tokens } = chat;
+  for (const tool of tools ?? []) if (tool.type !== 'function' || !tool.function?.name) throw new Error('only named function tools are encrypted under E2EE: refusing to send this request');
+  if (typeof tool_choice === 'object' && tool_choice.type !== 'function') throw new Error('only a named function tool_choice is encrypted under E2EE: refusing to send this request');
+  return JSON.stringify({ model, stream: false, messages, tools, tool_choice, temperature, max_tokens });
+}
+
 /** The tools offered to the model, by name: what the proof records as `toolNames` (SPEC §5.1). */
 export function toolNamesOf(chat: Pick<ChatInput, 'tools'>): string[] {
-  return (chat.tools ?? []).map((t) => (t.type === 'function' ? t.function.name : t.custom.name));
+  return (chat.tools ?? []).map((t) => t.function.name);
+}
+
+/** A promise that gives up: what it was waiting for is abandoned, and the run ends `failed` at that step. */
+export function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not finish within ${ms / 1000} s`)), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
+/** An observer of the run must not be able to change its outcome: a throw or a rejection from it goes nowhere. */
+export function observed(onStep: (event: StepEvent) => void): (event: StepEvent) => void {
+  return (event) => {
+    try {
+      void Promise.resolve(onStep(event)).catch(() => undefined);
+    } catch {
+      // ignored: see above
+    }
+  };
 }
 /** The assistant's text; a tool-call-only answer has none. */
 export function replyOf(completion: ChatCompletion): string {
@@ -82,20 +119,6 @@ export function contractLog(cfg: Pick<AinekConfig, 'rpcUrl' | 'contract'>): Read
   return async (model, signal) => ({ entries: await reader.latestKeys(model, undefined, signal), source: `contract ${cfg.contract} via ${new URL(cfg.rpcUrl).host}` });
 }
 
-/** A step failure that knows how long the step took (the log read is timed by its own promise, not by the step clock). */
-class StepError extends Error {
-  readonly ms: number;
-  constructor(message: string, ms: number) {
-    super(message);
-    this.ms = ms;
-  }
-}
-/** A 200 whose decrypted body is not a chat completion (an error envelope, a truncated body) must fail the send step with a clear reason, not a TypeError later. */
-function asChatCompletion(plaintext: string): ChatCompletion {
-  const value = JSON.parse(plaintext) as Partial<ChatCompletion> | null;
-  if (value?.object !== 'chat.completion' || typeof value.id !== 'string' || !Array.isArray(value.choices)) throw new Error(`unexpected response shape (keys: ${Object.keys(value ?? {}).join(', ') || 'none'})`);
-  return value as ChatCompletion;
-}
 
 // ---- outcomes ----
 export interface Verified {
@@ -127,6 +150,8 @@ export interface Failed {
   kind: 'failed';
   step: StepId;
   reason: string;
+  /** The model answered, but a later step failed: the answer as it came, not verified. Set only for steps after `send`. */
+  unverifiedCompletion?: ChatCompletion;
 }
 export type Tier1Outcome = (Verified | Refused | Failed) & RunStats;
 
@@ -140,14 +165,17 @@ export interface Tier1Params {
 }
 
 /** One cold run of the Tier-1 sequence. Never throws: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
-export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => undefined }: Tier1Params): Promise<Tier1Outcome> {
+export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep = () => undefined }: Tier1Params): Promise<Tier1Outcome> {
+  const onStep = observed(rawOnStep);
   const { model, nearaiBaseUrl: baseUrl } = cfg;
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] }; // validated in ainekConfigFromEnv; same names as the SDK's
-  // AttestationClient holds no cache or connection pool; staying off the SDK's InferenceClient (which caches attestation for 60 min) is what keeps every run cold.
+  // AttestationClient caches no evidence; staying off the SDK's InferenceClient (which caches attestation for 60 min) is what makes every run re-fetch and re-verify it. HTTP connections may still be reused between runs: its plain GETs go through the global fetch.
   const client = new AttestationClient({ apiKey, baseUrl, headers: { [NO_ALIASING_HEADER]: 'true' } });
   const timings: Timings = {};
   let retries = 0;
-  const retrying = <T>(fn: () => Promise<T>, attempts = 3) => withRetry(fn, { retryable: sdkRetryable, attempts, onRetry: () => void retries++ });
+  // Once the run has returned, nothing of it may go on: no new retries of a leg still in flight, and the log read is abandoned.
+  const runOver = new AbortController();
+  const retrying = <T>(fn: () => Promise<T>, attempts = 3) => withRetry(fn, { retryable: (err) => !runOver.signal.aborted && sdkRetryable(err), attempts, onRetry: () => void retries++ });
   const t0 = performance.now();
   let running: StepId = 'metadata';
   let stepStart = t0;
@@ -155,13 +183,16 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
   const step = async <T>(id: StepId, fn: () => Promise<T>, detail: (value: T) => string): Promise<T> => {
     running = id;
     stepStart = performance.now();
-    const value = await fn();
+    const value = await withDeadline(fn(), STEP_TIMEOUT_MS, `the ${id} step`);
     timings[id] = performance.now() - stepStart;
     onStep({ id, status: 'ok', detail: detail(value), ms: timings[id] });
     return value;
   };
-  const done = <O extends Verified | Refused | Failed>(outcome: O): O & RunStats => ({ ...outcome, timings, totalMs: performance.now() - t0, retries });
-  const logAbort = new AbortController(); // a run that fails before step 2 abandons the log read instead of leaving it running
+  const done = <O extends Verified | Refused | Failed>(outcome: O): O & RunStats => {
+    runOver.abort();
+    return { ...outcome, timings, totalMs: performance.now() - t0, retries };
+  };
+  let answered: ChatCompletion | undefined; // for a failure after the send: the reply as it came
 
   try {
     // 0. The chosen model must support model attestation: never a silent downgrade to plaintext.
@@ -178,7 +209,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
     // 1. Gateway and model evidence, verified here; the public log is read meanwhile (independent; the send waits for both).
     const tLog = performance.now();
     const logPromise = Promise.resolve()
-      .then(() => readLog(model, logAbort.signal)) // a reader that throws synchronously still fails the key-log step, not this one
+      .then(() => readLog(model, runOver.signal)) // a reader that throws synchronously still fails the key-log step, not this one
       .then(
         (log) => ({ ok: true as const, ...log, ms: performance.now() - tLog }),
         (err: unknown) => ({ ok: false as const, err, ms: performance.now() - tLog }), // never rejects: awaited only in step 2
@@ -204,7 +235,8 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
     // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
     running = 'key-log';
     const log = await logPromise;
-    if (!log.ok) throw new StepError(`public log unavailable (${describeSdkError(log.err)})`, log.ms);
+    stepStart = performance.now() - log.ms; // the read was timed by its own promise; it overlapped attestation
+    if (!log.ok) throw new Error(`public log unavailable (${describeSdkError(log.err)})`);
     const { entries, source: logSource, ms: logMs } = log;
     timings['key-log'] = logMs;
     const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
@@ -223,7 +255,8 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
           request: new Request(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Accept-Encoding': 'identity', [NO_ALIASING_HEADER]: 'true' },
-            body: JSON.stringify({ ...chat, model, stream: false }),
+            body: chatBody(model, chat),
+            signal: AbortSignal.timeout(STEP_TIMEOUT_MS), // closes the socket; the step's own deadline only stops waiting for it
           }),
           modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelPublicKey },
         }),
@@ -240,7 +273,8 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
         const forVerification = encrypted.clone();
         const decrypted = await prepared.decryptResponse(encrypted);
         const [bytes, plaintext] = await Promise.all([forVerification.arrayBuffer(), decrypted.text()]);
-        return { responseBody: new Uint8Array(bytes), completion: asChatCompletion(plaintext) };
+        answered = parseChatCompletion(plaintext) as unknown as ChatCompletion;
+        return { responseBody: new Uint8Array(bytes), completion: answered };
       },
       (r) => `completion ${r.completion.id}: ${requestBody.length} B ciphertext sent, ${r.responseBody.length} B received, ${functionCallsOf(r.completion).length} tool call(s)`,
     );
@@ -263,9 +297,8 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
     );
     return done({ kind: 'verified', signer, entries, logSource, logEntry, completion, requestBody, responseBody, signature, proof, report });
   } catch (err) {
-    logAbort.abort(); // no-op once the read has settled
     const reason = describeSdkError(err);
-    onStep({ id: running, status: 'fail', detail: reason, ms: err instanceof StepError ? err.ms : performance.now() - stepStart });
-    return done({ kind: 'failed', step: running, reason });
+    onStep({ id: running, status: 'fail', detail: reason, ms: performance.now() - stepStart });
+    return done({ kind: 'failed', step: running, reason, ...(answered ? { unverifiedCompletion: answered } : {}) });
   }
 }

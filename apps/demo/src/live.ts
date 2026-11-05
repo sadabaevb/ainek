@@ -47,6 +47,7 @@ if (outcome.kind === 'verified') {
   printVerified(outcome);
 } else {
   // REFUSED is the fail-closed rule (the key is not in the log); anything else that stopped the run before the send is a failure, but still nothing left this process.
+  if (outcome.kind === 'failed' && outcome.unverifiedCompletion) line(NA, `reply as it came, NOT verified: ${JSON.stringify(replyOf(outcome.unverifiedCompletion))}`);
   console.log(outcome.kind === 'refused' ? '\nResult: REFUSED. Nothing was sent.' : nothingSent(outcome.step) ? '\nResult: FAILED before sending. Nothing was sent.' : '\nResult: FAILED.');
   if (record || discloseFile) console.log('nothing written: the run did not verify');
 }

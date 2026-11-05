@@ -28,6 +28,7 @@ export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
 export { buildModelProof, buildCheckedModelProof } from './build.ts';
 export { withRetry } from './retry.ts';
+export { parseChatCompletion } from './chat.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
