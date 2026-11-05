@@ -1,12 +1,13 @@
 // One owner message, end to end (SPEC §7.2): model → policy → contract → action proof. Every dependency is an interface so
 // the whole path runs in tests with fakes; main.ts wires the real ones. Nothing is proposed unless the decision passes the
-// local checks, and nothing is sent to the model unless the key log confirms the attested key (inside extract).
-import { checkPolicyOutput, type Check, type ModelProof, type Verdict } from '@ainek/proof';
-import { eventNamed, type ActionChain } from './chain.ts';
+// local checks, and nothing is sent to the model unless the key log confirms the attested key (inside extract). Nothing
+// after propose_action can throw out of here: by then the money may have moved, and the owner must get the action id.
+import { buildActionProof, checkPolicyOutput, type Check, type CommittedActionProof, type ModelProof } from '@ainek/proof';
+import type { ActionChain } from './chain.ts';
+import { errorText } from './errors.ts';
 import type { Extraction } from './llm.ts';
-import type { ProofKeeper } from './store.ts';
 import type { PolicyEvaluator } from './policy.ts';
-import { buildActionProof, type CommittedActionProof } from './proof.ts';
+import type { ProofKeeper } from './store.ts';
 
 export interface Deps {
   extract: (text: string) => Promise<Extraction>;
@@ -22,27 +23,21 @@ export interface Deps {
 export type Result =
   | {
       kind: 'proposed';
-      verdict: Verdict;
-      actionId: number;
-      proposeTx: string;
-      /** The contract executed the transfer in the same transaction (Allow). */
-      executed: boolean;
+      /** Verdict, action id, transactions and whether it executed are all in here. */
       proof: CommittedActionProof;
-      commitTx: string | null;
-      modelCommitTx: string | null;
-      /** Why a commit is missing; the action itself already happened. */
-      commitError: string | null;
+      /** What the payment is for, for the card only: never on-chain. */
+      purpose: string;
+      /** Carries `commitTx`: its commit landed before the action was proposed. */
       modelProof: ModelProof;
-      checks: Check[];
+      /** Why the action proof has no commit; the action itself already happened. */
+      commitError: string | null;
     }
-  | { kind: 'declined'; reason: string; modelProof: ModelProof }
-  | { kind: 'bad-call'; reason: string; modelProof: ModelProof }
+  | { kind: 'declined' | 'bad-call'; reason: string; modelProof: ModelProof }
   | { kind: 'not-sent'; step: string; reason: string }
   /** The policy answered, but the answer is not one this agent may act on: nothing proposed, no gas spent. */
   | { kind: 'decision-rejected'; checks: Check[]; modelProof: ModelProof }
-  | { kind: 'failed'; stage: 'model' | 'store' | 'policy' | 'chain'; reason: string };
-
-const describe = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+  /** `after-propose`: the action is on-chain and the reason names it. Every other stage but `chain` ended before anything was proposed. */
+  | { kind: 'failed'; stage: 'model' | 'store' | 'policy' | 'commit' | 'chain' | 'after-propose'; reason: string };
 
 export async function handleOwnerText(deps: Deps, text: string): Promise<Result> {
   const now = deps.now ?? Date.now;
@@ -51,16 +46,15 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   const x = await deps.extract(text);
   if (x.kind === 'not-sent') return { kind: 'not-sent', step: x.step, reason: x.reason };
   if (x.kind === 'failed') return { kind: 'failed', stage: 'model', reason: `${x.step}: ${x.reason}` };
-  const modelProof = x.outcome.proof;
-  if (x.kind === 'declined') return { kind: 'declined', reason: x.reason, modelProof };
-  if (x.kind === 'bad-call') return { kind: 'bad-call', reason: x.reason, modelProof };
-  const modelProofCommit = modelProof.commit;
+  const proven = x.outcome.proof;
+  if (x.kind === 'declined' || x.kind === 'bad-call') return { kind: x.kind, reason: x.reason, modelProof: proven };
+  const modelProofCommit = proven.commit;
   if (!modelProofCommit) return { kind: 'failed', stage: 'model', reason: 'the model proof carries no commit' };
-  // The model proof's commit reaches the chain inside propose_action, so its salt is saved first: a commit nobody can open proves nothing.
+  // The salt goes to disk before the commit can reach anyone: a commit nobody can open proves nothing.
   try {
     await deps.keep.model(x.outcome);
   } catch (err) {
-    return { kind: 'failed', stage: 'store', reason: describe(err) };
+    return { kind: 'failed', stage: 'store', reason: errorText(err) };
   }
 
   // 2. The policy, inside its TEE; then the local checks on what came back.
@@ -69,50 +63,47 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
     const spentToday = await deps.chain.spentToday();
     evaluated = await deps.policy.evaluate({ action: x.action, model_proof_commit: modelProofCommit, spent_today: spentToday, now: now() });
   } catch (err) {
-    return { kind: 'failed', stage: 'policy', reason: describe(err) };
+    return { kind: 'failed', stage: 'policy', reason: errorText(err) };
   }
-  const checks = checkPolicyOutput(evaluated.output, { action: x.action, modelProofCommit, teePubkey: deps.teePubkey, wasmHash: deps.wasmHash, now: now() });
-  if (checks.some((c) => c.status === 'fail')) return { kind: 'decision-rejected', checks, modelProof };
-  if (!evaluated.attestationUrl) return { kind: 'failed', stage: 'policy', reason: 'OutLayer returned no attestation_url for this run' };
+  const { output, attestationUrl } = evaluated;
+  const checks = checkPolicyOutput(output, { action: x.action, modelProofCommit, teePubkey: deps.teePubkey, wasmHash: deps.wasmHash, now: now() });
+  if (checks.some((c) => c.status === 'fail')) return { kind: 'decision-rejected', checks, modelProof: proven };
 
-  // 3. The contract: it repeats the checks, then executes, parks or denies.
+  // 3. The model proof's commit, before any money can move: exhausted storage stops here, not after a transfer that could then never be proven.
+  let modelProof: ModelProof;
+  try {
+    modelProof = { ...proven, commitTx: await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex) };
+  } catch (err) {
+    return { kind: 'failed', stage: 'commit', reason: errorText(err) };
+  }
+  try {
+    await deps.keep.model({ ...x.outcome, proof: modelProof });
+  } catch (err) {
+    return { kind: 'failed', stage: 'store', reason: errorText(err) };
+  }
+
+  // 4. The contract: it repeats the checks it can, then executes, parks or denies.
   let proposed;
   try {
-    proposed = await deps.chain.proposeAction({ action: x.action, modelProofCommit, decision: evaluated.output.decision, teeSignature: evaluated.output.sig });
+    proposed = await deps.chain.proposeAction({ action: x.action, modelProofCommit, decision: output.decision, teeSignature: output.sig });
   } catch (err) {
-    return { kind: 'failed', stage: 'chain', reason: describe(err) };
+    return { kind: 'failed', stage: 'chain', reason: errorText(err) };
   }
-  const executed = eventNamed(proposed.events, 'action_executed');
-  const proof = buildActionProof({
-    actionId: proposed.actionId,
-    action: x.action,
-    modelProofCommit,
-    decision: evaluated.output.decision,
-    teeSignature: evaluated.output.sig,
-    teePubkey: evaluated.output.pubkey,
-    wasmHash: evaluated.output.wasm_hash,
-    attestationUrl: evaluated.attestationUrl,
-    proposeTx: proposed.txHash,
-    executeTx: executed ? proposed.txHash : null,
-    approver: null,
-  });
 
-  // 4. Two salted commits, both bound to the log entry the model proof points at (SPEC §4.2, §7.2). The action's salt is saved first. The model proof's commit is what /auditor
-  // looks up for a disclosed exchange. The action already happened on-chain, so a failure here is reported on the card, not a failed run, and one failing does not stop the other.
-  const errors: string[] = [];
-  let commitTx: string | null = null;
+  // 5. The action proof and its salted commit, salt saved first. The action already happened, so nothing from here on may throw or read as "nothing happened".
+  let proof: CommittedActionProof;
+  try {
+    proof = buildActionProof({ actionId: proposed.actionId, action: x.action, modelProofCommit, decision: output.decision, teeSignature: output.sig, teePubkey: output.pubkey, wasmHash: output.wasm_hash, attestationUrl, proposeTx: proposed.txHash, executeTx: proposed.executed ? proposed.txHash : null, approver: null });
+  } catch (err) {
+    return { kind: 'failed', stage: 'after-propose', reason: `action #${proposed.actionId} is on-chain (transaction ${proposed.txHash}), but its proof could not be built: ${errorText(err)}` };
+  }
+  let commitError: string | null = null;
   try {
     await deps.keep.action(proof);
-    commitTx = await deps.chain.commitProof(proof.commit, 'action', modelProof.logIndex);
-    await deps.keep.action({ ...proof, commitTx });
+    proof = { ...proof, commitTx: await deps.chain.commitProof(proof.commit, 'action', proven.logIndex) };
+    await deps.keep.action(proof);
   } catch (err) {
-    errors.push(describe(err));
+    commitError = errorText(err);
   }
-  let modelCommitTx: string | null = null;
-  try {
-    modelCommitTx = await deps.chain.commitProof(modelProofCommit, 'model', modelProof.logIndex);
-  } catch (err) {
-    errors.push(`model proof: ${describe(err)}`);
-  }
-  return { kind: 'proposed', verdict: evaluated.output.decision.verdict, actionId: proposed.actionId, proposeTx: proposed.txHash, executed, proof: commitTx ? { ...proof, commitTx } : proof, commitTx, modelCommitTx, commitError: errors.length > 0 ? errors.join('; ') : null, modelProof, checks };
+  return { kind: 'proposed', proof, purpose: x.purpose, modelProof, commitError };
 }

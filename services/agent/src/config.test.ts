@@ -34,3 +34,12 @@ test('loadConfig: refuses the sample log, malformed hashes and a key that is not
   const { NEARAI_API_KEY: _omitted, ...withoutKey } = env;
   assert.throws(() => loadConfig(withoutKey as NodeJS.ProcessEnv), /NEARAI_API_KEY is required/);
 });
+
+test('loadConfig: another service\'s key in the environment warns by name, without its value', (t) => {
+  const warn = t.mock.method(console, 'warn', () => undefined);
+  loadConfig({ ...env, VERIFIER_PRIVATE_KEY: 'ed25519:secret' });
+  assert.equal(warn.mock.callCount(), 1);
+  const text = String(warn.mock.calls[0]?.arguments[0]);
+  assert.match(text, /VERIFIER_PRIVATE_KEY/);
+  assert.doesNotMatch(text, /secret/);
+});
