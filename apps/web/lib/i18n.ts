@@ -39,7 +39,13 @@ const en = {
   disconnect: 'Disconnect',
   refusedTitle: 'Key not in the public log. Message not sent.',
   refusedBody: 'The model reported a signing key that no trusted verifier has logged. Ainek refuses rather than trusts.',
-  refusedConsequence: 'Had Ainek sent anyway, the message would have been encrypted to a key that no trusted verifier vouches for: whoever holds that key could read it.',
+  /** What the refusal protected against, per reason: a security claim that must match the verdict, not a generic line. */
+  refusedConsequence: {
+    absent: 'Had Ainek sent, the message would have been encrypted to a key no verifier vouches for: whoever holds that key could read it.',
+    'untrusted-only': 'Only verifiers outside the trust set vouch for this key. Ainek cannot tell it from a forged one, so nothing was sent.',
+    'below-quorum': 'Fewer trusted verifiers vouch for this key than this client requires. Ainek does not send on partial confirmation.',
+    'split-view': 'Trusted verifiers disagree about this model\'s key, so Ainek cannot say which one is real and sends nothing.',
+  },
   retryHonest: 'Try again with the honest key',
   refusedUntrustedTitle: 'Key logged only outside the trust set. Message not sent.',
   refusedUntrustedBody: (verifiers: string) => `The key is in the public log, but only from verifiers outside this client's trust set (${verifiers}). Ainek counts trusted verifiers only.`,
@@ -226,7 +232,12 @@ const ru: typeof en = {
   disconnect: 'Отключить',
   refusedTitle: 'Ключ не в публичном логе. Сообщение не отправлено.',
   refusedBody: 'Модель назвала ключ подписи, которого нет у доверенных верификаторов. Ainek отказывает, а не доверяет.',
-  refusedConsequence: 'Если бы Ainek всё же отправил, сообщение было бы зашифровано на ключ, за который не ручается ни один доверенный верификатор: кто держит этот ключ, тот бы его и прочитал.',
+  refusedConsequence: {
+    absent: 'Если бы Ainek отправил, сообщение ушло бы на ключ, за который не ручается ни один верификатор: его владелец мог бы прочитать текст.',
+    'untrusted-only': 'За этот ключ ручаются только верификаторы вне доверенного набора. Ainek не отличит его от подделки, поэтому ничего не отправил.',
+    'below-quorum': 'За ключ ручается меньше доверенных верификаторов, чем требует этот клиент. При частичном подтверждении Ainek не отправляет.',
+    'split-view': 'Доверенные верификаторы расходятся насчёт ключа этой модели: Ainek не может сказать, какой настоящий, и ничего не отправляет.',
+  },
   retryHonest: 'Повторить с честным ключом',
   refusedUntrustedTitle: 'Ключ записан только вне доверенного набора. Сообщение не отправлено.',
   refusedUntrustedBody: (verifiers) => `Ключ есть в публичном логе, но только от верификаторов вне доверенного набора этого клиента (${verifiers}). Ainek считает только доверенных.`,

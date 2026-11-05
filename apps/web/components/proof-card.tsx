@@ -35,12 +35,13 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
       'untrusted-only': [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))],
       absent: [t.refusedTitle, t.refusedBody],
     };
-    const [title, body] = texts[v.reason === 'ok' ? 'absent' : v.reason];
+    const reason = v.reason === 'ok' ? 'absent' : v.reason;
+    const [title, body] = texts[reason];
     return (
       <RedCard
         title={title}
         body={body}
-        note={t.refusedConsequence}
+        note={t.refusedConsequence[reason]}
         action={onRetry && <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button>}
         lines={[
           `key seen by the client: ${outcome.seenKey}`,

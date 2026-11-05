@@ -68,7 +68,7 @@ export interface VerifiedOutcome {
 
 export type ChatOutcome =
   | VerifiedOutcome
-  | { kind: 'refused'; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string }
+  | { kind: 'refused'; model: string; /** The demo switch swapped the key: the card can offer the honest retry. */ tampered: boolean; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
   /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
   | { kind: 'failed'; step: StepId; reason: string; reply?: string };
@@ -154,7 +154,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
   const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    return { kind: 'refused', deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey };
+    return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey };
   }
   const logEntry = keyVerdict.matching[0] as KeyEntry;
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });

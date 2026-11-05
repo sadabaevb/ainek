@@ -14,8 +14,6 @@ interface Turn {
   message: ChatMessage;
   steps: StepEvent[];
   outcome?: ChatOutcome;
-  /** The tamper switch was on for this turn: a refusal then offers a retry with the honest key. */
-  tamper: boolean;
 }
 
 /** What the composer sends with: the selected model and the tamper switch, taken at the moment of sending. */
@@ -41,10 +39,12 @@ function Progress({ steps }: { steps: StepEvent[] }) {
   );
 }
 
-const TurnView = memo(function TurnView({ turn, idx, onCommit, onRetry }: { turn: Turn; idx: number; onCommit: (idx: number, outcome: VerifiedOutcome) => void; onRetry: (content: string) => void }) {
+const TurnView = memo(function TurnView({ turn, idx, onCommit, onRetry }: { turn: Turn; idx: number; onCommit: (idx: number, outcome: VerifiedOutcome) => void; onRetry: (content: string, model: string) => void }) {
   const { t } = useT();
   const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
-  const retry = useCallback(() => onRetry(turn.message.content), [onRetry, turn.message.content]);
+  const { outcome } = turn;
+  const tampered = outcome?.kind === 'refused' && outcome.tampered ? outcome.model : null;
+  const retry = useCallback(() => onRetry(turn.message.content, tampered ?? ''), [onRetry, turn.message.content, tampered]);
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>
@@ -58,7 +58,7 @@ const TurnView = memo(function TurnView({ turn, idx, onCommit, onRetry }: { turn
       {turn.outcome && 'reply' in turn.outcome && (
         <div className="bubble assistant"><span className="who">{t.assistant}</span>{turn.outcome.reply}</div>
       )}
-      {turn.outcome && <ProofCard outcome={turn.outcome} onCommit={commit} onRetry={turn.tamper && turn.outcome.kind === 'refused' ? retry : undefined} />}
+      {outcome && <ProofCard outcome={outcome} onCommit={commit} onRetry={tampered ? retry : undefined} />}
     </article>
   );
 });
@@ -135,7 +135,7 @@ export default function ChatPage() {
     const history: ChatMessage[] = turns.flatMap((x) => (x.outcome && 'reply' in x.outcome && typeof x.outcome.reply === 'string' ? [x.message, { role: 'assistant' as const, content: x.outcome.reply }] : []));
     const messages = [...history, { role: 'user' as const, content }];
     const idx = turns.length;
-    setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [], tamper: opts.tamper }]);
+    setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
       const outcome = await runChat(cfg, { ...opts, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
       setTurns(atTurn(idx, withOutcome(outcome)));
@@ -147,14 +147,13 @@ export default function ChatPage() {
 
   // `send` closes over the thread, so it is a new function every render; the retry callback reads the latest one through a ref and stays stable for the memoized turns.
   const sendRef = useRef(send);
-  sendRef.current = send;
-  const onRetryClick = useCallback(
-    (content: string) => {
-      setTamper(false);
-      void sendRef.current(content, { model: cfg.model, tamper: false });
-    },
-    [cfg.model],
-  );
+  useEffect(() => {
+    sendRef.current = send;
+  });
+  const onRetryClick = useCallback((content: string, model: string) => {
+    setTamper(false);
+    void sendRef.current(content, { model, tamper: false });
+  }, []);
 
   /** A chip sets the controls to the scenario it names and sends its prompt in one click. */
   function pick(chip: Chip) {
