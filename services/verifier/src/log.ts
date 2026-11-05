@@ -24,6 +24,19 @@ export function alreadyLogged(entry: KeyEntryInput, recent: readonly KeyEntry[])
   return recent.find((e) => e.signing_address === entry.signing_address && e.compose_hash === entry.compose_hash);
 }
 
+/** `log_key` returns the new index as a JSON number in the receipt's SuccessValue (base64). */
+export function parseLoggedIndex(successValueB64: string): number {
+  const text = Buffer.from(successValueB64, 'base64').toString('utf8');
+  let index: unknown;
+  try {
+    index = JSON.parse(text);
+  } catch {
+    throw new Error(`log_key returned no index (got ${JSON.stringify(text.slice(0, 40))})`);
+  }
+  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) throw new Error(`log_key returned no index (got ${JSON.stringify(text.slice(0, 40))})`);
+  return index;
+}
+
 export function keyLogWriter(cfg: { rpcUrl: string; contract: string; accountId: string; privateKey: string }): KeyLogWriter {
   const provider = new JsonRpcProvider({ url: cfg.rpcUrl });
   const account = new Account(cfg.accountId, provider, KeyPairSigner.fromSecretKey(cfg.privateKey as KeyPairString));
@@ -39,10 +52,7 @@ export function keyLogWriter(cfg: { rpcUrl: string; contract: string; accountId:
       if (status.Failure !== undefined || status.SuccessValue === undefined) {
         throw new Error(`log_key failed: ${JSON.stringify(outcome.status).slice(0, 300)}`);
       }
-      // `log_key` returns the new index as a JSON number.
-      const index = Number(JSON.parse(Buffer.from(status.SuccessValue, 'base64').toString('utf8') || 'NaN'));
-      if (!Number.isInteger(index)) throw new Error('log_key returned no index');
-      return { index, txHash: outcome.transaction.hash as string };
+      return { index: parseLoggedIndex(status.SuccessValue), txHash: outcome.transaction.hash as string };
     },
   };
 }

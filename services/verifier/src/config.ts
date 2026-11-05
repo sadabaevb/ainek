@@ -18,6 +18,8 @@ export interface VerifierConfig extends AinekConfig {
 }
 
 export const SIX_HOURS_NS = String(6n * 3600n * 1_000_000_000n);
+/** 24 days: under setTimeout's 2^31-1 ms limit. */
+export const MAX_INTERVAL_MIN = 24 * 24 * 60;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig {
   // Root .env is the one place for secrets (CLAUDE.md); variables already set in the shell win.
@@ -33,7 +35,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig
   const models = (env['VERIFIER_MODELS'] ?? 'z-ai/glm-5.3-flash').split(',').map((s) => s.trim()).filter(Boolean);
   if (models.length === 0) throw new Error('VERIFIER_MODELS is empty');
   const intervalMin = Number(env['VERIFIER_INTERVAL_MIN'] ?? '15');
-  if (!Number.isFinite(intervalMin) || intervalMin < 1) throw new Error(`VERIFIER_INTERVAL_MIN must be >= 1, got ${String(env['VERIFIER_INTERVAL_MIN'])}`);
+  // Upper bound: setTimeout takes a 32-bit ms delay (~24.8 days); past that it fires immediately and the loop spins.
+  if (!Number.isFinite(intervalMin) || intervalMin < 1 || intervalMin > MAX_INTERVAL_MIN) {
+    throw new Error(`VERIFIER_INTERVAL_MIN must be between 1 and ${MAX_INTERVAL_MIN}, got ${String(env['VERIFIER_INTERVAL_MIN'])}`);
+  }
 
   return {
     ...ainekConfigFromEnv(env),
@@ -41,7 +46,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig
     privateKey,
     models,
     intervalMs: intervalMin * 60_000,
-    reportsDir: env['VERIFIER_DATA_DIR'] ?? path.resolve(import.meta.dirname, '../data/reports'),
+    // `||`, not `??`: an empty `VERIFIER_DATA_DIR=` line in .env must mean "default", not mkdir('').
+    reportsDir: env['VERIFIER_DATA_DIR'] || path.resolve(import.meta.dirname, '../data/reports'),
     dedupWindowNs: SIX_HOURS_NS,
   };
 }
