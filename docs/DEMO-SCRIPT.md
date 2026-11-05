@@ -40,9 +40,14 @@ Rules for the recording
 Day-of checklist (an hour before)
 - Verifier daemon running; `/log` shows an entry younger than 24 h (the chat refuses by design otherwise). Keep it running
   through both recording days.
-- NEAR AI key: spend limit not hit; one warm-up request succeeds (attestation, relay, NRAS proxy).
+- NEAR AI key: spend limit not hit; one warm-up request succeeds (`pnpm demo:live`: attestation and the NRAS proxy, with
+  nothing cached in the recording browser).
 - Signer account: storage prepaid, NEAR balance for gas; the wallet is reconnected after the site-data clear (see rules). Tier 2: agent and Telegram bot running,
   OutLayer job warmed with a throwaway request, whitelist entry for the demo receiver present.
+- In the recording browser, after a site-data clear, time the Catch 1 path once ("Swap the key before sending": metadata,
+  attestation, log read; about 4 s on Nov 5, 13 s seen on Nov 3; nothing is sent, so it costs nothing). If the strip runs
+  past ~6 s, retake later or trim it in the edit. Clear the site data again right before the take: this run warmed the
+  60-minute cache.
 - A spare take of every scene exists from Nov 11. Notifications off.
 
 X post, Tier 2 shipped: "We built Ainek at NEAR HACKATHON — a glass box for private AI agents on @NEARProtocol. It catches

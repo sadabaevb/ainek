@@ -100,10 +100,10 @@ pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live fr
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
 pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. The chat needs NEARAI_API_KEY
                                  #   (server-side only); /log, /verify, /auditor and /trust work without it. Send "hello" → the
-                                 #   browser verifies the TEE evidence itself (up to ~40 s cold, then cached 60 min), encrypts to
-                                 #   the attested model key, checks the signature and shows the proof card. Needs a log entry
-                                 #   younger than 24 h (see step 1); otherwise the red "Key not in the public log" card is the
-                                 #   expected result
+                                 #   browser verifies the TEE evidence itself (a few seconds cold, longer when the attestation
+                                 #   services are slow, see "Metrics"; then cached 60 min), encrypts to the attested model key,
+                                 #   checks the signature and shows the proof card. Needs a log entry younger than 24 h (see
+                                 #   step 1); otherwise the red "Key not in the public log" card is the expected result
 ```
 
 With `pnpm -F web dev` running, at `http://localhost:3000`:
@@ -212,14 +212,18 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-<!-- TODO Nov 10–11: paste the table printed by `pnpm demo:metrics --runs 50` (it also writes docs/metrics.json); add the policy-block and time-to-execute rows from the Tier 2 run if it ships -->
+<!-- TODO Nov 10–11: paste the table printed by `pnpm demo:metrics --runs 50` (it also writes docs/metrics.json); add the policy-block and time-to-execute rows from the Tier 2 run if it ships; the same day re-time the browser (3 runs, Ainek's IndexedDB cache cleared, runs > 30 s apart because of the collateral proxy's cache header) and update the browser sentence below, keeping it next to the table -->
 
 Measured by `pnpm demo:metrics --runs N`: N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
 a cold attestation on every run, the public-log check with the honest and a swapped key, one E2EE exchange, the signature
-and the proof. The browser is not measured by the script: its cold attestation takes longer (up to ~40 s, see "Try it")
-and is then cached for 60 minutes, so its usual case is the "later message" row. The on-chain commit is measured once, not
-per run: `commit_proof` burnt 2.41 TGas (0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR; 130 +
-account + kind bytes per SPEC §4.2, here a 26-character account) in
+and the proof. The browser is not measured by the script. In two runs on Nov 5 with nothing cached in this browser
+(Ainek's IndexedDB cache cleared, page reloaded, runs more than 30 s apart because NEAR AI's collateral proxy lets the
+browser cache for 29 s; the proxies' own caches may have been warm) its attestation took 3.4–3.6 s (13 s on Nov 3 with
+the same cold path) and the whole first message about 9 s; a slow or retried collateral or NVIDIA verdict fetch, both
+through NEAR AI's proxies in the browser, makes it longer. The browser then keeps the attestation for 60 minutes, so its
+usual case is the "later message" row. The on-chain commit is measured once, not per run: `commit_proof` burnt 2.41 TGas
+(0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR; 130 + account + kind bytes per SPEC §4.2, here a
+26-character account) in
 [8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM).
 
 ## Repository
