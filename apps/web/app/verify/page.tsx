@@ -7,8 +7,9 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
 import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
-import { CheckList } from '@/components/checks';
+import { CardHead, CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
+import { RedCard } from '@/components/red-card';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
 import { commitExchange } from '@/lib/flow';
@@ -118,7 +119,7 @@ function VerifyInner() {
       <p className="muted">{fill(tv.intro, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} placeholder={tv.placeholder} />
+        <JsonTextarea value={text} onChange={setText} onError={setError} placeholder={tv.placeholder} />
         <div className="actions">
           <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>{tv.verify}</button>
           <LoadFileButton onText={setText} onError={setError} />
@@ -136,13 +137,12 @@ function VerifyInner() {
         </details>
       )}
 
-      {missingId && <p className="card red">{tv.noExchange(missingId)}</p>}
-      {error && <p className="card red">{error}</p>}
+      {missingId && <RedCard title={tv.noExchange(missingId)} />}
+      {error && <RedCard title={error} />}
 
       {result && (
-        <section className={`card ${result.report.ok ? '' : 'red'}`}>
-          <h3>{result.report.ok ? tv.ok : tv.failed}</h3>
-          <p className="muted small">{tv.source(tv.origin[result.origin])}</p>
+        <section className="card">
+          <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>
           <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">

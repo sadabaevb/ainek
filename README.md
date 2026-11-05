@@ -229,7 +229,8 @@ Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test); `cargo test` in
 - Libraries: `@nearai/inference-sdk` 0.2.1 (attestation and signature verification, E2EE), `@hot-labs/near-connect` +
   `near-connect-hooks` (wallet), `near-api-js` 7 (RPC error types), `zod` (schemas), `tweetnacl` (ed25519), `ethers`
   (sha256, EIP-191 recovery for ecdsa signatures), `@phala/dcap-qvl` and `jose` (offline replay of Intel and NVIDIA
-  evidence), Next.js 16 / React 19; Rust: `near-sdk` 5, `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
+  evidence), Next.js 16 / React 19, the Inter font self-hosted under `apps/web/public/fonts` (SIL OFL 1.1, licence
+  alongside); Rust: `near-sdk` 5, `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
 - Reference material followed (no code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
   verification guide, `near-examples/nearai-cloud-verification-example`, `nearai/nearai-cloud-verifier`,
   `out-layer/private-dao-example` (Tier 2).

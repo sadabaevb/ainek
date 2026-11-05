@@ -1,34 +1,24 @@
 'use client';
 // The card a person sees after each reply (SPEC §5.3): one line per guarantee, ✓/✗/—, red states in their own design.
 import Link from 'next/link';
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { toDisclosure } from '@ainek/proof';
+import { toDisclosure, type KeyLogReason } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
 import { canCommitNow, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { downloadJson } from '@/lib/encoding';
-import { observedUtc, seconds, short } from '@/lib/format';
+import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
-import { CheckList, Row } from './checks';
-
-function RedCard({ title, body, lines }: { title: string; body?: string; lines: ReactNode[] }) {
-  const { t } = useT();
-  return (
-    <section className="card red">
-      <h3>{title}</h3>
-      {body && <p>{body}</p>}
-      <details>
-        <summary>{t.details}</summary>
-        <ul className="mono">{lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
-      </details>
-    </section>
-  );
-}
+import { fill } from '@/lib/fill';
+import { CardHead, CheckList, Row } from './checks';
+import { RedCard } from './red-card';
+import { CopyButton } from './copy-button';
 
 export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcome: ChatOutcome; onCommit?: (outcome: VerifiedOutcome) => void }) {
   const { t } = useT();
   const cfg = useConfig();
   const { signedAccountId } = useNearWallet(); // the button's label follows the wallet as it is now, not the turn's frozen status
+  const [explain, setExplain] = useState(false);
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
   if (outcome.kind === 'failed') {
@@ -37,10 +27,19 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
     return <RedCard title={title} body={body} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
+    // The decision is the same (nothing sent); the wording follows the verdict's reason, decided once in @ainek/proof.
+    const v = outcome.keyVerdict;
+    const texts: Record<Exclude<KeyLogReason, 'ok'>, [string, string]> = {
+      'split-view': [t.refusedSplitTitle, t.refusedSplitBody],
+      'below-quorum': [t.refusedQuorumTitle, t.refusedQuorumBody(v.confirmedBy.length, cfg.quorum)],
+      'untrusted-only': [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))],
+      absent: [t.refusedTitle, t.refusedBody],
+    };
+    const [title, body] = texts[v.reason === 'ok' ? 'absent' : v.reason];
     return (
       <RedCard
-        title={t.refusedTitle}
-        body={t.refusedBody}
+        title={title}
+        body={body}
         lines={[
           `key seen by the client: ${outcome.seenKey}`,
           `verdict: ${outcome.keyVerdict.status}: ${outcome.keyVerdict.detail}`,
@@ -69,23 +68,24 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
   const { proof, deployment, modelAttestation: m, logEntry, keyVerdict, exchange, report, logSource } = outcome;
   const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
   const since = observedUtc(logEntry.observed_at).slice(0, 10);
-  const commitShort = short(proof.commit ?? '');
+  const commit = proof.commit ?? '';
   const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
+  const hint = (key: keyof typeof t.hints) => (explain ? t.hints[key] : undefined);
   const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
 
   return (
     <section className="card">
-      <h3>{t.card}</h3>
-      <Row status="ok" label={t.rowModel}>{proof.model}, {t.attested} (compose {short(composeHash)})</Row>
-      <Row status="ok" label={t.rowHardware}>Intel TDX {m.tcbStatus}, NVIDIA GPU {m.gpuEvidence} ({deployment.tookMs === 0 ? t.cached : `${t.checkedInBrowser}, ${seconds(deployment.tookMs)}`})</Row>
-      <Row status="ok" label={t.rowKey}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}</Row>
-      <Row status="ok" label={t.rowHashes}>{t.hashesOk}</Row>
-      <Row status="ok" label={t.rowE2ee}>{t.e2eeYes}</Row>
-      <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain}>
+      <CardHead status="ok" when={utcMinute(exchange.sentAt)}>{t.cardVerified}</CardHead>
+      <Row status="ok" label={t.rowModel} hint={hint('model')}>{proof.model}, {t.attested} (compose {short(composeHash)})</Row>
+      <Row status="ok" label={t.rowHardware} hint={hint('hardware')}>Intel TDX {m.tcbStatus}, NVIDIA GPU {m.gpuEvidence} ({deployment.tookMs === 0 ? t.cached : `${t.checkedInBrowser}, ${seconds(deployment.tookMs)}`})</Row>
+      <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}</Row>
+      <Row status="ok" label={t.rowHashes} hint={hint('hashes')}>{t.hashesOk}</Row>
+      <Row status="ok" label={t.rowE2ee} hint={hint('e2ee')}>{t.e2eeYes}</Row>
+      <Row status={proof.commitTx ? 'ok' : 'skipped'} label={t.rowChain} hint={hint(proof.commitTx ? 'chain' : 'chainPending')}>
         {proof.commitTx ? (
-          <>{t.chainTx(commitShort)} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>
+          <>{t.chainTx(short(commit))} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a> <CopyButton text={proof.commitTx} /></>
         ) : (
-          `${chainText} (commit ${commitShort})`
+          <>{chainText} (commit {short(commit)}) <CopyButton text={commit} /></>
         )}
         {onCommit && canCommitNow(outcome.commit) && (
           <>
@@ -94,11 +94,13 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
           </>
         )}
       </Row>
+      <p className="small hint-line"><button type="button" className="linklike" onClick={() => setExplain((v) => !v)}>{explain ? t.hideRows : t.explainRows}</button></p>
       <div className="actions">
         <Link className="btn" href={`/verify?id=${encodeURIComponent(proof.completionId)}`}>{t.reverify}</Link>
         <a className="btn" href={vcUrl} target="_blank" rel="noreferrer">{t.openVc}</a>
         <button type="button" className="btn" onClick={disclose}>{t.disclose}</button>
       </div>
+      <p className="muted small">{fill(t.discloseHint, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
       <details>
         <summary>{t.details}</summary>
         <CheckList items={report.checks} />

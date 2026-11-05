@@ -11,17 +11,19 @@ export interface Column<Row> {
 
 export function StackTable<Row>({ columns, rows, rowKey }: { columns: Column<Row>[]; rows: Row[]; rowKey: (row: Row) => string }) {
   return (
-    <table className="stack">
-      <thead>
-        <tr>{columns.map((c) => <th key={c.label}>{c.label}</th>)}</tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={rowKey(row)}>
-            {columns.map((c) => <td key={c.label} className={c.className} data-label={c.label}><span>{c.cell(row)}</span></td>)}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="table-wrap">
+      <table className="stack">
+        <thead>
+          <tr>{columns.map((c) => <th key={c.label}>{c.label}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={rowKey(row)}>
+              {columns.map((c) => <td key={c.label} className={c.className} data-label={c.label}><span>{c.cell(row)}</span></td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

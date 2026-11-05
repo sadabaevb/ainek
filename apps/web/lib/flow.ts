@@ -26,9 +26,13 @@ import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
 export type StepId = 'metadata' | 'attestation' | 'key-log' | 'encrypt' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store' | 'commit';
+/** Wording key for the progress strip: the step id, or a route variant where the same step means something else. */
+export type Phrase = StepId | 'attestation-gateway' | 'send-plain' | 'signature-gateway';
 export type StepStatus = 'running' | 'ok' | 'fail' | 'skipped';
 export interface StepEvent {
   id: StepId;
+  /** Set on running events: which wording the UI shows while this step runs. */
+  say?: Phrase;
   status: StepStatus;
   detail: string;
 }
@@ -85,8 +89,8 @@ function fail(emit: Emit, id: StepId, reason: string): never {
 }
 
 /** Runs one step: emits running, then ok with `okDetail(result)`, or fail and aborts the flow. Always emitting running keeps runChat's "step last seen running" exact. */
-async function runStep<T>(emit: Emit, id: StepId, running: string, fn: () => Promise<T>, okDetail: (value: T) => string): Promise<T> {
-  emit({ id, status: 'running', detail: running });
+async function runStep<T>(emit: Emit, id: StepId, running: string, fn: () => Promise<T>, okDetail: (value: T) => string, say: Phrase = id): Promise<T> {
+  emit({ id, status: 'running', detail: running, say });
   try {
     const value = await fn();
     emit({ id, status: 'ok', detail: okDetail(value) });
@@ -236,11 +240,11 @@ async function nonTeeRoute(cfg: PublicConfig, { model, messages, onStep: emit }:
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
   const meta = await runStep(emit, 'metadata', `asking the gateway about ${model}`, () => fetchModelMetadata(model), (m) => `${model}: provider ${String(m.providerType)}, model attestation ${m.attestationSupported === true ? 'supported' : 'not supported'}`);
   if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, onStep: emit }, progress); // it is attested after all: use the real path
-  const gateway = await runStep(emit, 'attestation', 'verifying the gateway only (this model has no model attestation)', () => verifyGateway(policy), (g) => `gateway ${g.tcbStatus}; no model evidence exists for ${model}`);
+  const gateway = await runStep(emit, 'attestation', 'verifying the gateway only (this model has no model attestation)', () => verifyGateway(policy), (g) => `gateway ${g.tcbStatus}; no model evidence exists for ${model}`, 'attestation-gateway');
   emit({ id: 'key-log', status: 'skipped', detail: 'no model key to look up: nothing to verify against the log' });
-  const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`);
+  const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`, 'send-plain');
   progress.reply = exchange.reply;
-  const signature = await runStep(emit, 'signature', 'fetching the completion signature', () => fetchSignature(exchange.completionId), (s) => `signature_kind ${s.kind}`);
+  const signature = await runStep(emit, 'signature', 'fetching the completion signature', () => fetchSignature(exchange.completionId), (s) => `signature_kind ${s.kind}`, 'signature-gateway');
   await runStep(emit, 'sdk-check', 'SDK check against the gateway signer', async () => checkGatewayResponse(exchange, signature, gateway), () => 'SDK: the gateway signed these bytes; this says nothing about where the model ran');
   emit({ id: 'proof', status: 'skipped', detail: 'no model proof for a non-attested route' });
   return { kind: 'non-tee', reply: exchange.reply, gateway, exchange, signature, model };

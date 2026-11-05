@@ -18,15 +18,20 @@ export interface KeyLogQuery {
 }
 
 export type KeyLogStatus = 'ok' | 'not-logged' | 'split-view';
+/** Why the status is what it is. The UI words it; `detail` is the English technical line. */
+export type KeyLogReason = 'ok' | 'split-view' | 'below-quorum' | 'untrusted-only' | 'absent';
 
 export interface KeyLogVerdict {
   status: KeyLogStatus;
+  reason: KeyLogReason;
   /** Distinct trusted verifiers that logged this exact key. */
   confirmedBy: string[];
   /** Entries that matched the query, trusted verifiers only. */
   matching: KeyEntry[];
   /** Entries for the model from verifiers outside the trust set: shown, never counted. */
   untrusted: KeyEntry[];
+  /** Distinct verifiers outside the trust set that logged this exact key: the card names them instead of saying "not in the log". */
+  loggedByUntrusted: string[];
   detail: string;
 }
 
@@ -65,20 +70,28 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   const trusted = forModel.filter((e) => trustedSet.has(e.verifier));
   const untrusted = forModel.filter((e) => !trustedSet.has(e.verifier));
 
-  const split = findSplitView(forModel, query.model, query.trustedVerifiers);
-  if (split) return { status: 'split-view', confirmedBy: [], matching: [], untrusted, detail: `${split.detail}: refusing to send` };
-
   const wanted = normalizeHex(query.signingAddress);
-  const matching = trusted.filter(
-    (e) => normalizeHex(e.signing_address) === wanted && (query.composeHash === undefined || normalizeHex(e.compose_hash) === normalizeHex(query.composeHash)),
-  );
-  const confirmedBy = [...new Set(matching.map((e) => e.verifier))];
+  const hasKey = (e: KeyEntry) => normalizeHex(e.signing_address) === wanted && (query.composeHash === undefined || normalizeHex(e.compose_hash) === normalizeHex(query.composeHash));
+  const matching = trusted.filter(hasKey);
+  const confirmedBy = verifiersOf(matching);
+  const loggedByUntrusted = verifiersOf(untrusted.filter(hasKey));
+
+  const split = findSplitView(forModel, query.model, query.trustedVerifiers);
+  if (split) return { status: 'split-view', reason: 'split-view', confirmedBy: [], matching: [], untrusted, loggedByUntrusted, detail: `${split.detail}: refusing to send` };
   if (confirmedBy.length >= query.quorum) {
-    return { status: 'ok', confirmedBy, matching, untrusted, detail: `key ${shortHex(wanted)} confirmed by ${confirmedBy.join(', ')}` };
+    return { status: 'ok', reason: 'ok', confirmedBy, matching, untrusted, loggedByUntrusted, detail: `key ${shortHex(wanted)} confirmed by ${confirmedBy.join(', ')}` };
   }
-  const why = matching.length === 0 ? `key ${shortHex(wanted)} is not in the public log` : `only ${confirmedBy.length} of ${query.quorum} required confirmations`;
-  return { status: 'not-logged', confirmedBy, matching, untrusted, detail: `${why}: not sent (fail-closed)` };
+  // A trusted match short of quorum outranks entries from outside the trust set, which are named, never counted.
+  const reason = matching.length > 0 ? 'below-quorum' : loggedByUntrusted.length > 0 ? 'untrusted-only' : 'absent';
+  const why = {
+    'below-quorum': `only ${confirmedBy.length} of ${query.quorum} required confirmations`,
+    'untrusted-only': `key ${shortHex(wanted)} is logged only by ${loggedByUntrusted.join(', ')}, outside the trust set`,
+    absent: `key ${shortHex(wanted)} is not in the public log`,
+  }[reason];
+  return { status: 'not-logged', reason, confirmedBy, matching, untrusted, loggedByUntrusted, detail: `${why}: not sent (fail-closed)` };
 }
+
+const verifiersOf = (entries: readonly KeyEntry[]): string[] => [...new Set(entries.map((e) => e.verifier))];
 
 
 // ---- The entry a proof points at, with the public log as the source of truth -----------------------
