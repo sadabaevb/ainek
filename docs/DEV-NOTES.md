@@ -697,3 +697,19 @@ timestamp i64 LE ‖ attached_usd)`; хвост REPORTDATA — 32 нуля. Це
   политики, и с тем, какой именно секрет (ключ) был подключён.
 - Следствие для SPEC §6: `policy_pubkey` в контракт пишем один раз (owner), получив его из первого прогона job; привязка
   секрета к сборке — `secrets set --build <wasm sha256>`, иначе любая новая версия job прочитает тот же ключ.
+
+## 2026-11-05 — контракт v2 (proof commits) задеплоен, ежедневный log_key — Дастан
+
+- `ainek-log-dastan.testnet` обновлён до v2 одним tx `7NdG7S1UhDeUXTycb8r51jRPiMxD4PxgSLw1g9ycsdfj` (deploy + `migrate`):
+  старые коллекции сохранили префиксы, добавлены `commits` (`"<account>/<commit>"` → `{kind, log_index, block_height}`) и
+  `storage_credit` (yoctoNEAR на аккаунт). Лог ключей не тронут. SPEC §4.2: `commit_proof(commit, kind, log_index)` без
+  депозита (под FC-ключ), `deposit_storage()` payable полным ключом, view `proof_commit`, `storage_balance_of`, событие
+  `proof_committed`. Списывается ровно `storage_byte_cost × добавленные байты`; без предоплаты — `not enough prepaid storage`.
+  `log_index` должен существовать; повтор того же commit от того же аккаунта отвергается. Тесты: 15 unit + sandbox e2e
+  с настоящим FC-ключом, ограниченным `commit_proof`.
+- Для клиента: перед первым `commit_proof` аккаунт один раз вызывает `deposit_storage` полным ключом (0.01 NEAR хватит на
+  ~100 коммитов); остаток виден через `storage_balance_of`.
+- Свежие записи для `z-ai/glm-5.3-flash`: #1 tx `881Zaugh4ok9VU2FyVYdnJQN8fm3ZDd3aqeHVoBina2P`, #2 tx
+  `43xy1qkUhuV5cmm88RSrKX2whTUCqXy9WBeXehrXmMUP`. До демона — `contracts/ainek/scripts/log-key-stopgap.sh` в crontab Дастана
+  (09:00 ежедневно, лог `~/.ainek-log-key.log`); это та же запись из test-vectors со свежим `observed_at`, не живой
+  отчёт — убрать, когда заработает `services/verifier`.
