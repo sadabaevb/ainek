@@ -1,0 +1,36 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadConfig } from './config.ts';
+
+const env = {
+  NEARAI_API_KEY: 'k',
+  AGENT_ACCOUNT_ID: 'agent.testnet',
+  AGENT_FC_PRIVATE_KEY: 'ed25519:' + 'a'.repeat(40),
+  OWNER_ACCOUNT_ID: 'owner.testnet',
+  AINEK_TOKEN: 'token.testnet',
+  OUTLAYER_PAYMENT_KEY: 'o:n:s',
+  OUTLAYER_PROJECT: 'o.testnet/policy',
+  OUTLAYER_WASM_HASH: 'ab'.repeat(32),
+  POLICY_TEE_PUBKEY: 'cd'.repeat(32),
+} as NodeJS.ProcessEnv;
+
+test('loadConfig: the required variables are enough; the bot is optional, the API URL and decimals have defaults', () => {
+  const c = loadConfig(env);
+  assert.equal(c.outlayer.apiUrl, 'https://testnet-api.outlayer.ai');
+  assert.equal(c.tokenDecimals, 6);
+  assert.equal(c.telegram, null);
+  assert.deepEqual(loadConfig({ ...env, TELEGRAM_BOT_TOKEN: 't', TELEGRAM_OWNER_CHAT_ID: '1' }).telegram, { token: 't', ownerChatId: '1' });
+});
+
+test('loadConfig: refuses to start with an owner key in its environment, so the agent can never approve for itself', () => {
+  assert.throws(() => loadConfig({ ...env, OWNER_PRIVATE_KEY: 'ed25519:x' }), /must never hold an owner key/);
+  assert.throws(() => loadConfig({ ...env, AGENT_ADMIN_PRIVATE_KEY: 'ed25519:x' }), /must never hold an owner key/);
+});
+
+test('loadConfig: refuses the sample log, malformed hashes and a key that is not ed25519; a missing variable is named', () => {
+  assert.throws(() => loadConfig({ ...env, AINEK_LOG_SOURCE: 'sample' }), /only the contract log/);
+  assert.throws(() => loadConfig({ ...env, OUTLAYER_WASM_HASH: 'placeholder' }), /64 lowercase hex/);
+  assert.throws(() => loadConfig({ ...env, AGENT_FC_PRIVATE_KEY: 'plain' }), /ed25519/);
+  const { NEARAI_API_KEY: _omitted, ...withoutKey } = env;
+  assert.throws(() => loadConfig(withoutKey as NodeJS.ProcessEnv), /NEARAI_API_KEY is required/);
+});
