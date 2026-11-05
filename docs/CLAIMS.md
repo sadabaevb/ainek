@@ -44,9 +44,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
 - **A measurement allowlist.** Our log is a *key* allowlist: the client sends only to a key a trusted verifier logged. The
   offline replay also compares the attested compose hash with the logged one; the browser and `demo:live` show it on the
-  card and point the proof at a log entry with that compose when there is one, but still send when there is none (SPEC §7.1
-  asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not governed yet (next
-  steps). Instances of a model share one signing key, so the signature alone does not say which deployment answered.
+  card and point the proof at a log entry with that compose when there is one, but still send when there is none, and the
+  card says so (SPEC §7.1 asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not
+  governed yet (next steps). Instances of a model share one signing key, so the signature alone does not say which deployment
+  answered.
 - **A trustless read of the log.** The client reads `latest_keys` through one JSON-RPC endpoint (FastNear by default,
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested

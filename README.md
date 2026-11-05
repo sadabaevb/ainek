@@ -54,7 +54,8 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 | ![The public key log page](docs/screenshots/log.png) | ![The auditor verdict card](docs/screenshots/auditor.png) |
 
 The card's compose hash comes from the attestation checked before sending, and its log entry is the newest one with that
-key and that compose. See "What we do not claim".
+key and that compose; if the log window has none, it is the newest for the key and the card says so. See "What we do not
+claim".
 
 ## How NEAR is used
 
@@ -148,9 +149,10 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
 - **A measurement allowlist.** Our log is a *key* allowlist: the client sends only to a key a trusted verifier logged. The
   offline replay also compares the attested compose hash with the logged one; the browser and `demo:live` show it on the
-  card and point the proof at a log entry with that compose when there is one, but still send when there is none (SPEC §7.1
-  asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not governed yet (next
-  steps). Instances of a model share one signing key, so the signature alone does not say which deployment answered.
+  card and point the proof at a log entry with that compose when there is one, but still send when there is none, and the
+  card says so (SPEC §7.1 asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not
+  governed yet (next steps). Instances of a model share one signing key, so the signature alone does not say which deployment
+  answered.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
