@@ -878,6 +878,20 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
 отчёт отдаёт то один, то другой — теперь в логе есть оба; клиенту при сверке по `composeHash` принимать любой
 залогированный compose для ключа.
 
+## 2026-11-05 — демон запущен, второй верификатор зарегистрирован — Дастан
+
+- Демон `ainek-dev-dastan.testnet` работает постоянно с 13:18 UTC на машине Дастана
+  (`nohup pnpm -F verifier start`, лог `~/.ainek-verifier.log`, раунд каждые 15 мин, запись раз в 6 ч или при смене
+  ключа/compose). Это ноутбук, не сервер: до выкатки контейнера на хост окно 24 ч держится только пока он включён.
+- Второй верификатор: аккаунт `ainek-v2-dastan.testnet` (faucet, tx `5s2zLG9kP63J9zVutg1qq2zfa8zeDTKEEm2wWd48LnfR`),
+  `register_verifier` от владельца `ainek-log-dastan.testnet` — tx `CFxad5j3xCncwZmK4WHX3Pq4TyKsrZKGWGAcBog8n6mn`.
+  `verifiers()` → `[ainek-dev-dastan.testnet, ainek-v2-dastan.testnet]`. Записей от v2 пока **нет**: инстанс не запущен,
+  его ключ в keychain Дастана. Запуск на второй машине: тот же образ, `VERIFIER_ACCOUNT_ID=ainek-v2-dastan.testnet` и его
+  `VERIFIER_PRIVATE_KEY`.
+- Бектуру: когда v2 начнёт писать — добавить его в `AINEK_TRUSTED_VERIFIERS`; `AINEK_QUORUM=2` включать только после
+  того, как оба пишут стабильно, иначе чат откажет. Имена из ROADMAP (`ainek.testnet`, `v1`/`v2.ainek.testnet`) не
+  совпадают с фактическими (`ainek-log-dastan.testnet`, `ainek-dev-dastan`, `ainek-v2-dastan`) — решить до заморозки README.
+
 ## 2026-11-05 — proof указывает на запись лога с тем же compose (Бектур)
 
 У инстансов модели один ключ подписи, за ним два деплоя, и теперь в логе есть оба compose. Клиент брал `matching[0]`,
