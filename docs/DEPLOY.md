@@ -40,7 +40,56 @@ Settings names and defaults above are Vercel's as of Nov 2026; confirm them in t
 
 ## Policy job on OutLayer (Tier 2, Dastan)
 
-Recorded here once the job is deployed, because `register_agent` and the README need them: the project name on
-OutLayer testnet, the `wasm_hash` of the reproducible build, the policy public key (`POLICY_TEE_PUBKEY`, derived from
-the `PROTECTED_SIGNING_KEY:ed25519` secret inside the TEE) and the command that reproduces the hash from the repo.
-Until then see `docs/spike-outlayer/` and the spike B section of `docs/DEV-NOTES.md`.
+The job is `jobs/policy` (SPEC §3.5, §6): a WASI P1 binary that reads the action from stdin, the policy and the
+signing key from OutLayer secrets, and prints a signed decision.
+
+### 1. Build and hash
+
+```
+scripts/wasm-hash.sh        # prints: <sha256>  target/wasm32-wasip1/release/ainek-policy.wasm
+```
+
+The toolchain and `Cargo.lock` are pinned and build paths are remapped, so the hash does not depend on where the repo
+is checked out. The `policy-wasm` GitHub Action prints the same number for every push that touches the job. If your
+number differs from the one in the table below, you are not looking at the deployed code.
+
+### 2. Upload and deploy (OutLayer testnet)
+
+```
+outlayer upload jobs/policy/target/wasm32-wasip1/release/ainek-policy.wasm
+outlayer deploy policy <url printed by upload> --target wasm32-wasip1
+```
+
+### 3. Secrets, locked to this build
+
+```
+outlayer secrets set --project <owner>/policy --build <sha256 from step 1> \
+  --generate PROTECTED_ED25519:ed25519 \
+  '{"POLICY_JSON": "<the policy of SPEC §6.1 as one JSON string>", "WASM_HASH": "<sha256 from step 1>"}'
+```
+
+- `PROTECTED_ED25519` is generated inside the TEE; we never see it. The job prints only its public key (`pubkey`).
+- `POLICY_JSON` is the owner's policy. It is never on-chain and never in git; only `policy_hash` is public.
+- `WASM_HASH` is the hash from step 1: the job cannot hash itself, so it reports this value in `wasm_hash`.
+- `--build` locks all three to this exact wasm ("one build only"): another build of the job cannot read the key or
+  the policy. A new build therefore means new secrets, a **new public key** and `update_policy` on the contract.
+
+### 4. First run: get the public key
+
+```
+outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasip1 \
+  --secrets-account <owner> --secrets-profile default
+```
+
+`pubkey` in the output is `tee_pubkey` (`POLICY_TEE_PUBKEY` in `.env`) for `register_agent`; `decision.policy_hash` is
+`policy_hash`. Check the run's attestation (`GET https://testnet-api.outlayer.ai/attestations/<job_id>`): its
+`wasm_hash` must equal the hash from step 1.
+
+### Deployed values
+
+| What | Value |
+|---|---|
+| OutLayer project (testnet) | `ainek-dev-dastan.testnet/policy` |
+| `wasm_hash` of the deployed build | not deployed yet; the spike build `882c5c5a…1c5f` is still the active one |
+| policy public key (`tee_pubkey`) | not generated yet |
+| `policy_hash` | not registered yet |
