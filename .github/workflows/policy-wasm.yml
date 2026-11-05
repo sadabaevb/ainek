@@ -30,3 +30,9 @@ jobs:
           echo "ainek-policy.wasm sha256: $hash"
           echo "### ainek-policy.wasm" >> "$GITHUB_STEP_SUMMARY"
           echo "sha256: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"
+      # The exact bytes that were hashed, so a differing local build can be compared with them.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ainek-policy-wasm
+          path: jobs/policy/target/wasm32-wasip1/release/ainek-policy.wasm
+          if-no-files-found: error
