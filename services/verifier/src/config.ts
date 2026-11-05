@@ -15,22 +15,26 @@ export interface VerifierConfig extends AinekConfig {
   reportsDir: string;
   /** A key already logged by this verifier within this window is not logged again (gas). */
   dedupWindowNs: string;
+  /** `--dry-run`: attest and print the entry, send nothing. Needs no account or key. */
+  dryRun: boolean;
 }
 
 export const SIX_HOURS_NS = String(6n * 3600n * 1_000_000_000n);
 /** 24 days: under setTimeout's 2^31-1 ms limit. */
 export const MAX_INTERVAL_MIN = 24 * 24 * 60;
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { dryRun?: boolean } = {}): VerifierConfig {
+  const dryRun = opts.dryRun === true;
   // Root .env is the one place for secrets (CLAUDE.md); variables already set in the shell win.
   const repoRoot = path.resolve(import.meta.dirname, '../../..');
   const envFile = path.join(repoRoot, '.env');
   if (env === process.env && existsSync(envFile)) process.loadEnvFile(envFile);
 
-  const accountId = env['VERIFIER_ACCOUNT_ID'];
-  const privateKey = env['VERIFIER_PRIVATE_KEY'];
-  if (!accountId || !privateKey || !privateKey.startsWith('ed25519:') || privateKey.length < 20) {
-    throw new Error('VERIFIER_ACCOUNT_ID and VERIFIER_PRIVATE_KEY (ed25519:…) are required; see .env.example');
+  const accountId = env['VERIFIER_ACCOUNT_ID'] ?? '';
+  const privateKey = env['VERIFIER_PRIVATE_KEY'] ?? '';
+  // A dry run sends nothing, so it must work from a clean clone where .env still holds the placeholders.
+  if (!dryRun && (!accountId || !privateKey.startsWith('ed25519:') || privateKey.length < 20)) {
+    throw new Error('VERIFIER_ACCOUNT_ID and VERIFIER_PRIVATE_KEY (ed25519:…) are required; see .env.example. To try the verifier without an account: pnpm -F verifier dry-run');
   }
   const models = (env['VERIFIER_MODELS'] ?? 'z-ai/glm-5.3-flash').split(',').map((s) => s.trim()).filter(Boolean);
   if (models.length === 0) throw new Error('VERIFIER_MODELS is empty');
@@ -49,5 +53,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig
     // `||`, not `??`: an empty `VERIFIER_DATA_DIR=` line in .env must mean "default", not mkdir('').
     reportsDir: env['VERIFIER_DATA_DIR'] || path.resolve(import.meta.dirname, '../data/reports'),
     dedupWindowNs: SIX_HOURS_NS,
+    dryRun,
   };
 }
