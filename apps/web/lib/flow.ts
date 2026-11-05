@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, buildCheckedModelProof, evaluateKeyLog, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -147,7 +147,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
     return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey };
   }
-  const logEntry = keyVerdict.matching[0] as KeyEntry;
+  const logEntry = proofEntryOf(keyVerdict, composeHashOf(modelAttestation.deployment));
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });
 
   // 3. Encrypt to the verified key (nothing leaves the browser yet), then send through the proxy and decrypt the reply.

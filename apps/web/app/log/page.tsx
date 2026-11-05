@@ -1,6 +1,6 @@
 'use client';
 // The public key log as the client sees it: who logged which key for which model, and whether two trusted
-// verifiers disagree (split view). Wallet login here adds the function-call key later used for commit_proof.
+// verifiers disagree (split view). Wallet login here asks for the function-call key later used for commit_proof.
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
 import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
@@ -101,7 +101,7 @@ export default function LogPage() {
               {keys.map((k) => {
                 const p = k.access_key.permission;
                 const fc = typeof p === 'object' && p !== null && 'FunctionCall' in p ? p.FunctionCall : null;
-                return <li key={k.public_key}>{k.public_key.slice(0, 20)}… · {fc ? `FunctionCall on ${fc.receiver_id}, methods [${fc.method_names.join(', ')}]` : 'FullAccess'}</li>;
+                return <li key={k.public_key}>{k.public_key.slice(0, 20)}… · {fc ? `FunctionCall on ${fc.receiver_id}, methods [${fc.method_names.join(', ') || 'all'}]` : 'FullAccess'}</li>;
               })}
             </ul>
           </details>
