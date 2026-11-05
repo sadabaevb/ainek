@@ -1,10 +1,13 @@
 'use client';
 // Chat with a proof card per reply. The page only renders; lib/flow.ts does the work step by step.
-import { memo, useEffect, useRef, useState } from 'react';
+// The wallet is a React hook, so the page hands flow a committer resolver for the on-chain step (SPEC §4.2).
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
-import { describeError } from '@/lib/errors';
-import { runChat, type ChatMessage, type ChatOutcome, type StepEvent } from '@/lib/flow';
+import { canCommitNow, commitOutcome, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
+import type { Dict } from '@/lib/i18n';
+import { walletCommitter } from '@/lib/wallet';
 import { useConfig, useT } from './providers';
 
 interface Turn {
@@ -13,13 +16,41 @@ interface Turn {
   outcome?: ChatOutcome;
 }
 
-const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
+/** What the composer sends with: the selected model and the tamper switch, taken at the moment of sending. */
+type SendOptions = Pick<ChatParams, 'model' | 'tamper'>;
+
+type Chip = keyof Dict['intro']['chips'];
+
+// Updaters for one turn of the thread, built outside the component so the callbacks below close over setTurns only.
+const atTurn = (idx: number, fn: (turn: Turn) => Turn) => (prev: Turn[]) => prev.map((turn, i) => (i === idx ? fn(turn) : turn));
+const withStep = (e: StepEvent) => (turn: Turn): Turn => ({ ...turn, steps: upsert(turn.steps, e) });
+const withOutcome = (outcome: ChatOutcome) => (turn: Turn): Turn => ({ ...turn, outcome });
+
+/** The step in flight, in plain words (flow says which wording fits the route), over an indeterminate bar: the cold attestation alone can take ten seconds and no step index would show that. */
+function Progress({ steps }: { steps: StepEvent[] }) {
   const { t } = useT();
+  if (steps.length === 0) return null;
+  const running = steps.find((s) => s.status === 'running');
+  return (
+    <div className="progress" role="status">
+      <span>{running ? t.progress[running.say ?? running.id] : t.working}</span>
+      <span className="bar"><span /></span>
+    </div>
+  );
+}
+
+const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry }: { turn: Turn; idx: number; /** Only the last turn, and only while nothing is in flight, may be resent. */ canRetry: boolean; onCommit: (idx: number, outcome: VerifiedOutcome) => void; onRetry: (content: string, model: string) => void }) {
+  const { t } = useT();
+  const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
+  const { outcome } = turn;
+  // The honest key helps only when the swapped key was the whole problem: a split log would refuse the honest key too.
+  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.tampered && outcome.keyVerdict.reason === 'absent' ? outcome.model : null;
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>
+      {!turn.outcome && <Progress steps={turn.steps} />}
       {turn.steps.length > 0 && (
-        <details className="steps" open={!turn.outcome}>
+        <details className="steps">
           <summary>{t.steps}</summary>
           <CheckList items={turn.steps} />
         </details>
@@ -27,14 +58,45 @@ const TurnView = memo(function TurnView({ turn }: { turn: Turn }) {
       {turn.outcome && 'reply' in turn.outcome && (
         <div className="bubble assistant"><span className="who">{t.assistant}</span>{turn.outcome.reply}</div>
       )}
-      {turn.outcome && <ProofCard outcome={turn.outcome} />}
+      {outcome && <ProofCard outcome={outcome} onCommit={commit} onRetry={retryModel ? () => onRetry(turn.message.content, retryModel) : undefined} />}
     </article>
   );
 });
 
+const DOT: Record<Chip, 'ok' | 'fail' | 'warn'> = { ask: 'ok', tamper: 'fail', incognito: 'warn' };
+
+/** First screen: what the page is about and the three catches as one-click scenarios. Shown until the first message. */
+function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
+  const { t } = useT();
+  const chips = Object.keys(t.intro.chips) as Chip[];
+  return (
+    <section>
+      <div className="hero">
+        <h1>{t.hero[0]} <span className="grad">{t.hero[1]}</span></h1>
+        <p>{t.intro.title}</p>
+      </div>
+      <ol className="steps-grid">
+        {t.intro.lines.map((line, i) => (
+          <li key={line} className="step"><span className="num">{i + 1}</span><div>{line}</div></li>
+        ))}
+      </ol>
+      <p className="try">{t.intro.tryTitle}</p>
+      <div className="scenarios">
+        {chips.map((chip) => (
+          <button key={chip} type="button" className="scenario" onClick={() => onPick(chip)}>
+            <span className="title"><span className={`dot ${DOT[chip]}`} aria-hidden />{t.intro.chips[chip]}</span>
+            <span className="sub">{t.intro.subs[chip]}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function ChatPage() {
   const cfg = useConfig();
   const { t } = useT();
+  const wallet = useNearWallet();
   const [model, setModel] = useState(cfg.model);
   const [tamper, setTamper] = useState(false);
   const [input, setInput] = useState('');
@@ -49,11 +111,28 @@ export default function ChatPage() {
     bottom.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns.length]);
 
-  const patch = (idx: number, fn: (turn: Turn) => Turn) => setTurns((prev) => prev.map((turn, i) => (i === idx ? fn(turn) : turn)));
+  /** Step 8 for one turn, off the critical path: the card is already on screen, the commit lands when it lands. `connect` asks the wallet to sign in first (the card's button); the automatic pass after a reply never pops the wallet up. */
+  const commitTurn = useCallback(
+    async (idx: number, outcome: VerifiedOutcome, connect: boolean) => {
+      if (outcome.commit !== 'pending') setTurns(atTurn(idx, withOutcome({ ...outcome, commit: 'pending' }))); // the automatic pass already is
+      const committed = await commitOutcome(outcome, () => walletCommitter(wallet, cfg, connect), (e) => setTurns(atTurn(idx, withStep(e))));
+      setTurns(atTurn(idx, withOutcome(committed)));
+    },
+    [wallet, cfg],
+  );
+  const onCommitClick = useCallback(
+    (idx: number, outcome: VerifiedOutcome) => {
+      if (canCommitNow(outcome.commit)) void commitTurn(idx, outcome, true);
+    },
+    [commitTurn],
+  );
 
-  async function send() {
-    const content = input.trim();
+  /** Sends with the given controls and shows them as sent: the composer, a scenario card and the retry all go through here. */
+  async function send(text: string, opts: SendOptions) {
+    const content = text.trim();
     if (!content || busy) return;
+    setModel(opts.model);
+    setTamper(opts.tamper);
     setInput('');
     setBusy(true);
     const history: ChatMessage[] = turns.flatMap((x) => (x.outcome && 'reply' in x.outcome && typeof x.outcome.reply === 'string' ? [x.message, { role: 'assistant' as const, content: x.outcome.reply }] : []));
@@ -61,26 +140,34 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { model, messages, tamper, onStep: (e) => patch(idx, (turn) => ({ ...turn, steps: upsert(turn.steps, e) })) });
-      patch(idx, (turn) => ({ ...turn, outcome }));
-    } catch (err) {
-      // Not a step failure (those become outcomes inside runChat): report it at the step that was running.
-      patch(idx, (turn) => ({ ...turn, outcome: { kind: 'failed', step: turn.steps.findLast((s) => s.status === 'running')?.id ?? 'send', reason: describeError(err) } }));
+      const outcome = await runChat(cfg, { ...opts, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
+      setTurns(atTurn(idx, withOutcome(outcome)));
+      if (outcome.kind === 'verified') void commitTurn(idx, outcome, false);
     } finally {
       setBusy(false);
     }
   }
 
+  // `send` closes over the thread, so it is a new function every render; the retry callback reads the latest one through a ref
+  // (published before paint) and stays stable for the memoized turns.
+  const sendRef = useRef(send);
+  useLayoutEffect(() => {
+    sendRef.current = send;
+  });
+  const onRetryClick = useCallback((content: string, model: string) => void sendRef.current(content, { model, tamper: false }), []);
+
+  /** A scenario card sends its prompt with the controls it names. */
+  function pick(chip: Chip) {
+    void send(t.intro.prompts[chip], { model: chip === 'incognito' ? cfg.incognitoModel : cfg.model, tamper: chip === 'tamper' });
+  }
+
   return (
-    <main className="page">
-      <header className="top">
-        <h1>Ainek</h1>
-        <p className="muted">{t.tagline}</p>
-      </header>
+    <main className="page chat">
+      {turns.length === 0 ? <Intro onPick={pick} /> : <h1 className="compact">{t.hero.join(' ')}</h1>}
 
       <div className="controls">
-        <label>
-          {t.model}{' '}
+        <label className="field">
+          {t.model}
           <select value={model} onChange={(e) => setModel(e.target.value)} disabled={busy}>
             <option value={cfg.model}>{cfg.model} · {t.teeModel}</option>
             <option value={cfg.incognitoModel}>{cfg.incognitoModel} · {t.incognitoModel}</option>
@@ -92,7 +179,7 @@ export default function ChatPage() {
       </div>
 
       <section className="thread">
-        {turns.map((turn, i) => <TurnView key={i} turn={turn} />)}
+        {turns.map((turn, i) => <TurnView key={i} turn={turn} idx={i} canRetry={!busy && i === turns.length - 1} onCommit={onCommitClick} onRetry={onRetryClick} />)}
         <div ref={bottom} />
       </section>
 
@@ -100,11 +187,13 @@ export default function ChatPage() {
         className="composer"
         onSubmit={(e) => {
           e.preventDefault();
-          void send();
+          void send(input, { model, tamper });
         }}
       >
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t.placeholder} disabled={busy} maxLength={4000} />
-        <button type="submit" className="btn primary" disabled={busy || !input.trim()}>{busy ? t.working : t.send}</button>
+        <div className="composer-inner">
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t.placeholder} disabled={busy} maxLength={4000} />
+          <button type="submit" className="btn primary" disabled={busy || !input.trim()}>{busy ? t.working : t.send}</button>
+        </div>
       </form>
     </main>
   );

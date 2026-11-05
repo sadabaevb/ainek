@@ -1,47 +1,72 @@
 'use client';
 // Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, or from a disclosure file
-// (proof + raw bytes + log entry). Hashes are recomputed here; the log entry is re-read from the public log.
+// (proof + raw bytes + log entry). Hashes are recomputed here; the log entry is re-read from the public log. An exchange
+// kept in this browser whose proof was never committed can be committed from here (SPEC §4.2), wallet connected on demand.
 import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { isDisclosure, parseDisclosure, verifyModelProof, type KeyEntry, type VerifyReport } from '@ainek/proof';
-import { CheckList } from '@/components/checks';
+import { useNearWallet } from 'near-connect-hooks';
+import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import { CardHead, CheckList } from '@/components/checks';
+import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
+import { RedCard } from '@/components/red-card';
 import { describeError } from '@/lib/errors';
-import { keyLogFor } from '@/lib/key-log';
+import { fill } from '@/lib/fill';
+import { commitExchange } from '@/lib/flow';
+import type { Dict } from '@/lib/i18n';
+import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
-import { useConfig } from '../providers';
+import { walletCommitter } from '@/lib/wallet';
+import { useConfig, useT } from '../providers';
+
+/** Where the input came from; the wording follows the language toggle, so only the key is kept. */
+type Origin = keyof Dict['verify']['origin'];
 
 interface Input {
   proof: unknown;
   requestBody?: Uint8Array;
   responseBody?: Uint8Array;
-  /** Entry embedded in the input; used only when the public log cannot answer. */
-  logEntryHint?: KeyEntry;
-  origin: string;
+  /** Entry embedded in the input; the public log is still asked first, and a mismatch is reported. */
+  embeddedEntry?: KeyEntry;
+  /** Set when the input is an exchange kept in this browser: the one this page can commit. */
+  stored?: StoredExchange;
+  origin: Origin;
 }
 
 interface Result {
   report: VerifyReport;
-  origin: string;
-  logNote: string;
+  origin: Origin;
+  stored?: StoredExchange;
+}
+
+/** A disclosure file and a stored exchange carry the same four things. */
+function inputOf(x: DisclosedExchange, origin: Origin, stored?: StoredExchange): Input {
+  return { proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, embeddedEntry: x.logEntry, origin, ...(stored ? { stored } : {}) };
 }
 
 function VerifyInner() {
   const cfg = useConfig();
+  const { t } = useT();
+  const tv = t.verify;
+  const wallet = useNearWallet();
   const id = useSearchParams().get('id');
   const [text, setText] = useState('');
   const [input, setInput] = useState<Input | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [stored, setStored] = useState<StoredExchange[]>([]);
+  const [committing, setCommitting] = useState(false);
+  const [missingId, setMissingId] = useState<string | null>(null); // ?id= not in this browser's store: worded at render, so it follows the language
   const [error, setError] = useState('');
 
   useEffect(() => {
     listExchanges().then(setStored).catch(() => undefined);
+    setMissingId(null);
     if (!id) return;
     getExchange(id)
       .then((x) => {
-        if (!x) setError(`no exchange ${id} in this browser's store`);
-        else setInput({ proof: x.proof, requestBody: x.requestBody, responseBody: x.responseBody, logEntryHint: x.logEntry, origin: 'this browser (IndexedDB)' });
+        if (!x) setMissingId(id);
+        else setInput(inputOf(x, 'store', x));
       })
       .catch((e: unknown) => setError(describeError(e)));
   }, [id]);
@@ -50,22 +75,11 @@ function VerifyInner() {
     if (!input) return;
     let cancelled = false;
     (async () => {
-      const logIndex = (input.proof as { logIndex?: unknown }).logIndex;
-      let entry: KeyEntry | null = null;
-      let logNote = '';
-      if (typeof logIndex === 'number') {
-        try {
-          entry = await keyLogFor(cfg).entry(logIndex);
-          logNote = entry ? `log entry #${logIndex} re-read from the public log (${cfg.logSource})` : `log entry #${logIndex} not found in the public log`;
-        } catch (e) {
-          logNote = `public log unavailable (${describeError(e)})`;
-        }
-      }
-      if (!entry && input.logEntryHint) {
-        entry = input.logEntryHint;
-        logNote += `${logNote ? '; ' : ''}using the entry embedded in the input (weaker: not re-read from the chain)`;
-      }
-      if (!cancelled) setResult({ report: verifyModelProof(input.proof, input.requestBody, input.responseBody, entry), origin: input.origin, logNote });
+      // The chain is asked only for a schema-valid proof; a malformed one is reported by verifyModelProof without a view call.
+      const parsed = ModelProof.safeParse(input.proof);
+      const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
+      const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
+      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin, ...(input.stored ? { stored: input.stored } : {}) });
     })();
     return () => {
       cancelled = true;
@@ -74,38 +88,47 @@ function VerifyInner() {
 
   function parsePasted() {
     setError('');
+    setMissingId(null);
     try {
       const parsed = JSON.parse(text) as unknown;
-      if (isDisclosure(parsed)) {
-        const d = parseDisclosure(parsed);
-        setInput({ proof: d.proof, requestBody: d.requestBody, responseBody: d.responseBody, logEntryHint: d.logEntry, origin: 'disclosure file (proof + raw bytes)' });
-      } else {
-        setInput({ proof: parsed, origin: 'pasted proof JSON (no raw bytes: hash checks skipped)' });
-      }
+      if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
+      else setInput({ proof: parsed, origin: 'pasted' });
     } catch (e) {
-      setError(`not a proof or disclosure: ${describeError(e)}`);
+      setError(tv.notProof(describeError(e)));
     }
   }
 
-  const proof = result?.report.proof;
+  /** commit_proof for an exchange kept here (its salt is in the proof). commitTx is an envelope field outside the signed and committed bytes, so the report stays as it is; only the transaction link appears. */
+  async function commitStored(x: StoredExchange) {
+    setError('');
+    setCommitting(true);
+    const r = await commitExchange(x, () => walletCommitter(wallet, cfg, true), (e) => {
+      if (e.status === 'skipped') setError(e.detail);
+    });
+    // The page may be showing something else by now (a pasted proof): only the same exchange takes the transaction.
+    if (r.commit === 'committed') setResult((prev) => (prev?.stored?.completionId === x.completionId ? { ...prev, stored: r.exchange } : prev));
+    setCommitting(false);
+  }
+
+  // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
+  const proof = result?.stored?.proof ?? result?.report.proof;
+  const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
   return (
     <main className="page">
-      <h1>Verify a proof</h1>
-      <p className="muted">Paste a proof, drop a disclosure file, or pick one of the exchanges this browser has kept. Hashes are recomputed here, the signature is checked here, and the log entry is re-read from the public log.</p>
+      <h1>{tv.title}</h1>
+      <p className="muted">{fill(tv.intro, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
 
       <div className="controls">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} style={{ width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} placeholder='{"v":1,"kind":"model",...}  or the "Disclose to auditor" file' />
+        <JsonTextarea value={text} onChange={setText} onError={setError} placeholder={tv.placeholder} />
         <div className="actions">
-          <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>Verify</button>
-          <label className="btn">
-            Load file <input type="file" accept="application/json" style={{ display: 'none' }} onChange={(e) => void e.target.files?.[0]?.text().then(setText)} />
-          </label>
+          <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>{tv.verify}</button>
+          <LoadFileButton onText={setText} onError={setError} />
         </div>
       </div>
 
       {stored.length > 0 && (
         <details>
-          <summary>Exchanges kept in this browser ({stored.length})</summary>
+          <summary>{tv.kept(stored.length)}</summary>
           <ul className="mono">
             {stored.map((x) => (
               <li key={x.completionId}><a href={`/verify?id=${encodeURIComponent(x.completionId)}`}>{x.completionId}</a> · {x.model} · {x.sentAt.slice(0, 19)}</li>
@@ -114,17 +137,20 @@ function VerifyInner() {
         </details>
       )}
 
-      {error && <p className="card red">{error}</p>}
+      {missingId && <RedCard title={tv.noExchange(missingId)} />}
+      {error && <RedCard title={error} />}
 
       {result && (
-        <section className={`card ${result.report.ok ? '' : 'red'}`}>
-          <h3>{result.report.ok ? '✓ Proof verified' : '✗ Proof failed'}</h3>
-          <p className="muted small">source: {result.origin}{result.logNote ? `; ${result.logNote}` : ''}</p>
+        <section className="card">
+          <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>
           <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">
-              {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">Commit on nearblocks</a>}
-              <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">NEAR AI Verification Center</a>
+              {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{tv.commitTx}</a>}
+              {committable && (
+                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? tv.committing : t.commitNow}</button>
+              )}
+              <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">{t.openVc}</a>
             </div>
           )}
         </section>
@@ -134,8 +160,9 @@ function VerifyInner() {
 }
 
 export default function VerifyPage() {
+  const { t } = useT();
   return (
-    <Suspense fallback={<main className="page"><p className="muted">Loading…</p></main>}>
+    <Suspense fallback={<main className="page"><p className="muted">{t.loading}</p></main>}>
       <VerifyInner />
     </Suspense>
   );

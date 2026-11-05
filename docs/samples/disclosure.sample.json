@@ -1,0 +1,52 @@
+{
+  "v": 1,
+  "kind": "disclosure",
+  "proof": {
+    "v": 1,
+    "kind": "model",
+    "completionId": "88decc5515a243fc863f6d5f9c49af7a",
+    "model": "z-ai/glm-5.3-flash",
+    "signatureKind": "provider_tee",
+    "signingAlgo": "ed25519",
+    "signingAddress": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+    "signedText": "z-ai/glm-5.3-flash:26398fdcbd967e951b39087b44f319c34df2757e9c16cf213b3c178bb478f65f:7764378eb6374d0a3bf29e3f00b2b66805afcd464b92ef48b671b28606616ef9",
+    "signature": "beffbf62f6b6c50527f2684c0f5f336c25132eee27dbbcce8fd194e0069fa0827ee6a51b165a37c31d1a7dc4fa0844646aa42f7b2e8f7f2cb449d98e55c92b0e",
+    "requestSha256": "26398fdcbd967e951b39087b44f319c34df2757e9c16cf213b3c178bb478f65f",
+    "responseSha256": "7764378eb6374d0a3bf29e3f00b2b66805afcd464b92ef48b671b28606616ef9",
+    "e2ee": true,
+    "toolNames": [],
+    "logIndex": 0,
+    "verifier": "ainek-dev-dastan.testnet",
+    "verifiedAt": "2026-11-04T04:42:53.668Z",
+    "salt": "ff4293c1561dc725af17a368a26c22b52b534eb5b8cf9c07a62bcc9ce736334b",
+    "commit": "9c157c8985bdf22bfbeefc98bb3d87dd8379beba1f3783d9672a7aa1e8598ca5"
+  },
+  "logEntry": {
+    "model": "z-ai/glm-5.3-flash",
+    "signing_address": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+    "signing_algo": "ed25519",
+    "signing_public_key": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",
+    "compose_hash": "a0e3c6f4f21a60ea3f5c96bc7ef319b03a184ca2049605399275fbcea74e8c5f",
+    "image_digests": [
+      "sha256:85ac41c2db88d0df9bd6145e608a3cb023f5d8443868adbfbbf66efb51087917",
+      "sha256:742dbd2e61c8709b930712c38958386c3cb3928e09eeb1f1e490600c127e2edb",
+      "sha256:6e035c8fb99c1d31f41760d25af178683a658cca4afd73cd0d366fbb5bf884be",
+      "sha256:079a14b41deb11e0e27f9b69648e8b3d89bd6fb9ccf6071643b8f447fa415085"
+    ],
+    "tcb_status": "UpToDate",
+    "ita_jwt_hash": "",
+    "nras_result_hash": "",
+    "nonce": "fe7956b428eb5f489d46a23b7d7d8992c4ebe50da538604b9d81a5746ca3de55",
+    "report_hash": "4cdab15a163e270f7502d42c18d7b24161279094f2de76b840678be3d0252cef",
+    "observed_at": "1793718606738",
+    "index": 0,
+    "verifier": "ainek-dev-dastan.testnet",
+    "prev_hash": "",
+    "entry_hash": "5b2e5e5b0e3314b8efc47188eef0c400c36842fdd87f050587fffecdc6116979",
+    "block_height": 276064869
+  },
+  "rawRequestBase64": "eyJtb2RlbCI6InotYWkvZ2xtLTUuMy1mbGFzaCIsIm1lc3NhZ2VzIjpbeyJyb2xlIjoidXNlciIsImNvbnRlbnQiOiI3NDZhYzNlOTNiYzkzZWUzMTcxOTFhODljNDQ1YjY1ZjIwZTkzNGYzOTZiNjkxZjhhZDUzODZjYmI2MzNjMzY0Yzg4ZWM0NjMxNTliYTZkZDZlZTIzNGQ5NTJhMTA5ZGZkZWU0MTE5NDQ4NWY2M2MwNjRmODgyMjk5MWM5ZmViNjYwZGVmYzRhYzIwZjVlZjkwOTI5YTA0NjFhYWZjOTAxZWE0YTVkOGYwNjlmMThjOGVhNTI2MzJjYjIzMWJjYTBkNWVkMDZkM2FkMmI5NCJ9XSwic3RyZWFtIjpmYWxzZX0=",
+  "rawResponseBase64": "eyJpZCI6Ijg4ZGVjYzU1MTVhMjQzZmM4NjNmNmQ1ZjljNDlhZjdhIiwib2JqZWN0IjoiY2hhdC5jb21wbGV0aW9uIiwiY2hvaWNlcyI6W3siaW5kZXgiOjAsIm1lc3NhZ2UiOnsicm9sZSI6ImFzc2lzdGFudCIsImNvbnRlbnQiOiI0ZDE3NzkxZWY3MDQ2MzZiZTNiMDFiNGQ4ZGMyOWRhNDAxZDM5ZmNkODljMDgxNzNlZWUyYTZmZmZjZWYzODU2MWUwYTE2NDJkMzI0ODUxZTg2NzUyNjZmYmJjZGE3YTliNmVkM2VmYmY1NjA4M2MzMjkwYjc3YmQ3OGVhMzAzNDQ5YWNkYjlhNDYxYjYwZTBjYTgwZTNhMDk5MTAyYzU3Zjc5ZWMwMzRjNGEyIiwicmVhc29uaW5nX2NvbnRlbnQiOiJlOTdjMmQ0NjZjMzQxYTBjOTNkYzkyNDc3MTRhYzg5NzFlOGZiYmMwYTJjNzZmNzJlZTc4NGEyZGUzODBhNzJiN2JiZWY4NzNmMzFhNTZiMDc4NjdiYWFmMjAzZmE4MDRlOTM1YWY5ZDM2NmE4ZjQxYTJiOGNmMzIwNDBhNmNkYThmN2ZmMjMwZjc3NmEzODIwNDY1M2I1Yzc3YTA1NzA3YWM5NGZhOTQ3ZTA1MGMzNmZlNTNhOTBkZTcyYTlkMGRhOGE3MGRhNTM3MzU3NDNhNmI4NGI0OWQ4YzBlZDBkOGI3ZjIyYTY3MWQ0NmQxZGFmYWZmNWIxMDdjMzI3MzU2YjBkZDlhM2QxOWRlMmQ0OWM3Y2FiNDM4MmJlODEyNzcyMzg1OWRmMTQ0OWQ1ZTM4YTMwOTU0MTFiOTM5NWY1MDUwYzNhMzFjNWViNjc0ZDllM2YyZjdjMWM4YjdmMTBkMWExNmEyMjhhODk1MDlmMmI2NjlkZDA5ZjMyZTFlYTQ2N2Y0OWY1YzNhYWE0ZGI4NTBlNjExZDBmYTM0OTA3YTU2ZThmZDdlOTM2ZDVkMzQzY2RiNzBhNzZmYWRkNDQ1NDViMDBmOGNlMjcyOWFmMWZiZjc1MjM3NWRiMDY5NWJkY2UxZWViYmYyMGNhOGVjMzJlZDBjYzcwYjA0ZmMwNGY3OGExMjY0MDdhNGM3MjhkNzZkMjk2NTMyMTc0YmVlZjhjMDU4MGU3ZmY1NGQ0NjQ2OTdkNWY3YzM1ZjAxMWNkYjQ5MjJiMThlM2E5YjVmZmU3NDI3MGM2NWNkZDBkMDQ4YjFjOTRmNGI5Y2E1NmYxMzA1MjhjNzkwODVjYTBhMTc3MzFlYjkwNGZjODAxODQ3Mzg5N2VmOGU0YmY3YzFlMjJhNTJmYWZmNTJiZmNiN2RjNTNmZWE1ZTVmODc3ZmVkNDVlNzI1NTQwODU1M2FkYjg3MjBiOGMxM2Y0NmRjZDcyNTBhMTJkZGNkZTdkYmViM2VkNTY3Nzk4ODNkZWE2YjZlYzk1ZDFiNGY2OGZlN2UyNGRjZmVhNTJlZTk2YmY2NmIxMjA2YjY5ZjczZjdiN2ZmMzdhYWQwMzBiOTdlYTJmZGY0YmQ2MGRjNDIxM2EyZWI3ODM2OTA0YzgxODRhMjY0ZmZjODRhOTkwMGY4ZjhkMDAxZmI2MGY3ZTY3ZDJmYWYwNjdiYmFhN2NhMDExMTg2ZDgyZmQ2OGEwNWJlZjMxMzE1Mjk5MGE3MDE2YTQ1NTFiODBjNjdmNjI2YjBiNDk2YTQ4MjkyYTAwMmJkZjEwMTE5YmM1ODBhZTI0ZTIyMDMwYTIwOTA4NGU3NjFjOTAzNTNiYjNmMDEwYmNhMDIyYTM0MjM3ODY5MzQ5NWJkYjk0ODRlOWE1YzI1ZmVjOWIzZjQwYjVlYjI2NTQ2MjIxODJkNGEyMWMzMzUyYWI1ZmY0ODE3NTZiNzg4NjEyODg3Y2UxZDE2ZWM5MTMxYWIwNWNiMWE5MGQxYjYzZmZiODIxMGEyZmRmY2Y2ODI0ZjNmNjk4OGZjMTMyNWFjZGI4YSJ9LCJmaW5pc2hfcmVhc29uIjoic3RvcCIsImxvZ3Byb2JzIjpudWxsLCJtYXRjaGVkX3N0b3AiOjE1NDgyN31dLCJtb2RlbCI6InotYWkvZ2xtLTUuMy1mbGFzaCIsImNyZWF0ZWQiOjE3OTM3NjczNzUsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjE4LCJ0b3RhbF90b2tlbnMiOjE0NywiY29tcGxldGlvbl90b2tlbnMiOjEyOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjpudWxsLCJyZWFzb25pbmdfdG9rZW5zIjoxMjQsImNvbXBsZXRpb25fdG9rZW5zX2RldGFpbHMiOnsicmVhc29uaW5nX3Rva2VucyI6MTI0fX19",
+  "disclosedAt": "2026-11-04T04:42:58.538Z",
+  "note": "Selective disclosure of ONE exchange: lets an auditor recompute the hashes and the salted commit. The raw bytes are the E2EE ciphertext as sent/received; no plaintext is included."
+}

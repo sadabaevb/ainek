@@ -3,24 +3,48 @@
 // verifiers disagree (split view). Wallet login here adds the function-call key later used for commit_proof.
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
-import { findSplitView, type KeyEntry } from '@ainek/proof';
+import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
+import { RedCard } from '@/components/red-card';
+import { StackTable, type Column } from '@/components/stack-table';
 import { describeError } from '@/lib/errors';
-import { short } from '@/lib/format';
+import { fill } from '@/lib/fill';
+import { hoursSince, observedUtc, short } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
-import { useConfig } from '../providers';
+import { useConfig, useT } from '../providers';
 
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
-const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
+
+const WINDOW_HOURS = Number(LOG_WINDOW_NS) / 3_600_000_000_000;
+
+interface LogWindow {
+  entries: KeyEntry[];
+  /** The newest entry for the model regardless of age, looked up only when the window is empty to say how stale the log is: undefined while that lookup is in flight or failed, null when the log has none. */
+  newest?: KeyEntry | null;
+}
 
 export default function LogPage() {
   const cfg = useConfig();
-  const [entries, setEntries] = useState<KeyEntry[] | null>(null);
+  const { t } = useT();
+  const tl = t.log;
+  const [log, setLog] = useState<LogWindow | null>(null);
   const [error, setError] = useState('');
-  const { signedAccountId, signIn, signOut, getAccessKeyList, loading } = useNearWallet();
+  const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
   useEffect(() => {
-    keyLogFor(cfg).latestKeys(cfg.model).then(setEntries).catch((e: unknown) => setError(describeError(e)));
+    const reader = keyLogFor(cfg);
+    reader
+      .latestKeys(cfg.model)
+      .then((entries) => {
+        setLog({ entries }); // the window (and the explanation card) first; the staleness lookup must not delay or hide it
+        if (entries.length === 0) {
+          reader
+            .latestKeys(cfg.model, ANY_AGE_NS)
+            .then((all) => setLog({ entries, newest: all[0] ?? null }))
+            .catch(() => undefined);
+        }
+      })
+      .catch((e: unknown) => setError(describeError(e)));
   }, [cfg]);
 
   useEffect(() => {
@@ -33,53 +57,46 @@ export default function LogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedAccountId]);
 
-  const split = entries ? findSplitView(entries, cfg.model, cfg.trustedVerifiers) : null;
-
-  const connect = () =>
-    signIn({ addFunctionCallKey: { contractId: cfg.contract, allowMethods: { anyMethod: false, methodNames: ['commit_proof'] }, gasAllowance: { kind: 'limited', amount: FC_KEY_ALLOWANCE } } });
+  const split = log ? findSplitView(log.entries, cfg.model, cfg.trustedVerifiers) : null;
+  const c = tl.columns;
+  const columns: Column<KeyEntry>[] = [
+    { label: c.index, cell: (e) => e.index },
+    { label: c.model, cell: (e) => e.model, className: 'mono' },
+    { label: c.verifier, cell: (e) => (cfg.trustedVerifiers.includes(e.verifier) ? e.verifier : `${e.verifier} ${tl.notTrusted}`), className: 'mono' },
+    { label: c.key, cell: (e) => short(e.signing_address), className: 'mono' },
+    { label: c.compose, cell: (e) => short(e.compose_hash), className: 'mono' },
+    { label: c.tcb, cell: (e) => e.tcb_status },
+    { label: c.observed, cell: (e) => observedUtc(e.observed_at) },
+  ];
 
   return (
     <main className="page">
-      <h1>Public key log</h1>
+      <h1>{tl.title}</h1>
       <p className="muted">
-        Contract <span className="mono">{cfg.contract}</span> on {cfg.network}; trusted verifiers {cfg.trustedVerifiers.join(', ')}; quorum {cfg.quorum}.
-        {cfg.logSource === 'sample' && ' Showing the recorded sample entry until the contract is deployed (AINEK_LOG_SOURCE=sample).'}
+        {fill(tl.intro(cfg.network, cfg.trustedVerifiers.join(', '), cfg.quorum), { contract: <span className="mono">{cfg.contract}</span> })}
+        {cfg.logSource === 'sample' && ` ${tl.sampleNote}`}
       </p>
-      {error && <p className="card red">{error}</p>}
-      {split && (
-        <section className="card red">
-          <h3>Split view</h3>
-          <p>{split.detail}</p>
+      {error && <RedCard title={error} />}
+      {split && <RedCard title={tl.split} body={split.detail} />}
+      {log && (log.entries.length === 0 ? (
+        <section className="card">
+          <h3>{tl.emptyTitle(WINDOW_HOURS, cfg.model)}</h3>
+          <p>
+            {tl.emptyBody}
+            {log.newest !== undefined && ` ${log.newest ? tl.newest(log.newest.index, log.newest.verifier, observedUtc(log.newest.observed_at), hoursSince(log.newest.observed_at)) : tl.none}`}
+          </p>
         </section>
-      )}
-      {entries && (
-        <table>
-          <thead>
-            <tr><th>#</th><th>model</th><th>verifier</th><th>signing key</th><th>compose</th><th>TCB</th><th>observed</th></tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <tr key={e.index}>
-                <td>{e.index}</td>
-                <td className="mono">{e.model}</td>
-                <td className="mono">{e.verifier}{cfg.trustedVerifiers.includes(e.verifier) ? '' : ' (not in trust set)'}</td>
-                <td className="mono">{short(e.signing_address)}</td>
-                <td className="mono">{short(e.compose_hash)}</td>
-                <td>{e.tcb_status}</td>
-                <td>{new Date(Number(e.observed_at)).toISOString().slice(0, 16).replace('T', ' ')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      ) : (
+        <StackTable columns={columns} rows={log.entries} rowKey={(e) => String(e.index)} />
+      ))}
 
-      <h2 style={{ fontSize: '1.1rem', marginTop: '2rem' }}>Wallet</h2>
-      <p className="muted small">Logging in adds a function-call key limited to <span className="mono">commit_proof</span> on the contract, so the chat can commit salted proof hashes without asking the wallet each time.</p>
+      <h2>{tl.wallet}</h2>
+      <p className="muted small">{fill(tl.walletNote, { method: <span className="mono">commit_proof</span> })}</p>
       {signedAccountId ? (
         <>
-          <p>Connected as <span className="mono">{signedAccountId}</span> <button type="button" className="btn small" onClick={() => void signOut()}>Disconnect</button></p>
+          <p>{tl.connectedAs} <span className="mono">{signedAccountId}</span></p>
           <details>
-            <summary>Access keys ({keys.length})</summary>
+            <summary>{tl.accessKeys(keys.length)}</summary>
             <ul className="mono">
               {keys.map((k) => {
                 const p = k.access_key.permission;
@@ -90,7 +107,7 @@ export default function LogPage() {
           </details>
         </>
       ) : (
-        <button type="button" className="btn primary" onClick={() => void connect()} disabled={loading}>Connect wallet</button>
+        <p className="muted">{tl.noWallet}</p>
       )}
     </main>
   );

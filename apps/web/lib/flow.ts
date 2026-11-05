@@ -1,6 +1,7 @@
 // The Tier-1 client flow (SPEC §7.1) as a list of steps the page shows live:
 //   verify evidence in the browser → fail-closed check against the public log → E2EE send →
-//   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB.
+//   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
+//   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 import { buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
@@ -11,7 +12,7 @@ import {
   checkResponse,
   fetchModelMetadata,
   fetchSignature,
-  sendE2ee,
+  prepareE2ee, transmitE2ee,
   sendPlain,
   verifyDeployment,
   verifyGateway,
@@ -19,37 +20,57 @@ import {
   type Exchange,
   type VerifiedDeployment,
 } from './nearai-browser';
-import { putExchange } from './store';
+import { getExchange, putExchange, type StoredExchange } from './store';
+import { isMethodNotFound } from './wallet';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
-export type StepId = 'metadata' | 'attestation' | 'key-log' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store';
+export type StepId = 'metadata' | 'attestation' | 'key-log' | 'encrypt' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store' | 'commit';
+/** Wording key for the progress strip: the step id, or a route variant where the same step means something else. */
+export type Phrase = StepId | 'attestation-gateway' | 'send-plain' | 'signature-gateway';
 export type StepStatus = 'running' | 'ok' | 'fail' | 'skipped';
 export interface StepEvent {
   id: StepId;
+  /** Set on running events: which wording the UI shows while this step runs. */
+  say?: Phrase;
   status: StepStatus;
   detail: string;
 }
 
 /** Steps that run after the message has left the device: a failure there is "reply not provable", not "nothing was sent". */
-export const STEPS_AFTER_SEND: ReadonlySet<StepId> = new Set<StepId>(['signature', 'sdk-check', 'proof', 'store']);
+/** The steps in the order they run; the failure phase is a position relative to `send`, so a new step cannot be misread. */
+const STEP_ORDER: readonly StepId[] = ['metadata', 'attestation', 'key-log', 'encrypt', 'send', 'signature', 'sdk-check', 'proof', 'store', 'commit'];
+
+export type FailurePhase = 'not-sent' | 'sent' | 'answered';
+/** What a failure at `step` means for the message: nothing left the browser; it was handed to the network but no reply could be verified; a reply came and a later check failed. `send` starts at fetch, so the boundary is exact. */
+export function failurePhase(step: StepId): FailurePhase {
+  const at = STEP_ORDER.indexOf(step);
+  const send = STEP_ORDER.indexOf('send');
+  return at < send ? 'not-sent' : at === send ? 'sent' : 'answered';
+}
+
+/** What happened to the on-chain commit of a verified reply (SPEC §4.2); `committed` puts `commitTx` on the proof. */
+export type CommitStatus = 'pending' | 'no-wallet' | 'not-deployed' | 'failed' | 'committed';
+
+export interface VerifiedOutcome {
+  kind: 'verified';
+  reply: string;
+  deployment: VerifiedDeployment;
+  modelAttestation: VerifiedModelAttestation;
+  logSource: 'contract' | 'sample';
+  keyVerdict: KeyLogVerdict;
+  logEntry: KeyEntry;
+  exchange: Exchange;
+  proof: ModelProof;
+  report: VerifyReport;
+  commit: CommitStatus;
+}
 
 export type ChatOutcome =
-  | {
-      kind: 'verified';
-      reply: string;
-      deployment: VerifiedDeployment;
-      modelAttestation: VerifiedModelAttestation;
-      logSource: 'contract' | 'sample';
-      keyVerdict: KeyLogVerdict;
-      logEntry: KeyEntry;
-      exchange: Exchange;
-      proof: ModelProof;
-      report: VerifyReport;
-    }
-  | { kind: 'refused'; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string }
+  | VerifiedOutcome
+  | { kind: 'refused'; model: string; /** The demo switch swapped the key: the card can offer the honest retry. */ tampered: boolean; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
-  /** `reply` is present when the failure happened after the model had already answered. */
+  /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
   | { kind: 'failed'; step: StepId; reason: string; reply?: string };
 
 const TAMPERED_KEY = 'ab'.repeat(32);
@@ -67,17 +88,21 @@ function fail(emit: Emit, id: StepId, reason: string): never {
   throw new StepFailed(id, reason);
 }
 
-/** Runs one step: emits running (when given), then ok with `okDetail(result)`, or fail and aborts the flow. */
-async function runStep<T>(emit: Emit, id: StepId, running: string | null, fn: () => Promise<T>, okDetail: (value: T) => string): Promise<T> {
-  if (running !== null) emit({ id, status: 'running', detail: running });
-  let value: T;
+/** Runs one step: emits running, then ok with `okDetail(result)`, or fail and aborts the flow. Always emitting running keeps runChat's "step last seen running" exact. */
+async function runStep<T>(emit: Emit, id: StepId, running: string, fn: () => Promise<T>, okDetail: (value: T) => string, say: Phrase = id): Promise<T> {
+  emit({ id, status: 'running', detail: running, say });
   try {
-    value = await fn();
+    const value = await fn();
+    emit({ id, status: 'ok', detail: okDetail(value) });
+    return value;
   } catch (err) {
     return fail(emit, id, describeError(err));
   }
-  emit({ id, status: 'ok', detail: okDetail(value) });
-  return value;
+}
+
+/** Filled in as the route advances, so a failure can still show the reply that had already come back. */
+interface Progress {
+  reply?: string;
 }
 
 export interface ChatParams {
@@ -88,16 +113,27 @@ export interface ChatParams {
 }
 
 export async function runChat(cfg: PublicConfig, params: ChatParams): Promise<ChatOutcome> {
-  const sent: { reply?: string } = {};
+  // Every error becomes a failed outcome: a StepFailed knows its step, anything else is charged to the step last seen running.
+  let running: StepId = 'metadata';
+  const progress: Progress = {};
+  const emit: Emit = (e) => {
+    if (e.status === 'running') running = e.id;
+    params.onStep(e);
+  };
+  const route = { ...params, onStep: emit };
   try {
-    return await (params.model === cfg.incognitoModel ? nonTeeRoute(cfg, params, sent) : teeRoute(cfg, params, sent));
+    return await (params.model === cfg.incognitoModel ? nonTeeRoute(cfg, route, progress) : teeRoute(cfg, route, progress));
   } catch (err) {
-    if (err instanceof StepFailed) return { kind: 'failed', step: err.step, reason: err.reason, ...(sent.reply === undefined ? {} : { reply: sent.reply }) };
-    throw err;
+    // `reply` only when one came back: the page shows the assistant bubble on the key's presence.
+    const failed = (step: StepId, reason: string): ChatOutcome => ({ kind: 'failed', step, reason, ...(progress.reply === undefined ? {} : { reply: progress.reply }) });
+    if (err instanceof StepFailed) return failed(err.step, err.reason);
+    const reason = describeError(err);
+    emit({ id: running, status: 'fail', detail: reason });
+    return failed(running, reason);
   }
 }
 
-async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: emit }: ChatParams, sent: { reply?: string }): Promise<ChatOutcome> {
+async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
 
   // 0. The user chose the private model: it must support model attestation, otherwise nothing is sent (never a silent downgrade to plaintext).
@@ -118,21 +154,22 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
   const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    return { kind: 'refused', deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey };
+    return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey };
   }
   const logEntry = keyVerdict.matching[0] as KeyEntry;
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });
 
-  // 3. Encrypt to the verified key and send through the proxy.
-  const exchange = await runStep(emit, 'send', 'encrypting to the attested model key and sending', () => sendE2ee(model, messages, modelAttestation), (x) => `completion ${x.completionId}, ${x.requestBody.length} B sent, ${x.responseBody.length} B received (ciphertext kept)`);
-  sent.reply = exchange.reply;
+  // 3. Encrypt to the verified key (nothing leaves the browser yet), then send through the proxy and decrypt the reply.
+  const prepared = await runStep(emit, 'encrypt', 'encrypting to the attested model key', () => prepareE2ee(model, messages, modelAttestation), (p) => `${p.requestBody.length} B encrypted to the attested model key`);
+  const exchange = await runStep(emit, 'send', 'sending through our relay', () => transmitE2ee(prepared), (x) => `completion ${x.completionId}, ${x.requestBody.length} B sent, ${x.responseBody.length} B received (ciphertext kept)`);
+  progress.reply = exchange.reply;
 
   // 4. Signature from the gateway, 5. SDK byte-exact check against the verified model signer.
   const signature = await runStep(emit, 'signature', 'fetching the completion signature', () => fetchSignature(exchange.completionId), (s) => `signature_kind ${s.kind}, signer ${short(s.signer.signingAddress)}`);
-  const signer = await runStep(emit, 'sdk-check', null, async () => checkResponse(exchange, signature, deployment), () => 'SDK: signature covers exactly these request and response bytes, signer is the attested model key');
+  const signer = await runStep(emit, 'sdk-check', 'SDK byte-exact check against the attested signer', async () => checkResponse(exchange, signature, deployment), () => 'SDK: signature covers exactly these request and response bytes, signer is the attested model key');
 
   // 6. Our proof: hashes recomputed from the kept bytes, bound to the log entry, salted commit for the chain.
-  const { proof, report } = await runStep(emit, 'proof', null, async () => {
+  const { proof, report } = await runStep(emit, 'proof', 'recomputing hashes and building the proof', async () => {
     const proof = buildModelProof({ completionId: exchange.completionId, model, signature, requestBody: exchange.requestBody, responseBody: exchange.responseBody, logEntry, verifiedAt: deployment.verifiedAt, e2ee: true });
     const report = verifyModelProof(proof, exchange.requestBody, exchange.responseBody, logEntry);
     if (!report.ok) throw new Error(report.checks.filter((c) => c.status === 'fail').map((c) => `${c.id}: ${c.detail}`).join('; '));
@@ -140,27 +177,75 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
   }, ({ proof, report }) => `${report.checks.filter((c) => c.status === 'ok').length}/${report.checks.length} checks; commit ${proof.commit?.slice(0, 12)}… (salt stays on this device)`);
 
   // 7. Keep bytes + proof locally (best effort: a private window may refuse).
+  const outcome: VerifiedOutcome = { kind: 'verified', reply: exchange.reply, deployment, modelAttestation: signer, logSource: log.source, keyVerdict, logEntry, exchange, proof, report, commit: 'pending' };
   try {
-    await putExchange({ completionId: exchange.completionId, model, sentAt: exchange.sentAt, requestBody: exchange.requestBody, responseBody: exchange.responseBody, reply: exchange.reply, proof, logEntry });
+    await putExchange(storedExchangeOf(outcome));
     emit({ id: 'store', status: 'ok', detail: 'raw bytes, proof and salt saved in this browser (IndexedDB)' });
   } catch (err) {
     emit({ id: 'store', status: 'skipped', detail: `could not save locally: ${describeError(err)}` });
   }
+  return outcome;
+}
 
-  return { kind: 'verified', reply: exchange.reply, deployment, modelAttestation: signer, logSource: log.source, keyVerdict, logEntry, exchange, proof, report };
+function storedExchangeOf(o: VerifiedOutcome): StoredExchange {
+  const { exchange } = o;
+  return { completionId: exchange.completionId, model: o.proof.model, sentAt: exchange.sentAt, requestBody: exchange.requestBody, responseBody: exchange.responseBody, reply: exchange.reply, proof: o.proof, logEntry: o.logEntry };
+}
+
+/** Step 8, after the card is already on screen: commit the salted hash on NEAR (SPEC §4.2) through the caller's wallet, or record why not. */
+export type Committer = (proof: ModelProof) => Promise<string>;
+
+/** Commit states a click can move forward: no wallet yet, or a commit that failed. `not-deployed` waits for the contract, not for the user. */
+export function canCommitNow(status: CommitStatus): boolean {
+  return status === 'no-wallet' || status === 'failed';
+}
+
+/**
+ * Step 8 on an exchange kept in this browser: resolve the wallet, call commit_proof and record the transaction in the stored
+ * row. One boundary for the chat (right after a reply, or from the card's button) and for /verify (an older exchange). Never throws.
+ */
+export async function commitExchange(x: StoredExchange, resolveCommitter: () => Promise<Committer | null>, emit: Emit): Promise<{ commit: CommitStatus; exchange: StoredExchange }> {
+  try {
+    // The chat's automatic pass and a click on /verify can race for the same exchange: the stored row is the source of truth.
+    const fresh = await getExchange(x.completionId).catch(() => undefined);
+    if (fresh?.proof.commitTx) {
+      emit({ id: 'commit', status: 'ok', detail: `already committed in transaction ${short(fresh.proof.commitTx)}` });
+      return { commit: 'committed', exchange: fresh };
+    }
+    const committer = await resolveCommitter();
+    if (!committer) {
+      emit({ id: 'commit', status: 'skipped', detail: 'no wallet connected: the commit stays local (connect a wallet to put it on NEAR)' });
+      return { commit: 'no-wallet', exchange: x };
+    }
+    emit({ id: 'commit', status: 'running', detail: `commit_proof(${short(x.proof.commit ?? '')}, "model", ${x.proof.logIndex})` });
+    const commitTx = await committer(x.proof);
+    const committed: StoredExchange = { ...x, proof: { ...x.proof, commitTx } };
+    emit({ id: 'commit', status: 'ok', detail: `commit ${short(x.proof.commit ?? '')} recorded in transaction ${short(commitTx)}` });
+    putExchange(committed).catch(() => undefined);
+    return { commit: 'committed', exchange: committed };
+  } catch (err) {
+    const notDeployed = isMethodNotFound(err);
+    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? 'commit_proof is not in the contract yet (SPEC §4.2 lands next): commit kept locally' : `commit failed: ${describeError(err)}; commit kept locally` });
+    return { commit: notDeployed ? 'not-deployed' : 'failed', exchange: x };
+  }
+}
+
+export async function commitOutcome(outcome: VerifiedOutcome, resolveCommitter: () => Promise<Committer | null>, emit: Emit): Promise<VerifiedOutcome> {
+  const r = await commitExchange(storedExchangeOf(outcome), resolveCommitter, emit);
+  return { ...outcome, proof: r.exchange.proof, commit: r.commit };
 }
 
 /** The user picked the Incognito model (SPEC §3.9): no model evidence, no E2EE; plaintext goes through our proxy and the gateway, and the card says so. */
-async function nonTeeRoute(cfg: PublicConfig, { model, messages, onStep: emit }: ChatParams, sent: { reply?: string }): Promise<ChatOutcome> {
+async function nonTeeRoute(cfg: PublicConfig, { model, messages, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
   const meta = await runStep(emit, 'metadata', `asking the gateway about ${model}`, () => fetchModelMetadata(model), (m) => `${model}: provider ${String(m.providerType)}, model attestation ${m.attestationSupported === true ? 'supported' : 'not supported'}`);
-  if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, onStep: emit }, sent); // it is attested after all: use the real path
-  const gateway = await runStep(emit, 'attestation', 'verifying the gateway only (this model has no model attestation)', () => verifyGateway(policy), (g) => `gateway ${g.tcbStatus}; no model evidence exists for ${model}`);
+  if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, onStep: emit }, progress); // it is attested after all: use the real path
+  const gateway = await runStep(emit, 'attestation', 'verifying the gateway only (this model has no model attestation)', () => verifyGateway(policy), (g) => `gateway ${g.tcbStatus}; no model evidence exists for ${model}`, 'attestation-gateway');
   emit({ id: 'key-log', status: 'skipped', detail: 'no model key to look up: nothing to verify against the log' });
-  const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`);
-  sent.reply = exchange.reply;
-  const signature = await runStep(emit, 'signature', 'fetching the completion signature', () => fetchSignature(exchange.completionId), (s) => `signature_kind ${s.kind}`);
-  await runStep(emit, 'sdk-check', null, async () => checkGatewayResponse(exchange, signature, gateway), () => 'SDK: the gateway signed these bytes; this says nothing about where the model ran');
+  const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`, 'send-plain');
+  progress.reply = exchange.reply;
+  const signature = await runStep(emit, 'signature', 'fetching the completion signature', () => fetchSignature(exchange.completionId), (s) => `signature_kind ${s.kind}`, 'signature-gateway');
+  await runStep(emit, 'sdk-check', 'SDK check against the gateway signer', async () => checkGatewayResponse(exchange, signature, gateway), () => 'SDK: the gateway signed these bytes; this says nothing about where the model ran');
   emit({ id: 'proof', status: 'skipped', detail: 'no model proof for a non-attested route' });
   return { kind: 'non-tee', reply: exchange.reply, gateway, exchange, signature, model };
 }

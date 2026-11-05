@@ -4,7 +4,7 @@
 // user-chosen Incognito model (SPEC §3.9): no model key exists, so that request is plaintext and the card says so.
 // No body logging. Guards below keep a stranger from spending the key: same-origin callers only, the two
 // configured models, no streaming or n>1, small bodies, a per-IP rate limit; NEAR AI's spend limit is the backstop.
-import { DEFAULT_NEAR_AI_CLOUD_BASE_URL } from '@nearai/inference-sdk/node';
+import { ainekConfigFromEnv } from '@ainek/proof';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -25,8 +25,9 @@ const MAX_BODY_BYTES = 64 * 1024;
 const MAX_MESSAGES = 50;
 const RATE_LIMIT = { windowMs: 60_000, max: 30 };
 
-const upstreamOrigin = new URL(process.env.NEARAI_BASE_URL ?? DEFAULT_NEAR_AI_CLOUD_BASE_URL).origin;
-const allowedModels = new Set([process.env.NEARAI_MODEL ?? 'z-ai/glm-5.3-flash', process.env.NEARAI_INCOGNITO_MODEL ?? 'anthropic/claude-haiku-5-5']);
+const cfg = ainekConfigFromEnv(process.env);
+const upstreamOrigin = new URL(cfg.nearaiBaseUrl).origin;
+const allowedModels = new Set([cfg.model, cfg.incognitoModel]);
 const hits = new Map<string, number[]>(); // ip -> request timestamps inside the window (one process; fine for the demo)
 
 function rateLimited(ip: string): boolean {

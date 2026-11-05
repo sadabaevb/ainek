@@ -3,7 +3,7 @@
 //   ecdsa:   EIP-191 personal_sign; `signing_address` is the 20-byte Ethereum address; recover with ethers.
 import nacl from 'tweetnacl';
 import { verifyMessage } from 'ethers';
-import { hexToBytes, utf8Bytes } from './hash.ts';
+import { hexToBytes, normalizeHex, stripHexPrefix, utf8Bytes } from './hash.ts';
 import type { SigningAlgo } from './schema.ts';
 
 export interface SignatureCheck {
@@ -37,9 +37,9 @@ function verifyEd25519(signedText: string, signature: string, signingAddress: st
 }
 
 function verifyEcdsa(signedText: string, signature: string, signingAddress: string): SignatureCheck {
-  const sig = signature.startsWith('0x') ? signature : `0x${signature}`;
-  const recovered = verifyMessage(signedText, sig).toLowerCase();
-  const expected = (signingAddress.startsWith('0x') ? signingAddress : `0x${signingAddress}`).toLowerCase();
+  const sig = `0x${stripHexPrefix(signature)}`;
+  const recovered = normalizeHex(verifyMessage(signedText, sig));
+  const expected = normalizeHex(signingAddress);
   return recovered === expected
     ? { ok: true, detail: `ecdsa signer ${recovered.slice(0, 10)}… matches signing_address` }
     : { ok: false, detail: `ecdsa signer ${recovered} differs from signing_address ${expected}` };
@@ -47,7 +47,7 @@ function verifyEcdsa(signedText: string, signature: string, signingAddress: stri
 
 /** NEAR AI returns hex; accept base64 too, as SPEC §5.1 says "as returned". */
 export function decodeSignature(signature: string): Uint8Array {
-  const clean = signature.startsWith('0x') ? signature.slice(2) : signature;
+  const clean = stripHexPrefix(signature);
   if (/^[0-9a-fA-F]+$/.test(clean) && clean.length % 2 === 0) return hexToBytes(clean);
   return Uint8Array.from(Buffer.from(signature, 'base64'));
 }
