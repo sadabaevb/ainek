@@ -28,8 +28,9 @@ interface Result {
 /** The on-chain record for this commit (SPEC §4.2), or why it was not looked up. English like every other check detail. */
 async function lookupCommit(cfg: PublicConfig, d: ParsedDisclosure, account: string): Promise<Check> {
   const id = 'on-chain-commit';
-  const { commit, commitTx } = d.proof;
-  if (commit === undefined || commitTx === undefined) return { id, status: 'skipped', detail: 'the proof was never committed on NEAR (no commit transaction in the file): nothing to look up' };
+  // The chain decides whether a commit exists, not the file: `commitTx` is only the sender's note (a file saved before its commit landed has none).
+  const { commit } = d.proof;
+  if (commit === undefined) return { id, status: 'skipped', detail: 'the proof carries no commit: nothing to look up' };
   if (cfg.logSource === 'sample') return { id, status: 'skipped', detail: 'chain not consulted (AINEK_LOG_SOURCE=sample)' };
   if (!account) return { id, status: 'skipped', detail: 'enter the NEAR account that committed to look the commit up on-chain' };
   try {
