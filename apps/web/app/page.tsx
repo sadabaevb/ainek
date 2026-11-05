@@ -26,7 +26,7 @@ const atTurn = (idx: number, fn: (turn: Turn) => Turn) => (prev: Turn[]) => prev
 const withStep = (e: StepEvent) => (turn: Turn): Turn => ({ ...turn, steps: upsert(turn.steps, e) });
 const withOutcome = (outcome: ChatOutcome) => (turn: Turn): Turn => ({ ...turn, outcome });
 
-/** The step in flight, in plain words (flow says which wording fits the route), over an indeterminate bar: the cold attestation alone can take ten seconds and no step index would show that. */
+/** The step in flight, in plain words (flow says which wording fits the route), over an indeterminate bar: the cold attestation alone can take many seconds and no step index would show that. */
 function Progress({ steps }: { steps: StepEvent[] }) {
   const { t } = useT();
   if (steps.length === 0) return null;
