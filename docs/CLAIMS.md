@@ -50,7 +50,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested
   key, because attestation is checked locally. The endpoint also sees the browser's IP and the timing of every message's
-  log read (README "Who sees what").
+  log read, and the signed commit transaction, which the wallet connector broadcasts through its own FastNear endpoint
+  (README "Who sees what").
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.

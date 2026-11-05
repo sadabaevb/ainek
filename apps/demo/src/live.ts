@@ -7,7 +7,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { buildModelProof, normalizeHex, shortHex as short, toDisclosure, verifyModelProof, type ModelProof } from '@ainek/proof';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
-import { FAIL, NA, OK, head, line, markOf, seconds } from './term.ts';
+import { FAIL, NA, OK, exitFlushed, head, line, markOf, seconds } from './term.ts';
 import { loadLiveEnv, nothingSent, runTier1, type StepId, type Verified } from './tier1.ts';
 
 const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, disclose: { type: 'string' }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
@@ -37,35 +37,39 @@ const outcome = await runTier1({
     const title = HEADS[e.id];
     if (title) head(title);
     if (e.status === 'ok') line(OK, `${e.detail} (${seconds(e.ms)})`);
-    else line(FAIL, nothingSent(e.id) ? `${e.detail}: not sent (fail-closed)` : e.detail);
+    else line(FAIL, nothingSent(e.id) ? `${e.detail} (nothing was sent)` : e.detail);
   },
 });
-if (outcome.kind !== 'verified') {
-  console.log(nothingSent(outcome.step) ? '\nResult: REFUSED. Nothing was sent.' : '\nResult: FAILED.');
+if (outcome.kind === 'verified') {
+  printVerified(outcome);
+} else {
+  // REFUSED is the fail-closed rule (the key is not in the log); anything else that stopped the run before the send is a failure, but still nothing left this process.
+  console.log(outcome.kind === 'refused' ? '\nResult: REFUSED. Nothing was sent.' : nothingSent(outcome.step) ? '\nResult: FAILED before sending. Nothing was sent.' : '\nResult: FAILED.');
   if (record || discloseFile) console.log('nothing written: the run did not verify');
-  process.exit(1);
 }
-for (const c of outcome.report.checks) line(markOf(c.status), `proof.${c.id}: ${c.detail}`);
-line(NA, 'commit on NEAR: not in this mode (the web client commits with the wallet; the salt stays with the proof)');
-
-const { signer, logEntry, logSource, proof } = outcome;
-console.log('\n┌─ Ainek proof card ─ live ───────────────────────────────────────────');
-console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(signer.deployment.runtimeMeasurements.composeHash ?? '')})`);
-console.log(`│ ${OK} Hardware: Intel TDX ${signer.tcbStatus}, NVIDIA GPU ${signer.gpuEvidence}; chat request pinned to the attested gateway`);
-console.log(`│ ${OK} Key #${logEntry.index} in the public log, logged by ${logEntry.verifier} (${logSource})`);
-console.log(`│ ${OK} Request and response: hashes match the signature made inside the model TEE`);
-console.log(`│ ${OK} End-to-end encryption: yes, encrypted to the attested model key`);
-console.log(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);
-console.log(`└─ Result: VERIFIED in ${seconds(outcome.totalMs)}`);
-
-if (record) recordSamples(outcome);
-if (discloseFile) {
-  writeJson(discloseFile, toDisclosure({ proof, logEntry, requestBody: outcome.requestBody, responseBody: outcome.responseBody }));
-  console.log(`\ndisclosure written: ${discloseFile} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
-}
-process.exit(0);
+await exitFlushed(outcome.kind === 'verified' ? 0 : 1);
 
 // ---- helpers ----
+/** The proof checks, the card, then the files `--record` and `--disclose` asked for. */
+function printVerified(v: Verified & { totalMs: number }): void {
+  for (const c of v.report.checks) line(markOf(c.status), `proof.${c.id}: ${c.detail}`);
+  line(NA, 'commit on NEAR: not in this mode (the web client commits with the wallet; the salt stays with the proof)');
+  const { signer, logEntry, logSource, proof } = v;
+  console.log('\n┌─ Ainek proof card ─ live ───────────────────────────────────────────');
+  console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(signer.deployment.runtimeMeasurements.composeHash ?? '')})`);
+  console.log(`│ ${OK} Hardware: Intel TDX ${signer.tcbStatus}, NVIDIA GPU ${signer.gpuEvidence}; chat request pinned to the attested gateway`);
+  console.log(`│ ${OK} Key #${logEntry.index} in the public log, logged by ${logEntry.verifier} (${logSource})`);
+  console.log(`│ ${OK} Request and response: hashes match the signature made inside the model TEE`);
+  console.log(`│ ${OK} End-to-end encryption: yes, encrypted to the attested model key`);
+  console.log(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);
+  console.log(`└─ Result: VERIFIED in ${seconds(v.totalMs)}`);
+  if (record) recordSamples(v);
+  if (discloseFile) {
+    writeJson(discloseFile, toDisclosure({ proof, logEntry, requestBody: v.requestBody, responseBody: v.responseBody }));
+    console.log(`\ndisclosure written: ${discloseFile} (proof + salt + exact ciphertext bytes + log entry; keep it private, it is the file an auditor gets)`);
+  }
+}
+
 /** A flag the run cannot proceed with: say so before any network call or spend. */
 function usage(reason: string): never {
   console.error(`${reason}\nusage: pnpm demo:live [--record] [--disclose <file>] [--message "…"]`);

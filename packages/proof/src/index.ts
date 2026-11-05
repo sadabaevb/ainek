@@ -23,6 +23,8 @@ export {
   hex64,
 } from './schema.ts';
 export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, resolveLogEntry } from './key-log.ts';
+export { TIER1_STEPS, failurePhase } from './steps.ts';
+export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
 export { buildModelProof } from './build.ts';
 export type { BuildModelProofInput } from './build.ts';

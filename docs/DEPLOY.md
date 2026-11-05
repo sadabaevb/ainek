@@ -16,7 +16,7 @@ Nov 25.
 4. **Environment variables** (Production and Preview), values from the root `.env`:
    `NEARAI_API_KEY` (a workspace key with a spend limit), `NEARAI_BASE_URL`, `NEARAI_MODEL`, `NEARAI_INCOGNITO_MODEL`,
    `NEAR_NETWORK=testnet`, `AINEK_CONTRACT`, `AINEK_LOG_SOURCE=contract`, `AINEK_TRUSTED_VERIFIERS`,
-   `AINEK_QUORUM`, `AINEK_ACCEPTED_TCB`; `NEAR_RPC_URL` only to override the FastNear default. Nothing else: the web app never reads the verifier, agent, Telegram or
+   `AINEK_QUORUM`, `AINEK_ACCEPTED_TCB`; `NEAR_RPC_URL` only to override the FastNear default (delete it from the project if an earlier `.env` put it there). Nothing else: the web app never reads the verifier, agent, Telegram or
    OutLayer secrets. The tamper switch is a client-side demo control (`?tamper=1` or the checkbox) and stays
    available on the hosted demo on purpose: it is the demo of the refusal.
 5. Deploy, then check: `/log` shows the live log; the chat verifies (or refuses, if the 24-hour log window is empty:

@@ -19,22 +19,20 @@ import {
   verifyModelResponse,
   type CompletionSignature,
   type TcbStatus,
-  type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, keyLogReader, shortHex as short, verifyModelProof, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof } from '@ainek/proof';
+import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, failurePhase, keyLogReader, shortHex as short, verifyModelProof, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { loadSampleLogEntry } from './evidence.ts';
 import { describe } from './term.ts';
 
 export const SIGNING_ALGO = 'ed25519' as const;
 
-/** The steps of flow.ts up to the proof; `store` and `commit` belong to the browser (IndexedDB, wallet). */
-export type StepId = 'metadata' | 'attestation' | 'key-log' | 'encrypt' | 'send' | 'signature' | 'sdk-check' | 'proof';
-const STEP_ORDER: readonly StepId[] = ['metadata', 'attestation', 'key-log', 'encrypt', 'send', 'signature', 'sdk-check', 'proof'];
+/** The shared step ids (TIER1_STEPS in @ainek/proof); `store` and `commit` belong to the browser (IndexedDB, wallet). */
+export type StepId = Tier1StepId;
 
-/** True when a failure at `step` happened before the request left this process: the fail-closed cases. */
+/** True when a failure at `step` happened before the request left this process. */
 export function nothingSent(step: StepId): boolean {
-  return STEP_ORDER.indexOf(step) < STEP_ORDER.indexOf('send');
+  return failurePhase(step) === 'not-sent';
 }
 
 export interface StepEvent {
@@ -48,22 +46,19 @@ export type Timings = Partial<Record<StepId, number>>;
 
 export interface Verified {
   kind: 'verified';
-  gateway: VerifiedGatewayAttestation;
-  models: VerifiedModelAttestation[];
-  /** The report whose key signed the reply. */
+  /** The model report whose key signed the reply. */
   signer: VerifiedModelAttestation;
   verifiedAt: string;
   entries: KeyEntry[];
   logSource: string;
   logEntry: KeyEntry;
-  verdict: KeyLogVerdict;
   completionId: string;
   reply: string;
   requestBody: Uint8Array;
   responseBody: Uint8Array;
   signature: CompletionSignature;
   proof: ModelProof;
-  report: ReturnType<typeof verifyModelProof>;
+  report: VerifyReport;
 }
 /** The attested key is not in the public log: nothing was sent (the entries are kept so a caller can test other keys against the same read). */
 export interface Refused {
@@ -128,12 +123,20 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
     onStep({ id, status: 'ok', detail: detail(value), ms: timings[id] });
     return value;
   };
-  const done = <O extends Verified | Refused | Failed>(outcome: O): O & { timings: Timings; totalMs: number; retries: number } => ({ ...outcome, timings, totalMs: performance.now() - t0, retries });
+  // `timings` is copied: the parallel log read may still land after a run that failed at attestation, and that run must not grow a number for a step it never reached.
+  const done = <O extends Verified | Refused | Failed>(outcome: O): O & { timings: Timings; totalMs: number; retries: number } => ({ ...outcome, timings: { ...timings }, totalMs: performance.now() - t0, retries });
 
   try {
     // 0. The chosen model must support model attestation: never a silent downgrade to plaintext.
-    const meta = await step('metadata', () => retrying(() => client.fetchModelMetadata(model)), (m) => `${model}: provider ${String(m.providerType)}, model attestation ${m.attestationSupported === true ? 'supported' : 'not supported'}`);
-    if (meta.attestationSupported !== true) throw new Error(`${model} reports no model attestation: refusing to send in plaintext`);
+    await step(
+      'metadata',
+      async () => {
+        const meta = await retrying(() => client.fetchModelMetadata(model));
+        if (meta.attestationSupported !== true) throw new Error(`${model} reports no model attestation (provider ${String(meta.providerType)}): refusing to send in plaintext`);
+        return meta;
+      },
+      (m) => `${model}: provider ${String(m.providerType)}, model attestation supported`,
+    );
 
     // 1. Gateway and model evidence, verified here; the public log is read meanwhile (independent; the send waits for both).
     const tLog = performance.now();
@@ -142,22 +145,23 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
       return log;
     });
     logPromise.catch(() => undefined); // awaited in step 2; a rejection must not surface before then
-    const [gateway, models] = await step(
+    const { gateway, models, modelAttestation, modelPublicKey, pinnedFetch } = await step(
       'attestation',
-      () =>
-        Promise.all([
+      async () => {
+        const [gateway, models] = await Promise.all([
           retrying(() => client.fetchGatewayAttestation({ signingAlgo: SIGNING_ALGO }).then((f) => verifyGatewayAttestation({ attestation: f.attestation, clientBinding: f.clientBinding, policy }))),
           retrying(() => client.fetchModelAttestations({ model, signingAlgo: SIGNING_ALGO }).then((f) => Promise.all(f.attestations.map((attestation) => verifyModelAttestation({ attestation, clientBinding: f.clientBinding, policy: { ...policy, gpuEvidence: 'required' } }))))),
-        ]),
-      ([g, ms]) => `gateway TCB ${g.tcbStatus}, signer ${short(g.signer.signingAddress)}, TLS binding ${g.tlsBinding.kind}; ${ms.length} model report${ms.length === 1 ? '' : 's'}: ${ms.map((m) => `${short(m.signer.signingAddress)} ${m.tcbStatus}/gpu ${m.gpuEvidence} compose ${short(m.deployment.runtimeMeasurements.composeHash ?? '')}`).join('; ')}`,
+        ]);
+        // Node can observe the TLS peer: a gateway report without the TLS binding means the chat request could not be pinned, so stop.
+        if (gateway.tlsBinding.kind !== 'attested') throw new Error(`gateway TLS binding is ${gateway.tlsBinding.kind}: the chat request cannot be pinned to the attested gateway`);
+        const modelAttestation = models.find((m) => m.signingPublicKey !== undefined);
+        const modelPublicKey = modelAttestation?.signingPublicKey; // its own const: the narrowing has to survive into the encrypt step's closure
+        if (!modelAttestation || !modelPublicKey) throw new Error('no verified model attestation with an E2EE key');
+        return { gateway, models, modelAttestation, modelPublicKey, pinnedFetch: createPinnedTlsFetch(gateway.tlsBinding.spkiFingerprint) };
+      },
+      (a) => `gateway TCB ${a.gateway.tcbStatus}, signer ${short(a.gateway.signer.signingAddress)}, TLS binding ${a.gateway.tlsBinding.kind}; ${a.models.length} model report${a.models.length === 1 ? '' : 's'}: ${a.models.map((m) => `${short(m.signer.signingAddress)} ${m.tcbStatus}/gpu ${m.gpuEvidence} compose ${short(m.deployment.runtimeMeasurements.composeHash ?? '')}`).join('; ')}`,
     );
     const verifiedAt = new Date().toISOString();
-    // Node can observe the TLS peer: a gateway report without the TLS binding means the chat request could not be pinned, so stop.
-    if (gateway.tlsBinding.kind !== 'attested') throw new Error(`gateway TLS binding is ${gateway.tlsBinding.kind}: the chat request cannot be pinned to the attested gateway`);
-    const modelAttestation = models.find((m) => m.signingPublicKey !== undefined);
-    const modelPublicKey = modelAttestation?.signingPublicKey; // its own const: the narrowing has to survive into the encrypt step's closure
-    if (!modelAttestation || !modelPublicKey) throw new Error('no verified model attestation with an E2EE key');
-    const pinnedFetch = createPinnedTlsFetch(gateway.tlsBinding.spkiFingerprint);
 
     // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
     running = 'key-log';
@@ -225,7 +229,7 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
       },
       (x) => `${x.report.checks.length} checks pass; commit ${short(x.proof.commit ?? '')}`,
     );
-    return done({ kind: 'verified', gateway, models, signer, verifiedAt, entries, logSource, logEntry, verdict, completionId: completion.id, reply, requestBody, responseBody, signature, proof, report });
+    return done({ kind: 'verified', signer, verifiedAt, entries, logSource, logEntry, completionId: completion.id, reply, requestBody, responseBody, signature, proof, report });
   } catch (err) {
     const reason = describe(err);
     onStep({ id: running, status: 'fail', detail: reason, ms: performance.now() - stepStart });

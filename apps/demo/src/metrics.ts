@@ -3,23 +3,26 @@
 // public-log rule is checked with a swapped key against the same log read, as the chat's tamper switch does. Per-run timings
 // and outcomes go to a JSON file; a markdown table is printed for the README. The on-chain commit is not part of a run (it
 // needs a wallet); its cost was measured once (docs/DEV-NOTES.md).
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEMO_SWAPPED_KEY, evaluateKeyLog } from '@ainek/proof';
-import { FAIL, OK, describe, line, seconds } from './term.ts';
+import { FAIL, OK, describe, exitFlushed, line, seconds } from './term.ts';
 import { loadLiveEnv, runTier1, type StepId, type Timings } from './tier1.ts';
 
 const flags = (() => {
   try {
-    return parseArgs({ options: { runs: { type: 'string', default: '10' }, out: { type: 'string', default: 'docs/metrics.json' } }, strict: true }).values;
+    return parseArgs({ options: { runs: { type: 'string', default: '10' }, out: { type: 'string' } }, strict: true }).values;
   } catch (err) {
     return usage(describe(err));
   }
 })();
 const runs = Number(flags.runs);
 if (!Number.isInteger(runs) || runs < 1) usage('--runs must be a positive integer');
-const outFile = path.resolve(process.env.INIT_CWD ?? process.cwd(), flags.out); // INIT_CWD: where pnpm ran (the repo root for `pnpm demo:metrics`)
+// The default is docs/metrics.json in the repo wherever the script was started from; an explicit --out is relative to where pnpm ran
+// (INIT_CWD). Checked before the first paid run: a missing directory must not throw after 50 of them.
+const outFile = flags.out === undefined ? path.resolve(import.meta.dirname, '../../../docs/metrics.json') : path.resolve(process.env.INIT_CWD ?? process.cwd(), flags.out);
+if (!existsSync(path.dirname(outFile))) usage(`--out: directory ${path.dirname(outFile)} does not exist`);
 
 const env = loadLiveEnv();
 const apiKey: string = env.apiKey ?? usage('NEARAI_API_KEY is not set (root .env)');
@@ -63,7 +66,6 @@ for (let n = 1; n <= runs; n++) {
   const retried = run.retries ? `, ${run.retries} retr${run.retries === 1 ? 'y' : 'ies'}` : '';
   line(run.outcome === 'verified' ? OK : FAIL, `run ${n}: ${run.outcome} in ${seconds(run.totalMs)} (attestation ${sec(t.attestation)}, log ${sec(t['key-log'])}, reply ${sec(t.send)}, signature ${sec(t.signature)}${retried}); swapped key refused: ${run.swappedRefused ?? 'not checked'}${run.error ? `; ${run.step}: ${run.error}` : ''}`);
 }
-writeFileSync(outFile, `${JSON.stringify({ meta: { model: cfg.model, baseUrl: cfg.nearaiBaseUrl, contract: cfg.contract, rpcUrl: cfg.rpcUrl, node: process.version, measuredAt: new Date().toISOString(), note: 'from Node, direct to NEAR AI (no relay), nothing cached between runs; times in ms' }, runs: results }, null, 2)}\n`);
 
 // The table: counts over every run, times over the runs that reached the step (a run that failed earlier has no number for it).
 const verified = results.filter((r) => r.outcome === 'verified');
@@ -92,10 +94,12 @@ console.log(`| Signature fetch | ${spread(of((r) => r.timings.signature, verifie
 console.log(`| First message of the hour, whole run | ${spread(of((r) => r.totalMs, verified))} |`);
 console.log(`| Later message, attestation cached (derived from the same runs) | ${spread(of(laterMessage, verified))} |`);
 console.log(`| Ciphertext per exchange | ${quantile(of((r) => r.bytesSent, verified), 0.5) ?? '?'} B sent, ${quantile(of((r) => r.bytesReceived, verified), 0.5) ?? '?'} B received |`);
+writeFileSync(outFile, `${JSON.stringify({ meta: { model: cfg.model, baseUrl: cfg.nearaiBaseUrl, contract: cfg.contract, rpcUrl: cfg.rpcUrl, node: process.version, measuredAt: new Date().toISOString(), note: 'from Node, direct to NEAR AI (no relay), nothing cached between runs; times in ms' }, runs: results }, null, 2)}\n`);
 console.log(`\nwritten: ${outFile}`);
-process.exit(verified.length === results.length ? 0 : 1);
+// Non-zero when any run did not verify or the swapped key got through: the two things the table must never show silently.
+await exitFlushed(verified.length === results.length && results.every((r) => r.swappedRefused === true) ? 0 : 1);
 
 function usage(reason: string): never {
-  console.error(`${reason}\nusage: pnpm demo:metrics [--runs N] [--out <file>]`);
+  console.error(`${reason}\nusage: pnpm demo:metrics [--runs N] [--out <file>]   (default: 10 runs, docs/metrics.json)`);
   return process.exit(2);
 }
