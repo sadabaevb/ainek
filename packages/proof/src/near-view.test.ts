@@ -107,3 +107,14 @@ test('readStorageBalance: the U128 decimal string becomes a bigint, with the cal
   rpcAnswering(viewResult(12));
   await assert.rejects(readStorageBalance('http://rpc.test', 'ainek.testnet', 'alice.testnet'));
 });
+
+test('viewFunction: an aborted signal ends the call at once, with no retry', async () => {
+  let calls = 0;
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    calls++;
+    if (init?.signal?.aborted) throw new DOMException('The operation was aborted', 'AbortError');
+    return new Response('{}', { status: 500 });
+  }) as typeof fetch;
+  await assert.rejects(viewFunction('http://rpc.test', 'ainek.testnet', 'latest_keys', {}, AbortSignal.abort()), (err: unknown) => err instanceof Error && err.name === 'AbortError');
+  assert.equal(calls, 1);
+});
