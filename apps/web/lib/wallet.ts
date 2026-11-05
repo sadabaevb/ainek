@@ -2,11 +2,13 @@
 // `commit_proof` on the log contract, so committing a proof hash never pops the wallet up again.
 import type { NearContextValue } from 'near-connect-hooks';
 import { ContractMethodNotFoundError } from 'near-api-js/rpc-errors';
-import type { ModelProof } from '@ainek/proof';
+import { readStorageBalance, type ModelProof } from '@ainek/proof';
 import type { PublicConfig } from './config';
 import type { Committer } from './flow';
 
 const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
+/** One-time storage prepayment (SPEC §4.2). A commit was measured at 161 bytes = 0.00161 NEAR on testnet (2026-11-05), so 0.1 NEAR covers about 60. Attached through the wallet dialog: a function-call key cannot carry a deposit. */
+export const PREPAY_YOCTO = 10n ** 23n;
 
 export function fcKeyLogin(signIn: NearContextValue['signIn'], cfg: PublicConfig): Promise<void> {
   return signIn({
@@ -32,6 +34,18 @@ export async function commitProofOnChain(callFunctionRaw: NearContextValue['call
       await new Promise((r) => setTimeout(r, 1500 * attempt));
     }
   }
+}
+
+/** `deposit_storage()` with the attached prepayment; the hook routes it through the wallet since the FC key does not cover this method. */
+export async function depositStorage(callFunctionRaw: NearContextValue['callFunctionRaw'], cfg: PublicConfig): Promise<void> {
+  const outcome = await callFunctionRaw({ contractId: cfg.contract, method: 'deposit_storage', args: {}, deposit: PREPAY_YOCTO.toString() });
+  const status = outcome.status as unknown;
+  if (typeof status === 'object' && status !== null && 'Failure' in status) throw new Error(`deposit_storage failed: ${safeString((status as { Failure: unknown }).Failure)}`);
+}
+
+/** The contract's own refusal when the account has not prepaid (SPEC §4.2). */
+export function isNoPrepaidStorage(err: unknown): boolean {
+  return /not enough prepaid storage/i.test(err instanceof Error ? err.message : safeString(err));
 }
 
 /** The contract is deployed but the method is not there yet (SPEC §4.2 lands after §4.1). Typed error on the FC-key path; text match for the wallet-popup path. */
@@ -68,10 +82,16 @@ function isDialogClosed(err: unknown): boolean {
  */
 export async function walletCommitter(wallet: NearContextValue, cfg: PublicConfig, connect: boolean): Promise<Committer | null> {
   const { connector, signIn, callFunctionRaw, signedAccountId, loading } = wallet;
-  const committer: Committer = (proof) => commitProofOnChain(callFunctionRaw, cfg, proof);
-  if (signedAccountId) return committer;
+  const committerFor = (account: string): Committer => ({
+    account,
+    prepaid: () => readStorageBalance(cfg.rpcUrl, cfg.contract, account),
+    prepay: () => depositStorage(callFunctionRaw, cfg),
+    commit: (proof) => commitProofOnChain(callFunctionRaw, cfg, proof),
+  });
+  if (signedAccountId) return committerFor(signedAccountId);
   const connectedAccount = () => withDeadline(connector.getConnectedWallet().then((c) => c.accounts[0]?.accountId ?? null, () => null), null);
-  if (loading && (await connectedAccount())) return committer;
+  const restored = loading ? await connectedAccount() : null;
+  if (restored) return committerFor(restored);
   if (!connect) return null;
   try {
     await fcKeyLogin(signIn, cfg);
@@ -79,5 +99,6 @@ export async function walletCommitter(wallet: NearContextValue, cfg: PublicConfi
     if (isDialogClosed(err)) return null;
     throw err;
   }
-  return (await connectedAccount()) ? committer : null;
+  const account = await connectedAccount();
+  return account ? committerFor(account) : null;
 }

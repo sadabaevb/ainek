@@ -83,6 +83,13 @@ export type ProofCommitLookup = { status: 'found'; record: ProofCommitRecord } |
  * `proof_commit(account, commit)`: the on-chain record for a salted commit. `none` when that account never committed it,
  * `not-deployed` while the contract has no such view yet. Other failures (RPC down, malformed account id) throw.
  */
+const yocto = z.string().regex(/^\d+$/);
+
+/** `storage_balance_of(account)` (SPEC §4.2): the yoctoNEAR the account prepaid for its commits; 0n when it never deposited. */
+export async function readStorageBalance(rpcUrl: string, contractId: string, account: string): Promise<bigint> {
+  return BigInt(yocto.parse(await viewFunction(rpcUrl, contractId, 'storage_balance_of', { account })));
+}
+
 export async function readProofCommit(rpcUrl: string, contractId: string, account: string, commit: string): Promise<ProofCommitLookup> {
   try {
     const raw = await viewFunction(rpcUrl, contractId, 'proof_commit', { account, commit });

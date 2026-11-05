@@ -56,6 +56,7 @@ function VerifyInner() {
   const [result, setResult] = useState<Result | null>(null);
   const [stored, setStored] = useState<StoredExchange[]>([]);
   const [committing, setCommitting] = useState(false);
+  const [needDeposit, setNeedDeposit] = useState(false); // the last commit attempt stopped at "no prepaid storage": the next click may deposit
   const [missingId, setMissingId] = useState<string | null>(null); // ?id= not in this browser's store: worded at render, so it follows the language
   const [error, setError] = useState('');
 
@@ -104,7 +105,8 @@ function VerifyInner() {
     setCommitting(true);
     const r = await commitExchange(x, () => walletCommitter(wallet, cfg, true), (e) => {
       if (e.status === 'skipped') setError(e.detail);
-    });
+    }, needDeposit);
+    setNeedDeposit(r.commit === 'no-deposit');
     // The page may be showing something else by now (a pasted proof): only the same exchange takes the transaction.
     if (r.commit === 'committed') setResult((prev) => (prev?.stored?.completionId === x.completionId ? { ...prev, stored: r.exchange } : prev));
     setCommitting(false);
@@ -148,7 +150,7 @@ function VerifyInner() {
             <div className="actions">
               {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{tv.commitTx}</a>}
               {committable && (
-                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? tv.committing : t.commitNow}</button>
+                <button type="button" className="btn" onClick={() => void commitStored(committable)} disabled={committing}>{committing ? tv.committing : needDeposit ? t.depositAndCommit : t.commitNow}</button>
               )}
               <a className="btn" href={verificationCenterUrl(proof)} target="_blank" rel="noreferrer">{t.openVc}</a>
             </div>

@@ -115,7 +115,8 @@ export default function ChatPage() {
   const commitTurn = useCallback(
     async (idx: number, outcome: VerifiedOutcome, connect: boolean) => {
       if (outcome.commit !== 'pending') setTurns(atTurn(idx, withOutcome({ ...outcome, commit: 'pending' }))); // the automatic pass already is
-      const committed = await commitOutcome(outcome, () => walletCommitter(wallet, cfg, connect), (e) => setTurns(atTurn(idx, withStep(e))));
+      // A click on the card while it says "no prepaid storage" is the consent to the one-time deposit.
+      const committed = await commitOutcome(outcome, () => walletCommitter(wallet, cfg, connect), (e) => setTurns(atTurn(idx, withStep(e))), outcome.commit === 'no-deposit');
       setTurns(atTurn(idx, withOutcome(committed)));
     },
     [wallet, cfg],

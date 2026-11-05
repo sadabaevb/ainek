@@ -72,7 +72,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   const composeHash = m.deployment.runtimeMeasurements.composeHash ?? logEntry.compose_hash;
   const since = observedUtc(logEntry.observed_at).slice(0, 10);
   const commit = proof.commit ?? '';
-  const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
+  const chainText = { pending: t.chainCommitting, 'no-wallet': t.chainNoWallet, 'no-deposit': t.chainNoDeposit, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: '' }[outcome.commit];
   const hint = (key: keyof typeof t.hints) => (explain ? t.hints[key] : undefined);
   const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
 
@@ -93,7 +93,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
         {onCommit && canCommitNow(outcome.commit) && (
           <>
             {' '}
-            <button type="button" className="btn small" onClick={() => onCommit(outcome)}>{!signedAccountId ? t.commitConnect : outcome.commit === 'failed' ? t.commitRetry : t.commitNow}</button>
+            <button type="button" className="btn small" onClick={() => onCommit(outcome)}>{!signedAccountId ? t.commitConnect : outcome.commit === 'no-deposit' ? t.depositAndCommit : outcome.commit === 'failed' ? t.commitRetry : t.commitNow}</button>
           </>
         )}
       </Row>

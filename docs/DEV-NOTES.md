@@ -652,3 +652,25 @@ plaintext-маршрута только `send`. Фаза падения — чи
   ходов.
 - `docs/DEPLOY.md`: хостинг на Vercel. `next build` на 2026-11-05 проходит с чистого клона. `DEMO_TAMPER_KEY` удалён
   из `.env.example`: переменную никто не читал, tamper это клиентский переключатель.
+
+## 2026-11-05 — клиент под `deposit_storage` и живой `commit_proof` (Бектур)
+
+- Контракт v2 задеплоен на `ainek-log-dastan.testnet` (PR #19 Дастана): `commit_proof`, `proof_commit`, `deposit_storage`,
+  `storage_balance_of`. Клиент: `walletCommitter` теперь отдаёт объект `{ account, prepaid, prepay, commit }`;
+  `commitExchange` перед `commit_proof` читает `storage_balance_of` и при нехватке возвращает статус `no-deposit`
+  (кнопка «Внести 0.1 NEAR и записать»). Депозит идёт только по клику: `prepay=true` передаётся из карточки и `/verify`,
+  автоматический проход после ответа кошелёк не дёргает. Отказ контракта `not enough prepaid storage` тоже ведёт в
+  `no-deposit`, на случай гонки с устаревшим view.
+- Репетиция на testnet одноразовым аккаунтом `ainek-e2e-f20c502d.testnet` (скрипт в scratchpad, не в репо):
+  `commit_proof` без предоплаты → «Smart contract panicked: not enough prepaid storage: call deposit_storage with a
+  full-access key first»; `deposit_storage` 0.01 NEAR → кредит 1e22; FC-ключ только на `commit_proof` →
+  tx `8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM`, событие `proof_committed`; `proof_commit` →
+  `{kind: model, log_index: 0, block_height: 276296026}`; дубль → «this proof is already committed»; депозит с FC-ключа →
+  «Deposit is not allowed with function call».
+- **Цена коммита: 161 байт = 0.00161 NEAR**, не «≈100 байт». 0.01 NEAR хватает на 6 коммитов, поэтому клиент просит
+  0.1 NEAR (~60). Сказать Дастану: поправить оценку в SPEC §4.2 и сообщении.
+- View-запросы идут с `finality: final`: сразу после транзакции `proof_commit` и `storage_balance_of` ещё отдают старое
+  состояние, через секунду-две новое. Для `/auditor` это честно; поток коммита перечитывать баланс после депозита не
+  обязан, транзакции упорядочены.
+- Что не проверено без кошелька: что near-connect при `deposit: '1e23'` на метод вне FC-ключа открывает диалог кошелька,
+  а не падает. Проверяется первым же кликом «Внести 0.1 NEAR и записать» в браузере с testnet-кошельком.
