@@ -229,7 +229,9 @@ through NEAR AI's proxies in the browser, makes it longer. The browser then keep
 usual case is the "later message" row. The on-chain commit is measured once, not per run: `commit_proof` burnt 2.41 TGas
 (0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR; 130 + account + kind bytes per SPEC §4.2, here a
 26-character account) in
-[8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM).
+[8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM). On Nov 5 a browser wallet
+(Meteor) signed the same call with its function-call key, without a popup:
+[FLHbBzAv…](https://testnet.nearblocks.io/txns/FLHbBzAvaBN6jkmAQ1fnuAXAaViPZkgLi1XoWnhSiDnR).
 
 ## Repository
 
