@@ -17,8 +17,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   no hop swapped the reply key: see the first item under "Known issues we inherited".
 - Every response is **signed inside the enclave** over `sha256(request)` and `sha256(response)`. We keep the
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
-- Only a **salted hash** of each proof goes on-chain (once `commit_proof` is deployed; until then the commit stays in the
-  browser). Prompts, responses and policy contents never do.
+- Only a **salted hash** of each proof goes on-chain (`commit_proof`, paid from storage the committing account prepays and
+  cannot withdraw). Prompts, responses and policy contents never do.
 - (Tier 2) The agent holds **only a function-call key** scoped to `propose_action`. Funds sit in the contract.
   Revoking the key (`DeleteKey`) or `pause_agent` stops the agent at the chain level.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer),

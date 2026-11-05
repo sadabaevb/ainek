@@ -652,6 +652,31 @@ plaintext-маршрута только `send`. Фаза падения — чи
   ходов.
 - `docs/DEPLOY.md`: хостинг на Vercel. `next build` на 2026-11-05 проходит с чистого клона. `DEMO_TAMPER_KEY` удалён
   из `.env.example`: переменную никто не читал, tamper это клиентский переключатель.
+
+## 2026-11-05 — клиент под `deposit_storage` и живой `commit_proof` (Бектур)
+
+- Контракт v2 задеплоен на `ainek-log-dastan.testnet` (PR #19 Дастана): `commit_proof`, `proof_commit`, `deposit_storage`,
+  `storage_balance_of`. Поведение клиента: перед автоматической записью после ответа читается `storage_balance_of`, и
+  только при нуле запись пропускается со статусом «нет предоплаты» (кнопка «Внести 0.1 NEAR за хранение и записать»).
+  Цену коммита клиент не считает: она зависит от длины аккаунта (130 + len(account) + len(kind) байт), решает контракт,
+  а его отказ «not enough prepaid storage» ведёт в тот же статус. Депозит открывается только по клику: кнопка и клик
+  берут действие из одной функции (`connect | deposit | retry | commit`), и резолвер кошелька получает согласие
+  `none | connect | deposit` рядом с подключением. По клику «внести» депозит идёт без перепроверки баланса, иначе при
+  устаревшем view кнопка крутилась бы по кругу.
+- Репетиция на testnet одноразовым аккаунтом `ainek-e2e-f20c502d.testnet` (скрипт в scratchpad, не в репо):
+  `commit_proof` без предоплаты → «Smart contract panicked: not enough prepaid storage: call deposit_storage with a
+  full-access key first»; `deposit_storage` 0.01 NEAR → кредит 1e22; FC-ключ только на `commit_proof` →
+  tx `8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM`, событие `proof_committed`; `proof_commit` →
+  `{kind: model, log_index: 0, block_height: 276296026}`; дубль → «this proof is already committed»; депозит с FC-ключа →
+  «Deposit is not allowed with function call».
+- **Цена коммита: 161 байт = 0.00161 NEAR** для 26-символьного аккаунта, не «≈100 байт»; для 64-символьного implicit
+  аккаунта 199–200 байт. 0.01 NEAR хватает на 5–6 коммитов, поэтому клиент просит 0.1 NEAR (50–68). Предоплату
+  забрать нельзя, метода withdraw в контракте нет. Оценку в SPEC §4.2 стоит поправить в PR #19 (формула выше).
+- View-запросы идут с `finality: final`: сразу после транзакции `proof_commit` и `storage_balance_of` ещё отдают старое
+  состояние, через секунду-две новое. Для `/auditor` это честно; поток записи после депозита баланс не перечитывает,
+  транзакции упорядочены.
+- Что не проверено без кошелька: что near-connect при `deposit` на метод вне FC-ключа открывает диалог кошелька, а не
+  падает. Проверяется первым же кликом «Внести 0.1 NEAR за хранение и записать» в браузере с testnet-кошельком.
 ## 2026-11-04 — спайк B (OutLayer): прогон прошёл, аттестация проверена — Дастан
 
 FastFS ожил (`test.fastfs.io` отдаёт наш wasm, HTTP 200, sha256 совпадает с локальной сборкой). Два прогона

@@ -35,6 +35,9 @@ const en = {
   chainPending: 'only a salted hash will go on-chain; commit_proof is not in the contract yet',
   chainTx: (commit: string) => `only the hash ${commit}, committed in transaction`,
   chainNoWallet: 'only a salted hash goes on-chain; connect a wallet to commit it',
+  chainNoDeposit: 'only a salted hash goes on-chain; this account does not have enough prepaid storage on the contract',
+  chainDepositing: (near: string) => `asking the wallet for the ${near} NEAR storage prepayment…`,
+  chainCommittedElsewhere: 'the salted hash is on NEAR from an earlier transaction this browser does not know',
   chainFailed: 'only a salted hash goes on-chain; the commit failed and stays local',
   chainCommitting: 'committing the salted hash on NEAR…',
   connectWallet: 'Connect wallet',
@@ -66,6 +69,7 @@ const en = {
   commitConnect: 'Connect wallet and commit',
   commitRetry: 'Retry the commit',
   commitNow: 'Commit now',
+  depositAndCommit: (near: string) => `Prepay ${near} NEAR for storage and commit`,
   intro: {
     title: 'What happens when you send a message',
     lines: [
@@ -187,7 +191,7 @@ const en = {
     note: 'Note',
     provesTitle: 'What this file proves',
     proves1: (model: string) => `The disclosed bytes were signed inside an attested deployment of ${model} on NEAR AI Cloud: the signing key was logged on NEAR by a verifier that checked the Intel TDX and NVIDIA GPU evidence, and the signature over these exact bytes verifies here.`,
-    proves2: "The public commit is this exchange's: it equals sha256(salt ‖ canonical proof) for the proof and salt in this file, so the sender cannot swap in another exchange after the fact. The on-chain record, once {method} is live, fixes the block at which that commit was made.",
+    proves2: "The public commit is this exchange's: it equals sha256(salt ‖ canonical proof) for the proof and salt in this file, so the sender cannot swap in another exchange after the fact. The on-chain record ({method}) fixes the block at which that commit was made.",
     provesNothing: 'Nothing: at least one check above failed, so none of the guarantees below are established for this file.',
     notProvesTitle: 'What it does not prove',
     notProves: [
@@ -226,6 +230,9 @@ const ru: typeof en = {
   chainPending: 'в цепочку уйдёт только солёный хеш; commit_proof в контракте ещё нет',
   chainTx: (commit) => `только хеш ${commit}, записан транзакцией`,
   chainNoWallet: 'в цепочку уходит только солёный хеш; подключи кошелёк, чтобы записать его',
+  chainNoDeposit: 'в цепочку уходит только солёный хеш; у этого аккаунта не хватает предоплаты за хранение в контракте',
+  chainDepositing: (near) => `прошу кошелёк внести ${near} NEAR за хранение…`,
+  chainCommittedElsewhere: 'солёный хеш уже в NEAR, транзакция этому браузеру не известна',
   chainFailed: 'в цепочку уходит только солёный хеш; запись не удалась, хеш остался локально',
   chainCommitting: 'записываю солёный хеш в NEAR…',
   connectWallet: 'Подключить кошелёк',
@@ -256,6 +263,7 @@ const ru: typeof en = {
   commitConnect: 'Подключить кошелёк и записать',
   commitRetry: 'Повторить запись',
   commitNow: 'Записать сейчас',
+  depositAndCommit: (near) => `Внести ${near} NEAR за хранение и записать`,
   intro: {
     title: 'Что происходит, когда ты отправляешь сообщение',
     lines: [
@@ -377,7 +385,7 @@ const ru: typeof en = {
     note: 'Заметка',
     provesTitle: 'Что этот файл доказывает',
     proves1: (model) => `Раскрытые байты были подписаны внутри аттестованного деплоя ${model} на NEAR AI Cloud: ключ подписи записал в NEAR верификатор, проверивший свидетельства Intel TDX и NVIDIA GPU, а подпись над ровно этими байтами сходится здесь.`,
-    proves2: 'Публичный коммит принадлежит этому обмену: он равен sha256(соль ‖ канонический proof) для proof и соли из этого файла, поэтому отправитель не может задним числом подставить другой обмен. Запись в цепочке, когда заработает {method}, зафиксирует блок, в котором сделан коммит.',
+    proves2: 'Публичный коммит принадлежит этому обмену: он равен sha256(соль ‖ канонический proof) для proof и соли из этого файла, поэтому отправитель не может задним числом подставить другой обмен. Запись в цепочке ({method}) фиксирует блок, в котором сделан коммит.',
     provesNothing: 'Ничего: хотя бы одна проверка выше не прошла, поэтому ни одна из гарантий для этого файла не установлена.',
     notProvesTitle: 'Чего он не доказывает',
     notProves: [

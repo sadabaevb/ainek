@@ -2,11 +2,16 @@
 // proof commits (SPEC §4.2). Shared by the web client, the demo and the verifier so the ABI call shapes live in one place.
 import { z } from 'zod';
 import { bytesToBase64 } from './disclosure.ts';
-import { KeyEntry, ProofCommitRecord, hex64 } from './schema.ts';
+import { KeyEntry, ProofCommitRecord, hex64, u128String } from './schema.ts';
 import type { Check } from './verify.ts';
 
 const TIMEOUT_MS = 10_000;
 const ATTEMPTS = 3;
+
+/** `storage_balance_of(account)` (SPEC §4.2): the yoctoNEAR the account prepaid for its commits; 0n when it never deposited. */
+export async function readStorageBalance(rpcUrl: string, contractId: string, account: string): Promise<bigint> {
+  return u128String.transform(BigInt).parse(await viewFunction(rpcUrl, contractId, 'storage_balance_of', { account }));
+}
 
 /** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
 export class ContractMethodNotFound extends Error {}

@@ -164,8 +164,10 @@ view storage_balance_of(account: AccountId) -> U128                // yoctoNEAR 
 `commit = sha256(salt_32_bytes || canonical_json(Proof))` hex, где `Proof` — proof **без** полей `salt`, `commit`, `commitTx`
 (они появляются после коммита и не могут входить в него); `salt_32_bytes` — сырые байты соли, не hex-текст.
 Эталон: `docs/test-vectors/canonical.json` → `commits.proof_commit` (TS: `commitOf`). `kind` = `"model" | "action"`.
-Событие `proof_committed {account, commit, kind, log_index}`. Storage: один коммит ≈ 100 байт — депозит за
-хранение владелец аккаунта кладёт заранее полным ключом (FC-ключ депозит прикладывать не может).
+Событие `proof_committed {account, commit, kind, log_index}`. Storage: один коммит стоит `130 + len(account) + len(kind)` байт
+(161 байт = 0.00161 NEAR для 26-символьного аккаунта, измерено на testnet 2026-11-05; клиент просит 0.1 NEAR, хватает на 50–68
+коммитов, забрать депозит нельзя) — депозит за хранение владелец аккаунта кладёт заранее полным ключом (FC-ключ депозит
+прикладывать не может).
 
 ### 4.3 Агенты и политика (ярус 2)
 ```

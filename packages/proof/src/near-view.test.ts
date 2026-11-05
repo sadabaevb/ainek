@@ -1,6 +1,6 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ContractMethodNotFound, checkProofCommit, readProofCommit, viewFunction, type ProofCommitLookup } from './near-view.ts';
+import { ContractMethodNotFound, checkProofCommit, readProofCommit, viewFunction, type ProofCommitLookup, readStorageBalance } from './near-view.ts';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -96,4 +96,14 @@ test('keyLogReader.latestKeys: the fail-closed window by default, any age when a
   assert.deepEqual(calls.map((c) => c.args), [{ model: 'z-ai/glm-5.3-flash', max_age_ns: LOG_WINDOW_NS }, { model: 'z-ai/glm-5.3-flash', max_age_ns: ANY_AGE_NS }]);
   assert.equal(LOG_WINDOW_NS, '86400000000000');
   assert.equal(ANY_AGE_NS, String(2n ** 64n - 1n));
+});
+
+test('readStorageBalance: the U128 decimal string becomes a bigint, with the call shape of SPEC §4.2', async () => {
+  const calls = rpcAnswering(viewResult('10000000000000000000000'));
+  assert.equal(await readStorageBalance('http://rpc.test', 'ainek.testnet', 'alice.testnet'), 10n ** 22n);
+  assert.deepEqual(calls, [{ method: 'storage_balance_of', args: { account: 'alice.testnet' } }]);
+  rpcAnswering(viewResult('0'));
+  assert.equal(await readStorageBalance('http://rpc.test', 'ainek.testnet', 'alice.testnet'), 0n);
+  rpcAnswering(viewResult(12));
+  await assert.rejects(readStorageBalance('http://rpc.test', 'ainek.testnet', 'alice.testnet'));
 });
