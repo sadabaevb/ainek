@@ -139,6 +139,15 @@ async fn key_log_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .data;
     assert!(stale.is_empty(), "a 1 ns window admits nothing: fail-closed on age");
 
+    // u64::MAX = "no age limit" (the /log page). Must not overflow and must return everything.
+    let unlimited: Vec<Value> = contract
+        .call_function("latest_keys", json!({ "model": model, "max_age_ns": u64::MAX.to_string() }))
+        .read_only()
+        .fetch_from(&network)
+        .await?
+        .data;
+    assert_eq!(unlimited.len(), 2, "u64::MAX window returns every entry for the model");
+
     // ---- proof commits (SPEC §4.2), the way the web client does it ---------------------------
     // Wallet login adds a function-call key to alice's account that may only call `commit_proof`
     // on the contract; the chat then commits with that key, never asking the wallet again.

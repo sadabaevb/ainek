@@ -500,7 +500,9 @@ mod tests {
         assert!(c.latest_keys("other/model".into(), day_ns).is_empty());
         // Two days later: outside the window — a stale key must not count as current.
         set_caller(&verifier, observed_ns + 2 * day_ns.0);
-        assert!(c.latest_keys(input.model, day_ns).is_empty());
+        assert!(c.latest_keys(input.model.clone(), day_ns).is_empty());
+        // "No limit" from the /log page: u64::MAX must not overflow the cutoff arithmetic.
+        assert_eq!(c.latest_keys(input.model, U64(u64::MAX)).len(), 1);
     }
 
     #[test]
