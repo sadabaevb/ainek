@@ -1,0 +1,25 @@
+{
+  "name": "verifier",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ainek verifier daemon: re-attests NEAR AI models with a fresh nonce and appends their signing keys to the public key log (SPEC §3.2)",
+  "type": "module",
+  "bin": {
+    "ainek-verify": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "once": "node src/main.ts --once",
+    "test": "node --test 'src/**/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ainek/proof": "workspace:*",
+    "@nearai/inference-sdk": "0.2.1",
+    "near-api-js": "7.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

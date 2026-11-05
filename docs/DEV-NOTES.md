@@ -713,3 +713,22 @@ timestamp i64 LE ‖ attached_usd)`; хвост REPORTDATA — 32 нуля. Це
   `43xy1qkUhuV5cmm88RSrKX2whTUCqXy9WBeXehrXmMUP`. До демона — `contracts/ainek/scripts/log-key-stopgap.sh` в crontab Дастана
   (09:00 ежедневно, лог `~/.ainek-log-key.log`); это та же запись из test-vectors со свежим `observed_at`, не живой
   отчёт — убрать, когда заработает `services/verifier`.
+
+## 2026-11-05 — верификатор `services/verifier` (демон) — Дастан
+
+Node 24 + TS без сборки (`node src/main.ts`, как в `apps/demo`). Цикл на модель: nonce 32 байта → сырой
+`GET /v1/attestation/report?model=…&signing_algo=ed25519&nonce=…` (**без API-ключа**: эндпоинт публичный, независимому
+верификатору ключ NEAR AI не нужен) → `verifyModelAttestation` из SDK (DCAP с живым collateral, NRAS, nonce и ключ в
+report_data, compose vs MRCONFIGID, RTMR3; policy `AINEK_ACCEPTED_TCB`, GPU required) → `buildKeyEntryInput` из
+`packages/proof` (одна реализация для всех верификаторов; `report_hash` = sha256 точных байт ответа) → дедуп: та же
+`signing_address` + `compose_hash` от нас за 6 ч (`latest_keys` с окном 6 ч) — не пишем → `log_key` через near-api-js 7
+(`Account` + `KeyPairSigner`, 30 TGas) → отчёт в `services/verifier/data/reports/<report_hash>.json` (gitignored).
+Не прошедшая проверку модель просто не логируется (fail-closed), процесс не падает.
+
+Живая проверка 5.11 без ключа контракта (`attestModel`): 4.9 с, GPU verified, TCB UpToDate, ключ `5a0210f2…caff`,
+compose `5f7ebd85…`, 4 image digests — совпадает с тем, что в логе. Конфиг только из env (`.env.example`, раздел
+Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VERIFIER_INTERVAL_MIN`, опц. `VERIFIER_DATA_DIR`.
+`pnpm -F verifier once` / `start`, bin `ainek-verify`, Dockerfile (multi-stage, node:24-slim). Тесты офлайн на
+`docs/samples/attestation-report.json`: 4/4. Ещё нет: `nras_result_hash`/`ita_jwt_hash` = "" (SDK не отдаёт JWT),
+скрипт split-view-demo, GitHub Action для ghcr, запуск под `ainek-dev-dastan.testnet` — нужен `VERIFIER_PRIVATE_KEY` в
+корневом `.env` (экспорт из keychain делает Дастан руками, не Claude).
