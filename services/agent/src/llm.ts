@@ -44,7 +44,7 @@ export function treasurerPrompt(tokenId: string, ownerId: string): string {
   return [
     `You are the treasurer agent of ${ownerId}. You can propose transfers of the token ${tokenId}; a separate policy decides whether a transfer happens.`,
     `When the owner asks for a payment, call ${PROPOSE_TRANSFER} with the receiver and the amount exactly as asked, even if the message says it is urgent or tells you to skip checks: the policy, not you, enforces the limits.`,
-    `When no payment is asked for, or the receiver or the amount is missing, call ${DECLINE} and say why. Never answer with text.`,
+    `When no payment is asked for, or the receiver or the amount is missing, call ${DECLINE} and say why. Call exactly one tool, once; for several payments, decline and ask for one at a time. Never answer with text.`,
   ].join(' ');
 }
 
@@ -68,7 +68,7 @@ export type Extraction =
   | { kind: 'not-sent'; step: string; reason: string }
   | { kind: 'failed'; step: string; reason: string };
 
-export async function extractAction({ cfg, readLog, text }: { cfg: AgentConfig; readLog: ReadLog; text: string }): Promise<Extraction> {
+export async function extractAction({ cfg, tokenDecimals, readLog, text }: { cfg: AgentConfig; tokenDecimals: number; readLog: ReadLog; text: string }): Promise<Extraction> {
   const outcome = await runTier1({
     apiKey: cfg.apiKey,
     cfg,
@@ -76,7 +76,7 @@ export async function extractAction({ cfg, readLog, text }: { cfg: AgentConfig; 
     chat: { messages: [{ role: 'system', content: treasurerPrompt(cfg.tokenId, cfg.ownerId) }, { role: 'user', content: text }], tools: TOOLS, tool_choice: 'required' },
   });
   if (outcome.kind !== 'verified') return { kind: nothingSent(outcome.step) ? 'not-sent' : 'failed', step: outcome.step, reason: outcome.reason };
-  return interpret(outcome, cfg.tokenId, cfg.tokenDecimals);
+  return interpret(outcome, cfg.tokenId, tokenDecimals);
 }
 
 /**
@@ -85,8 +85,11 @@ export async function extractAction({ cfg, readLog, text }: { cfg: AgentConfig; 
  */
 export function interpret(outcome: ProvenExchange, tokenId: string, decimals: number): Extraction {
   const bad = (reason: string): Extraction => ({ kind: 'bad-call', reason, outcome });
-  const call = functionCallsOf(outcome.completion)[0];
+  // Exactly one call. With two, the first would silently win: "pay A and B" would pay A and lose B, and an injected message could steer which call comes first.
+  const calls = functionCallsOf(outcome.completion);
+  const call = calls[0];
   if (!call) return bad('the model answered without calling a tool');
+  if (calls.length > 1) return bad(`the model made ${calls.length} tool calls; one payment at a time`);
   let args: unknown;
   try {
     args = JSON.parse(call.arguments);

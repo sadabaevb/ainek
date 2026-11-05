@@ -61,26 +61,27 @@ function actionProof(): ActionProof {
 }
 const failedIds = (r: ReturnType<typeof verifyActionProof>) => r.checks.filter((c) => c.status === 'fail').map((c) => c.id);
 
-test('verifyActionProof: an honest proof passes; signer and build are "skipped" without the on-chain registration, compared with it', () => {
-  const r = verifyActionProof(actionProof());
+const registered = { teePubkey: pubkey, wasmHash };
+
+test('verifyActionProof: an honest proof passes; a proof signed by a key of its own fails against the registration', () => {
+  const r = verifyActionProof(actionProof(), registered);
   assert.equal(r.ok, true);
-  assert.deepEqual(r.checks.filter((c) => c.status === 'skipped').map((c) => c.id), ['decision-key', 'wasm-hash']);
-  assert.deepEqual(verifyActionProof(actionProof(), { teePubkey: pubkey, wasmHash }).checks.filter((c) => c.status !== 'ok'), []);
+  assert.deepEqual(r.checks.filter((c) => c.status !== 'ok'), []);
   assert.deepEqual(failedIds(verifyActionProof(actionProof(), { teePubkey: 'ff'.repeat(32), wasmHash: 'ee'.repeat(32) })), ['decision-key', 'wasm-hash']);
 });
 
 test('verifyActionProof: every tampering is named', () => {
   const p = actionProof();
   const recommit = (x: ActionProof): ActionProof => ({ ...x, commit: commitOf('11'.repeat(32), x) });
-  assert.deepEqual(failedIds(verifyActionProof({ ...p, commit: 'ff'.repeat(32) })), ['commit']);
-  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, action: { ...action, amount: '1' } }))), ['action-commit']);
-  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, modelProofCommit: 'ff'.repeat(32) }))), ['model-proof-commit']);
-  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, decision: { ...p.decision, verdict: 'Deny' } }))), ['decision-signature']);
-  assert.deepEqual(failedIds(verifyActionProof({ ...p, extra: 1 })), ['schema']);
+  assert.deepEqual(failedIds(verifyActionProof({ ...p, commit: 'ff'.repeat(32) }, registered)), ['commit']);
+  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, action: { ...action, amount: '1' } }), registered)), ['action-commit']);
+  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, modelProofCommit: 'ff'.repeat(32) }), registered)), ['model-proof-commit']);
+  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, decision: { ...p.decision, verdict: 'Deny' } }), registered)), ['decision-signature']);
+  assert.deepEqual(failedIds(verifyActionProof({ ...p, extra: 1 }, registered)), ['schema']);
 });
 
 test('verifyActionProof: a copy without the salt is still checkable; the commit is skipped, and expiry is not re-checked', () => {
-  const r = verifyActionProof(proofPayload(actionProof()));
+  const r = verifyActionProof(proofPayload(actionProof()), registered);
   assert.equal(r.ok, true);
   assert.equal(r.checks.find((c) => c.id === 'commit')?.status, 'skipped');
   assert.equal(r.checks.some((c) => c.id === 'decision-expiry'), false);

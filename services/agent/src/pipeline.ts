@@ -31,6 +31,8 @@ export type Result =
       modelProof: ModelProof;
       /** Why the action proof has no commit; the action itself already happened. */
       commitError: string | null;
+      /** The commit landed, but the file on disk does not record its transaction. The salt is saved. */
+      saveError: string | null;
     }
   | { kind: 'declined' | 'bad-call'; reason: string; modelProof: ModelProof }
   | { kind: 'not-sent'; step: string; reason: string }
@@ -69,15 +71,18 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   const checks = checkPolicyOutput(output, { action: x.action, modelProofCommit, teePubkey: deps.teePubkey, wasmHash: deps.wasmHash, now: now() });
   if (checks.some((c) => c.status === 'fail')) return { kind: 'decision-rejected', checks, modelProof: proven };
 
-  // 3. The model proof's commit, before any money can move: exhausted storage stops here, not after a transfer that could then never be proven.
+  // 3. Room for both commits, then the model proof's commit, before any money can move: exhausted storage stops here, not after a transfer that could then never be proven.
   let modelProof: ModelProof;
   try {
+    if (!(await deps.chain.roomForCommits())) return { kind: 'failed', stage: 'commit', reason: 'the agent has no prepaid storage left for the two commits of an action: call deposit_storage' };
     modelProof = { ...proven, commitTx: await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex) };
   } catch (err) {
     return { kind: 'failed', stage: 'commit', reason: errorText(err) };
   }
+  // The intent goes to disk last before the money: a crash from here until the action proof is saved leaves it, and the restart warns the owner, who could otherwise resend and pay twice.
   try {
     await deps.keep.model({ ...x.outcome, proof: modelProof });
+    await deps.keep.intent({ modelProofCommit, action: x.action, decision: output.decision, teeSignature: output.sig, at: new Date(now()).toISOString() });
   } catch (err) {
     return { kind: 'failed', stage: 'store', reason: errorText(err) };
   }
@@ -91,6 +96,7 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   }
 
   // 5. The action proof and its salted commit, salt saved first. The action already happened, so nothing from here on may throw or read as "nothing happened".
+  if (proposed.actionId === null) return { kind: 'failed', stage: 'after-propose', reason: `transaction ${proposed.txHash} landed, but the contract named no action: check it on the explorer before retrying` };
   let proof: CommittedActionProof;
   try {
     proof = buildActionProof({ actionId: proposed.actionId, action: x.action, modelProofCommit, decision: output.decision, teeSignature: output.sig, teePubkey: output.pubkey, wasmHash: output.wasm_hash, attestationUrl, proposeTx: proposed.txHash, executeTx: proposed.executed ? proposed.txHash : null, approver: null });
@@ -98,12 +104,20 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
     return { kind: 'failed', stage: 'after-propose', reason: `action #${proposed.actionId} is on-chain (transaction ${proposed.txHash}), but its proof could not be built: ${errorText(err)}` };
   }
   let commitError: string | null = null;
+  let saveError: string | null = null;
   try {
     await deps.keep.action(proof);
+    await deps.keep.settled(modelProofCommit);
     proof = { ...proof, commitTx: await deps.chain.commitProof(proof.commit, 'action', proven.logIndex) };
-    await deps.keep.action(proof);
   } catch (err) {
     commitError = errorText(err);
   }
-  return { kind: 'proposed', proof, purpose: x.purpose, modelProof, commitError };
+  if (proof.commitTx) {
+    try {
+      await deps.keep.action(proof);
+    } catch (err) {
+      saveError = errorText(err);
+    }
+  }
+  return { kind: 'proposed', proof, purpose: x.purpose, modelProof, commitError, saveError };
 }

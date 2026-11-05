@@ -54,7 +54,9 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
 Give the agent its own env file. The owner's keys never go on this server: `pnpm demo:stop` runs on the owner's machine from
 `.env.owner`, and the service refuses to start if `OWNER_PRIVATE_KEY` or `AGENT_ADMIN_PRIVATE_KEY` is in its environment. Other
 `*_PRIVATE_KEY` variables, such as the verifier's on a shared `.env`, only produce a warning. Run one instance: updates are
-handled one at a time, and pending ones are dropped at start, so a message sent while it is down has to be sent again.
+handled one at a time, and pending ones are dropped at start, so a message sent while it is down has to be sent again. If the
+service stopped in the middle of a payment, it tells the owner when it is back. The token's decimals are read from its
+`ft_metadata` at start, so the token must exist first.
 
 ## Policy job on OutLayer (Tier 2, Dastan)
 

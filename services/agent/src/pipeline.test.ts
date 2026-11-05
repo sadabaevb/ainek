@@ -31,18 +31,19 @@ function policy(opts: { verdict?: Decision['verdict']; signer?: nacl.SignKeyPair
   };
 }
 /** A contract that records what it is asked. */
-function chain(opts: { executed?: boolean; failCommit?: 'model' | 'action'; failPropose?: boolean; proposeTx?: string } = {}): ActionChain & { proposals: unknown[]; commits: Array<[string, string, number]> } {
+function chain(opts: { executed?: boolean; failCommit?: 'model' | 'action'; failPropose?: boolean; proposeTx?: string; actionId?: number | null; noRoom?: boolean } = {}): ActionChain & { proposals: unknown[]; commits: Array<[string, string, number]> } {
   const proposals: unknown[] = [];
   const commits: Array<[string, string, number]> = [];
   return {
     proposals,
     commits,
-    proposeAction: async (args) => { if (opts.failPropose) throw new Error('rejected'); proposals.push(args); return { actionId: 7, txHash: opts.proposeTx ?? 'PROPOSE_TX', executed: opts.executed ?? false }; },
+    proposeAction: async (args) => { if (opts.failPropose) throw new Error('rejected'); proposals.push(args); return { actionId: opts.actionId === undefined ? 7 : opts.actionId, txHash: opts.proposeTx ?? 'PROPOSE_TX', executed: opts.executed ?? false }; },
     commitProof: async (commit, kind, logIndex) => { if (opts.failCommit === kind) throw new Error('not enough prepaid storage'); commits.push([commit, kind, logIndex]); return `${kind.toUpperCase()}_TX`; },
     spentToday: async () => '100',
+    roomForCommits: async () => !opts.noRoom,
   };
 }
-const keeper = (over: Partial<ProofKeeper> = {}): ProofKeeper => ({ model: async () => undefined, action: async () => undefined, ...over });
+const keeper = (over: Partial<ProofKeeper> = {}): ProofKeeper => ({ model: async () => undefined, intent: async () => undefined, settled: async () => undefined, unsettled: async () => [], action: async () => undefined, ...over });
 const deps = (over: Partial<Deps>): Deps => ({ extract: async () => extracted, policy: policy(), chain: chain({ executed: true }), keep: keeper(), teePubkey, wasmHash, now: () => now, ...over });
 
 test('Allow: the policy gets the §6.2 input, the contract gets the signed decision, both proofs are committed to the model proof\'s log entry, and the action proof verifies', async () => {
@@ -93,11 +94,12 @@ test('order: the salt is saved before its commit, and the model proof is committ
   const c = chain({ executed: true });
   const logged: ActionChain = {
     spentToday: c.spentToday,
+    roomForCommits: c.roomForCommits,
     proposeAction: async (a) => { order.push('propose_action'); return c.proposeAction(a); },
     commitProof: async (commit, kind, i) => { order.push(`commit_proof ${kind}`); return c.commitProof(commit, kind, i); },
   };
-  await handleOwnerText(deps({ chain: logged, keep: keeper({ model: async (x) => void order.push(x.proof.commitTx ? 'keep model with tx' : 'keep model'), action: async (p) => void order.push(p.commitTx ? 'keep action with tx' : 'keep action') }) }), 'pay');
-  assert.deepEqual(order, ['keep model', 'commit_proof model', 'keep model with tx', 'propose_action', 'keep action', 'commit_proof action', 'keep action with tx']);
+  await handleOwnerText(deps({ chain: logged, keep: keeper({ model: async (x) => void order.push(x.proof.commitTx ? 'keep model with tx' : 'keep model'), intent: async () => void order.push('keep intent'), settled: async () => void order.push('settled'), action: async (p) => void order.push(p.commitTx ? 'keep action with tx' : 'keep action') }) }), 'pay');
+  assert.deepEqual(order, ['keep model', 'commit_proof model', 'keep model with tx', 'keep intent', 'propose_action', 'keep action', 'settled', 'commit_proof action', 'keep action with tx']);
 });
 
 test('before the money: a salt that cannot be saved, a spent_today that cannot be read, or a model commit that fails (no storage) stops everything', async () => {
@@ -109,13 +111,21 @@ test('before the money: a salt that cannot be saved, a spent_today that cannot b
   const c = chain({ failCommit: 'model' });
   assert.deepEqual(await handleOwnerText(deps({ chain: c }), 'pay'), { kind: 'failed', stage: 'commit', reason: 'not enough prepaid storage' });
   assert.deepEqual(c.proposals, []);
+  const full = chain({ noRoom: true });
+  const r = await handleOwnerText(deps({ chain: full }), 'pay');
+  assert.ok(r.kind === 'failed' && r.stage === 'commit' && /two commits/.test(r.reason));
+  assert.deepEqual([full.commits, full.proposals], [[], []]);
+  const noIntent = chain();
+  assert.deepEqual(await handleOwnerText(deps({ chain: noIntent, keep: keeper({ intent: async () => { throw new Error('disk full'); } }) }), 'pay'), { kind: 'failed', stage: 'store', reason: 'disk full' });
+  assert.deepEqual(noIntent.proposals, []);
 });
 
-test('a rejected propose_action is the chain stage; nothing was saved as an action', async () => {
+test('a failed propose_action is the chain stage; nothing is saved as an action, and the intent stays, because it may have landed', async () => {
   let actions = 0;
-  const r = await handleOwnerText(deps({ chain: chain({ failPropose: true }), keep: keeper({ action: async () => void actions++ }) }), 'pay');
+  let settled = 0;
+  const r = await handleOwnerText(deps({ chain: chain({ failPropose: true }), keep: keeper({ action: async () => void actions++, settled: async () => void settled++ }) }), 'pay');
   assert.deepEqual(r, { kind: 'failed', stage: 'chain', reason: 'rejected' });
-  assert.equal(actions, 0);
+  assert.deepEqual([actions, settled], [0, 0]);
 });
 
 test('after the money: a commit or a save that fails is reported on the proposed result, never thrown', async () => {
@@ -126,6 +136,19 @@ test('after the money: a commit or a save that fails is reported on the proposed
   const noSave = await handleOwnerText(deps({ chain: c, keep: keeper({ action: async () => { throw new Error('disk full'); } }) }), 'pay');
   assert.ok(noSave.kind === 'proposed' && noSave.commitError === 'disk full');
   assert.deepEqual(c.commits.map(([, kind]) => kind), ['model']); // an action proof whose salt is not saved is not committed
+});
+
+test('after the money: a commit that landed but could not be recorded in its file is not reported as uncommitted', async () => {
+  let saves = 0;
+  const r = await handleOwnerText(deps({ keep: keeper({ action: async () => { if (++saves === 2) throw new Error('disk full'); } }) }), 'pay');
+  assert.ok(r.kind === 'proposed' && r.proof.commitTx === 'ACTION_TX' && r.commitError === null && r.saveError === 'disk full');
+});
+
+test('after the money: a transaction that named no action keeps its hash, and the intent stays', async () => {
+  let settled = 0;
+  const r = await handleOwnerText(deps({ chain: chain({ executed: true, actionId: null }), keep: keeper({ settled: async () => void settled++ }) }), 'pay');
+  assert.ok(r.kind === 'failed' && r.stage === 'after-propose' && /PROPOSE_TX/.test(r.reason));
+  assert.equal(settled, 0);
 });
 
 test('after the money: a proof that cannot be built still names the action and its transaction', async () => {

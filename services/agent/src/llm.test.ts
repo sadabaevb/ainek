@@ -22,6 +22,13 @@ test('interpret: the owner\'s words stay off-chain: the memo of the public Actio
   assert.ok(r.kind === 'action' && r.action.memo === '' && !JSON.stringify(r.action).includes('URGENT'));
 });
 
+test('interpret: more than one tool call proposes nothing, whatever the order', () => {
+  const two = (first: object, second: object) => ({ completion: { id: 'c', object: 'chat.completion', choices: [{ message: { role: 'assistant', content: null, tool_calls: [first, second].map((f, i) => ({ id: `t${i}`, type: 'function', function: f })) } }] } }) as unknown as Verified & RunStats;
+  const pay = { name: PROPOSE_TRANSFER, arguments: JSON.stringify({ receiver_id: 'a.testnet', amount: '1', purpose: '' }) };
+  const no = { name: DECLINE, arguments: JSON.stringify({ reason: 'no' }) };
+  for (const x of [two(pay, pay), two(pay, no), two(no, pay)]) assert.match(reason(interpret(x, 't', 6)), /2 tool calls/);
+});
+
 test('interpret: decline carries the reason; bad arguments, unknown tools and text answers are "bad-call" with a reason', () => {
   assert.equal(reason(interpret(exchange(DECLINE, { reason: 'no payment asked' }), 't', 6)), 'no payment asked');
   assert.match(reason(interpret(exchange(PROPOSE_TRANSFER, { receiver_id: 'Vendor One', amount: '300', purpose: '' }), 't', 6)), /receiver_id/);

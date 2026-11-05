@@ -14,10 +14,9 @@ const env = {
   POLICY_TEE_PUBKEY: 'cd'.repeat(32),
 } as NodeJS.ProcessEnv;
 
-test('loadConfig: the required variables are enough; the bot is optional, the API URL and decimals have defaults', () => {
+test('loadConfig: the required variables are enough; the bot is optional and the API URL has a default', () => {
   const c = loadConfig(env);
   assert.equal(c.outlayer.apiUrl, 'https://testnet-api.outlayer.ai');
-  assert.equal(c.tokenDecimals, 6);
   assert.equal(c.telegram, null);
   assert.deepEqual(loadConfig({ ...env, TELEGRAM_BOT_TOKEN: 't', TELEGRAM_OWNER_CHAT_ID: '1' }).telegram, { token: 't', ownerChatId: '1' });
 });

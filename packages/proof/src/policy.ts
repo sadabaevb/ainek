@@ -42,11 +42,10 @@ export function verifyDecisionSignature(decision: Decision, sigBase64: string, p
 }
 
 const check = (id: Check['id'], ok: boolean, okText: string, failText: string): Check => ({ id, status: ok ? 'ok' : 'fail', detail: ok ? okText : failText });
-const against = (id: Check['id'], actual: string, wanted: string | undefined, what: string): Check =>
-  wanted === undefined ? { id, status: 'skipped', detail: `${what} not compared with the registration` } : check(id, actual === wanted, `${what} matches the registration`, `${what} ${short(actual)} differs from the registered ${short(wanted)}`);
+const against = (id: Check['id'], actual: string, wanted: string, what: string): Check => check(id, actual === wanted, `${what} matches the registration`, `${what} ${short(actual)} differs from the registered ${short(wanted)}`);
 
 /** One wording and one rule for the agent's check and the auditor's, so they cannot drift. `coveredCommits` is every place that claims to cover the action. */
-function decisionChecks(x: { decision: Decision; sig: string; pubkey: string; action: Action; coveredCommits: string[]; modelProofCommit: string; wasmHash: string; teePubkey: string | undefined; expectedWasmHash: string | undefined }): Check[] {
+function decisionChecks(x: { decision: Decision; sig: string; pubkey: string; action: Action; coveredCommits: string[]; modelProofCommit: string; wasmHash: string; teePubkey: string; expectedWasmHash: string }): Check[] {
   const recomputed = actionCommitOf(x.action);
   return [
     check('decision-signature', verifyDecisionSignature(x.decision, x.sig, x.pubkey), `ed25519 signature verifies under ${short(x.pubkey)} over canonical_bytes(decision)`, 'the decision signature does not verify under the key the proof names'),
@@ -71,11 +70,11 @@ export function checkPolicyOutput(out: PolicyOutput, x: { action: Action; modelP
 
 /**
  * Re-checks an action proof from the proof alone (SPEC §5.2), for an auditor: the action hashes to what the decision covers, the decision
- * is signed by the key the proof names, and the salted commit reproduces. `expected` is what `register_agent` put on-chain: without it
- * the key and the build are "skipped", because a proof cannot vouch for its own signer. Expiry is not re-checked: a decision has expired
- * by the time anyone audits it, and the contract checked it when it mattered.
+ * is signed by the key the proof names, and the salted commit reproduces. `expected` is what `register_agent` put on-chain, and it is required:
+ * a proof cannot vouch for its own signer, and anyone can sign a decision with a key of their own. Expiry is not re-checked: a decision has
+ * expired by the time anyone audits it, and the contract checked it when it mattered.
  */
-export function verifyActionProof(value: unknown, expected: { teePubkey?: string; wasmHash?: string } = {}): { ok: boolean; checks: Check[]; proof: ActionProof | null } {
+export function verifyActionProof(value: unknown, expected: { teePubkey: string; wasmHash: string }): { ok: boolean; checks: Check[]; proof: ActionProof | null } {
   const parsed = ActionProof.safeParse(value);
   if (!parsed.success) return { ok: false, checks: [{ id: 'schema', status: 'fail', detail: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }], proof: null };
   const proof = parsed.data;

@@ -1,13 +1,15 @@
 // The chain side (SPEC §4.3, §4.2): propose_action with the agent's function-call key, commit_proof for the proofs, and the
 // view the policy input needs. near-api-js v7, like the verifier's log writer. `signAndSendTransaction` throws on a failed
-// transaction by default, with the contract's panic text, so failures surface without a status check here.
+// transaction by default, with the contract's panic text, but only on the top-level status: a failed sub-receipt (the transfer) has to be read here.
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
-import { viewFunction, type Action, type Decision } from '@ainek/proof';
+import { withDeadline } from '@ainek/tier1-node';
+import { readStorageBalance, viewFunction, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
-  actionId: number;
+  /** Null when the transaction landed but named no action: never a reason to lose the hash. */
+  actionId: number | null;
   txHash: string;
-  /** The contract emitted `action_executed` in this transaction: the transfer went out (Allow). */
+  /** The contract emitted `action_executed` and no receipt of this transaction failed. */
   executed: boolean;
 }
 export interface ActionChain {
@@ -16,26 +18,47 @@ export interface ActionChain {
   commitProof(commit: string, kind: 'model' | 'action', logIndex: number): Promise<string>;
   /** What this agent spent today, a U128 decimal string, for the policy's per-day cap. */
   spentToday(): Promise<string>;
+  /** Whether the agent's prepaid storage covers the two commits an action needs (SPEC §4.2). */
+  roomForCommits(): Promise<boolean>;
 }
 
 /** The parts of a near-api-js outcome the agent reads. */
 interface TxOutcome {
   status: unknown;
   transaction: { hash: string };
-  receipts_outcome: Array<{ outcome: { logs: string[] } }>;
+  receipts_outcome: Array<{ outcome: { logs: string[]; status?: unknown } }>;
 }
 
-/** The action id from `propose_action`'s return value and the execution from the NEP-297 events in the receipts. */
-export function parseProposed(outcome: TxOutcome): Proposed {
-  const value = (outcome.status as { SuccessValue?: string }).SuccessValue;
-  const returned = value === undefined ? '' : Buffer.from(value, 'base64').toString('utf8');
-  const actionId = /^"?\d+"?$/.test(returned) ? Number(returned.replaceAll('"', '')) : NaN; // near-sdk returns a u64 as a number, a U64 as a decimal string
-  if (!Number.isSafeInteger(actionId)) throw new Error('propose_action returned no action id');
-  const executed = outcome.receipts_outcome
+/** NEP-297 events from the logs. A log line that does not parse is someone else's (a token, a callee), never a reason to lose a landed transaction. */
+function eventsOf(outcome: TxOutcome): Array<{ event?: unknown; data?: unknown }> {
+  return outcome.receipts_outcome
     .flatMap((r) => r.outcome.logs)
     .filter((l) => l.startsWith('EVENT_JSON:'))
-    .some((l) => (JSON.parse(l.slice('EVENT_JSON:'.length)) as { event?: unknown }).event === 'action_executed');
-  return { actionId, txHash: outcome.transaction.hash, executed };
+    .flatMap((l) => {
+      try {
+        return [JSON.parse(l.slice('EVENT_JSON:'.length)) as { event?: unknown; data?: unknown }];
+      } catch {
+        return [];
+      }
+    });
+}
+const asId = (value: unknown): number | null => {
+  const id = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  return typeof id === 'number' && Number.isSafeInteger(id) && id >= 0 ? id : null;
+};
+
+/**
+ * Never throws: this runs after the transaction landed, when losing the hash is the worst outcome. The id comes from the return value, or from
+ * `action_proposed` when the contract returns its callback's value instead (a u64 as a number, a U64 as a decimal string).
+ */
+export function parseProposed(outcome: TxOutcome): Proposed {
+  const events = eventsOf(outcome);
+  const value = (outcome.status as { SuccessValue?: string }).SuccessValue;
+  const returned = value === undefined ? '' : Buffer.from(value, 'base64').toString('utf8').replaceAll('"', '');
+  const proposed = events.find((e) => e.event === 'action_proposed')?.data;
+  const fromEvent = (Array.isArray(proposed) ? proposed[0] : proposed) as { action_id?: unknown } | undefined;
+  const receiptFailed = outcome.receipts_outcome.some((r) => (r.outcome.status as { Failure?: unknown } | undefined)?.Failure !== undefined);
+  return { actionId: asId(returned) ?? asId(fromEvent?.action_id), txHash: outcome.transaction.hash, executed: !receiptFailed && events.some((e) => e.event === 'action_executed') };
 }
 
 /**
@@ -48,7 +71,22 @@ export function spentTodayOf(info: unknown): string {
   return spent;
 }
 
+/** `decimals` from the token's NEP-148 `ft_metadata`. */
+export function tokenDecimalsOf(metadata: unknown): number {
+  const decimals = (metadata as { decimals?: unknown } | null | undefined)?.decimals;
+  if (typeof decimals !== 'number' || !Number.isInteger(decimals) || decimals < 0 || decimals > 24) throw new Error(`the token reports no usable decimals in ft_metadata (${String(decimals)})`);
+  return decimals;
+}
+
 const KEY_METHODS = ['commit_proof', 'propose_action'];
+/** NEAR's storage price, yoctoNEAR per byte. */
+const STORAGE_BYTE_COST = 10n ** 19n;
+/** What the contract charges for one commit (SPEC §4.2: 130 + account + kind bytes). */
+export function commitCost(account: string, kind: 'model' | 'action'): bigint {
+  return BigInt(130 + account.length + kind.length) * STORAGE_BYTE_COST;
+}
+/** No chain call may stall the one-at-a-time queue; a timed-out propose_action reads as "may have landed" on the card. */
+const CHAIN_TIMEOUT_MS = 120_000;
 
 /** The claim "the agent holds only a function-call key" rests on the key's on-chain scope, not on what the variable is called. An empty method list means every method. */
 export function keyScopeProblem(permission: unknown, contract: string): string | null {
@@ -60,11 +98,11 @@ export function keyScopeProblem(permission: unknown, contract: string): string |
   return null;
 }
 
-export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId: string; agentKey: string }): ActionChain & { assertKeyScope(): Promise<void> } {
+export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId: string; agentKey: string; tokenId: string }): ActionChain & { assertKeyScope(): Promise<void>; tokenDecimals(): Promise<number> } {
   const provider = new JsonRpcProvider({ url: cfg.rpcUrl });
   const signer = KeyPairSigner.fromSecretKey(cfg.agentKey as KeyPairString);
   const account = new Account(cfg.agentId, provider, signer);
-  const call = (method: string, args: Record<string, unknown>, tgas: number) => account.signAndSendTransaction({ receiverId: cfg.contract, actions: [actions.functionCall(method, args, teraToGas(tgas), 0n)] });
+  const call = (method: string, args: Record<string, unknown>, tgas: number) => withDeadline(account.signAndSendTransaction({ receiverId: cfg.contract, actions: [actions.functionCall(method, args, teraToGas(tgas), 0n)] }), CHAIN_TIMEOUT_MS, method);
   return {
     assertKeyScope: async () => {
       const key = await provider.viewAccessKey({ accountId: cfg.agentId, publicKey: await signer.getPublicKey(), finalityQuery: { finality: 'final' } });
@@ -75,5 +113,8 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
     // Measured 2.19 TGas (DEV-NOTES); attached gas ties up allowance until the refund, so it stays small.
     commitProof: async (commit, kind, logIndex) => (await call('commit_proof', { commit, kind, log_index: logIndex }, 10)).transaction.hash,
     spentToday: async () => spentTodayOf(await viewFunction(cfg.rpcUrl, cfg.contract, 'agent', { agent_id: cfg.agentId })),
+    roomForCommits: async () => (await readStorageBalance(cfg.rpcUrl, cfg.contract, cfg.agentId)) >= commitCost(cfg.agentId, 'model') + commitCost(cfg.agentId, 'action'),
+    // The chain's own answer, not a config value: on a wrong scale the card would still read "300" while the transfer and the policy caps were off by orders of magnitude.
+    tokenDecimals: async () => tokenDecimalsOf(await viewFunction(cfg.rpcUrl, cfg.tokenId, 'ft_metadata', {})),
   };
 }

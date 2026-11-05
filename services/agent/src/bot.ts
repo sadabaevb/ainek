@@ -3,10 +3,12 @@
 // the agent only when the owner forwards it, which is the prompt-injection scene of the demo. grammY's long polling handles
 // updates one at a time, so two messages can never read the same `spent_today`. The owner's text is never logged.
 import { Bot, InlineKeyboard } from 'grammy';
+import { withRetry } from '@ainek/proof';
 import type { Card } from './card.ts';
 import { errorText } from './errors.ts';
 
 const TELEGRAM_LIMIT = 4000; // below Telegram's 4096: a card too long to send must not become an error after the money moved
+const SEND_RETRY_PAUSE_MS = 500;
 
 export interface BotOptions {
   token: string;
@@ -34,16 +36,17 @@ export function createBot(o: BotOptions): Bot {
   bot.use(async (ctx, next) => {
     if (ctx.chat?.type === 'private' && String(ctx.chat.id) === o.ownerChatId) await next();
   });
-  bot.command('start', (ctx) => ctx.reply('Tell me whom to pay, how much and what for. The policy decides, the contract checks the decision, and you get a card with the proof. Messages sent while I am down are dropped on purpose: send them again if you still mean them.'));
+  bot.command('start', (ctx) => ctx.reply('Tell me whom to pay, how much and what for. The policy decides, the contract checks the decision, and you get a card with the proof. Messages sent while I am down are dropped on purpose. If I stopped in the middle of a payment, I tell you when I am back: check the explorer before you send it again.'));
   bot.on('message:text', async (ctx) => {
-    await ctx.replyWithChatAction('typing');
+    await ctx.replyWithChatAction('typing').catch(() => undefined); // cosmetic: it must not stop the message
     const card = await o.handle(ctx.message.text);
     const text = card.text.slice(0, TELEGRAM_LIMIT);
-    if (card.approval === null) await ctx.reply(text);
-    else await ctx.reply(text, { reply_markup: new InlineKeyboard().text('How to approve', `how:approve:${card.approval}`).text('How to reject', `how:reject:${card.approval}`) });
+    const options = card.approval === null ? {} : { reply_markup: new InlineKeyboard().text('How to approve', `how:approve:${card.approval}`).text('How to reject', `how:reject:${card.approval}`) };
+    // The money may have moved by now, and this card may hold the only approval buttons: a Telegram hiccup is retried.
+    await withRetry(() => ctx.reply(text, options), { retryable: () => true, attempts: 3, pauseMs: SEND_RETRY_PAUSE_MS });
   });
   bot.callbackQuery(/^how:(approve|reject):(\d+)$/, async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => undefined); // updates run one at a time, so a late answer is rejected as "query is too old": the command still has to go out
     const [, method, id] = ctx.match;
     await ctx.reply(`First read what the contract holds for this action:\n\n${viewCommand(o, Number(id))}\n\nThen run this with your own key; the agent cannot do it for you:\n\n${ownerCommand(o, method as 'approve' | 'reject', Number(id))}`);
   });

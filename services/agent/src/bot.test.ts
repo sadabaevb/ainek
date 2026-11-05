@@ -92,3 +92,21 @@ test('startBot drops pending updates, so a message redelivered after a crash can
   const deleted = calls.find((c) => c.method === 'deleteWebhook');
   assert.deepEqual(deleted?.payload, { drop_pending_updates: true });
 });
+
+test('a cosmetic call that fails does not stop the message or the command, and a failed send is retried', async () => {
+  let failed = false;
+  const h = harness({ text: 'the card', approval: 7 });
+  h.bot.api.config.use(async (prev, method, payload) => {
+    if (method === 'sendChatAction' || method === 'answerCallbackQuery') throw new Error('query is too old');
+    if (method === 'sendMessage' && !failed) {
+      failed = true;
+      throw new Error('429');
+    }
+    return prev(method, payload);
+  });
+  await h.bot.handleUpdate(update({ id: OWNER, type: 'private' }, 'pay'));
+  assert.deepEqual(h.texts, ['pay']);
+  assert.equal(h.sent()[0]?.['text'], 'the card');
+  await h.bot.handleUpdate(click(OWNER, 'how:approve:7'));
+  assert.ok(String(h.sent()[1]?.['text']).includes(ownerCommand(options, 'approve', 7)));
+});

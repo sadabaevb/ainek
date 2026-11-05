@@ -36,6 +36,13 @@ test('evaluate: the attestation url is required and made absolute, so an action 
   assert.equal((await client(scripted([done({ attestation_url: '/attestations/c1' })]).f).evaluate(input)).attestationUrl, attestation);
 });
 
+test('evaluate: the payment key never goes to another host, and an attestation url must be https', async () => {
+  const { f, calls } = scripted([json(200, { status: 'pending', poll_url: 'https://evil.example/x' })]);
+  await assert.rejects(client(f).evaluate(input), /refusing to send the payment key/);
+  assert.equal(calls.length, 1);
+  await assert.rejects(client(scripted([done({ attestation_url: 'http://api.test/a' })]).f).evaluate(input), /not https/);
+});
+
 test('evaluate: a refusal carries the platform reason; a failed job says so', async () => {
   await assert.rejects(client(scripted([json(403, { error: 'Project not allowed for this payment key', reason: 'project_not_allowed' })]).f).evaluate(input), /Project not allowed.*\(project_not_allowed\)/);
   await assert.rejects(client(scripted([json(200, { status: 'failed', error: 'trap' })]).f).evaluate(input), /the policy job failed: trap/);

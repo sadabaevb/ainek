@@ -11,8 +11,6 @@ export interface AgentConfig extends AinekConfig {
   agentKey: string;
   ownerId: string;
   tokenId: string;
-  /** Decimals of the demo token: the owner writes "300", the chain wants minimal units. */
-  tokenDecimals: number;
   outlayer: { apiUrl: string; paymentKey: string; project: string; wasmHash: string; teePubkey: string };
   /** Where proofs and their salts are kept, one file per proof. */
   dataDir: string;
@@ -44,8 +42,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   const wasmHash = need('OUTLAYER_WASM_HASH');
   const teePubkey = need('POLICY_TEE_PUBKEY');
   if (!isHex64(wasmHash) || !isHex64(teePubkey)) throw new Error('OUTLAYER_WASM_HASH and POLICY_TEE_PUBKEY must be 64 lowercase hex chars (docs/DEPLOY.md, once the policy job is deployed)');
-  const tokenDecimals = Number(env['AGENT_TOKEN_DECIMALS'] ?? '6');
-  if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 24) throw new Error(`AGENT_TOKEN_DECIMALS must be an integer 0–24, got ${String(env['AGENT_TOKEN_DECIMALS'])}`);
   const token = env['TELEGRAM_BOT_TOKEN'];
   const ownerChatId = env['TELEGRAM_OWNER_CHAT_ID'];
   return {
@@ -55,7 +51,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     agentKey,
     ownerId: need('OWNER_ACCOUNT_ID'),
     tokenId: need('AINEK_TOKEN'),
-    tokenDecimals,
     outlayer: { apiUrl: (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, ''), paymentKey: need('OUTLAYER_PAYMENT_KEY'), project: need('OUTLAYER_PROJECT'), wasmHash, teePubkey },
     dataDir: env['AGENT_DATA_DIR'] ?? path.resolve(import.meta.dirname, '../data/proofs'),
     telegram: token && ownerChatId ? { token, ownerChatId } : null,

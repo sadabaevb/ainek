@@ -40,13 +40,18 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
       while (answer.status !== 'completed' && answer.status !== 'failed') {
         if (!pollUrl) throw new Error(`OutLayer: unexpected answer status ${String(answer.status)}`);
         await sleep(pollMs, undefined, { signal });
-        answer = await call(new URL(pollUrl, apiUrl).href);
+        // The payment key goes only to the API it belongs to: a poll_url on another host would receive it.
+        const target = new URL(pollUrl, apiUrl);
+        if (target.origin !== new URL(apiUrl).origin) throw new Error(`OutLayer: poll_url points at ${target.origin}, refusing to send the payment key there`);
+        answer = await call(target.href);
         pollUrl = answer.poll_url ?? pollUrl;
       }
       if (answer.status === 'failed') throw new Error(`OutLayer: the policy job failed: ${answer.error ?? 'no error given'}`);
       if (!answer.attestation_url) throw new Error('OutLayer returned no attestation_url for this run');
       const raw: unknown = typeof answer.output === 'string' ? JSON.parse(answer.output) : answer.output; // a WASI job prints JSON to stdout; the platform may hand it over parsed or as text
-      return { output: PolicyOutput.parse(raw), attestationUrl: new URL(answer.attestation_url, apiUrl).href };
+      const attestation = new URL(answer.attestation_url, apiUrl);
+      if (attestation.protocol !== 'https:') throw new Error(`OutLayer: attestation_url is not https (${attestation.protocol})`);
+      return { output: PolicyOutput.parse(raw), attestationUrl: attestation.href };
     },
   };
 }

@@ -19,7 +19,7 @@ pnpm demo:stop                   # the stop button: DeleteKey + pause_agent, on 
 | `src/llm.ts`, `src/units.ts` | owner text → `Action`, through function tools on `runTier1` from `@ainek/tier1-node` |
 | `src/policy.ts` | HTTPS call to the OutLayer job (§6.2), under a deadline |
 | `src/chain.ts` | `propose_action`, `commit_proof`, `spent_today`, and the check of the key's on-chain scope |
-| `src/store.ts` | proofs and salts on disk, written atomically |
+| `src/store.ts` | proofs, salts and unfinished intents on disk, written durably |
 | `src/pipeline.ts` | one message end to end; everything behind interfaces |
 | `src/card.ts`, `src/bot.ts` | the card the owner reads; the owner-only grammY bot |
 | `src/stop.ts`, `src/stop-cli.ts` | the stop button |
@@ -29,5 +29,5 @@ the service refuses to start if `OWNER_PRIVATE_KEY` or `AGENT_ADMIN_PRIVATE_KEY`
 signing key whose on-chain scope is wider than `propose_action` and `commit_proof`.
 
 To audit an exchange, give `/auditor` the `model-<commit>.json` file from `AGENT_DATA_DIR` and the agent's account: it is the
-agent that committed, not the owner. An action proof is checked with `verifyActionProof` from `@ainek/proof`; the web page for it
-does not exist yet.
+agent that committed, not the owner. An action proof is checked with `verifyActionProof` from `@ainek/proof`, against the policy key and
+build registered on-chain; the web page for it does not exist yet.
