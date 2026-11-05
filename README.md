@@ -96,6 +96,9 @@ pnpm demo:tamper                 # same recording, the key the client sees is sw
 pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
                                  #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
 
+pnpm -F verifier dry-run         # no key, needs network (~5 s): re-attests the model with a fresh nonce, verifies the TDX + GPU
+                                 #   evidence and prints the key-log entry a registered verifier would append; sends nothing
+
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
 pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. The chat needs NEARAI_API_KEY

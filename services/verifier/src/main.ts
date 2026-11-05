@@ -53,6 +53,11 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       const { entry } = k;
       const key = shortHex(entry.signing_address);
       log(`${model}: key ${key} verified: TCB ${entry.tcb_status}, GPU ${k.verified.gpuEvidence}, compose ${shortHex(entry.compose_hash)}, ${entry.image_digests.length} image digest(s)`);
+      if (cfg.dryRun) {
+        log(`${model}: dry run, nothing sent. A registered verifier would log this entry with log_key:\n${JSON.stringify(entry, null, 2)}`);
+        results.push({ model, key: entry.signing_address, outcome: 'current', index: -1 });
+        continue;
+      }
       const pair = `${entry.signing_address}/${entry.compose_hash}`;
       const seen = alreadyLogged(entry, recent);
       if (seen || loggedNow.has(pair)) {
@@ -76,10 +81,12 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
 }
 
 async function main(): Promise<void> {
-  const once = process.argv.includes('--once');
-  const cfg = loadConfig();
-  console.log(`Ainek verifier ${cfg.accountId} → ${cfg.contract} (${cfg.rpcUrl}); models: ${cfg.models.join(', ')}; TCB policy: ${cfg.acceptedTcbStatuses.join(',')}; reports: ${cfg.reportsDir}`);
-  const writer = keyLogWriter(cfg);
+  const dryRun = process.argv.includes('--dry-run');
+  const once = dryRun || process.argv.includes('--once');
+  const cfg = loadConfig(process.env, { dryRun });
+  console.log(`Ainek verifier ${dryRun ? '(dry run, no account)' : cfg.accountId} → ${cfg.contract} (${cfg.rpcUrl}); models: ${cfg.models.join(', ')}; TCB policy: ${cfg.acceptedTcbStatuses.join(',')}; reports: ${cfg.reportsDir}`);
+  // A dry run never signs: no key is loaded and both contract calls are skipped.
+  const writer: KeyLogWriter = dryRun ? { recentByMe: async () => [], logKey: async () => Promise.reject(new Error('dry run')) } : keyLogWriter(cfg);
   const stamped = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
   for (;;) {
     const results = await runRound(cfg, writer, stamped);

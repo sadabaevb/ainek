@@ -16,6 +16,14 @@ What one round does, per model:
 
 A key whose evidence does not verify is not logged, the other keys of the report still are. Nothing else happens: clients then refuse the unlogged key (fail-closed).
 
+## Try it without an account
+
+```sh
+pnpm -F verifier dry-run   # live re-attestation with a fresh nonce (~5 s), prints the KeyEntryInput; sends nothing
+```
+
+No NEAR account, no API key: it shows exactly what a registered verifier would append to the log.
+
 ## Run a verifier in 5 minutes
 
 You need a NEAR testnet account whose key you can export, and the contract owner must have called

@@ -66,4 +66,6 @@ test('loadConfig refuses to start without the verifier account and key, and boun
   assert.deepEqual(cfg.models, ['a/b', 'c/d']);
   assert.equal(cfg.intervalMs, 15 * 60_000);
   assert.throws(() => loadConfig({ ...base, VERIFIER_INTERVAL_MIN: String(MAX_INTERVAL_MIN + 1) }), /between 1 and/);
+  // A dry run sends nothing, so the .env.example placeholders must be enough (clean-clone rule).
+  assert.equal(loadConfig({ VERIFIER_ACCOUNT_ID: 'v1.ainek.testnet', VERIFIER_PRIVATE_KEY: 'ed25519:...' }, { dryRun: true }).dryRun, true);
 });
