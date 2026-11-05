@@ -1,5 +1,5 @@
 'use client';
-// One wallet control for the whole app (nav): login asks for a function-call key limited to commit_proof (the wallet decides what it grants).
+// One wallet control for the whole app (nav): login asks for a function-call key limited to commit_proof.
 import { useNearWallet } from 'near-connect-hooks';
 import { useConfig, useT } from '@/app/providers';
 import { short } from '@/lib/format';
