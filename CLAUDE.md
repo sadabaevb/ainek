@@ -44,7 +44,7 @@ apps/demo/           Node 24 CLI: `pnpm demo` replay / `demo:tamper` on docs/sam
 services/verifier/   Node 24 daemon: attestation -> KeyEntry -> contract.log_key    (services)
 services/agent/      Node 24 service: NL -> NEAR AI -> OutLayer -> contract         (services)
 packages/proof/      Shared TS: proof schema, canonical bytes, hashing, verify fns  (shared)
-packages/tier1-node/ Shared TS, Node only: the Tier-1 sequence (attest, log check, E2EE, signature, proof) for demo and agent
+packages/tier1-node/ Shared TS, Node only: the Tier-1 sequence for demo:live/metrics and the agent   (shared)
 contracts/ainek/     Rust near-sdk-rs contract                                       (services)
 jobs/policy/         Rust OutLayer WASI job: evaluate policy, sign decision          (services)
 docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.md, prompts/

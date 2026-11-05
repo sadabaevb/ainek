@@ -5,8 +5,8 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { buildModelProof, normalizeHex, shortHex as short, toDisclosure, verifyModelProof, type ModelProof } from '@ainek/proof';
-import { nothingSent, runTier1, type StepId, type Verified } from '@ainek/tier1-node';
+import { buildCheckedModelProof, normalizeHex, shortHex as short, toDisclosure, type ModelProof } from '@ainek/proof';
+import { contractLog, nothingSent, replyOf, runTier1, type StepId, type Verified } from '@ainek/tier1-node';
 import { loadLiveEnv } from './env.ts';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
 import { FAIL, NA, OK, exitFlushed, head, line, markOf, seconds } from './term.ts';
@@ -35,7 +35,7 @@ const outcome = await runTier1({
   cfg,
   chat: { messages: [{ role: 'user', content: message }] },
   // The recorded sample entry only when AINEK_LOG_SOURCE=sample asks for it explicitly; the trust set comes from the shared config either way.
-  ...(cfg.logSource === 'sample' ? { readLog: async () => ({ entries: [loadSampleLogEntry()], source: 'sample (docs/samples/key-entry.sample.json, AINEK_LOG_SOURCE=sample)' }) } : {}),
+  readLog: cfg.logSource === 'sample' ? async () => ({ entries: [loadSampleLogEntry()], source: 'sample (docs/samples/key-entry.sample.json, AINEK_LOG_SOURCE=sample)' }) : contractLog(cfg),
   onStep: (e) => {
     const title = HEADS[e.id];
     if (title) head(title);
@@ -55,6 +55,7 @@ await exitFlushed(outcome.kind === 'verified' ? 0 : 1);
 // ---- helpers ----
 /** The proof checks, the card, then the files `--record` and `--disclose` asked for. */
 function printVerified(v: Verified & { totalMs: number }): void {
+  line(NA, `reply: ${JSON.stringify(replyOf(v.completion))}`);
   for (const c of v.report.checks) line(markOf(c.status), `proof.${c.id}: ${c.detail}`);
   line(NA, 'commit on NEAR: not in this mode (the web client commits with the wallet; the salt stays with the proof)');
   const { signer, logEntry, logSource, proof } = v;
@@ -83,10 +84,12 @@ function usage(reason: string): never {
 function proofBoundToSampleLog(v: Verified): ModelProof {
   const sampleEntry = loadSampleLogEntry();
   if (normalizeHex(sampleEntry.signing_address) !== normalizeHex(v.signature.signer.signingAddress)) throw new Error(`live signer ${short(v.signature.signer.signingAddress)} differs from the sample log entry key ${short(sampleEntry.signing_address)}: re-record attestation-report.json and key-entry.sample.json first`);
-  const proof = buildModelProof({ completionId: v.completionId, model, signature: v.signature, requestBody: v.requestBody, responseBody: v.responseBody, logEntry: sampleEntry, verifiedAt: v.verifiedAt, e2ee: true, salt: '0123456789abcdef'.repeat(4) });
-  const check = verifyModelProof(proof, v.requestBody, v.responseBody, sampleEntry);
-  if (!check.ok) throw new Error(`recorded proof does not verify: ${check.checks.filter((c) => c.status === 'fail').map((c) => c.detail).join('; ')}`);
-  return { ...proof, commitTx: 'SAMPLE-not-committed' };
+  try {
+    const { proof } = buildCheckedModelProof({ completionId: v.completion.id, model, signature: v.signature, requestBody: v.requestBody, responseBody: v.responseBody, logEntry: sampleEntry, verifiedAt: v.proof.verifiedAt, e2ee: true, salt: '0123456789abcdef'.repeat(4) });
+    return { ...proof, commitTx: 'SAMPLE-not-committed' };
+  } catch (err) {
+    throw new Error(`recorded proof does not verify: ${(err as Error).message}`);
+  }
 }
 
 function recordSamples(v: Verified): void {
@@ -95,7 +98,7 @@ function recordSamples(v: Verified): void {
   writeFileSync(at('e2ee-chat-request.raw.json'), v.requestBody);
   writeFileSync(at('e2ee-chat-response.raw.json'), v.responseBody);
   writeJson(at('e2ee-signature.json'), { text: v.signature.signedText, signature: v.signature.signature, signing_address: v.signature.signer.signingAddress, signing_algo: v.signature.signer.signingAlgo, signature_kind: v.signature.kind });
-  writeJson(at('e2ee-plaintext.json'), { _note: 'What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.', model, prompt: message, reply: v.reply, completionId: v.completionId, recordedAt: new Date().toISOString() });
+  writeJson(at('e2ee-plaintext.json'), { _note: 'What the recording client sent and decrypted. NOT covered by the proof (which is over the ciphertext bytes): shown in the replay card for readability only.', model, prompt: message, reply: replyOf(v.completion), completionId: v.completion.id, recordedAt: new Date().toISOString() });
   writeJson(at('model-proof-e2ee.sample.json'), { _note: 'SAMPLE model proof for the recorded E2EE exchange (e2ee-*.json). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value; commitTx is a placeholder.', proof: bound });
   console.log('\nrecorded: e2ee-chat-request.raw.json, e2ee-chat-response.raw.json, e2ee-signature.json, e2ee-plaintext.json, model-proof-e2ee.sample.json');
 }

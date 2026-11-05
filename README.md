@@ -233,7 +233,7 @@ apps/web/            Next.js app: chat with the proof card, /verify, /log, /audi
 apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:live, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
-                     demo:live, demo:metrics and the agent service; mirrors apps/web/lib/flow.ts
+                     demo:live and demo:metrics, planned for the Tier-2 agent service; mirrors apps/web/lib/flow.ts
 contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
                      (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2); Tier 2 (§4.3) next
 jobs/policy/         Rust OutLayer WASI-P1 job: spike, cap check only, no signature yet (Tier 2)
@@ -242,7 +242,7 @@ services/agent/      placeholder: NL → NEAR AI → OutLayer → contract (Tier
 docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
 ```
 
-Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof` and `services/verifier`); `cargo test` in
+Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`, `packages/tier1-node` and `services/verifier`); `cargo test` in
 `contracts/ainek` (unit tests + a `near-sandbox` integration test); `pnpm -F demo check-contract` checks the deployed contract's ABI against SPEC §4.1.
 
 ## Disclosures

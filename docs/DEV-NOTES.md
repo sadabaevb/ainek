@@ -828,9 +828,23 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
 
 - `apps/demo/src/tier1.ts` переехал в `packages/tier1-node` без изменения последовательности: его будет звать и
   `services/agent` (ярус 2), а зависимость сервиса от `apps/demo` — не зависимость. Вход теперь не строка, а `chat`
-  (`messages`, при необходимости `tools` и `tool_choice`: агенту нужен structured output через function tools, которые
-  SDK под E2EE шифрует наравне с текстом), в исходе есть `completion` целиком и помощники `replyOf`/`toolCallsOf`.
-  Чтение лога — параметр `readLog` (по умолчанию контракт через `contractLog(cfg)`; образец из `docs/samples` остался в
-  демо и передаётся им явно при `AINEK_LOG_SOURCE=sample`, пакет про образцы не знает). `withRetry` получил предикат
-  и паузу параметрами ради тестов (3 теста на ретраи). `describe` для ошибок SDK живёт в пакете, `term.ts` его
-  реэкспортирует. `loadLiveEnv` остался в демо (`apps/demo/src/env.ts`): у агента свой конфиг по образцу верификатора.
+  (OpenAI-формы из типов SDK: `messages`, `tools`, `tool_choice`; SDK под E2EE шифрует содержимое сообщений, инструменты
+  и вызовы, а `response_format` — нет, поэтому structured output у агента только через function tool), в исходе —
+  `completion` целиком и помощники `replyOf`/`functionCallsOf`. Имена предложенных инструментов попадают в proof как
+  `toolNames` (определение добавлено в SPEC §5.1). Чтение лога — обязательный параметр `readLog` (`contractLog(cfg)`;
+  образец из `docs/samples` остался в демо и передаётся им явно при `AINEK_LOG_SOURCE=sample`: пакет про образцы не
+  знает, и забыть его нельзя — типы не дадут). `loadLiveEnv` остался в демо (`apps/demo/src/env.ts`): у агента свой
+  конфиг по образцу верификатора.
+- После `/simplify`: петля ретраев одна — `withRetry` в `@ainek/proof` с предикатом от вызывающего (у браузера и у
+  Node-раннера свои `getSdkError`: классы ошибок в двух бандлах SDK разные), ею же пользуется JSON-RPC-читалка; «собрать
+  proof и проверить» — одна функция `buildCheckedModelProof` вместо трёх копий (flow.ts, раннер, запись образцов);
+  время чтения лога пишется в шаге, а не из `.then`; текст шага `send` больше не содержит открытый ответ модели
+  (сервер может его логировать); ошибки SDK описываются их собственным `message`. Кеш аттестации на 60 минут для агента
+  (как в браузере) — решение в PR агента: сейчас каждый вызов холодный, как и нужно `demo:metrics`.
+- **Проба function tool под E2EE (2026-11-05, один живой вызов `runTier1`):** system prompt «казначей», два инструмента
+  (`propose_transfer`, `decline`), `tool_choice: 'required'`, запрос «Pay vendor1.testnet 300 tokens for October hosting.»
+  `z-ai/glm-5.3-flash` ответил одним вызовом `propose_transfer` с аргументами `{"amount":"300","memo":"October hosting",
+  "receiver_id":"vendor1.testnet"}`, `finish_reason: tool_calls`, текста нет; аргументы расшифровались, `sdk-check` и 8
+  проверок proof прошли, `toolNames: ["propose_transfer","decline"]`, 2927 Б шифртекста туда (определения инструментов
+  внутри), 1699 Б обратно, весь прогон 6.5 с. То есть путь «текст владельца → Action» для агента работает на той же
+  последовательности, что и чат; остаётся разбор аргументов zod-схемой `Action` и всё, что после (OutLayer, контракт).

@@ -1,28 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { withRetry } from './retry.ts';
+import { VerificationError, type VerificationFailure } from '@nearai/inference-sdk/node';
+import { sdkRetryable } from './retry.ts';
 
-const flaky = (failures: number) => {
-  let calls = 0;
-  return { fn: async () => { calls++; if (calls <= failures) throw new Error(`flaky ${calls}`); return calls; }, calls: () => calls };
-};
-const always = () => true;
+const collateralUnavailable = () => new VerificationError({ code: 'quote.collateral_unavailable', retryable: true } as VerificationFailure);
 
-test('withRetry: a retryable failure is retried with the pause, and every retry is reported', async () => {
-  const f = flaky(2);
-  let retries = 0;
-  assert.equal(await withRetry(f.fn, 3, () => retries++, always, 0), 3);
-  assert.equal(retries, 2);
-});
-
-test('withRetry: a failure the predicate rejects is thrown at once', async () => {
-  const f = flaky(1);
-  await assert.rejects(withRetry(f.fn, 3, undefined, () => false, 0), /flaky 1/);
-  assert.equal(f.calls(), 1);
-});
-
-test('withRetry: the last failure is thrown when the attempts run out', async () => {
-  const f = flaky(5);
-  await assert.rejects(withRetry(f.fn, 3, undefined, always, 0), /flaky 3/);
-  assert.equal(f.calls(), 3);
+test('sdkRetryable: the SDK verdict, also when the SDK error is the cause of a wrapper; a plain error is never retried', () => {
+  assert.equal(sdkRetryable(collateralUnavailable()), true);
+  assert.equal(sdkRetryable(new Error('wrapped', { cause: collateralUnavailable() })), true);
+  assert.equal(sdkRetryable(new Error('network down')), false);
 });

@@ -2,7 +2,8 @@
 //   verify evidence in the browser → fail-closed check against the public log → E2EE send →
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
-import { DEMO_SWAPPED_KEY, buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+// Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
+import { DEMO_SWAPPED_KEY, buildCheckedModelProof, evaluateKeyLog, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -159,12 +160,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
   const signer = await runStep(emit, 'sdk-check', 'SDK byte-exact check against the attested signer', async () => checkResponse(exchange, signature, deployment), () => 'SDK: signature covers exactly these request and response bytes, signer is the attested model key');
 
   // 6. Our proof: hashes recomputed from the kept bytes, bound to the log entry, salted commit for the chain.
-  const { proof, report } = await runStep(emit, 'proof', 'recomputing hashes and building the proof', async () => {
-    const proof = buildModelProof({ completionId: exchange.completionId, model, signature, requestBody: exchange.requestBody, responseBody: exchange.responseBody, logEntry, verifiedAt: deployment.verifiedAt, e2ee: true });
-    const report = verifyModelProof(proof, exchange.requestBody, exchange.responseBody, logEntry);
-    if (!report.ok) throw new Error(report.checks.filter((c) => c.status === 'fail').map((c) => `${c.id}: ${c.detail}`).join('; '));
-    return { proof, report };
-  }, ({ proof, report }) => `${report.checks.filter((c) => c.status === 'ok').length}/${report.checks.length} checks; commit ${proof.commit?.slice(0, 12)}… (salt stays on this device)`);
+  const { proof, report } = await runStep(emit, 'proof', 'recomputing hashes and building the proof', async () => buildCheckedModelProof({ completionId: exchange.completionId, model, signature, requestBody: exchange.requestBody, responseBody: exchange.responseBody, logEntry, verifiedAt: deployment.verifiedAt, e2ee: true }), ({ proof, report }) => `${report.checks.filter((c) => c.status === 'ok').length}/${report.checks.length} checks; commit ${proof.commit?.slice(0, 12)}… (salt stays on this device)`);
 
   // 7. Keep bytes + proof locally (best effort: a private window may refuse).
   const outcome: VerifiedOutcome = { kind: 'verified', reply: exchange.reply, deployment, modelAttestation: signer, logSource: log.source, keyVerdict, logEntry, exchange, proof, report, commit: 'pending' };

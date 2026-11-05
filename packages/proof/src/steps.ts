@@ -1,5 +1,5 @@
 // The steps of one Tier-1 exchange, in order. The browser flow (apps/web/lib/flow.ts, which adds `store` and `commit`
-// after them) and the Node runner (apps/demo/src/tier1.ts) report the same ids, so one list decides which failures mean
+// after them) and the Node runner (packages/tier1-node/src/tier1.ts) report the same ids, so one list decides which failures mean
 // "nothing was sent".
 export const TIER1_STEPS = ['metadata', 'attestation', 'key-log', 'encrypt', 'send', 'signature', 'sdk-check', 'proof'] as const;
 export type Tier1StepId = (typeof TIER1_STEPS)[number];

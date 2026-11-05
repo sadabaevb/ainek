@@ -1,6 +1,7 @@
 // Read-only NEAR view calls over plain JSON-RPC (global fetch, no SDK), enough for the key log (SPEC §4.1 views) and the
 // proof commits (SPEC §4.2). Shared by the web client, the demo and the verifier so the ABI call shapes live in one place.
 import { z } from 'zod';
+import { withRetry } from './retry.ts';
 import { bytesToBase64 } from './disclosure.ts';
 import { KeyEntry, ProofCommitRecord, hex64, u128String } from './schema.ts';
 import type { Check } from './verify.ts';
@@ -30,8 +31,10 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
     const message = `${contractId}.${method}: ${text}`;
     return /\bMethodNotFound\b/.test(text) ? new ContractMethodNotFound(message) : new Error(message);
   };
-  for (let attempt = 1; ; attempt++) {
-    try {
+  // Network failures, timeouts and 429/5xx are retried a bounded number of times; contract errors are not.
+  const transient = (err: unknown): boolean => err instanceof Transient || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|network/i.test(err.message)));
+  return withRetry(
+    async () => {
       const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: AbortSignal.timeout(TIMEOUT_MS) });
       if (res.status === 429 || res.status >= 500) throw new Transient(`${rpcUrl}: HTTP ${res.status}`);
       if (!res.ok) throw new Error(`${rpcUrl}: HTTP ${res.status}`);
@@ -40,13 +43,9 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
       if (json.result?.error) throw contractError(json.result.error);
       const bytes = json.result?.result ?? [];
       return bytes.length === 0 ? undefined : JSON.parse(new TextDecoder().decode(Uint8Array.from(bytes)));
-    } catch (err) {
-      // Network failures, timeouts and 429/5xx are retried a bounded number of times; contract errors are not.
-      const transient = err instanceof Transient || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|network/i.test(err.message)));
-      if (!transient || attempt >= ATTEMPTS) throw err;
-      await new Promise((r) => setTimeout(r, 500 * attempt));
-    }
-  }
+    },
+    { retryable: transient, attempts: ATTEMPTS, pauseMs: 500 },
+  );
 }
 
 class Transient extends Error {}
