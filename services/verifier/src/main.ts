@@ -10,7 +10,7 @@
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { shortHex } from '@ainek/proof';
-import { attestModel } from './attest.ts';
+import { attestModel, withDeadline } from './attest.ts';
 import { loadConfig, type VerifierConfig } from './config.ts';
 import { alreadyLogged, keyLogWriter, type KeyLogWriter } from './log.ts';
 
@@ -19,12 +19,35 @@ export type KeyResult =
   | { model: string; key: string; outcome: 'current'; index: number }
   | { model: string; key: string; outcome: 'failed'; error: string };
 
+/** near-api-js puts no deadline on sending a transaction. If `log_key` still lands after we gave up, the next
+ *  round finds the entry in the log and does not write it twice. */
+export const LOG_KEY_TIMEOUT_MS = 60_000;
+/** The first retry after a failure; every further failure of the same key in a row doubles it, up to the interval. */
+export const RETRY_AFTER_FAILURE_MS = 60_000;
+
+/** Failures in a row per model and key after this round: one that failed again counts one more, the rest is forgotten. */
+export function failureStreaks(results: readonly KeyResult[], previous: ReadonlyMap<string, number>): Map<string, number> {
+  const streaks = new Map<string, number>();
+  for (const r of results) {
+    if (r.outcome === 'failed') streaks.set(`${r.model}/${r.key}`, (previous.get(`${r.model}/${r.key}`) ?? 0) + 1);
+  }
+  return streaks;
+}
+
+/** A new failure is retried soon: each lost round eats into the clients' 24 h window. The newest failure sets the
+ *  pace, so a failure that stays (a replica whose evidence never verifies) backs off to the normal interval on its
+ *  own, without slowing the retry of a transient error on another key. */
+export function nextDelayMs(streaks: ReadonlyMap<string, number>, intervalMs: number): number {
+  if (streaks.size === 0) return intervalMs;
+  return Math.min(RETRY_AFTER_FAILURE_MS * 2 ** (Math.min(...streaks.values()) - 1), intervalMs);
+}
+
 export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (line: string) => void = console.log): Promise<KeyResult[]> {
   const results: KeyResult[] = [];
   for (const model of cfg.models) {
     const started = performance.now();
     // Anything that fails before the per-key loop (attestation fetch, disk, reading the log) fails this model's
-    // round and nothing else: the daemon keeps running and tries again next interval.
+    // round and nothing else: the daemon keeps running and tries again next round.
     let round;
     let recent;
     try {
@@ -41,8 +64,9 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       continue;
     }
 
-    // Keys logged earlier in this same round: two replicas with the same key and compose count once.
-    const loggedNow = new Set<string>();
+    // Keys sent earlier in this same round: two replicas with the same key and compose count once. A key counts as
+    // sent from the moment we try: a `log_key` we stopped waiting for may still land, and must not be sent twice.
+    const sentNow = new Set<string>();
     for (const k of round.keys) {
       if (!k.ok) {
         // Fail closed: a replica whose evidence does not verify is simply not logged; clients then refuse that key.
@@ -53,16 +77,21 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       const { entry } = k;
       const key = shortHex(entry.signing_address);
       log(`${model}: key ${key} verified: TCB ${entry.tcb_status}, GPU ${k.verified.gpuEvidence}, compose ${shortHex(entry.compose_hash)}, ${entry.image_digests.length} image digest(s)`);
+      if (cfg.dryRun) {
+        log(`${model}: dry run, nothing sent. A registered verifier would log this entry with log_key:\n${JSON.stringify(entry, null, 2)}`);
+        results.push({ model, key: entry.signing_address, outcome: 'current', index: -1 });
+        continue;
+      }
       const pair = `${entry.signing_address}/${entry.compose_hash}`;
       const seen = alreadyLogged(entry, recent);
-      if (seen || loggedNow.has(pair)) {
-        log(`${model}: key ${key} with this compose already logged by us${seen ? ` at index ${seen.index} within 6 h` : ' in this round'}, not logging again`);
+      if (seen || sentNow.has(pair)) {
+        log(`${model}: key ${key} with this compose already ${seen ? `logged by us at index ${seen.index} within 6 h` : 'sent by us in this round'}, not logging again`);
         results.push({ model, key: entry.signing_address, outcome: 'current', index: seen?.index ?? -1 });
         continue;
       }
       try {
-        const { index, txHash } = await writer.logKey(entry);
-        loggedNow.add(pair);
+        sentNow.add(pair);
+        const { index, txHash } = await withDeadline(writer.logKey(entry), LOG_KEY_TIMEOUT_MS, 'log_key');
         log(`logged ${model} key ${key} at index ${index}, tx ${txHash}`);
         results.push({ model, key: entry.signing_address, outcome: 'logged', index, txHash });
       } catch (err) {
@@ -76,16 +105,21 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
 }
 
 async function main(): Promise<void> {
-  const once = process.argv.includes('--once');
-  const cfg = loadConfig();
-  console.log(`Ainek verifier ${cfg.accountId} → ${cfg.contract} (${cfg.rpcUrl}); models: ${cfg.models.join(', ')}; TCB policy: ${cfg.acceptedTcbStatuses.join(',')}; reports: ${cfg.reportsDir}`);
-  const writer = keyLogWriter(cfg);
+  const dryRun = process.argv.includes('--dry-run');
+  const once = dryRun || process.argv.includes('--once');
+  const cfg = loadConfig(process.env, { dryRun });
+  console.log(`Ainek verifier ${dryRun ? '(dry run, no account)' : cfg.accountId} → ${cfg.contract} (${cfg.rpcUrl}); models: ${cfg.models.join(', ')}; TCB policy: ${cfg.acceptedTcbStatuses.join(',')}; reports: ${cfg.reportsDir}`);
+  // A dry run never signs: no key is loaded and both contract calls are skipped.
+  const writer: KeyLogWriter = dryRun ? { recentByMe: async () => [], logKey: async () => Promise.reject(new Error('dry run')) } : keyLogWriter(cfg);
   const stamped = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
+  let streaks = new Map<string, number>();
   for (;;) {
     const results = await runRound(cfg, writer, stamped);
     if (once) process.exit(results.every((r) => r.outcome !== 'failed') ? 0 : 1);
-    stamped(`next round in ${cfg.intervalMs / 60_000} min`);
-    await new Promise((r) => setTimeout(r, cfg.intervalMs));
+    streaks = failureStreaks(results, streaks);
+    const delayMs = nextDelayMs(streaks, cfg.intervalMs);
+    stamped(`next round in ${delayMs / 60_000} min`);
+    await new Promise((r) => setTimeout(r, delayMs));
   }
 }
 

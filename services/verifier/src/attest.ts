@@ -31,6 +31,20 @@ export interface AttestOptions {
   now?: () => number;
 }
 
+/** One attestation normally verifies in 5–60 s. The SDK's collateral and NRAS requests carry no deadline of their
+ *  own and can hang on a socket that died while the host was asleep; past this the replica counts as failed. */
+export const VERIFY_TIMEOUT_MS = 180_000;
+
+/** A promise that gives up. The work itself is not cancelled (the SDK takes no AbortSignal), it only stops blocking
+ *  the caller. Twin of `withDeadline` in packages/tier1-node, which the verifier does not depend on. */
+export function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not finish within ${ms / 1000} s`)), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
 export async function fetchReport(baseUrl: string, model: string, nonce: string, fetchImpl: typeof fetch = fetch): Promise<Uint8Array> {
   const url = `${baseUrl}/attestation/report?model=${encodeURIComponent(model)}&signing_algo=ed25519&nonce=${nonce}`;
   // `x-no-aliasing: true` (CLAUDE.md): the gateway must answer for exactly this model id, never an alias of it,
@@ -60,7 +74,9 @@ export async function attestModel(model: string, opts: AttestOptions): Promise<A
     selectModelAttestations(raw, model).map(async (selected): Promise<AttestedKey> => {
       try {
         // The SDK checks that this nonce is what the TEE signed over; a replayed report fails here.
-        const verified = await verifyModelAttestation({ attestation: toModelAttestation(selected) as ModelAttestation, clientBinding: { nonce }, policy });
+        // The deadline is per replica: a hung one is reported as failed and does not hide the ones that verified.
+        const verifying = verifyModelAttestation({ attestation: toModelAttestation(selected) as ModelAttestation, clientBinding: { nonce }, policy });
+        const verified = await withDeadline(verifying, VERIFY_TIMEOUT_MS, 'verification of the attestation');
         return { ok: true, verified, entry: buildKeyEntryInput({ model, verified, reportBytes, observedAtMs }) };
       } catch (err) {
         return { ok: false, signingAddress: selected.signing_address, error: err instanceof Error ? err.message : String(err) };
