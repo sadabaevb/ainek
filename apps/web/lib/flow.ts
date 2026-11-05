@@ -2,7 +2,7 @@
 //   verify evidence in the browser → fail-closed check against the public log → E2EE send →
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
-import { buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type VerifyReport } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -73,8 +73,6 @@ export type ChatOutcome =
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
   /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
   | { kind: 'failed'; step: StepId; reason: string; reply?: string };
-
-const TAMPERED_KEY = 'ab'.repeat(32);
 
 class StepFailed extends Error {
   constructor(readonly step: StepId, readonly reason: string) {
@@ -151,7 +149,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
 
   // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
   const entries = await runStep(emit, 'key-log', `reading the public key log (${log.source})`, () => keyLogPromise, (e) => `${e.length} entr${e.length === 1 ? 'y' : 'ies'} in window (source: ${log.source})`);
-  const seenKey = tamper ? TAMPERED_KEY : modelAttestation.signer.signingAddress;
+  const seenKey = tamper ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
   const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });

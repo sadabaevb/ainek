@@ -22,7 +22,7 @@ export {
   SigningAlgo,
   hex64,
 } from './schema.ts';
-export { evaluateKeyLog, findSplitView, resolveLogEntry } from './key-log.ts';
+export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, resolveLogEntry } from './key-log.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
 export { buildModelProof } from './build.ts';
 export type { BuildModelProofInput } from './build.ts';
