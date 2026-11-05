@@ -57,8 +57,11 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
 - **Hidden settlement.** On testnet the executed transfer (token, amount, receiver) is public; the conversation, the reasoning
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.
-- **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. Its blast radius is bounded on-chain
-  (function-call key, contract checks, TEE-signed policy decisions), not eliminated.
+- **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. It and Telegram read the owner's
+  messages in plaintext; E2EE covers the hop from the service to the model, not the hop from the owner to the service. Its
+  blast radius is bounded on-chain (function-call key, contract checks, TEE-signed policy decisions), not eliminated.
+- **That the model resists prompt injection.** (Tier 2) It may or may not propose what an injected message asks. The limits
+  are enforced by the policy and the contract, not by the model.
 - **Compliance or certification** of any kind.
 - **Independence from hardware vendors.** The root of trust is Intel and NVIDIA. A compromised CPU/GPU breaks every
   guarantee here, as it does for every TEE product.

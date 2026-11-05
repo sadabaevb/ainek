@@ -38,6 +38,19 @@ Settings names and defaults above are Vercel's as of Nov 2026; confirm them in t
 
 `pnpm -F web build && pnpm -F web start` serves the production build on http://localhost:3000 with the same root `.env`.
 
+## Agent service (Tier 2)
+
+Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i && pnpm -F agent start`. Variables are in
+`.env.example`, block "Agent service". Before the first message:
+
+1. The agent account exists, with a function-call key scoped to the contract and to `propose_action` and `commit_proof`.
+2. The account prepaid its commits: `deposit_storage` with a full-access key (two commits per action, SPEC §4.2).
+3. `register_agent` ran with the policy hash, `POLICY_TEE_PUBKEY` and the token.
+4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
+
+The owner's keys never go on this server. `pnpm demo:stop` runs on the owner's machine from `.env.owner`; the service refuses
+to start if it finds them in its environment.
+
 ## Policy job on OutLayer (Tier 2, Dastan)
 
 Recorded here once the job is deployed, because `register_agent` and the README need them: the project name on

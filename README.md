@@ -130,6 +130,7 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Model enclave | plaintext for the duration of inference | — | TDX + GPU attestation; retention inside the enclave is not provable by attestation |
 | NEAR blockchain | provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash | the policy contents, the conversation, the proofs | salted commits; transfer details are hidden only with Confidential Intents (out of scope) |
 | OutLayer policy job (Tier 2, planned) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
+| Agent service and Telegram (Tier 2, planned) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
 The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until the SDK
@@ -238,11 +239,12 @@ contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, e
                      (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2); Tier 2 (§4.3) next
 jobs/policy/         Rust OutLayer WASI-P1 job: spike, cap check only, no signature yet (Tier 2)
 services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
-services/agent/      placeholder: NL → NEAR AI → OutLayer → contract (Tier 2, not started)
+services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes, waits for
+                     contract §4.3 and the deployed policy job; not run end to end yet
 docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
 ```
 
-Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`, `packages/tier1-node` and `services/verifier`); `cargo test` in
+Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`, `packages/tier1-node`, `services/verifier` and `services/agent`); `cargo test` in
 `contracts/ainek` (unit tests + a `near-sandbox` integration test); `pnpm -F demo check-contract` checks the deployed contract's ABI against SPEC §4.1.
 
 ## Disclosures
