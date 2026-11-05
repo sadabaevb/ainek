@@ -24,7 +24,14 @@ export type CheckId =
   | 'key-in-log'
   | 'commit'
   | 'log-entry' // the chain re-read of the entry the proof points at (resolveLogEntry)
-  | 'on-chain-commit'; // the proof_commit record (checkProofCommit)
+  | 'on-chain-commit' // the proof_commit record (checkProofCommit)
+  // action proofs: the policy decision (checkPolicyOutput in policy.ts)
+  | 'decision-signature'
+  | 'decision-key'
+  | 'wasm-hash'
+  | 'action-commit'
+  | 'model-proof-commit'
+  | 'decision-expiry';
 
 export interface VerifyReport {
   /** True only when no check failed. Skipped checks (no raw bytes given) do not make it false. */

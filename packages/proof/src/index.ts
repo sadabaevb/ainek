@@ -29,6 +29,8 @@ export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView,
 export { buildModelProof, buildCheckedModelProof } from './build.ts';
 export { withRetry } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
+export { PolicyInput, PolicyOutput, verifyDecisionSignature, checkPolicyOutput } from './policy.ts';
+export type { DecisionExpectations } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
