@@ -1,0 +1,32 @@
+# Builds the policy job on a clean machine and prints the sha256 of the wasm (SPEC §3.5): the number to compare
+# with docs/DEPLOY.md, with OutLayer's attestation and with your own `scripts/wasm-hash.sh`.
+name: policy-wasm
+
+on:
+  push:
+    paths: ['jobs/policy/**', 'scripts/wasm-hash.sh', 'docs/test-vectors/**', '.github/workflows/policy-wasm.yml']
+  pull_request:
+    paths: ['jobs/policy/**', 'scripts/wasm-hash.sh', 'docs/test-vectors/**', '.github/workflows/policy-wasm.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # rustup reads jobs/policy/rust-toolchain.toml and installs exactly that toolchain and target.
+      - name: Unit tests
+        working-directory: jobs/policy
+        run: cargo test --locked
+      - name: Build and hash
+        run: |
+          # No pipe: a failed build must fail the step, not print an empty hash.
+          line=$(scripts/wasm-hash.sh)
+          hash=${line%% *}
+          [ ${#hash} -eq 64 ]
+          echo "ainek-policy.wasm sha256: $hash"
+          echo "### ainek-policy.wasm" >> "$GITHUB_STEP_SUMMARY"
+          echo "sha256: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"
