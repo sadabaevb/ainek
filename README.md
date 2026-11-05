@@ -126,6 +126,7 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Relay on the Incognito demo route (user-chosen) | the plaintext prompt and reply | — | none (no model key to encrypt to); the red card says so |
 | NEAR AI gateway and proxy | ciphertext, token accounting; the browser's IP during collateral and NRAS calls | contents | E2EE; the gateway is attested; the proxy cannot forge the NVIDIA verdict (checked against NVIDIA's keys) |
 | NVIDIA key server | the browser's IP and timing of each cold verification (the SDK fetches NVIDIA's public keys directly) | anything about the exchange | public keys only; the NRAS verdict itself goes through NEAR AI's proxy |
+| NEAR RPC endpoint (FastNear by default, `NEAR_RPC_URL`) | the browser's IP and the time of every log read (one per message), the model id; on a commit, `/verify` and `/auditor` also the NEAR account and the commit looked up; the signed `commit_proof` transaction, which the wallet connector broadcasts through its own FastNear endpoint (the storage deposit goes through the wallet's) | contents | none for privacy; the log read is a plain JSON-RPC view with no light-client proof, so the client trusts what the endpoint answers: a lying endpoint can pass an unlogged key or refuse a logged one, not swap in an unattested key (attestation is checked locally) |
 | Model enclave | plaintext for the duration of inference | — | TDX + GPU attestation; retention inside the enclave is not provable by attestation |
 | NEAR blockchain | provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash | the policy contents, the conversation, the proofs | salted commits; transfer details are hidden only with Confidential Intents (out of scope) |
 | OutLayer policy job (Tier 2, planned) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
@@ -211,13 +212,21 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-<!-- TODO: table from the Nov 10–11 run: verification time, fail-closed outcomes (honest vs tampered key), false policy blocks, time-to-execute, gas per proof/action -->
+<!-- TODO Nov 10–11: paste the table printed by `pnpm demo:metrics --runs 50` (it also writes docs/metrics.json); add the policy-block and time-to-execute rows from the Tier 2 run if it ships -->
+
+Measured by `pnpm demo:metrics --runs N`: N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
+a cold attestation on every run, the public-log check with the honest and a swapped key, one E2EE exchange, the signature
+and the proof. The browser is not measured by the script: its cold attestation takes longer (up to ~40 s, see "Try it")
+and is then cached for 60 minutes, so its usual case is the "later message" row. The on-chain commit is measured once, not
+per run: `commit_proof` burnt 2.41 TGas (0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR; 130 +
+account + kind bytes per SPEC §4.2, here a 26-character account) in
+[8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM).
 
 ## Repository
 
 ```
 apps/web/            Next.js app: chat with the proof card, /verify, /log, /auditor, /trust; byte-exact relay to NEAR AI
-apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:live, record / check-contract scripts
+apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:live, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
                      (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2); Tier 2 (§4.3) next

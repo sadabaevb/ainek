@@ -24,3 +24,12 @@ export function describe(err: unknown): string {
   if (sdk) return `${sdk.failure.code}${'details' in sdk.failure && sdk.failure.details ? ' ' + JSON.stringify(sdk.failure.details) : ''}`;
   return err instanceof Error ? err.message : String(err);
 }
+
+export function seconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
+/** Exits once stdout has drained: to a pipe (`| tee`) stdout is written asynchronously, and process.exit() right after console.log would cut the last lines off. */
+export function exitFlushed(code: number): Promise<never> {
+  return new Promise<never>(() => process.stdout.write('', () => process.exit(code)));
+}

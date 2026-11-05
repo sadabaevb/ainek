@@ -2,7 +2,7 @@
 //   verify evidence in the browser → fail-closed check against the public log → E2EE send →
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
-import { buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type VerifyReport } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, buildModelProof, evaluateKeyLog, verifyModelProof, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -25,7 +25,7 @@ import { DEPOSIT_NEAR, isAlreadyCommitted, isDialogClosed, isMethodNotFound, isN
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
-export type StepId = 'metadata' | 'attestation' | 'key-log' | 'encrypt' | 'send' | 'signature' | 'sdk-check' | 'proof' | 'store' | 'commit';
+export type StepId = Tier1StepId | 'store' | 'commit';
 /** Wording key for the progress strip: the step id, or a route variant where the same step means something else. */
 export type Phrase = StepId | 'attestation-gateway' | 'send-plain' | 'signature-gateway';
 export type StepStatus = 'running' | 'ok' | 'fail' | 'skipped';
@@ -37,17 +37,8 @@ export interface StepEvent {
   detail: string;
 }
 
-/** Steps that run after the message has left the device: a failure there is "reply not provable", not "nothing was sent". */
-/** The steps in the order they run; the failure phase is a position relative to `send`, so a new step cannot be misread. */
-const STEP_ORDER: readonly StepId[] = ['metadata', 'attestation', 'key-log', 'encrypt', 'send', 'signature', 'sdk-check', 'proof', 'store', 'commit'];
-
-export type FailurePhase = 'not-sent' | 'sent' | 'answered';
-/** What a failure at `step` means for the message: nothing left the browser; it was handed to the network but no reply could be verified; a reply came and a later check failed. `send` starts at fetch, so the boundary is exact. */
-export function failurePhase(step: StepId): FailurePhase {
-  const at = STEP_ORDER.indexOf(step);
-  const send = STEP_ORDER.indexOf('send');
-  return at < send ? 'not-sent' : at === send ? 'sent' : 'answered';
-}
+/** The failure phase follows the shared step order (TIER1_STEPS in @ainek/proof); `store` and `commit` run after the reply, so a failure there is "reply not provable", not "nothing was sent". */
+export { failurePhase, type FailurePhase } from '@ainek/proof';
 
 /** What happened to the on-chain commit of a verified reply (SPEC §4.2); `committed` puts `commitTx` on the proof. */
 /** `depositing` and `pending` are the two in-flight states (the card words them differently); `committed` may lack the transaction when the chain already had the commit. */
@@ -73,8 +64,6 @@ export type ChatOutcome =
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
   /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
   | { kind: 'failed'; step: StepId; reason: string; reply?: string };
-
-const TAMPERED_KEY = 'ab'.repeat(32);
 
 class StepFailed extends Error {
   constructor(readonly step: StepId, readonly reason: string) {
@@ -151,7 +140,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
 
   // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
   const entries = await runStep(emit, 'key-log', `reading the public key log (${log.source})`, () => keyLogPromise, (e) => `${e.length} entr${e.length === 1 ? 'y' : 'ies'} in window (source: ${log.source})`);
-  const seenKey = tamper ? TAMPERED_KEY : modelAttestation.signer.signingAddress;
+  const seenKey = tamper ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
   const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });

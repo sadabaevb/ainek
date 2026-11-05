@@ -21,6 +21,9 @@ export type KeyLogStatus = 'ok' | 'not-logged' | 'split-view';
 /** Why the status is what it is. The UI words it; `detail` is the English technical line. */
 export type KeyLogReason = 'ok' | 'split-view' | 'below-quorum' | 'untrusted-only' | 'absent';
 
+/** The key the demo shows the client instead of the attested one (the chat's "Swap the key" switch, `pnpm demo:tamper`, `demo:metrics`): a well-formed 32-byte hex no verifier ever logged. */
+export const DEMO_SWAPPED_KEY = 'ab'.repeat(32);
+
 export interface KeyLogVerdict {
   status: KeyLogStatus;
   reason: KeyLogReason;

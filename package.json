@@ -12,6 +12,7 @@
     "demo:live": "pnpm -F demo live",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "demo:metrics": "pnpm -F demo metrics"
   }
 }
