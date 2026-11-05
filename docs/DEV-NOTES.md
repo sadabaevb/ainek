@@ -823,3 +823,22 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
   после очистки данных сайта и повторная очистка перед дублем, иначе на камеру попадёт кеш (пункт в чек-листе DEMO-SCRIPT;
   прогрев ключа — через `pnpm demo:live`, не в браузере записи). Пункт 2026-11-02 «прогреть кеш» закрыт: Catch 1 нарочно
   показывает холодную проверку.
+
+## 2026-11-05 — верификатор: правки по ревью #19 перед выкаткой — Дастан
+
+Исправлено (блокирующее): Dockerfile — `--chown=node:node`, `data/reports` создаётся заранее, `USER node` после
+копирования, все workspace-манифесты для `--frozen-lockfile`, `.dockerignore` в корне; `x-no-aliasing: true` в
+запросе отчёта; логируются **все** `model_attestations` для модели (каждая проверяется отдельно, одна упавшая не
+прячет остальные); cron-заглушка с фикстурой удалена (`contracts/ainek/scripts/log-key-stopgap.sh`), записи #0–#2
+в логе — с чужим nonce/report_hash и свежим `observed_at`, т.е. неподтверждённые, их в CLAIMS/README не считать;
+вместо cron — `pnpm -F verifier once` или `start`. Мелкое: `VERIFIER_DATA_DIR` в `.env.example`, bin через symlink
+(`realpath`), безопасный разбор `SuccessValue`, интервал ограничен 24 днями (лимит setTimeout), `randomHex32` из
+`packages/proof`, метка времени на каждую строку. Не трогал: депозит в 1 yocto в `deposit_storage` (testnet, мелочь),
+пробник секрета в policy-job (уйдёт при переписывании под SPEC §6), `withdraw` (решено: не делаем).
+
+Проверка: `pnpm -F verifier once` → запись #4 (tx `Gwinh62Kmyx6aJaeUBbDDAdghU8WevLWVkk5AkWkCeR1`, compose `a0e3c6f4…`);
+`docker build` + `docker run --env-file .env ainek-verifier --once` → запись #5 (tx
+`EQVuhy1Bkyth26Ncwa1nki8vHCYCsYz6aJPM1J79qy6T`, compose `5f7ebd85…`). Это первые записи с живым nonce и report_hash.
+За эндпоинтом **два деплоя glm-5.3-flash с одним ключом подписи и разными compose_hash** (`a0e3c6f4…` и `5f7ebd85…`),
+отчёт отдаёт то один, то другой — теперь в логе есть оба; клиенту при сверке по `composeHash` принимать любой
+залогированный compose для ключа.
