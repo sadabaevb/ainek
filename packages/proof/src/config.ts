@@ -53,3 +53,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
   };
 }
+
+export function explorerTxUrl(explorer: string, tx: string): string {
+  return `${explorer}/txns/${encodeURIComponent(tx)}`; // tx comes from a proof, i.e. from whoever wrote the file
+}

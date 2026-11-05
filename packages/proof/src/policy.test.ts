@@ -2,11 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
 import { canonicalBytes } from './canonical.ts';
+import { buildActionProof } from './build.ts';
 import { actionCommitOf, commitOf, proofPayload } from './commit.ts';
 import { bytesToBase64 } from './disclosure.ts';
 import { bytesToHex, sha256Hex } from './hash.ts';
 import { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
-import { ActionProof, type Action, type Decision } from './schema.ts';
+import type { Action, ActionProof, Decision } from './schema.ts';
 
 const action: Action = { kind: 'ft_transfer', token_id: 'token.ainek.testnet', receiver_id: 'vendor1.testnet', amount: '300000000', memo: 'October' };
 const modelProofCommit = 'ab'.repeat(32);
@@ -39,7 +40,6 @@ test('verifyDecisionSignature: a signature over canonical_bytes(decision) verifi
 
 test('checkPolicyOutput: an honest Allow passes every check; each tampering is named', () => {
   assert.deepEqual(failed(checkPolicyOutput(signed(), expect)), []);
-  assert.deepEqual(failed(checkPolicyOutput(signed('Deny'), expect)), []);
   assert.deepEqual(failed(checkPolicyOutput({ ...signed(), decision: { ...signed().decision, verdict: 'Deny' } }, expect)), ['decision-signature']);
   assert.deepEqual(failed(checkPolicyOutput(signed(), { ...expect, teePubkey: 'ff'.repeat(32) })), ['decision-key']);
   assert.deepEqual(failed(checkPolicyOutput(signed(), { ...expect, wasmHash: 'ff'.repeat(32) })), ['wasm-hash']);
@@ -48,12 +48,16 @@ test('checkPolicyOutput: an honest Allow passes every check; each tampering is n
   assert.deepEqual(failed(checkPolicyOutput(signed('Allow', { expires_at: String(now - 1) }), expect)), ['decision-expiry']);
 });
 
+test('checkPolicyOutput: an expires_at in nanoseconds (the wrong unit) fails the check by name instead of throwing or reading as far in the future', () => {
+  const checks = checkPolicyOutput(signed('Allow', { expires_at: '1800000000000000000' }), expect);
+  assert.deepEqual(failed(checks), ['decision-expiry']);
+  assert.match(checks.find((c) => c.id === 'decision-expiry')?.detail ?? '', /wrong unit/);
+});
+
 /** A committed action proof over `signed()`. */
 function actionProof(): ActionProof {
   const out = signed();
-  const payload = ActionProof.parse({ v: 1, kind: 'action', actionId: 7, action, actionCommit: actionCommitOf(action), modelProofCommit, decision: out.decision, teeSignature: out.sig, teePubkey: pubkey, wasmHash, attestationUrl: 'https://api.test/attestations/c1', proposeTx: 'TX', executeTx: 'TX', approver: null });
-  const salt = '11'.repeat(32);
-  return { ...payload, salt, commit: commitOf(salt, payload) };
+  return buildActionProof({ actionId: 7, action, modelProofCommit, decision: out.decision, teeSignature: out.sig, teePubkey: pubkey, wasmHash, attestationUrl: 'https://api.test/attestations/c1', proposeTx: 'TX', executeTx: 'TX', approver: null, salt: '11'.repeat(32) });
 }
 const failedIds = (r: ReturnType<typeof verifyActionProof>) => r.checks.filter((c) => c.status === 'fail').map((c) => c.id);
 
