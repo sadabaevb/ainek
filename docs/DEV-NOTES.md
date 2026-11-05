@@ -759,3 +759,13 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
 `docs/samples/attestation-report.json`: 4/4. Ещё нет: `nras_result_hash`/`ita_jwt_hash` = "" (SDK не отдаёт JWT),
 скрипт split-view-demo, GitHub Action для ghcr, запуск под `ainek-dev-dastan.testnet` — нужен `VERIFIER_PRIVATE_KEY` в
 корневом `.env` (экспорт из keychain делает Дастан руками, не Claude).
+
+## 2026-11-05 — `pnpm demo:metrics` для таблицы метрик (Бектур)
+
+- `apps/demo/src/metrics.ts`: N живых прогонов Tier 1 из Node (свежая аттестация шлюза и модели без кеша, проверка лога
+  честным и подменённым ключом, один E2EE-обмен, подпись, proof). Пишет `docs/metrics.json` и печатает markdown-таблицу для
+  README. Коммит в цепочку не делает (нужен кошелёк); его цена измерена один раз на tx `8syaAPnB…`: 2.41 TGas, 0.00022 NEAR
+  комиссии, 161 байт хранения. Прогон 10–11 ноября: `pnpm demo:metrics --runs 50`, таблицу вставить в README «Metrics».
+- Пробный прогон 3 раза (2026-11-05): 3/3 verified, подмена отвергнута 3/3, аттестация медиана 3.8 с, ответ 1.4 с,
+  подпись 0.6 с, весь прогон ~10 с, 293 Б шифртекста туда и 841 Б обратно. Чтение `latest_keys` заняло 3.3 с, что для
+  view-запроса много; см. замер RPC ниже.

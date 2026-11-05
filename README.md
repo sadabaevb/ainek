@@ -211,7 +211,12 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-<!-- TODO: table from the Nov 10–11 run: verification time, fail-closed outcomes (honest vs tampered key), false policy blocks, time-to-execute, gas per proof/action -->
+<!-- TODO Nov 10–11: paste the table printed by `pnpm demo:metrics --runs 50` (it also writes docs/metrics.json); add the policy-block and time-to-execute rows from the Tier 2 run if it ships -->
+
+Measured by `pnpm demo:metrics --runs N`: N live runs from Node, each with a fresh attestation, the public-log check with the
+honest and a swapped key, one E2EE exchange, the signature and the proof. The on-chain commit is measured once, not per run:
+`commit_proof` burnt 2.41 TGas (0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR) in
+[8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM).
 
 ## Repository
 
