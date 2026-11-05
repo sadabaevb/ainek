@@ -140,9 +140,11 @@ function VerifyInner() {
       {error && <p className="card red">{error}</p>}
 
       {result && (
-        <section className={`card ${result.report.ok ? '' : 'red'}`}>
-          <h3>{result.report.ok ? tv.ok : tv.failed}</h3>
-          <p className="muted small">{tv.source(tv.origin[result.origin])}</p>
+        <section className="card">
+          <header className={`card-head${result.report.ok ? '' : ' bad'}`}>
+            <span>{result.report.ok ? tv.ok : tv.failed}</span>
+            <span className="when">{tv.source(tv.origin[result.origin])}</span>
+          </header>
           <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">

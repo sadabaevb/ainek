@@ -60,17 +60,31 @@ const TurnView = memo(function TurnView({ turn, idx, onCommit }: { turn: Turn; i
   );
 });
 
-/** First screen: what the page is about and the three catches as one-click prompts. Shown until the first message. */
+const DOT: Record<Chip, 'ok' | 'fail' | 'warn'> = { ask: 'ok', tamper: 'fail', incognito: 'warn' };
+
+/** First screen: what the page is about and the three catches as one-click scenarios. Shown until the first message. */
 function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
   const { t } = useT();
   const chips = Object.keys(t.intro.chips) as Chip[];
   return (
-    <section className="card intro">
-      <h2>{t.intro.title}</h2>
-      <ol>{t.intro.lines.map((line) => <li key={line}>{line}</li>)}</ol>
+    <section>
+      <div className="hero">
+        <h1>{t.hero[0]} <span className="grad">{t.hero[1]}</span></h1>
+        <p>{t.intro.title}</p>
+      </div>
+      <ol className="steps-grid">
+        {t.intro.lines.map((line, i) => (
+          <li key={line} className="step"><span className="num">{i + 1}</span><div>{line}</div></li>
+        ))}
+      </ol>
       <p className="try">{t.intro.tryTitle}</p>
-      <div className="chips">
-        {chips.map((chip) => <button key={chip} type="button" className="btn chip" onClick={() => onPick(chip)}>{t.intro.chips[chip]}</button>)}
+      <div className="scenarios">
+        {chips.map((chip) => (
+          <button key={chip} type="button" className="scenario" onClick={() => onPick(chip)}>
+            <span className="title"><span className={`dot ${DOT[chip]}`} aria-hidden />{t.intro.chips[chip]}</span>
+            <span className="sub">{t.intro.subs[chip]}</span>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -138,12 +152,7 @@ export default function ChatPage() {
 
   return (
     <main className="page">
-      <header className="top">
-        <h1>Ainek</h1>
-        <p className="muted">{t.tagline}</p>
-      </header>
-
-      {turns.length === 0 && <Intro onPick={pick} />}
+      {turns.length === 0 ? <Intro onPick={pick} /> : <h1 className="small muted">{t.tagline}</h1>}
 
       <div className="controls">
         <label className="field">
@@ -170,8 +179,10 @@ export default function ChatPage() {
           void send(input, { model, tamper });
         }}
       >
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t.placeholder} disabled={busy} maxLength={4000} />
-        <button type="submit" className="btn primary" disabled={busy || !input.trim()}>{busy ? t.working : t.send}</button>
+        <div className="composer-inner">
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={t.placeholder} disabled={busy} maxLength={4000} />
+          <button type="submit" className="btn primary" disabled={busy || !input.trim()}>{busy ? t.working : t.send}</button>
+        </div>
       </form>
     </main>
   );

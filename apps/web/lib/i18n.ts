@@ -7,6 +7,7 @@ export const LANG_COOKIE = 'ainek.lang';
 
 const en = {
   tagline: 'Ask a private model. Get a proof you can check yourself.',
+  hero: ['Ask a private model.', 'Get a proof you can check yourself.'],
   model: 'Model',
   teeModel: 'Private TEE model',
   incognitoModel: 'Incognito model (no hardware proof): demo of the red card',
@@ -67,6 +68,7 @@ const en = {
     ],
     tryTitle: 'Try one of the three catches',
     chips: { ask: 'Ask a private question', tamper: 'Swap the key before sending', incognito: 'A model without hardware proof' },
+    subs: { ask: 'Encrypted to the attested key, answered with a proof you can re-check.', tamper: 'The fail-closed rule: nothing leaves the browser.', incognito: 'Privacy by contract only, and the card says so.' },
     prompts: { ask: 'In two sentences: what is a TEE, and why would I want my AI to run inside one?', tamper: 'hello', incognito: 'hello' },
   },
   progress: {
@@ -125,7 +127,7 @@ const en = {
   verify: {
     title: 'Verify a proof',
     intro: 'Paste a proof, drop a disclosure file, or pick one of the exchanges this browser has kept. Hashes are recomputed here, the signature is checked here, and the log entry is re-read from the public log. Received a disclosure from someone else? {auditor} says what it proves.',
-    placeholder: '{"v":1,"kind":"model",...}  or the "Disclose to auditor" file',
+    placeholder: 'Paste a proof JSON or a "Disclose to auditor" file here, or drop the file onto this box',
     verify: 'Verify',
     kept: (n: number) => `Exchanges kept in this browser (${n})`,
     noExchange: (id: string) => `no exchange ${id} in this browser's store`,
@@ -139,6 +141,7 @@ const en = {
   },
   auditor: {
     intro: 'Someone sent you a "Disclose to auditor" file: one exchange, its proof with the salt, the exact bytes and the log entry. This page recomputes the hashes and the commit here, re-reads the log entry from the public log on NEAR, and looks the commit up on-chain. The file is read in this browser and not uploaded.',
+    placeholder: 'Paste the disclosure file here, or drop it onto this box',
     accountPlaceholder: 'NEAR account that committed (optional), e.g. alice.testnet',
     check: 'Check',
     checking: 'Checking…',
@@ -188,6 +191,7 @@ const en = {
 
 const ru: typeof en = {
   tagline: 'Спроси приватную модель. Получи proof, который проверишь сам.',
+  hero: ['Спроси приватную модель.', 'Получи proof, который проверишь сам.'],
   model: 'Модель',
   teeModel: 'Приватная TEE-модель',
   incognitoModel: 'Incognito-модель (без аппаратного доказательства): демо красной карточки',
@@ -248,6 +252,7 @@ const ru: typeof en = {
     ],
     tryTitle: 'Попробуй один из трёх сценариев',
     chips: { ask: 'Задать приватный вопрос', tamper: 'Подменить ключ перед отправкой', incognito: 'Модель без аппаратного доказательства' },
+    subs: { ask: 'Зашифровано на аттестованный ключ, ответ приходит с proof, который можно перепроверить.', tamper: 'Правило fail-closed: из браузера ничего не уходит.', incognito: 'Приватность только по договору, и карточка так и скажет.' },
     prompts: { ask: 'В двух предложениях: что такое TEE и зачем мне, чтобы мой ИИ работал внутри него?', tamper: 'hello', incognito: 'hello' },
   },
   progress: {
@@ -306,7 +311,7 @@ const ru: typeof en = {
   verify: {
     title: 'Проверить proof',
     intro: 'Вставь proof, загрузи файл раскрытия или выбери один из обменов, которые хранит этот браузер. Хеши пересчитываются здесь, подпись проверяется здесь, запись лога перечитывается из публичного лога. Получил файл раскрытия от кого-то другого? {auditor} скажет, что он доказывает.',
-    placeholder: '{"v":1,"kind":"model",...}  или файл «Раскрыть аудитору»',
+    placeholder: 'Вставь JSON proof или файл «Раскрыть аудитору», либо перетащи файл сюда',
     verify: 'Проверить',
     kept: (n) => `Обмены, сохранённые в этом браузере (${n})`,
     noExchange: (id) => `обмена ${id} нет в хранилище этого браузера`,
@@ -320,6 +325,7 @@ const ru: typeof en = {
   },
   auditor: {
     intro: 'Тебе прислали файл «Раскрыть аудитору»: один обмен, его proof с солью, точные байты и запись лога. Эта страница пересчитывает хеши и коммит здесь, перечитывает запись лога из публичного лога в NEAR и ищет коммит в цепочке. Файл читается в этом браузере и никуда не загружается.',
+    placeholder: 'Вставь файл раскрытия сюда или перетащи его в это поле',
     accountPlaceholder: 'NEAR-аккаунт, который записал коммит (необязательно), например alice.testnet',
     check: 'Проверить',
     checking: 'Проверяю…',

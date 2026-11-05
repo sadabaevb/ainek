@@ -1,10 +1,33 @@
 'use client';
 // The paste box and the "Load file" button shared by /verify and /auditor. The file is read in the browser, never uploaded.
+// A file can also be dropped straight onto the box.
+import { useState, type DragEvent } from 'react';
 import { useT } from '@/app/providers';
 import { describeError } from '@/lib/errors';
 
 export function JsonTextarea({ value, onChange, placeholder }: { value: string; onChange: (text: string) => void; placeholder: string }) {
-  return <textarea className="json" value={value} onChange={(e) => onChange(e.target.value)} rows={6} placeholder={placeholder} />;
+  const [over, setOver] = useState(false);
+  const drop = (e: DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    setOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) void file.text().then(onChange);
+  };
+  return (
+    <textarea
+      className={`json${over ? ' drop' : ''}`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={drop}
+      rows={6}
+      placeholder={placeholder}
+    />
+  );
 }
 
 export function LoadFileButton({ onText, onError }: { onText: (text: string) => void; onError: (message: string) => void }) {

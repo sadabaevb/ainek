@@ -3,6 +3,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { LangToggle } from '@/components/lang-toggle';
+import { Logo } from '@/components/logo';
+import { NavLinks } from '@/components/nav-links';
 import { WalletButton } from '@/components/wallet-button';
 import { readPublicConfig } from '@/lib/config.server';
 import { LANG_COOKIE, dict, type Lang } from '@/lib/i18n';
@@ -19,19 +21,24 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const nav = dict[lang].nav;
   return (
     <html lang={lang}>
+      <head>
+        {/* Inter when the network allows; the font stack falls back to the system font otherwise, nothing blocks on it. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+      </head>
       <body>
         <Providers config={config} lang={lang}>
-          <nav className="nav">
-            <Link href="/" className="brand">Ainek</Link>
-            <Link href="/log">{nav.log}</Link>
-            <Link href="/verify">{nav.verify}</Link>
-            <Link href="/auditor">{nav.auditor}</Link>
-            <Link href="/trust">{nav.trust}</Link>
-            <span className="right">
-              <WalletButton />
-              <LangToggle />
-            </span>
-          </nav>
+          <header className="nav">
+            <div className="nav-inner">
+              <Link href="/" className="brand"><Logo /> Ainek</Link>
+              <NavLinks items={[{ href: '/log', label: nav.log }, { href: '/verify', label: nav.verify }, { href: '/auditor', label: nav.auditor }, { href: '/trust', label: nav.trust }]} />
+              <span className="right">
+                <WalletButton />
+                <LangToggle />
+              </span>
+            </div>
+          </header>
           {children}
         </Providers>
       </body>

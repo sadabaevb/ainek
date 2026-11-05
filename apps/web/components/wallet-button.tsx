@@ -4,14 +4,19 @@ import { useNearWallet } from 'near-connect-hooks';
 import { useConfig, useT } from '@/app/providers';
 import { fcKeyLogin } from '@/lib/wallet';
 
+/** Implicit (hex) accounts are 64 characters; named ones are short enough to show whole. */
+const shortAccount = (id: string) => (id.length > 24 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id);
+
 export function WalletButton() {
   const cfg = useConfig();
   const { t } = useT();
   const { signedAccountId, signIn, signOut, loading } = useNearWallet();
   if (signedAccountId) {
     return (
-      <span className="muted small wallet">
-        <span className="mono">{signedAccountId}</span> <button type="button" className="btn small" onClick={() => void signOut()}>{t.disconnect}</button>
+      <span className="wallet">
+        <span className="dot" aria-hidden />
+        <span className="mono" title={signedAccountId}>{shortAccount(signedAccountId)}</span>
+        <button type="button" className="btn small" onClick={() => void signOut()}>{t.disconnect}</button>
       </span>
     );
   }

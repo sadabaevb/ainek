@@ -64,9 +64,11 @@ function VerdictCard({ d, report, cfg }: Result & { cfg: PublicConfig }) {
   const title = !report.ok ? ta.verdictFail : logEntry.status === 'ok' ? ta.verdictOk : ta.verdictLocal;
 
   return (
-    <section className={`card ${report.ok ? '' : 'red'}`}>
-      <h3>{title}</h3>
-      <p className="muted small">{ta.when(utcMinute(proof.verifiedAt), utcMinute(d.disclosedAt))}</p>
+    <section className="card">
+      <header className={`card-head${report.ok ? '' : ' bad'}`}>
+        <span>{title}</span>
+        <span className="when">{ta.when(utcMinute(proof.verifiedAt), utcMinute(d.disclosedAt))}</span>
+      </header>
       <Row status={commit.status} label={ta.rowCommit}>{commit.detail}</Row>
       <Row status={bytes.status} label={ta.rowBytes}>{bytes.detail}</Row>
       <Row status={signed.status} label={ta.rowSigned}>{signed.detail}</Row>
@@ -101,13 +103,15 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
   return (
     <section>
       <h2>{ta.disclosedTitle}</h2>
-      <table className="kv">
-        <tbody>
-          {rows.map(([k, v]) => (
-            <tr key={k}><th>{k}</th><td>{v}</td></tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="table-wrap">
+        <table className="kv">
+          <tbody>
+            {rows.map(([k, v]) => (
+              <tr key={k}><th>{k}</th><td>{v}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -164,7 +168,7 @@ export default function AuditorPage() {
       <p className="muted">{ta.intro}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} placeholder='{"v":1,"kind":"disclosure",...}' />
+        <JsonTextarea value={text} onChange={setText} placeholder={ta.placeholder} />
         <input type="text" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={ta.accountPlaceholder} />
         <div className="actions">
           <button type="button" className="btn primary" onClick={() => void run()} disabled={busy || !text.trim()}>{busy ? ta.checking : ta.check}</button>
