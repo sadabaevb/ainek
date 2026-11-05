@@ -89,6 +89,25 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  services/verifier:
+    dependencies:
+      '@ainek/proof':
+        specifier: workspace:*
+        version: link:../../packages/proof
+      '@nearai/inference-sdk':
+        specifier: 0.2.1
+        version: 0.2.1(typescript@5.9.3)(ws@8.21.0)(zod@4.6.7)
+      near-api-js:
+        specifier: 7.4.0
+        version: 7.4.0
+    devDependencies:
+      '@types/node':
+        specifier: 24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
 packages:
 
   '@adraffy/ens-normalize@1.11.1':

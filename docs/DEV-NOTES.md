@@ -652,3 +652,83 @@ plaintext-маршрута только `send`. Фаза падения — чи
   ходов.
 - `docs/DEPLOY.md`: хостинг на Vercel. `next build` на 2026-11-05 проходит с чистого клона. `DEMO_TAMPER_KEY` удалён
   из `.env.example`: переменную никто не читал, tamper это клиентский переключатель.
+## 2026-11-04 — спайк B (OutLayer): прогон прошёл, аттестация проверена — Дастан
+
+FastFS ожил (`test.fastfs.io` отдаёт наш wasm, HTTP 200, sha256 совпадает с локальной сборкой). Два прогона
+`outlayer run ainek-dev-dastan.testnet/policy '{…}' --target wasm32-wasip1` в режиме NEAR:
+
+| run | вход | выход | tx | job_id | списано |
+|---|---|---|---|---|---|
+| 3 | `{"action":{"amount":"300"},"cap":"500"}` | `{"verdict":"Allow"}` | `DFnTFr9GBt2wxKZi1c2tVXmhuLoB6kS1YNfHVmVgrZAc` | 19003 | 0.00114 NEAR (из депозита 0.002, остаток вернулся) |
+| 4 | `{"action":{"amount":"900"},"cap":"500"}` | `{"verdict":"Deny"}`  | `CLjjrtdscmHAZz2mCisYBJ9S1YKH4mgbbyGoV79WdWpt` | 19006 | 0.00102 NEAR (wasm уже в кэше) |
+
+Ресурсы: 9.2 k инструкций, 192 мс; первая компиляция 1.2 с. Сырые receipts и аттестации — `docs/spike-outlayer/run{3,4}-*.json`.
+
+**Как достать аттестацию** (в доках только «кнопка View Attestation»): публичный API координатора
+`GET https://testnet-api.outlayer.ai/attestations/<job_id>` (job_id — из `GET /public/jobs?project=<owner>/<name>`).
+Поля: `tdx_quote` (base64, 5006 байт), `worker_measurement` (RTMR3), `wasm_hash` = `executed_wasm_sha256`,
+`input_hash`, `output_hash`, `transaction_hash`, `block_height`, `caller_account_id`, `project_id`, `timestamp`.
+Проверено скриптом (python, без доверия к дашборду): `sha256(stdin)` == `input_hash`, `sha256(stdout)` == `output_hash`,
+`wasm_hash` == sha256 нашего `.wasm`, и **Task Hash == REPORTDATA[568:600] квоты** для обоих прогонов. Раскладка
+Task Hash (из js дашборда, в доках неполная): `sha256(task_type ‖ task_id i64 LE ‖ [repo_url ‖ commit_hash ‖] build_target
+‖ wasm_hash ‖ input_hash ‖ output_hash (hex как UTF-8) ‖ block_height u64 LE ‖ caller_account_id ‖ project_id ‖ [secrets_ref ‖]
+timestamp i64 LE ‖ attached_usd)`; хвост REPORTDATA — 32 нуля. Цепочку подписи квоты до Intel и `is_measurements_approved`
+на `worker.outlayer.*` мы не проверяли — это делает кнопка «Verify» дашборда (DCAP в wasm), для /verify-страницы хватит
+ссылки на неё плюс наших трёх хэшей.
+
+**Для контракта (SPEC §4.2 / Tier 2):** `request_execution` принимает `source: Project{project_id}`, `resource_limits: {}`
+(обязательно, иначе ничего не выполняется), `input_data`, `secrets_ref: {account_id, profile}`, `response_format: Json`;
+результат приходит в callback-promise (`env::promise_result(0)`), плюс события `execution_requested`/`execution_completed`
+стандарта `near-outlayer`. В `execution_completed` есть `code_source.hash` — это и есть привязка решения к сборке политики.
+
+**(г) живой формат `PROTECTED_*:ed25519` — проверен.** Job расширен (`jobs/policy`, версия `882c5c5a…`, upload tx
+`5vW8XnqibHZwettQmrZSjTTQvcErPWraK3J2iCdkFMYJ`): если в env есть `PROTECTED_SIGNING_KEY`, в выход добавляется `key` —
+длина/префикс/какие декодирования дают 32 или 64 байта, публичный ключ и подпись над `"ainek spike B"`; сам секрет никогда
+не печатается (юнит-тест). Секрет создан вручную: `outlayer secrets set --project ainek-dev-dastan.testnet/policy
+--generate PROTECTED_SIGNING_KEY:ed25519` (профиль `default`). Прогон с `--secrets-account ainek-dev-dastan.testnet
+--secrets-profile default`, tx `9CKuwxWJWANzbfEnfBiEmdMQc3p9FgSq9R8vjuLd4E6s`, job 19025:
+
+- Значение в env: **`ed25519:<base58(32-байтный seed RFC 8032)>`**, 52 символа (NEAR-формат, но только seed, без публичного
+  ключа — `b58=32`). Читается `ed25519-dalek::SigningKey::from_bytes(seed)`.
+- Публичный ключ `cfce3d5780ebc330116014731e9f3409e7a9a23cb986dd1dbf9c6477c1c3a043`; подпись проверена офлайн `tweetnacl`
+  → `true`. Контракт сможет проверять такие подписи нативно через `env::ed25519_verify` (~1 TGas).
+- Аттестация этого прогона (`run5-secret-allow.attestation.json`): `wasm_hash` = новая сборка, `secrets_ref` =
+  `ainek-dev-dastan.testnet/default` входит в Task Hash, Task Hash == REPORTDATA. Т.е. квота связывает решение и с кодом
+  политики, и с тем, какой именно секрет (ключ) был подключён.
+- Следствие для SPEC §6: `policy_pubkey` в контракт пишем один раз (owner), получив его из первого прогона job; привязка
+  секрета к сборке — `secrets set --build <wasm sha256>`, иначе любая новая версия job прочитает тот же ключ.
+
+## 2026-11-05 — контракт v2 (proof commits) задеплоен, ежедневный log_key — Дастан
+
+- `ainek-log-dastan.testnet` обновлён до v2 одним tx `7NdG7S1UhDeUXTycb8r51jRPiMxD4PxgSLw1g9ycsdfj` (deploy + `migrate`):
+  старые коллекции сохранили префиксы, добавлены `commits` (`"<account>/<commit>"` → `{kind, log_index, block_height}`) и
+  `storage_credit` (yoctoNEAR на аккаунт). Лог ключей не тронут. SPEC §4.2: `commit_proof(commit, kind, log_index)` без
+  депозита (под FC-ключ), `deposit_storage()` payable полным ключом, view `proof_commit`, `storage_balance_of`, событие
+  `proof_committed`. Списывается ровно `storage_byte_cost × добавленные байты`; без предоплаты — `not enough prepaid storage`.
+  `log_index` должен существовать; повтор того же commit от того же аккаунта отвергается. Тесты: 15 unit + sandbox e2e
+  с настоящим FC-ключом, ограниченным `commit_proof`.
+- Для клиента: перед первым `commit_proof` аккаунт один раз вызывает `deposit_storage` полным ключом (0.01 NEAR хватит на
+  ~100 коммитов); остаток виден через `storage_balance_of`.
+- Свежие записи для `z-ai/glm-5.3-flash`: #1 tx `881Zaugh4ok9VU2FyVYdnJQN8fm3ZDd3aqeHVoBina2P`, #2 tx
+  `43xy1qkUhuV5cmm88RSrKX2whTUCqXy9WBeXehrXmMUP`. До демона — `contracts/ainek/scripts/log-key-stopgap.sh` в crontab Дастана
+  (09:00 ежедневно, лог `~/.ainek-log-key.log`); это та же запись из test-vectors со свежим `observed_at`, не живой
+  отчёт — убрать, когда заработает `services/verifier`.
+
+## 2026-11-05 — верификатор `services/verifier` (демон) — Дастан
+
+Node 24 + TS без сборки (`node src/main.ts`, как в `apps/demo`). Цикл на модель: nonce 32 байта → сырой
+`GET /v1/attestation/report?model=…&signing_algo=ed25519&nonce=…` (**без API-ключа**: эндпоинт публичный, независимому
+верификатору ключ NEAR AI не нужен) → `verifyModelAttestation` из SDK (DCAP с живым collateral, NRAS, nonce и ключ в
+report_data, compose vs MRCONFIGID, RTMR3; policy `AINEK_ACCEPTED_TCB`, GPU required) → `buildKeyEntryInput` из
+`packages/proof` (одна реализация для всех верификаторов; `report_hash` = sha256 точных байт ответа) → дедуп: та же
+`signing_address` + `compose_hash` от нас за 6 ч (`latest_keys` с окном 6 ч) — не пишем → `log_key` через near-api-js 7
+(`Account` + `KeyPairSigner`, 30 TGas) → отчёт в `services/verifier/data/reports/<report_hash>.json` (gitignored).
+Не прошедшая проверку модель просто не логируется (fail-closed), процесс не падает.
+
+Живая проверка 5.11 без ключа контракта (`attestModel`): 4.9 с, GPU verified, TCB UpToDate, ключ `5a0210f2…caff`,
+compose `5f7ebd85…`, 4 image digests — совпадает с тем, что в логе. Конфиг только из env (`.env.example`, раздел
+Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VERIFIER_INTERVAL_MIN`, опц. `VERIFIER_DATA_DIR`.
+`pnpm -F verifier once` / `start`, bin `ainek-verify`, Dockerfile (multi-stage, node:24-slim). Тесты офлайн на
+`docs/samples/attestation-report.json`: 4/4. Ещё нет: `nras_result_hash`/`ita_jwt_hash` = "" (SDK не отдаёт JWT),
+скрипт split-view-demo, GitHub Action для ghcr, запуск под `ainek-dev-dastan.testnet` — нужен `VERIFIER_PRIVATE_KEY` в
+корневом `.env` (экспорт из keychain делает Дастан руками, не Claude).

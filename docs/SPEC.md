@@ -153,9 +153,14 @@ demo; the log format and the client policy do not depend on it».
 
 ### 4.2 Коммиты proof-ов
 ```
-commit_proof(commit: String, kind: String, log_index: u64)       // any account; FC key allowed
-view proof_commit(account: AccountId, commit: String) -> Option<{ kind, log_index, block_height }>
+commit_proof(commit: String, kind: String, log_index: u64)       // any account; FC key allowed; no deposit
+deposit_storage() -> U128                                          // payable, full-access key; prepays the caller's commits
+view proof_commit(account: AccountId, commit: String) -> Option<{ kind: String, log_index: u64, block_height: u64 }>
+view storage_balance_of(account: AccountId) -> U128                // yoctoNEAR left, decimal string
 ```
+`commit_proof` требует `log_index < len(log)` (proof ссылается на существующую запись лога), отвергает повтор того же
+`commit` от того же аккаунта и списывает ровно стоимость добавленных байт из предоплаты аккаунта
+(`storage_byte_cost × added_bytes`); без предоплаты падает с `not enough prepaid storage`.
 `commit = sha256(salt_32_bytes || canonical_json(Proof))` hex, где `Proof` — proof **без** полей `salt`, `commit`, `commitTx`
 (они появляются после коммита и не могут входить в него); `salt_32_bytes` — сырые байты соли, не hex-текст.
 Эталон: `docs/test-vectors/canonical.json` → `commits.proof_commit` (TS: `commitOf`). `kind` = `"model" | "action"`.
