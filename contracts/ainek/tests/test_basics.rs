@@ -139,5 +139,86 @@ async fn key_log_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .data;
     assert!(stale.is_empty(), "a 1 ns window admits nothing: fail-closed on age");
 
+    // u64::MAX = "no age limit" (the /log page). Must not overflow and must return everything.
+    let unlimited: Vec<Value> = contract
+        .call_function("latest_keys", json!({ "model": model, "max_age_ns": u64::MAX.to_string() }))
+        .read_only()
+        .fetch_from(&network)
+        .await?
+        .data;
+    assert_eq!(unlimited.len(), 2, "u64::MAX window returns every entry for the model");
+
+    // ---- proof commits (SPEC §4.2), the way the web client does it ---------------------------
+    // Wallet login adds a function-call key to alice's account that may only call `commit_proof`
+    // on the contract; the chat then commits with that key, never asking the wallet again.
+    let alice = create_subaccount(&sandbox, "alice.sandbox").await?;
+    let fc_secret = near_api::signer::generate_secret_key()?;
+    let fc_signer = near_api::Signer::from_secret_key(fc_secret.clone())?;
+    alice
+        .add_key(
+            near_api::types::AccessKeyPermission::FunctionCall(
+                near_api::types::transaction::actions::FunctionCallPermission {
+                    allowance: Some(NearToken::from_millinear(250)),
+                    receiver_id: contract.account_id().to_string(),
+                    method_names: vec!["commit_proof".into()],
+                },
+            ),
+            fc_secret.public_key(),
+        )
+        .with_signer(signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+
+    let commit = "f415f768dc1fa81dfed5a6d1cf421f90b7fa70bba60f7815ea32f995b5810dbf";
+    let commit_args = json!({ "commit": commit, "kind": "model", "log_index": 1 });
+
+    // No prepaid storage yet: the FC-key call must fail (nobody fills our storage for free).
+    contract
+        .call_function("commit_proof", commit_args.clone())
+        .transaction()
+        .with_signer(alice.account_id().clone(), fc_signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_failure();
+
+    // Alice's full-access key prepays storage once (an FC key cannot attach a deposit).
+    contract
+        .call_function("deposit_storage", ())
+        .transaction()
+        .deposit(NearToken::from_millinear(100))
+        .with_signer(alice.account_id().clone(), signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+
+    contract
+        .call_function("commit_proof", commit_args)
+        .transaction()
+        .with_signer(alice.account_id().clone(), fc_signer)
+        .send_to(&network)
+        .await?
+        .assert_success();
+
+    let stored: Value = contract
+        .call_function("proof_commit", json!({ "account": alice.account_id(), "commit": commit }))
+        .read_only()
+        .fetch_from(&network)
+        .await?
+        .data;
+    assert_eq!(stored["kind"], "model");
+    assert_eq!(stored["log_index"], 1);
+    assert!(stored["block_height"].as_u64().unwrap() > 0);
+
+    let credit: String = contract
+        .call_function("storage_balance_of", json!({ "account": alice.account_id() }))
+        .read_only()
+        .fetch_from(&network)
+        .await?
+        .data;
+    let credit: u128 = credit.parse()?;
+    let deposited = NearToken::from_millinear(100).as_yoctonear();
+    assert!(credit < deposited && credit > deposited * 9 / 10, "one commit costs a sliver of 0.1 NEAR");
+
     Ok(())
 }
