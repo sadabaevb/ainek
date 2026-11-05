@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildKeyEntryInput, imageDigestsOf, type BuildKeyEntryInputParams } from './key-entry.ts';
+import { buildKeyEntryInput, composeHashOf, imageDigestsOf, type BuildKeyEntryInputParams } from './key-entry.ts';
 import { entryHashOf } from './commit.ts';
+import { sha256Hex } from './hash.ts';
 import { readRepoFile, readRepoJson } from './fixtures.ts';
 import type { RawReport } from './report.ts';
 import type { KeyEntry, KeyEntryInput } from './schema.ts';
@@ -50,6 +51,14 @@ test('compose hash falls back to sha256(app_compose); NRAS / ITA hashes are set 
   const b = build({ nrasJwt: 'eyJ.jwt', itaJwt: 'ita' });
   assert.equal(b.nras_result_hash.length, 64);
   assert.equal(b.ita_jwt_hash.length, 64);
+});
+
+test('composeHashOf: the measured value wins; absent or empty, the hash of app_compose; always in the logged form', () => {
+  const measured = 'cd'.repeat(32);
+  const hashed = sha256Hex('compose');
+  assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: { composeHash: `0x${measured.toUpperCase()}` } }), measured);
+  assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: {} }), hashed);
+  assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: { composeHash: '' } }), hashed);
 });
 
 test('refuses to build an entry that would pin nothing', () => {

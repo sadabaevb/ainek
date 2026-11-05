@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { memo, useMemo, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { composeHashOf, toDisclosure, type KeyLogReason } from '@ainek/proof';
+import { composeHashOf, normalizeHex, toDisclosure, type KeyLogReason } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
 import { canCommitNow, commitAction, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { commitLabel } from '@/lib/commit-label';
@@ -83,7 +83,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
       <CardHead status="ok" when={utcMinute(exchange.sentAt)}>{t.cardVerified}</CardHead>
       <Row status="ok" label={t.rowModel} hint={hint('model')}>{proof.model}, {t.attested} (compose {short(composeHash)})</Row>
       <Row status="ok" label={t.rowHardware} hint={hint('hardware')}>Intel TDX {m.tcbStatus}, NVIDIA GPU {m.gpuEvidence} ({deployment.tookMs === 0 ? t.cached : `${t.checkedInBrowser}, ${seconds(deployment.tookMs)}`})</Row>
-      <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}</Row>
+      <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}{normalizeHex(logEntry.compose_hash) === composeHash ? '' : ` (${t.otherCompose})`}</Row>
       <Row status="ok" label={t.rowHashes} hint={hint('hashes')}>{t.hashesOk}</Row>
       <Row status="ok" label={t.rowE2ee} hint={hint('e2ee')}>{t.e2eeYes}</Row>
       <Row status={proof.commitTx || outcome.commit === 'committed' ? 'ok' : 'skipped'} label={t.rowChain} hint={hint(proof.commitTx || outcome.commit === 'committed' ? 'chain' : 'chainPending')}>

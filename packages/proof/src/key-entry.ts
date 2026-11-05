@@ -15,9 +15,9 @@ export interface VerifiedModelEvidence {
   report: { nonce: string };
 }
 
-/** The compose hash of a verified deployment: the measurement from the quote, without one sha256(app_compose) (SPEC §4.1). */
+/** The compose hash of a verified deployment: the value of the RTMR3 `compose-hash` event, without one (absent or empty) sha256(app_compose), which the SDK checks against MRCONFIGID. */
 export function composeHashOf(deployment: VerifiedModelEvidence['deployment']): string {
-  return normalizeHex(deployment.runtimeMeasurements.composeHash ?? sha256Hex(deployment.appCompose));
+  return normalizeHex(deployment.runtimeMeasurements.composeHash || sha256Hex(deployment.appCompose));
 }
 
 export interface BuildKeyEntryInputParams {

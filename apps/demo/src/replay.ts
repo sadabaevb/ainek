@@ -7,7 +7,7 @@ import {
   verifyModelResponse,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { DEMO_SWAPPED_KEY, ainekConfigFromEnv, evaluateKeyLog, shortHex as short, verifyModelProof, type KeyEntry } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, ainekConfigFromEnv, composeHashOf, evaluateKeyLog, shortHex as short, verifyModelProof, type KeyEntry } from '@ainek/proof';
 import { loadRecording } from './evidence.ts';
 import { FAIL, NA, OK, describe, head, markOf, line as say } from './term.ts';
 import { toGatewayAttestation, toModelAttestation } from './report.ts';
@@ -46,7 +46,7 @@ try {
   const g = gpu as RecordedGpuVerdict | null;
   line(OK, `Intel TDX quote verified with recorded collateral (evaluated at ${rec.manifest.evidenceRecordedAt.slice(0, 16)}Z): TCB ${verifiedModel.tcbStatus}, advisories ${verifiedModel.advisoryIds.length === 0 ? 'none' : verifiedModel.advisoryIds.join(',')}, debug off`);
   line(OK, `nonce ${short(model.request_nonce)} and signing key ${short(verifiedModel.signer.signingAddress)} bound in the TDX report data`);
-  line(OK, `app_compose matches MRCONFIGID, RTMR3 event log replayed: compose ${short(verifiedModel.deployment.runtimeMeasurements.composeHash ?? '')}`);
+  line(OK, `app_compose matches MRCONFIGID, RTMR3 event log replayed: compose ${short(composeHashOf(verifiedModel.deployment))}`);
   line(OK, `NVIDIA GPU evidence: NRAS verdict signed by NVIDIA key ${g ? g.kid.slice(0, 24) : '?'}…, nonce matches, overall result true${g ? `, ${g.hwmodel} ×${g.gpus}` : ''}`);
   line(verifiedModel.deployment.composeManager ? OK : NA, verifiedModel.deployment.composeManager ? 'compose manager attestation (deployment actions) verified' : 'no compose manager attestation in this report');
   line(NA, `freshness not re-checked: this is a recording (NRAS token issued ${at.toISOString().slice(0, 16)}Z); live mode re-attests with a fresh nonce`);
@@ -81,7 +81,7 @@ const verdict = evaluateKeyLog(entries, {
   signingAddress: seenKey,
   trustedVerifiers: TRUSTED_VERIFIERS,
   quorum: QUORUM,
-  ...(verifiedModel?.deployment.runtimeMeasurements.composeHash === undefined ? {} : { composeHash: verifiedModel.deployment.runtimeMeasurements.composeHash }),
+  ...(verifiedModel ? { composeHash: composeHashOf(verifiedModel.deployment) } : {}),
 });
 if (verdict.status === 'ok') {
   const e = verdict.matching[0] as KeyEntry;
@@ -117,7 +117,7 @@ if (!shown) throw new Error('recording has no exchanges');
 const { exchange: e2ee, report } = shown;
 
 // 5. The card a person sees.
-const composeHash = verifiedModel?.deployment.runtimeMeasurements.composeHash ?? model.info.tcb_info.compose_hash;
+const composeHash = verifiedModel ? composeHashOf(verifiedModel.deployment) : model.info.tcb_info.compose_hash;
 const g = gpu as RecordedGpuVerdict | null;
 console.log('\n┌─ Ainek proof card ─ replay ─────────────────────────────────────────');
 console.log(`│ ${verifiedModel ? OK : FAIL} Model: ${model.model_name}, attested deployment (compose ${short(composeHash)})`);

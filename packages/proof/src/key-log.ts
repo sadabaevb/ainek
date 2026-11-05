@@ -104,7 +104,9 @@ const verifiersOf = (entries: readonly KeyEntry[]): string[] => [...new Set(entr
  */
 export function proofEntryOf(verdict: KeyLogVerdict, composeHash: string): KeyEntry {
   const compose = normalizeHex(composeHash);
-  return (verdict.matching.find((e) => normalizeHex(e.compose_hash) === compose) ?? verdict.matching[0]) as KeyEntry;
+  const entry = verdict.matching.find((e) => normalizeHex(e.compose_hash) === compose) ?? verdict.matching[0];
+  if (!entry) throw new Error('the verdict has no log entry for a proof to point at');
+  return entry;
 }
 
 

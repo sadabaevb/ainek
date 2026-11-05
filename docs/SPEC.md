@@ -137,8 +137,8 @@ entry_hash = sha256(prev_hash || canonical_json(KeyEntryInput) || verifier)   //
 
 **Соглашения верификатора** (реализованы в `buildKeyEntryInput`, `packages/proof`; любой верификатор, включая чужой `v3`, обязан
 давать те же байты): все hex-поля — без `0x`, в нижнем регистре; `signing_public_key` = ключ из отчёта, для ed25519 равен
-`signing_address`, для ecdsa без ключа запись не создаётся; `compose_hash` = измерение из квоты (MRCONFIGID), при его
-отсутствии `sha256(app_compose)`; `image_digests` — только из строк `image:` compose-файла, в порядке первого появления,
+`signing_address`, для ecdsa без ключа запись не создаётся; `compose_hash` = значение события `compose-hash` из RTMR3, если оно пустое или его
+нет, `sha256(app_compose)` (его SDK сверяет с MRCONFIGID); `image_digests` — только из строк `image:` compose-файла, в порядке первого появления,
 без дублей, пустой список — отказ логировать; `nonce` — тот, что SDK сверил с `report_data`; `report_hash` — sha256 точных
 байт ответа `/v1/attestation/report`; `nras_result_hash` может быть `""`, если верификатор использовал встроенный GPU-верификатор
 SDK (он не отдаёт JWT), и обязателен, если верификатор сам ходил в NRAS; `observed_at` — целые unix-миллисекунды.

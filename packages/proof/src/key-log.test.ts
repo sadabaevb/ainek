@@ -18,6 +18,7 @@ test('proofEntryOf: the newest entry with the attested compose, else the newest 
   assert.equal(proofEntryOf(verdict, composeB).index, 5);
   assert.equal(proofEntryOf(verdict, `0x${composeA.toUpperCase()}`).index, 4, 'hex spelling does not matter');
   assert.equal(proofEntryOf(verdict, composeC).index, 5, 'a compose nobody logged is not a refusal');
+  assert.throws(() => proofEntryOf(evaluateKeyLog([], base), composeA), /no log entry/, 'stops before anything is sent, not at the proof step after it');
 });
 
 test('one trusted confirmation satisfies quorum 1', () => {
