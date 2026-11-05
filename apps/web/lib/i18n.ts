@@ -1,6 +1,8 @@
 // Card and page texts: English for the judges, Russian toggle (tier1-client.md). The active language lives in
 // <Providers> (one toggle in the nav); components call useT() from app/providers. Check details written by
 // @ainek/proof (the "Technical details" lists) stay English: they are shared with the CLI and quoted in the docs.
+import type { KeyLogReason } from '@ainek/proof';
+
 export type Lang = 'en' | 'ru';
 /** Set by the toggle, read by the root layout on every request. */
 export const LANG_COOKIE = 'ainek.lang';
@@ -39,13 +41,11 @@ const en = {
   disconnect: 'Disconnect',
   refusedTitle: 'Key not in the public log. Message not sent.',
   refusedBody: 'The model reported a signing key that no trusted verifier has logged. Ainek refuses rather than trusts.',
-  /** What the refusal protected against, per reason: a security claim that must match the verdict, not a generic line. */
+  /** What the refusal protected against, where a counterfactual exists; the quorum and split-view bodies already say it all. */
   refusedConsequence: {
     absent: 'Had Ainek sent, the message would have been encrypted to a key no verifier vouches for: whoever holds that key could read it.',
-    'untrusted-only': 'Only verifiers outside the trust set vouch for this key. Ainek cannot tell it from a forged one, so nothing was sent.',
-    'below-quorum': 'Fewer trusted verifiers vouch for this key than this client requires. Ainek does not send on partial confirmation.',
-    'split-view': 'Trusted verifiers disagree about this model\'s key, so Ainek cannot say which one is real and sends nothing.',
-  },
+    'untrusted-only': 'Ainek cannot tell this key from a forged one on the word of verifiers it does not trust, so nothing was sent.',
+  } as Partial<Record<KeyLogReason, string>>,
   retryHonest: 'Try again with the honest key',
   refusedUntrustedTitle: 'Key logged only outside the trust set. Message not sent.',
   refusedUntrustedBody: (verifiers: string) => `The key is in the public log, but only from verifiers outside this client's trust set (${verifiers}). Ainek counts trusted verifiers only.`,
@@ -234,9 +234,7 @@ const ru: typeof en = {
   refusedBody: 'Модель назвала ключ подписи, которого нет у доверенных верификаторов. Ainek отказывает, а не доверяет.',
   refusedConsequence: {
     absent: 'Если бы Ainek отправил, сообщение ушло бы на ключ, за который не ручается ни один верификатор: его владелец мог бы прочитать текст.',
-    'untrusted-only': 'За этот ключ ручаются только верификаторы вне доверенного набора. Ainek не отличит его от подделки, поэтому ничего не отправил.',
-    'below-quorum': 'За ключ ручается меньше доверенных верификаторов, чем требует этот клиент. При частичном подтверждении Ainek не отправляет.',
-    'split-view': 'Доверенные верификаторы расходятся насчёт ключа этой модели: Ainek не может сказать, какой настоящий, и ничего не отправляет.',
+    'untrusted-only': 'Со слов верификаторов, которым клиент не доверяет, Ainek не отличит этот ключ от подделки, поэтому ничего не отправил.',
   },
   retryHonest: 'Повторить с честным ключом',
   refusedUntrustedTitle: 'Ключ записан только вне доверенного набора. Сообщение не отправлено.',

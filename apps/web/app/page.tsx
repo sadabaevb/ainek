@@ -1,7 +1,7 @@
 'use client';
 // Chat with a proof card per reply. The page only renders; lib/flow.ts does the work step by step.
 // The wallet is a React hook, so the page hands flow a committer resolver for the on-chain step (SPEC §4.2).
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
@@ -39,12 +39,12 @@ function Progress({ steps }: { steps: StepEvent[] }) {
   );
 }
 
-const TurnView = memo(function TurnView({ turn, idx, onCommit, onRetry }: { turn: Turn; idx: number; onCommit: (idx: number, outcome: VerifiedOutcome) => void; onRetry: (content: string, model: string) => void }) {
+const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry }: { turn: Turn; idx: number; /** Only the last turn, and only while nothing is in flight, may be resent. */ canRetry: boolean; onCommit: (idx: number, outcome: VerifiedOutcome) => void; onRetry: (content: string, model: string) => void }) {
   const { t } = useT();
   const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
   const { outcome } = turn;
-  const tampered = outcome?.kind === 'refused' && outcome.tampered ? outcome.model : null;
-  const retry = useCallback(() => onRetry(turn.message.content, tampered ?? ''), [onRetry, turn.message.content, tampered]);
+  // The honest key helps only when the swapped key was the whole problem: a split log would refuse the honest key too.
+  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.tampered && outcome.keyVerdict.reason === 'absent' ? outcome.model : null;
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>
@@ -58,7 +58,7 @@ const TurnView = memo(function TurnView({ turn, idx, onCommit, onRetry }: { turn
       {turn.outcome && 'reply' in turn.outcome && (
         <div className="bubble assistant"><span className="who">{t.assistant}</span>{turn.outcome.reply}</div>
       )}
-      {outcome && <ProofCard outcome={outcome} onCommit={commit} onRetry={tampered ? retry : undefined} />}
+      {outcome && <ProofCard outcome={outcome} onCommit={commit} onRetry={retryModel ? () => onRetry(turn.message.content, retryModel) : undefined} />}
     </article>
   );
 });
@@ -127,9 +127,12 @@ export default function ChatPage() {
     [commitTurn],
   );
 
+  /** Sends with the given controls and shows them as sent: the composer, a scenario card and the retry all go through here. */
   async function send(text: string, opts: SendOptions) {
     const content = text.trim();
     if (!content || busy) return;
+    setModel(opts.model);
+    setTamper(opts.tamper);
     setInput('');
     setBusy(true);
     const history: ChatMessage[] = turns.flatMap((x) => (x.outcome && 'reply' in x.outcome && typeof x.outcome.reply === 'string' ? [x.message, { role: 'assistant' as const, content: x.outcome.reply }] : []));
@@ -145,22 +148,17 @@ export default function ChatPage() {
     }
   }
 
-  // `send` closes over the thread, so it is a new function every render; the retry callback reads the latest one through a ref and stays stable for the memoized turns.
+  // `send` closes over the thread, so it is a new function every render; the retry callback reads the latest one through a ref
+  // (published before paint) and stays stable for the memoized turns.
   const sendRef = useRef(send);
-  useEffect(() => {
+  useLayoutEffect(() => {
     sendRef.current = send;
   });
-  const onRetryClick = useCallback((content: string, model: string) => {
-    setTamper(false);
-    void sendRef.current(content, { model, tamper: false });
-  }, []);
+  const onRetryClick = useCallback((content: string, model: string) => void sendRef.current(content, { model, tamper: false }), []);
 
-  /** A chip sets the controls to the scenario it names and sends its prompt in one click. */
+  /** A scenario card sends its prompt with the controls it names. */
   function pick(chip: Chip) {
-    const opts: SendOptions = { model: chip === 'incognito' ? cfg.incognitoModel : cfg.model, tamper: chip === 'tamper' };
-    setModel(opts.model);
-    setTamper(opts.tamper);
-    void send(t.intro.prompts[chip], opts);
+    void send(t.intro.prompts[chip], { model: chip === 'incognito' ? cfg.incognitoModel : cfg.model, tamper: chip === 'tamper' });
   }
 
   return (
@@ -181,7 +179,7 @@ export default function ChatPage() {
       </div>
 
       <section className="thread">
-        {turns.map((turn, i) => <TurnView key={i} turn={turn} idx={i} onCommit={onCommitClick} onRetry={onRetryClick} />)}
+        {turns.map((turn, i) => <TurnView key={i} turn={turn} idx={i} canRetry={!busy && i === turns.length - 1} onCommit={onCommitClick} onRetry={onRetryClick} />)}
         <div ref={bottom} />
       </section>
 

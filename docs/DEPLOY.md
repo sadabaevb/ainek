@@ -1,9 +1,12 @@
-# Hosting the demo
+# Deploying Ainek
 
-The web app is a plain Next.js 16 app; `pnpm -F web build` passes from a clean clone. Vercel is the planned host
-(ROADMAP); the demo must stay up through Nov 25.
+Two things get deployed: the web demo (this section, Bektur) and the Tier 2 policy job on OutLayer (the last section,
+Dastan). ROADMAP and the Tier 2 prompt point here for both.
 
-## Vercel, once
+## Web demo on Vercel
+
+The web app is a plain Next.js 16 app; `pnpm -F web build` passes from a clean clone. The demo must stay up through
+Nov 25.
 
 1. Vercel → Add New Project → import `sadabaevb/ainek`. Framework preset: Next.js (detected).
 2. **Root Directory:** `apps/web`. Keep "Include source files outside of the Root Directory" on: the app imports
@@ -31,6 +34,13 @@ Settings names and defaults above are Vercel's as of Nov 2026; confirm them in t
 - Spend: every chat message is one NEAR AI completion on the workspace key. Set the limit in the NEAR AI console
   before publishing the link.
 
-## Local production check
+## Local production check of the web app
 
 `pnpm -F web build && pnpm -F web start` serves the production build on http://localhost:3000 with the same root `.env`.
+
+## Policy job on OutLayer (Tier 2, Dastan)
+
+Recorded here once the job is deployed, because `register_agent` and the README need them: the project name on
+OutLayer testnet, the `wasm_hash` of the reproducible build, the policy public key (`POLICY_TEE_PUBKEY`, derived from
+the `PROTECTED_SIGNING_KEY:ed25519` secret inside the TEE) and the command that reproduces the hash from the repo.
+Until then see `docs/spike-outlayer/` and the spike B section of `docs/DEV-NOTES.md`.
