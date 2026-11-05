@@ -877,3 +877,24 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
 За эндпоинтом **два деплоя glm-5.3-flash с одним ключом подписи и разными compose_hash** (`a0e3c6f4…` и `5f7ebd85…`),
 отчёт отдаёт то один, то другой — теперь в логе есть оба; клиенту при сверке по `composeHash` принимать любой
 залогированный compose для ключа.
+
+## 2026-11-05 — контрольная точка 6.11, сторона Дастана (сделано заранее) — Дастан
+
+**Интеграция на живом testnet, контракт v2 `ainek-log-dastan.testnet`:**
+- `commit_proof` без предоплаты → `not enough prepaid storage: call deposit_storage with a full-access key first` (как в тесте).
+- `deposit_storage` 0.01 NEAR от `ainek-dev-dastan.testnet` — tx `4Kt2p3fVKgJTyc8pDn33UV7ZuobB5nJecHnVpsp298EL`.
+- `commit_proof(285b4401…b654, "model", 5)` — tx `Wbj2Y4LtrxsneZp3NKS2GG5hah38HaMQvDS3bKFECjb`, событие `proof_committed`.
+  Commit посчитан `commitOf(randomHex32(), sample proof)` из `packages/proof`, т.е. тем же кодом, что у клиента.
+- Чтение клиентским ридером: `readProofCommit` → `{status:"found", record:{kind:"model", log_index:5, block_height:276346576}}`,
+  для другого аккаунта → `{status:"none"}`. `storage_balance_of` после коммита: списано **0.00159 NEAR за коммит**
+  (159 байт × 10^19), т.е. 62 коммита на 0.1 NEAR — в README указано «50 to 68», сходится.
+- Не проверено вживую мной: вызов `commit_proof` именно FC-ключом кошелька (в sandbox-тесте проверено на настоящей ноде;
+  живой прогон с кошельком — за Бектуром).
+
+**Чистый клон** (`git clone` в пустую папку, main `7c14e3d`, `.env` = копия `.env.example`): `pnpm i` 1.7 с; `pnpm demo` →
+`Result: VERIFIED`; `pnpm demo:tamper` → `Result: REFUSED`; `pnpm test` → proof 85/85, tier1-node 7/7, verifier 5/5;
+`pnpm typecheck` — все 5 пакетов; `pnpm -F web build` — собирается; `cargo near build non-reproducible-wasm` — ок,
+unit-тесты контракта 15/15. `pnpm -F verifier once` с плейсхолдерами из `.env.example` падает с понятным сообщением —
+из чистого клона верификатор нечем было показать, поэтому добавлен **`pnpm -F verifier dry-run`**: живая переаттестация со
+свежим nonce (~5–8 с), печатает `KeyEntryInput`, ничего не отправляет, не требует ни аккаунта, ни API-ключа. Строка
+добавлена в «Try it» корневого README (Бектур, поправь формулировку, если не в тоне).
