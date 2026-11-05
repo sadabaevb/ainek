@@ -5,7 +5,7 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { buildCheckedModelProof, normalizeHex, shortHex as short, toDisclosure, type ModelProof } from '@ainek/proof';
+import { buildCheckedModelProof, composeHashOf, normalizeHex, shortHex as short, toDisclosure, type ModelProof } from '@ainek/proof';
 import { contractLog, nothingSent, replyOf, runTier1, type StepId, type Verified } from '@ainek/tier1-node';
 import { loadLiveEnv } from './env.ts';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
@@ -61,9 +61,10 @@ function printVerified(v: Verified & { totalMs: number }): void {
   line(NA, 'commit on NEAR: not in this mode (the web client commits with the wallet; the salt stays with the proof)');
   const { signer, logEntry, logSource, proof } = v;
   console.log('\n┌─ Ainek proof card ─ live ───────────────────────────────────────────');
-  console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(signer.deployment.runtimeMeasurements.composeHash ?? '')})`);
+  const compose = composeHashOf(signer.deployment);
+  console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(compose)})`);
   console.log(`│ ${OK} Hardware: Intel TDX ${signer.tcbStatus}, NVIDIA GPU ${signer.gpuEvidence}; chat request pinned to the attested gateway`);
-  console.log(`│ ${OK} Key #${logEntry.index} in the public log, logged by ${logEntry.verifier} (${logSource})`);
+  console.log(`│ ${OK} Key #${logEntry.index} in the public log, logged by ${logEntry.verifier} (${logSource})${normalizeHex(logEntry.compose_hash) === compose ? '' : '; this entry has another compose, the attested one is not in the log window'}`);
   console.log(`│ ${OK} Request and response: hashes match the signature made inside the model TEE`);
   console.log(`│ ${OK} End-to-end encryption: yes, encrypted to the attested model key`);
   console.log(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);

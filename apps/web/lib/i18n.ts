@@ -27,6 +27,7 @@ const en = {
   rowKey: 'Key in the public log',
   keyLine: (index: number, verifiers: string, since: string) => `#${index}, logged by ${verifiers} since ${since}`,
   sampleEntry: 'sample entry until the contract is live',
+  otherCompose: 'this entry has another compose, the attested one is not in the log window',
   rowHashes: 'Request and response',
   hashesOk: 'hashes recomputed here match the signature made inside the model TEE',
   rowE2ee: 'End-to-end encryption',
@@ -101,7 +102,7 @@ const en = {
   explainRows: 'What do these rows mean?',
   hideRows: 'Hide the explanations',
   hints: {
-    model: 'Which model and which deployment image answered. The compose hash measures the container set, not the weights.',
+    model: 'Which model, and the deployment image in the attestation checked before sending. The compose hash measures the container set, not the weights.',
     hardware: "The Intel TDX quote was verified here against Intel's collateral; the NVIDIA GPU verdict came from NVIDIA's attestation service through NEAR AI's proxy and was checked here against NVIDIA's keys.",
     key: 'The signing key was found in the append-only log on NEAR, written by a verifier. Without it the message would not have been sent.',
     hashes: "Recomputed in this browser from the exact bytes: the step NEAR AI's own Verification Center says it cannot do.",
@@ -222,6 +223,7 @@ const ru: typeof en = {
   rowKey: 'Ключ в публичном логе',
   keyLine: (index, verifiers, since) => `№${index}, записал ${verifiers}, с ${since}`,
   sampleEntry: 'образец записи, пока контракт не задеплоен',
+  otherCompose: 'у этой записи другой compose, аттестованного в окне лога нет',
   rowHashes: 'Запрос и ответ',
   hashesOk: 'хеши, пересчитанные здесь, совпадают с подписью из TEE модели',
   rowE2ee: 'Сквозное шифрование',
@@ -295,7 +297,7 @@ const ru: typeof en = {
   explainRows: 'Что значат эти строки?',
   hideRows: 'Скрыть пояснения',
   hints: {
-    model: 'Какая модель и какой образ деплоя ответили. Compose-хеш измеряет набор контейнеров, а не веса.',
+    model: 'Какая модель и какой образ деплоя были в аттестации, проверенной перед отправкой. Compose-хеш измеряет набор контейнеров, а не веса.',
     hardware: 'Квота Intel TDX проверена здесь по данным Intel; вердикт по NVIDIA GPU выдал сервис аттестации NVIDIA через прокси NEAR AI и проверен здесь по ключам NVIDIA.',
     key: 'Ключ подписи найден в append-only логе в NEAR, который пишет верификатор. Без него сообщение не ушло бы.',
     hashes: 'Пересчитано в этом браузере из точных байтов: тот самый шаг, который Verification Center самой NEAR AI сделать не может.',

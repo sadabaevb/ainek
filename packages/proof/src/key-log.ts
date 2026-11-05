@@ -96,6 +96,19 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
 
 const verifiersOf = (entries: readonly KeyEntry[]): string[] => [...new Set(entries.map((e) => e.verifier))];
 
+/**
+ * The entry a proof points at, from a verdict that passed. Instances of a model share one signing key, so several composes
+ * can sit behind it: take the newest entry with the attested compose, so that the proof and the card name the deployment
+ * that was checked. No such entry is not a refusal (the compose is shown, not enforced: DEV-NOTES 2026-11-02), it means the
+ * newest entry for the key. `matching` keeps the contract's newest-first order.
+ */
+export function proofEntryOf(verdict: KeyLogVerdict, composeHash: string): KeyEntry {
+  const compose = normalizeHex(composeHash);
+  const entry = verdict.matching.find((e) => normalizeHex(e.compose_hash) === compose) ?? verdict.matching[0];
+  if (!entry) throw new Error('the verdict has no log entry for a proof to point at');
+  return entry;
+}
+
 
 // ---- The entry a proof points at, with the public log as the source of truth -----------------------
 export interface ResolvedEntry {

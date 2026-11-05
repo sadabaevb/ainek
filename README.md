@@ -27,10 +27,10 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 - **Is this key real?** The client sends nothing unless the model's signing key is in the public log on NEAR (fail-closed).
   A verifier logs a key only after checking the Intel TDX quote and the NVIDIA GPU evidence, and the client re-verifies the
   evidence itself as well, so the log is a second opinion, not the only one. If two trusted verifiers disagree on a model,
-  you see a split view, not an average. Today: one verifier, ours; entry #0 was logged by hand from a report our code
-  verified with the SDK); entries #1 and #2 are re-logs of that same recording by a stopgap script (same nonce and report
-  hash); entry #3 is the first one written by the verifier daemon from a fresh attestation. No entry records the NVIDIA
-  verdict hash yet (the SDK's GPU verifier does not return it).
+  you see a split view, not an average. Today: one verifier, ours. Entry #0 was logged by hand from a report our code
+  verified with the SDK; entries #1 and #2 are re-logs of that same recording by a stopgap script, since removed (same nonce
+  and report hash, fresh `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh
+  attestation each. No entry records the NVIDIA verdict hash yet (the SDK's GPU verifier does not return it).
 - **Did this answer come from there?** The enclave signs `sha256(request)` and `sha256(response)`. Ainek keeps the exact
   bytes, recomputes both hashes and checks the signature against the logged key. A salted hash of the proof is committed
   to NEAR by your wallet (`commit_proof`, from storage your account prepays); until you connect one it stays in this browser. The salt and your copy of the exchange live
@@ -53,9 +53,9 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 | The public key log (`/log`) | A disclosure checked by an auditor (`/auditor`) |
 | ![The public key log page](docs/screenshots/log.png) | ![The auditor verdict card](docs/screenshots/auditor.png) |
 
-The card's compose hash is the one attested for this reply; it is shown, not compared with the matched entry (#3, whose
-compose differs: the provider answers from two deployments with the same signing key, and both composes are in the log).
-See "What we do not claim".
+The card's compose hash comes from the attestation checked before sending, and its log entry is the newest one with that
+key and that compose; if the log window has none, it is the newest for the key and the card says so. See "What we do not
+claim".
 
 ## How NEAR is used
 
@@ -149,8 +149,10 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
 - **A measurement allowlist.** Our log is a *key* allowlist: the client sends only to a key a trusted verifier logged. The
   offline replay also compares the attested compose hash with the logged one; the browser and `demo:live` show it on the
-  card but do not compare it yet (SPEC §7.1 asks for it; enforcing it is a pending team decision), and acceptable compose
-  hashes are not governed yet (next steps).
+  card and point the proof at a log entry with that compose when there is one, but still send when there is none, and the
+  card says so (SPEC §7.1 asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not
+  governed yet (next steps). Instances of a model share one signing key, so the signature alone does not say which deployment
+  answered.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
