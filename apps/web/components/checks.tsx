@@ -20,6 +20,16 @@ export function CheckList({ items }: { items: ReadonlyArray<{ id: string; status
   );
 }
 
+/** The strip at the top of a result card: tone and glyph follow the status, so a card can never look green by omission. */
+export function CardHead({ status, when, children }: { status: 'ok' | 'fail'; when?: ReactNode; children: ReactNode }) {
+  return (
+    <header className={`card-head ${status}`}>
+      <span>{mark(status)} {children}</span>
+      {when !== undefined && <span className="when">{when}</span>}
+    </header>
+  );
+}
+
 /** One guarantee line; `hint` is the plain-language explanation shown when the card's "What do these rows mean?" is open. */
 export function Row({ status, label, hint, children }: { status: Exclude<Status, 'running'>; label: string; hint?: string; children: ReactNode }) {
   return (

@@ -6,7 +6,6 @@ export type Lang = 'en' | 'ru';
 export const LANG_COOKIE = 'ainek.lang';
 
 const en = {
-  tagline: 'Ask a private model. Get a proof you can check yourself.',
   hero: ['Ask a private model.', 'Get a proof you can check yourself.'],
   model: 'Model',
   teeModel: 'Private TEE model',
@@ -107,6 +106,7 @@ const en = {
   loading: 'Loading…',
   loadFile: 'Load file',
   readFailed: (name: string, reason: string) => `could not read ${name}: ${reason}`,
+  fileTooBig: (name: string) => `${name} is larger than 2 MB; a proof or a disclosure file is a few kilobytes`,
   log: {
     title: 'Public key log',
     intro: (network: string, verifiers: string, quorum: number) => `Contract {contract} on ${network}; trusted verifiers ${verifiers}; quorum ${quorum}.`,
@@ -133,8 +133,8 @@ const en = {
     noExchange: (id: string) => `no exchange ${id} in this browser's store`,
     origin: { store: 'this browser (IndexedDB)', disclosure: 'disclosure file (proof + raw bytes)', pasted: 'pasted proof JSON (no raw bytes: hash checks skipped)' },
     notProof: (reason: string) => `not a proof or disclosure: ${reason}`,
-    ok: '✓ Proof verified',
-    failed: '✗ Proof failed',
+    ok: 'Proof verified',
+    failed: 'Proof failed',
     source: (origin: string) => `source: ${origin}`,
     commitTx: 'Commit on nearblocks',
     committing: 'Committing…',
@@ -148,9 +148,9 @@ const en = {
     useSample: 'Use the sample file',
     notDisclosure: (reason: string) => `not a disclosure file: ${reason}. A bare proof can be checked on /verify.`,
     notRun: 'not run',
-    verdictFail: '✗ This disclosure does not check out',
-    verdictOk: '✓ This disclosure checks out',
-    verdictLocal: '✓ Internally consistent; the public log was not consulted',
+    verdictFail: 'This disclosure does not check out',
+    verdictOk: 'This disclosure checks out',
+    verdictLocal: 'Internally consistent; the public log was not consulted',
     when: (verified: string, disclosed: string) => `verified ${verified}, disclosed ${disclosed}`,
     rowCommit: 'Commit',
     rowBytes: 'Disclosed bytes',
@@ -190,7 +190,6 @@ const en = {
 };
 
 const ru: typeof en = {
-  tagline: 'Спроси приватную модель. Получи proof, который проверишь сам.',
   hero: ['Спроси приватную модель.', 'Получи proof, который проверишь сам.'],
   model: 'Модель',
   teeModel: 'Приватная TEE-модель',
@@ -291,6 +290,7 @@ const ru: typeof en = {
   loading: 'Загрузка…',
   loadFile: 'Загрузить файл',
   readFailed: (name, reason) => `не удалось прочитать ${name}: ${reason}`,
+  fileTooBig: (name) => `${name} больше 2 МБ; proof или файл раскрытия весит несколько килобайт`,
   log: {
     title: 'Публичный лог ключей',
     intro: (network, verifiers, quorum) => `Контракт {contract} в сети ${network}; доверенные верификаторы: ${verifiers}; кворум ${quorum}.`,
@@ -317,8 +317,8 @@ const ru: typeof en = {
     noExchange: (id) => `обмена ${id} нет в хранилище этого браузера`,
     origin: { store: 'этот браузер (IndexedDB)', disclosure: 'файл раскрытия (proof + сырые байты)', pasted: 'вставленный JSON proof (без сырых байтов: проверки хешей пропущены)' },
     notProof: (reason) => `не proof и не файл раскрытия: ${reason}`,
-    ok: '✓ Proof подтверждён',
-    failed: '✗ Proof не прошёл',
+    ok: 'Proof подтверждён',
+    failed: 'Proof не прошёл',
     source: (origin) => `источник: ${origin}`,
     commitTx: 'Коммит на nearblocks',
     committing: 'Записываю…',
@@ -332,9 +332,9 @@ const ru: typeof en = {
     useSample: 'Взять файл-образец',
     notDisclosure: (reason) => `это не файл раскрытия: ${reason}. Голый proof можно проверить на /verify.`,
     notRun: 'не выполнялась',
-    verdictFail: '✗ Это раскрытие не сходится',
-    verdictOk: '✓ Это раскрытие сходится',
-    verdictLocal: '✓ Внутренне согласовано; публичный лог не опрашивался',
+    verdictFail: 'Это раскрытие не сходится',
+    verdictOk: 'Это раскрытие сходится',
+    verdictLocal: 'Внутренне согласовано; публичный лог не опрашивался',
     when: (verified, disclosed) => `проверено ${verified}, раскрыто ${disclosed}`,
     rowCommit: 'Коммит',
     rowBytes: 'Раскрытые байты',

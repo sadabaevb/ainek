@@ -151,8 +151,8 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="page">
-      {turns.length === 0 ? <Intro onPick={pick} /> : <h1 className="small muted">{t.tagline}</h1>}
+    <main className="page chat">
+      {turns.length === 0 ? <Intro onPick={pick} /> : <h1 className="compact">{t.hero.join(' ')}</h1>}
 
       <div className="controls">
         <label className="field">

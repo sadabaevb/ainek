@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
 import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
-import { CheckList } from '@/components/checks';
+import { CardHead, CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
@@ -118,7 +118,7 @@ function VerifyInner() {
       <p className="muted">{fill(tv.intro, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} placeholder={tv.placeholder} />
+        <JsonTextarea value={text} onChange={setText} onError={setError} placeholder={tv.placeholder} />
         <div className="actions">
           <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>{tv.verify}</button>
           <LoadFileButton onText={setText} onError={setError} />
@@ -141,10 +141,7 @@ function VerifyInner() {
 
       {result && (
         <section className="card">
-          <header className={`card-head${result.report.ok ? '' : ' bad'}`}>
-            <span>{result.report.ok ? tv.ok : tv.failed}</span>
-            <span className="when">{tv.source(tv.origin[result.origin])}</span>
-          </header>
+          <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>
           <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">

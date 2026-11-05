@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
 import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
+import { RedCard } from '@/components/proof-card';
 import { StackTable, type Column } from '@/components/stack-table';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
@@ -76,12 +77,7 @@ export default function LogPage() {
         {cfg.logSource === 'sample' && ` ${tl.sampleNote}`}
       </p>
       {error && <p className="card red">{error}</p>}
-      {split && (
-        <section className="card red">
-          <h3>{tl.split}</h3>
-          <p>{split.detail}</p>
-        </section>
-      )}
+      {split && <RedCard title={tl.split} body={split.detail} />}
       {log && (log.entries.length === 0 ? (
         <section className="card">
           <h3>{tl.emptyTitle(WINDOW_HOURS, cfg.model)}</h3>

@@ -10,7 +10,7 @@ import { downloadJson } from '@/lib/encoding';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { fill } from '@/lib/fill';
-import { CheckList, Row, mark } from './checks';
+import { CardHead, CheckList, Row } from './checks';
 import { CopyButton } from './copy-button';
 
 const WARN = (
@@ -20,16 +20,19 @@ const WARN = (
   </svg>
 );
 
-function RedCard({ title, body, lines }: { title: string; body?: string; lines: ReactNode[] }) {
+/** A refusal or failure, in its own red design; `lines` are the English technical details, collapsed. */
+export function RedCard({ title, body, lines }: { title: string; body?: string; lines?: ReactNode[] }) {
   const { t } = useT();
   return (
     <section className="card red">
       <h3>{WARN}<span>{title}</span></h3>
       {body && <p>{body}</p>}
-      <details>
-        <summary>{t.details}</summary>
-        <ul className="mono" lang="en">{lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
-      </details>
+      {lines && (
+        <details>
+          <summary>{t.details}</summary>
+          <ul className="mono" lang="en">{lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
+        </details>
+      )}
     </section>
   );
 }
@@ -95,10 +98,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
 
   return (
     <section className="card">
-      <header className="card-head">
-        <span>{mark('ok')} {t.cardVerified}</span>
-        <span className="when">{utcMinute(exchange.sentAt)}</span>
-      </header>
+      <CardHead status="ok" when={utcMinute(exchange.sentAt)}>{t.cardVerified}</CardHead>
       <Row status="ok" label={t.rowModel} hint={hint('model')}>{proof.model}, {t.attested} (compose {short(composeHash)})</Row>
       <Row status="ok" label={t.rowHardware} hint={hint('hardware')}>Intel TDX {m.tcbStatus}, NVIDIA GPU {m.gpuEvidence} ({deployment.tookMs === 0 ? t.cached : `${t.checkedInBrowser}, ${seconds(deployment.tookMs)}`})</Row>
       <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}</Row>
