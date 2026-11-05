@@ -19,7 +19,7 @@ import {
   type TcbStatus,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { buildCheckedModelProof, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, proofEntryOf, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
@@ -244,7 +244,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });
     }
-    const logEntry = verdict.matching[0] as KeyEntry;
+    const logEntry = proofEntryOf(verdict, modelAttestation.deployment.runtimeMeasurements.composeHash);
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')} (source: ${logSource})`, ms: logMs });
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.

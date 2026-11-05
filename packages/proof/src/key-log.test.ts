@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateKeyLog, findSplitView, resolveLogEntry } from './key-log.ts';
+import { evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
 import type { KeyEntry } from './schema.ts';
 import { readRepoJson } from './fixtures.ts';
 
@@ -9,6 +9,17 @@ const KEY_A = entry.signing_address;
 const KEY_B = 'ab'.repeat(32);
 const base = { model: entry.model, signingAddress: KEY_A, trustedVerifiers: ['v1.ainek.testnet', 'v2.ainek.testnet'], quorum: 1 };
 const logged = (overrides: Partial<KeyEntry>): KeyEntry => ({ ...entry, ...overrides });
+
+test('proofEntryOf: the newest entry with the attested compose, else the newest for the key', () => {
+  const [composeA, composeB, composeC] = ['a0'.repeat(32), '5f'.repeat(32), 'cc'.repeat(32)];
+  // Newest first, as latest_keys returns them: two deployments behind one signing key.
+  const verdict = evaluateKeyLog([logged({ index: 5, compose_hash: composeB }), logged({ index: 4, compose_hash: composeA }), logged({ index: 2, compose_hash: composeA })], base);
+  assert.equal(proofEntryOf(verdict, composeA).index, 4, 'not #5, the newest overall, and not the older #2');
+  assert.equal(proofEntryOf(verdict, composeB).index, 5);
+  assert.equal(proofEntryOf(verdict, `0x${composeA.toUpperCase()}`).index, 4, 'hex spelling does not matter');
+  assert.equal(proofEntryOf(verdict, composeC).index, 5, 'a compose nobody logged is not a refusal');
+  assert.equal(proofEntryOf(verdict, undefined).index, 5);
+});
 
 test('one trusted confirmation satisfies quorum 1', () => {
   const v = evaluateKeyLog([entry], base);
