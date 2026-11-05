@@ -232,6 +232,8 @@ usual case is the "later message" row. The on-chain commit is measured once, not
 apps/web/            Next.js app: chat with the proof card, /verify, /log, /auditor, /trust; byte-exact relay to NEAR AI
 apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:live, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
+packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
+                     demo:live, demo:metrics and the agent service; mirrors apps/web/lib/flow.ts
 contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
                      (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2); Tier 2 (§4.3) next
 jobs/policy/         Rust OutLayer WASI-P1 job: spike, cap check only, no signature yet (Tier 2)

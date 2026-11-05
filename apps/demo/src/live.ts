@@ -1,14 +1,15 @@
 // `pnpm demo:live [--record] [--disclose <file>] [--message "…"]`: the Tier-1 flow from Node with the server-side API key
-// (the sequence is tier1.ts, shared with demo:metrics), printed step by step, then the proof card. `--record` writes the
+// (the sequence is @ainek/tier1-node, shared with demo:metrics and the agent), printed step by step, then the proof card. `--record` writes the
 // exchange into docs/samples so the offline replay (`pnpm demo`) has an E2EE sample. `--disclose <file>` writes the
 // "Disclose to auditor" file of this run (SPEC §5.4), the same bytes a proof card downloads, for /auditor and /verify.
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { buildModelProof, normalizeHex, shortHex as short, toDisclosure, verifyModelProof, type ModelProof } from '@ainek/proof';
+import { nothingSent, runTier1, type StepId, type Verified } from '@ainek/tier1-node';
+import { loadLiveEnv } from './env.ts';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
 import { FAIL, NA, OK, exitFlushed, head, line, markOf, seconds } from './term.ts';
-import { loadLiveEnv, nothingSent, runTier1, type StepId, type Verified } from './tier1.ts';
 
 const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, disclose: { type: 'string' }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
 const record = flags.record === true;
@@ -32,7 +33,9 @@ const HEADS: Partial<Record<StepId, string>> = { metadata: `0. Model metadata: $
 const outcome = await runTier1({
   apiKey,
   cfg,
-  message,
+  chat: { messages: [{ role: 'user', content: message }] },
+  // The recorded sample entry only when AINEK_LOG_SOURCE=sample asks for it explicitly; the trust set comes from the shared config either way.
+  ...(cfg.logSource === 'sample' ? { readLog: async () => ({ entries: [loadSampleLogEntry()], source: 'sample (docs/samples/key-entry.sample.json, AINEK_LOG_SOURCE=sample)' }) } : {}),
   onStep: (e) => {
     const title = HEADS[e.id];
     if (title) head(title);

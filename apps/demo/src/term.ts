@@ -1,5 +1,5 @@
 // Terminal output shared by the replay and live modes.
-import { getSdkError } from '@nearai/inference-sdk/node';
+export { describeSdkError as describe } from '@ainek/tier1-node';
 
 export const OK = '✓';
 export const FAIL = '✗';
@@ -17,12 +17,6 @@ export function head(title: string): void {
 export function line(mark: string, text: string): boolean {
   console.log(`  ${mark} ${text}`);
   return mark === FAIL;
-}
-
-export function describe(err: unknown): string {
-  const sdk = getSdkError(err);
-  if (sdk) return `${sdk.failure.code}${'details' in sdk.failure && sdk.failure.details ? ' ' + JSON.stringify(sdk.failure.details) : ''}`;
-  return err instanceof Error ? err.message : String(err);
 }
 
 export function seconds(ms: number): string {

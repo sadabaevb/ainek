@@ -1,5 +1,5 @@
 // `pnpm demo:metrics [--runs N] [--out <file>]`: N live Tier-1 runs for the README metrics table (ROADMAP: the Nov 10–11 run).
-// Each run is tier1.ts, what the chat does, from Node, direct to NEAR AI, nothing cached: a cold first message. On top, the
+// Each run is @ainek/tier1-node, what the chat does, from Node, direct to NEAR AI, nothing cached: a cold first message. On top, the
 // public-log rule is checked with a swapped key against the same log read, as the chat's tamper switch does. Per-run timings
 // and outcomes go to a JSON file; a markdown table is printed for the README. The on-chain commit is not part of a run (it
 // needs a wallet); its cost was measured once (docs/DEV-NOTES.md).
@@ -7,8 +7,9 @@ import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { DEMO_SWAPPED_KEY, evaluateKeyLog } from '@ainek/proof';
+import { runTier1, type StepId, type Timings } from '@ainek/tier1-node';
+import { loadLiveEnv } from './env.ts';
 import { FAIL, OK, describe, exitFlushed, line, seconds } from './term.ts';
-import { loadLiveEnv, runTier1, type StepId, type Timings } from './tier1.ts';
 
 const flags = (() => {
   try {
@@ -31,7 +32,7 @@ if (cfg.logSource !== 'contract') usage('metrics need the live log (AINEK_LOG_SO
 const PROMPT = 'Reply with the single word: ok.';
 const rpcHost = new URL(cfg.rpcUrl).host;
 
-/** One run. `outcome` is what the chat would have shown; timings only for the steps that ran (tier1.ts). */
+/** One run. `outcome` is what the chat would have shown; timings only for the steps that ran (@ainek/tier1-node). */
 interface Run {
   outcome: 'verified' | 'refused' | 'failed';
   /** Where a run that did not verify stopped. */
@@ -48,7 +49,7 @@ interface Run {
 }
 
 async function runOnce(): Promise<Run> {
-  const o = await runTier1({ apiKey, cfg, message: PROMPT });
+  const o = await runTier1({ apiKey, cfg, chat: { messages: [{ role: 'user', content: PROMPT }] } });
   const base = { retries: o.retries, timings: o.timings, totalMs: o.totalMs };
   if (o.kind === 'failed') return { outcome: 'failed', step: o.step, error: o.reason, ...base };
   const swappedRefused = evaluateKeyLog(o.entries, { model: cfg.model, signingAddress: DEMO_SWAPPED_KEY, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }).status !== 'ok';

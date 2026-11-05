@@ -1,0 +1,27 @@
+{
+  "name": "@ainek/tier1-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ainek Tier-1 sequence from Node (attest, fail-closed log check, E2EE request, signature, proof) for demo:live, demo:metrics and the agent service",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "node --test 'src/**/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ainek/proof": "workspace:*",
+    "@nearai/inference-sdk": "0.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

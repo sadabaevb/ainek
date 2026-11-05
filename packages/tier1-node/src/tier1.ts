@@ -1,18 +1,15 @@
-// The Tier-1 sequence from Node with the server-side API key, shared by `demo:live` and `demo:metrics`.
-// Mirror of apps/web/lib/flow.ts (same steps, same order, same step ids; keep the two in sync): the model must support model
-// attestation, gateway + model evidence verified here, the public log read meanwhile, fail-closed check of the attested key,
-// one E2EE request with the exact bytes kept, the signature, the SDK byte-exact check and our proof. On purpose unlike the
-// browser: no relay (direct to NEAR AI), the chat request TLS-pinned to the attested gateway (a browser cannot observe the
-// TLS peer), nothing cached between calls (every call is a cold first message). The on-chain commit is not here: it needs
-// a wallet.
-import { existsSync } from 'node:fs';
-import path from 'node:path';
+// The Tier-1 sequence from Node with a server-side API key, shared by `demo:live`, `demo:metrics` and the agent service.
+// Mirror of apps/web/lib/flow.ts (same steps, same order, the step ids of TIER1_STEPS in @ainek/proof; keep the two in
+// sync): the model must support model attestation, gateway + model evidence verified here, the public log read meanwhile,
+// fail-closed check of the attested key, one E2EE request with the exact bytes kept, the signature, the SDK byte-exact
+// check and our proof. On purpose unlike the browser: no relay (direct to NEAR AI), the chat request TLS-pinned to the
+// attested gateway (a browser cannot observe the TLS peer), nothing cached between calls (every call is a cold first
+// message). The on-chain commit is not here: it needs a key, and whose key depends on the caller.
 import {
   AttestationClient,
   NO_ALIASING_HEADER,
   createPinnedTlsFetch,
   findModelAttestationForSignature,
-  getSdkError,
   prepareE2eeChatRequest,
   verifyGatewayAttestation,
   verifyModelAttestation,
@@ -21,9 +18,9 @@ import {
   type TcbStatus,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { ainekConfigFromEnv, buildModelProof, evaluateKeyLog, failurePhase, keyLogReader, shortHex as short, verifyModelProof, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
-import { loadSampleLogEntry } from './evidence.ts';
-import { describe } from './term.ts';
+import { buildModelProof, evaluateKeyLog, failurePhase, keyLogReader, shortHex as short, verifyModelProof, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { describeSdkError } from './errors.ts';
+import { withRetry } from './retry.ts';
 
 export const SIGNING_ALGO = 'ed25519' as const;
 
@@ -44,6 +41,47 @@ export interface StepEvent {
 /** Milliseconds per step, only for the steps that ran. `key-log` is the RPC read itself, which overlaps `attestation`, so the steps add up to more than the whole run. */
 export type Timings = Partial<Record<StepId, number>>;
 
+// ---- the chat request (OpenAI-compatible; under E2EE the SDK encrypts message contents, function tools and tool calls) ----
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+export interface FunctionTool {
+  type: 'function';
+  function: { name: string; description?: string; parameters: Record<string, unknown> };
+}
+export type ToolChoice = 'none' | 'auto' | 'required' | { type: 'function'; function: { name: string } };
+export interface ChatInput {
+  messages: ChatMessage[];
+  tools?: FunctionTool[];
+  tool_choice?: ToolChoice;
+  temperature?: number;
+  max_tokens?: number;
+}
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+/** The decrypted completion, the parts the callers read. */
+export interface ChatCompletion {
+  id: string;
+  choices: Array<{ message: { content: string | null; tool_calls?: ToolCall[] }; finish_reason?: string }>;
+}
+
+// ---- the public log ----
+export interface LogRead {
+  entries: KeyEntry[];
+  source: string;
+}
+export type ReadLog = (model: string) => Promise<LogRead>;
+/** The contract log over JSON-RPC, what the browser reads too (an unreachable contract fails the run before sending, never a silent fallback). */
+export function contractLog(cfg: Pick<AinekConfig, 'rpcUrl' | 'contract'>): ReadLog {
+  const reader = keyLogReader(cfg.rpcUrl, cfg.contract);
+  return async (model) => ({ entries: await reader.latestKeys(model), source: `contract ${cfg.contract} via ${new URL(cfg.rpcUrl).host}` });
+}
+
+// ---- outcomes ----
 export interface Verified {
   kind: 'verified';
   /** The model report whose key signed the reply. */
@@ -53,6 +91,8 @@ export interface Verified {
   logSource: string;
   logEntry: KeyEntry;
   completionId: string;
+  completion: ChatCompletion;
+  /** The assistant text, '' when the model answered with tool calls only. */
   reply: string;
   requestBody: Uint8Array;
   responseBody: Uint8Array;
@@ -79,32 +119,16 @@ export type Tier1Outcome = (Verified | Refused | Failed) & { timings: Timings; t
 export interface Tier1Params {
   apiKey: string;
   cfg: AinekConfig;
-  message: string;
+  chat: ChatInput;
   onStep?: (event: StepEvent) => void;
+  /** Where the log comes from; the contract by default. The demo passes the recorded sample entry when AINEK_LOG_SOURCE=sample. */
+  readLog?: ReadLog;
 }
 
-/** The root .env (CLAUDE.md: secrets live in one file) and the shared config. loadEnvFile never overrides variables already set, so the shell wins. */
-export function loadLiveEnv(): { apiKey: string | undefined; cfg: AinekConfig } {
-  const repoRoot = path.resolve(import.meta.dirname, '../../..');
-  if (existsSync(path.join(repoRoot, '.env'))) process.loadEnvFile(path.join(repoRoot, '.env'));
-  return { apiKey: process.env.NEARAI_API_KEY || undefined, cfg: ainekConfigFromEnv(process.env) };
-}
-
-/** Same rule as apps/web/lib/nearai-browser.ts: only failures the SDK marks retryable (Intel collateral hiccups, NRAS/transport 5xx, a signature not yet on this node) are retried, with a growing pause. */
-export async function withRetry<T>(fn: () => Promise<T>, attempts = 3, onRetry: () => void = () => undefined): Promise<T> {
-  for (let i = 1; ; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (i >= attempts || getSdkError(err)?.retryable !== true) throw err;
-      onRetry();
-      await new Promise((r) => setTimeout(r, 1500 * i));
-    }
-  }
-}
-
-/** One cold run of the Tier-1 sequence. Never throws: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
-export async function runTier1({ apiKey, cfg, message, onStep = () => undefined }: Tier1Params): Promise<Tier1Outcome> {
+/** One cold run of the Tier-1 sequence. Never throws after it starts: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
+export async function runTier1({ apiKey, cfg, chat, onStep = () => undefined, readLog }: Tier1Params): Promise<Tier1Outcome> {
+  if (!readLog && cfg.logSource !== 'contract') throw new Error(`AINEK_LOG_SOURCE=${cfg.logSource}: pass readLog (this package reads only the contract)`);
+  const loadLog = readLog ?? contractLog(cfg);
   const { model, nearaiBaseUrl: baseUrl } = cfg;
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] }; // validated in ainekConfigFromEnv; same names as the SDK's
   const client = new AttestationClient({ apiKey, baseUrl, headers: { [NO_ALIASING_HEADER]: 'true' } }); // a new client every run: nothing cached from an earlier one
@@ -140,7 +164,7 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
 
     // 1. Gateway and model evidence, verified here; the public log is read meanwhile (independent; the send waits for both).
     const tLog = performance.now();
-    const logPromise = loadLog(cfg).then((log) => {
+    const logPromise = loadLog(model).then((log) => {
       timings['key-log'] = performance.now() - tLog;
       return log;
     });
@@ -167,7 +191,7 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
     running = 'key-log';
     stepStart = tLog;
     const { entries, source: logSource } = await logPromise.catch((err: unknown) => {
-      throw new Error(`public log unavailable (${describe(err)})`);
+      throw new Error(`public log unavailable (${describeSdkError(err)})`);
     });
     const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
     if (verdict.status !== 'ok') {
@@ -185,7 +209,7 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
           request: new Request(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Accept-Encoding': 'identity', [NO_ALIASING_HEADER]: 'true' },
-            body: JSON.stringify({ model, messages: [{ role: 'user', content: message }], stream: false }),
+            body: JSON.stringify({ model, stream: false, ...chat }),
           }),
           modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelPublicKey },
         }),
@@ -202,11 +226,10 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
         const forVerification = encrypted.clone();
         const decrypted = await prepared.decryptResponse(encrypted);
         const [bytes, plaintext] = await Promise.all([forVerification.arrayBuffer(), decrypted.text()]);
-        return { responseBody: new Uint8Array(bytes), completion: JSON.parse(plaintext) as { id: string; choices: Array<{ message: { content: string | null } }> } };
+        return { responseBody: new Uint8Array(bytes), completion: JSON.parse(plaintext) as ChatCompletion };
       },
-      (r) => `completion ${r.completion.id}: ${requestBody.length} B ciphertext sent, ${r.responseBody.length} B received; reply: ${JSON.stringify(r.completion.choices[0]?.message.content ?? '')}`,
+      (r) => `completion ${r.completion.id}: ${requestBody.length} B ciphertext sent, ${r.responseBody.length} B received; reply: ${JSON.stringify(replyOf(r.completion))}`,
     );
-    const reply = completion.choices[0]?.message.content ?? '';
 
     // 5. The signature made inside the model TEE, the SDK's byte-exact check, our proof.
     const signature = await step('signature', () => retrying(() => client.fetchCompletionSignature({ completionId: completion.id, signingAlgo: SIGNING_ALGO }), 4), (s) => `${s.kind} signature by ${short(s.signer.signingAddress)}`);
@@ -229,16 +252,20 @@ export async function runTier1({ apiKey, cfg, message, onStep = () => undefined 
       },
       (x) => `${x.report.checks.length} checks pass; commit ${short(x.proof.commit ?? '')}`,
     );
-    return done({ kind: 'verified', signer, verifiedAt, entries, logSource, logEntry, completionId: completion.id, reply, requestBody, responseBody, signature, proof, report });
+    return done({ kind: 'verified', signer, verifiedAt, entries, logSource, logEntry, completionId: completion.id, completion, reply: replyOf(completion), requestBody, responseBody, signature, proof, report });
   } catch (err) {
-    const reason = describe(err);
+    const reason = describeSdkError(err);
     onStep({ id: running, status: 'fail', detail: reason, ms: performance.now() - stepStart });
     return done({ kind: 'failed', step: running, reason });
   }
 }
 
-/** The contract log, or the recorded sample entry only when AINEK_LOG_SOURCE=sample asks for it explicitly (the trust set comes from the shared config in both cases). An unreachable contract is a failure before sending, never a silent fallback. */
-async function loadLog(cfg: AinekConfig): Promise<{ entries: KeyEntry[]; source: string }> {
-  if (cfg.logSource === 'sample') return { entries: [loadSampleLogEntry()], source: 'sample (docs/samples/key-entry.sample.json, AINEK_LOG_SOURCE=sample)' };
-  return { entries: await keyLogReader(cfg.rpcUrl, cfg.contract).latestKeys(cfg.model), source: `contract ${cfg.contract} via ${new URL(cfg.rpcUrl).host}` };
+/** The assistant's text; a tool-call-only answer has none. */
+export function replyOf(completion: ChatCompletion): string {
+  return completion.choices[0]?.message.content ?? '';
+}
+
+/** The function calls the model made, in order; empty for a plain text answer. */
+export function toolCallsOf(completion: ChatCompletion): ToolCall[] {
+  return completion.choices[0]?.message.tool_calls ?? [];
 }
