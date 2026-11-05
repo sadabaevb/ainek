@@ -85,7 +85,7 @@ function proofBoundToSampleLog(v: Verified): ModelProof {
   const sampleEntry = loadSampleLogEntry();
   if (normalizeHex(sampleEntry.signing_address) !== normalizeHex(v.signature.signer.signingAddress)) throw new Error(`live signer ${short(v.signature.signer.signingAddress)} differs from the sample log entry key ${short(sampleEntry.signing_address)}: re-record attestation-report.json and key-entry.sample.json first`);
   try {
-    const { proof } = buildCheckedModelProof({ completionId: v.completion.id, model, signature: v.signature, requestBody: v.requestBody, responseBody: v.responseBody, logEntry: sampleEntry, verifiedAt: v.proof.verifiedAt, e2ee: true, salt: '0123456789abcdef'.repeat(4) });
+    const { proof } = buildCheckedModelProof({ completionId: v.completion.id, model, signature: v.signature, requestBody: v.requestBody, responseBody: v.responseBody, logEntry: sampleEntry, verifiedAt: v.proof.verifiedAt, e2ee: true, toolNames: v.proof.toolNames, salt: '0123456789abcdef'.repeat(4) });
     return { ...proof, commitTx: 'SAMPLE-not-committed' };
   } catch (err) {
     throw new Error(`recorded proof does not verify: ${(err as Error).message}`);

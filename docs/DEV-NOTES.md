@@ -840,7 +840,11 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
   proof и проверить» — одна функция `buildCheckedModelProof` вместо трёх копий (flow.ts, раннер, запись образцов);
   время чтения лога пишется в шаге, а не из `.then`; текст шага `send` больше не содержит открытый ответ модели
   (сервер может его логировать); ошибки SDK описываются их собственным `message`. Кеш аттестации на 60 минут для агента
-  (как в браузере) — решение в PR агента: сейчас каждый вызов холодный, как и нужно `demo:metrics`.
+  (как в браузере) — решение в PR агента: сейчас каждый вызов холодный, как и нужно `demo:metrics`. После `/code-review`:
+  из типа `ChatInput` исключены поля, которые ушли бы в шлюз открытыми (`response_format`, `metadata`, `user`, `store`, `n`),
+  чтение лога получает `AbortSignal` и отменяется, если прогон упал раньше (`viewFunction` принимает сигнал и после отмены
+  не ретраит), расшифрованный ответ проверяется на форму `chat.completion`, у упавшего чтения лога честное время, а
+  `describe` для реплея берётся из subpath `@ainek/tier1-node/errors`, чтобы офлайн `pnpm demo` не грузил раннер.
 - **Проба function tool под E2EE (2026-11-05, один живой вызов `runTier1`):** system prompt «казначей», два инструмента
   (`propose_transfer`, `decline`), `tool_choice: 'required'`, запрос «Pay vendor1.testnet 300 tokens for October hosting.»
   `z-ai/glm-5.3-flash` ответил одним вызовом `propose_transfer` с аргументами `{"amount":"300","memo":"October hosting",

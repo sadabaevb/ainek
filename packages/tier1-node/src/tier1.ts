@@ -50,10 +50,11 @@ export interface RunStats {
 }
 
 // ---- the chat request: OpenAI's Chat Completions shapes as the SDK types them. Under E2EE the SDK encrypts message contents,
-// `tools`, `tool_choice` and the tool calls in the reply; `response_format` is NOT encrypted, so structured output goes through
-// a function tool, never through a JSON schema in the clear.
+// `tools`, `tool_choice` and the tool calls in the reply; everything else travels in the clear. The fields that would carry
+// content in the clear are left out of the type: `response_format` (a JSON schema names the fields the answer must have, so
+// structured output goes through a function tool), `metadata`, `user`, `store`, and `n` (one choice is what the proof expects).
 type CreateBody = Parameters<InferenceChatCompletions['create']>[0];
-export type ChatInput = Omit<CreateBody, 'model' | 'stream'>;
+export type ChatInput = Omit<CreateBody, 'model' | 'stream' | 'response_format' | 'metadata' | 'user' | 'store' | 'n'>;
 export type ChatMessage = CreateBody['messages'][number];
 export type ChatTool = NonNullable<CreateBody['tools']>[number];
 export type ChatCompletion = Extract<Awaited<ReturnType<InferenceChatCompletions['create']>>, { object: 'chat.completion' }>;
@@ -73,12 +74,27 @@ export function functionCallsOf(completion: ChatCompletion): Array<{ id: string;
 }
 
 // ---- the public log ----
-export type ReadLog = (model: string) => Promise<{ entries: KeyEntry[]; source: string }>;
+/** Reads the log for `model`; `signal` is aborted when the run fails before the read is needed, so a reader should stop then. */
+export type ReadLog = (model: string, signal: AbortSignal) => Promise<{ entries: KeyEntry[]; source: string }>;
 /** The contract log over JSON-RPC, what the browser reads too (an unreachable contract fails the run before sending, never a silent fallback). */
 export function contractLog(cfg: Pick<AinekConfig, 'rpcUrl' | 'contract'>): ReadLog {
   const reader = keyLogReader(cfg.rpcUrl, cfg.contract);
-  const source = `contract ${cfg.contract} via ${new URL(cfg.rpcUrl).host}`;
-  return async (model) => ({ entries: await reader.latestKeys(model), source });
+  return async (model, signal) => ({ entries: await reader.latestKeys(model, undefined, signal), source: `contract ${cfg.contract} via ${new URL(cfg.rpcUrl).host}` });
+}
+
+/** A step failure that knows how long the step took (the log read is timed by its own promise, not by the step clock). */
+class StepError extends Error {
+  readonly ms: number;
+  constructor(message: string, ms: number) {
+    super(message);
+    this.ms = ms;
+  }
+}
+/** A 200 whose decrypted body is not a chat completion (an error envelope, a truncated body) must fail the send step with a clear reason, not a TypeError later. */
+function asChatCompletion(plaintext: string): ChatCompletion {
+  const value = JSON.parse(plaintext) as Partial<ChatCompletion> | null;
+  if (value?.object !== 'chat.completion' || typeof value.id !== 'string' || !Array.isArray(value.choices)) throw new Error(`unexpected response shape (keys: ${Object.keys(value ?? {}).join(', ') || 'none'})`);
+  return value as ChatCompletion;
 }
 
 // ---- outcomes ----
@@ -145,6 +161,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
     return value;
   };
   const done = <O extends Verified | Refused | Failed>(outcome: O): O & RunStats => ({ ...outcome, timings, totalMs: performance.now() - t0, retries });
+  const logAbort = new AbortController(); // a run that fails before step 2 abandons the log read instead of leaving it running
 
   try {
     // 0. The chosen model must support model attestation: never a silent downgrade to plaintext.
@@ -161,9 +178,11 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
     // 1. Gateway and model evidence, verified here; the public log is read meanwhile (independent; the send waits for both).
     const tLog = performance.now();
     const logPromise = Promise.resolve()
-      .then(() => readLog(model)) // a reader that throws synchronously still fails the key-log step, not this one
-      .then((log) => ({ ...log, ms: performance.now() - tLog }));
-    logPromise.catch(() => undefined); // awaited in step 2; a rejection must not surface before then
+      .then(() => readLog(model, logAbort.signal)) // a reader that throws synchronously still fails the key-log step, not this one
+      .then(
+        (log) => ({ ok: true as const, ...log, ms: performance.now() - tLog }),
+        (err: unknown) => ({ ok: false as const, err, ms: performance.now() - tLog }), // never rejects: awaited only in step 2
+      );
     const { gateway, models, modelAttestation, modelPublicKey, pinnedFetch } = await step(
       'attestation',
       async () => {
@@ -184,10 +203,9 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
 
     // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
     running = 'key-log';
-    stepStart = tLog;
-    const { entries, source: logSource, ms: logMs } = await logPromise.catch((err: unknown) => {
-      throw new Error(`public log unavailable (${describeSdkError(err)})`);
-    });
+    const log = await logPromise;
+    if (!log.ok) throw new StepError(`public log unavailable (${describeSdkError(log.err)})`, log.ms);
+    const { entries, source: logSource, ms: logMs } = log;
     timings['key-log'] = logMs;
     const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
     if (verdict.status !== 'ok') {
@@ -222,7 +240,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
         const forVerification = encrypted.clone();
         const decrypted = await prepared.decryptResponse(encrypted);
         const [bytes, plaintext] = await Promise.all([forVerification.arrayBuffer(), decrypted.text()]);
-        return { responseBody: new Uint8Array(bytes), completion: JSON.parse(plaintext) as ChatCompletion };
+        return { responseBody: new Uint8Array(bytes), completion: asChatCompletion(plaintext) };
       },
       (r) => `completion ${r.completion.id}: ${requestBody.length} B ciphertext sent, ${r.responseBody.length} B received, ${functionCallsOf(r.completion).length} tool call(s)`,
     );
@@ -245,8 +263,9 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep = () => unde
     );
     return done({ kind: 'verified', signer, entries, logSource, logEntry, completion, requestBody, responseBody, signature, proof, report });
   } catch (err) {
+    logAbort.abort(); // no-op once the read has settled
     const reason = describeSdkError(err);
-    onStep({ id: running, status: 'fail', detail: reason, ms: performance.now() - stepStart });
+    onStep({ id: running, status: 'fail', detail: reason, ms: err instanceof StepError ? err.ms : performance.now() - stepStart });
     return done({ kind: 'failed', step: running, reason });
   }
 }

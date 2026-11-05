@@ -17,7 +17,8 @@ export async function readStorageBalance(rpcUrl: string, contractId: string, acc
 /** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
 export class ContractMethodNotFound extends Error {}
 
-export async function viewFunction(rpcUrl: string, contractId: string, method: string, args: Record<string, unknown>): Promise<unknown> {
+/** `signal` lets a caller abandon the read (the Node runner aborts the log read when attestation fails); an aborted call is not retried. */
+export async function viewFunction(rpcUrl: string, contractId: string, method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
   const body = JSON.stringify({
     jsonrpc: '2.0',
     id: '1',
@@ -32,10 +33,10 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
     return /\bMethodNotFound\b/.test(text) ? new ContractMethodNotFound(message) : new Error(message);
   };
   // Network failures, timeouts and 429/5xx are retried a bounded number of times; contract errors are not.
-  const transient = (err: unknown): boolean => err instanceof Transient || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|network/i.test(err.message)));
+  const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|network/i.test(err.message))));
   return withRetry(
     async () => {
-      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
       if (res.status === 429 || res.status >= 500) throw new Transient(`${rpcUrl}: HTTP ${res.status}`);
       if (!res.ok) throw new Error(`${rpcUrl}: HTTP ${res.status}`);
       const json = (await res.json()) as { result?: { result?: number[]; error?: string }; error?: { message?: string; data?: unknown } };
@@ -58,7 +59,7 @@ const Head = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64
 
 export interface KeyLogReader {
   /** `latest_keys(model, max_age_ns)`: newest first, the fail-closed window by default. */
-  latestKeys(model: string, maxAgeNs?: string): Promise<KeyEntry[]>;
+  latestKeys(model: string, maxAgeNs?: string, signal?: AbortSignal): Promise<KeyEntry[]>;
   /** `entry(index)`; null when the index does not exist. */
   entry(index: number): Promise<KeyEntry | null>;
   /** `entries_since(index, limit)`. */
@@ -68,9 +69,9 @@ export interface KeyLogReader {
 }
 
 export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
-  const view = (method: string, args: Record<string, unknown>) => viewFunction(rpcUrl, contractId, method, args);
+  const view = (method: string, args: Record<string, unknown>, signal?: AbortSignal) => viewFunction(rpcUrl, contractId, method, args, signal);
   return {
-    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs })),
+    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS, signal) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs }, signal)),
     entry: async (index) => {
       const raw = await view('entry', { index });
       return raw == null ? null : KeyEntry.parse(raw);
