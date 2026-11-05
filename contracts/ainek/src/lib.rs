@@ -10,11 +10,14 @@
 //!   methods are *change* calls: a signed transaction, gas, and `env::predecessor_account_id()`
 //!   tells us who called.
 
+mod agent;
 mod canonical;
+
+pub use agent::{Action, ActionRecord, ActionStatus, AgentInfo, Decision};
 
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde_json::{self, json};
-use near_sdk::store::{IterableSet, LookupMap, Vector};
+use near_sdk::store::{IterableSet, LookupMap, LookupSet, Vector};
 use near_sdk::{env, near, require, AccountId, PanicOnDefault};
 
 /// Upper bound for list views so a single RPC call stays within node limits.
@@ -109,15 +112,22 @@ pub struct Contract {
     /// account owner tops this up once with a full-access key (`deposit_storage`) and the chat
     /// then commits with the FC key, each commit paying for its own bytes from this balance.
     storage_credit: LookupMap<AccountId, u128>,
+    /// Tier 2 (SPEC §4.3, `agent.rs`): registered agents, every proposed action by id, and the
+    /// decisions already used ("<agent>/<nonce>").
+    agents: LookupMap<AccountId, agent::Agent>,
+    actions: Vector<ActionRecord>,
+    used_nonces: LookupSet<String>,
 }
 
-/// State layout of the v1 deployment (key log only), read once by `migrate`.
+/// State layout of the v2 deployment (key log + proof commits), read once by `migrate`.
 #[near(serializers = [borsh])]
-struct ContractV1 {
+struct ContractV2 {
     owner: AccountId,
     verifiers: IterableSet<AccountId>,
     entries: Vector<KeyEntry>,
     by_model: LookupMap<String, Vector<u64>>,
+    commits: LookupMap<String, ProofCommit>,
+    storage_credit: LookupMap<AccountId, u128>,
 }
 
 #[near]
@@ -132,23 +142,29 @@ impl Contract {
             by_model: LookupMap::new(b"m"),
             commits: LookupMap::new(b"p"),
             storage_credit: LookupMap::new(b"s"),
+            agents: LookupMap::new(b"a"),
+            actions: Vector::new(b"x"),
+            used_nonces: LookupSet::new(b"n"),
         }
     }
 
-    /// v1 -> v2 state upgrade, run once in the same transaction as the code deploy
+    /// v2 -> v3 state upgrade, run once in the same transaction as the code deploy
     /// (`cargo near deploy ... with-init-call migrate`). The collections keep their prefixes, so
-    /// only the root struct is rewritten; the key log is untouched.
+    /// only the root struct is rewritten; the key log and the proof commits are untouched.
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let old: ContractV1 = env::state_read().expect("no v1 state to migrate");
+        let old: ContractV2 = env::state_read().expect("no v2 state to migrate");
         Self {
             owner: old.owner,
             verifiers: old.verifiers,
             entries: old.entries,
             by_model: old.by_model,
-            commits: LookupMap::new(b"p"),
-            storage_credit: LookupMap::new(b"s"),
+            commits: old.commits,
+            storage_credit: old.storage_credit,
+            agents: LookupMap::new(b"a"),
+            actions: Vector::new(b"x"),
+            used_nonces: LookupSet::new(b"n"),
         }
     }
 
@@ -314,14 +330,7 @@ impl Contract {
         // Charge exactly the bytes written. `storage_usage` is updated as collections are flushed
         // at the end of the call, so flush here to measure.
         self.commits.flush();
-        let added = env::storage_usage().saturating_sub(before);
-        let cost = env::storage_byte_cost().as_yoctonear() * u128::from(added);
-        let credit = self.storage_credit.get(&account).copied().unwrap_or(0);
-        require!(
-            credit >= cost,
-            "not enough prepaid storage: call deposit_storage with a full-access key first"
-        );
-        self.storage_credit.insert(account.clone(), credit - cost);
+        self.charge_storage(&account, before);
 
         emit(
             "proof_committed",
@@ -331,6 +340,19 @@ impl Contract {
 
     pub fn proof_commit(&self, account: AccountId, commit: String) -> Option<ProofCommit> {
         self.commits.get(&commit_key(&account, &commit)).cloned()
+    }
+
+    /// Takes the price of the bytes written since `before` from `account`'s prepaid credit. The
+    /// caller flushes the collections it wrote to first, otherwise the bytes are not counted yet.
+    fn charge_storage(&mut self, account: &AccountId, before: u64) {
+        let added = env::storage_usage().saturating_sub(before);
+        let cost = env::storage_byte_cost().as_yoctonear() * u128::from(added);
+        let credit = self.storage_credit.get(account).copied().unwrap_or(0);
+        require!(
+            credit >= cost,
+            "not enough prepaid storage: call deposit_storage with a full-access key first"
+        );
+        self.storage_credit.insert(account.clone(), credit - cost);
     }
 
     fn assert_owner(&self) {
@@ -627,5 +649,42 @@ mod tests {
         let mut c = contract_with_verifier(&verifier);
         set_caller(&verifier, 0);
         c.log_key(input);
+    }
+
+    /// The live contract holds the key log the web demo reads and users' proof commits. Upgrading to
+    /// the tier-2 code must keep all of it and start with no agents.
+    #[test]
+    fn migrate_keeps_the_key_log_and_the_proof_commits() {
+        let (input, verifier, _) = vector_input();
+        set_caller("ainek.testnet", 1);
+        let mut v2 = ContractV2 {
+            owner: acc("owner.testnet"),
+            verifiers: IterableSet::new(b"v"),
+            entries: Vector::new(b"e"),
+            by_model: LookupMap::new(b"m"),
+            commits: LookupMap::new(b"p"),
+            storage_credit: LookupMap::new(b"s"),
+        };
+        v2.verifiers.insert(acc(&verifier));
+        v2.commits.insert(
+            commit_key(&acc("alice.testnet"), COMMIT),
+            ProofCommit { kind: "model".into(), log_index: 0, block_height: 7 },
+        );
+        v2.storage_credit.insert(acc("alice.testnet"), 5);
+        v2.verifiers.flush();
+        v2.commits.flush();
+        v2.storage_credit.flush();
+        env::state_write(&v2);
+
+        // `migrate` is #[private]: called by the contract account itself, in the deploy transaction.
+        let mut c = Contract::migrate();
+        assert_eq!(c.owner(), acc("owner.testnet"));
+        assert_eq!(c.verifiers(), vec![acc(&verifier)]);
+        assert_eq!(c.storage_balance_of(acc("alice.testnet")).0, 5);
+        assert_eq!(c.proof_commit(acc("alice.testnet"), COMMIT.to_string()).unwrap().block_height, 7);
+        assert!(c.agent(acc("agent.testnet")).is_none() && c.action(0).is_none());
+        // The migrated contract keeps working: the registered verifier can still log.
+        set_caller(&verifier, 2);
+        assert_eq!(c.log_key(input), 0);
     }
 }

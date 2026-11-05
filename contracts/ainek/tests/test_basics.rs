@@ -1,30 +1,13 @@
 //! Integration test: deploys the real wasm into a local NEAR sandbox node and drives it the way
 //! the verifier (change calls) and the client (view calls) will on testnet.
 
-use near_api::{AccountId, NearToken};
+mod common;
+
+use common::{create_subaccount, now_ms};
+use near_api::NearToken;
 use near_sdk::serde_json::{self, json, Value};
 
 const VECTORS: &str = include_str!("../../../docs/test-vectors/canonical.json");
-
-async fn create_subaccount(
-    sandbox: &near_sandbox::Sandbox,
-    name: &str,
-) -> testresult::TestResult<near_api::Account> {
-    let account_id: AccountId = name.parse().unwrap();
-    sandbox
-        .create_account(account_id.clone())
-        .initial_balance(NearToken::from_near(10))
-        .send()
-        .await?;
-    Ok(near_api::Account(account_id))
-}
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
-}
 
 #[tokio::test]
 async fn key_log_end_to_end_on_sandbox() -> testresult::TestResult<()> {

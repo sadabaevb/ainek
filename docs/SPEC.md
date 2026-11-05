@@ -183,22 +183,43 @@ update_policy(agent_id, policy_hash, policy_version, tee_pubkey)                
 pause_agent(agent_id) / unpause_agent(agent_id)                                                                    // owner
 propose_action(action: Action, model_proof_commit: String, decision: Decision, tee_signature: String) -> u64     // agent (FC key)
 approve(action_id: u64) / reject(action_id: u64)                                                                   // owner
-view agent(agent_id) -> AgentInfo
-view action(action_id) -> ActionRecord
+view agent(agent_id) -> AgentInfo | null
+view action(action_id) -> ActionRecord | null
 view pending_actions(agent_id) -> Vec<ActionRecord>
 ```
 ```
 Action   { kind: "ft_transfer", token_id: AccountId, receiver_id: AccountId, amount: U128, memo: String }
 Decision { verdict: "Allow" | "Deny" | "NeedsApproval", policy_hash: String, policy_version: u32,
            action_commit: String, model_proof_commit: String, nonce: String, expires_at: U64 }
+AgentInfo    { agent_id, policy_hash, policy_version, tee_pubkey, token_id, paused: bool, spent_today: U128 }
+ActionRecord { action_id: u64, agent_id, action: Action, decision: Decision, tee_signature: String, tee_pubkey: String,
+               status: "Pending" | "Executing" | "Executed" | "Failed" | "Denied" | "Rejected", day: u64, block_height: u64 }
 ```
-Проверки в `propose_action`: агент зарегистрирован и не на паузе; `decision.policy_hash/version`
-совпадают с реестром; `decision.action_commit == sha256(canonical_json(action))`;
-`decision.expires_at > now`; `nonce` не использован; `ed25519_verify(tee_signature, canonical_bytes(decision), tee_pubkey)`.
-`Allow` → cross-contract `ft_transfer` (контракт — отправитель) → `action_executed`.
-`NeedsApproval` → pending → `action_pending`; `approve` исполняет. `Deny` → `action_denied`, без исполнения.
+`policy_hash`, `tee_pubkey` — 64 hex (в `ActionRecord` — ключ, которым проверена подпись этого действия, он переживает
+`update_policy`); `tee_signature` — base64 подписи ed25519 над `canonical_bytes(decision)` (поле `sig`
+выхода job); `expires_at` — unix ms. `spent_today` — сумма за текущие сутки UTC по времени блока; её агент передаёт в job.
+
+Проверки в `propose_action` (каждая со своим тестом): агент зарегистрирован и не на паузе; `action.kind == "ft_transfer"`
+и `action.token_id` совпадает с зарегистрированным; `decision.policy_hash/version` совпадают с реестром;
+`decision.action_commit == sha256(canonical_json(action))`; `decision.model_proof_commit == model_proof_commit`;
+`now < decision.expires_at <= now + 10 мин + 2 мин` (верхняя граница не даёт получить «вечное» решение, подав в job
+время из будущего); `decision.nonce == sha256(action_commit:(expires_at − 600000):spent_today)`, где `spent_today` —
+учёт самого контракта (§6.2: так контракт ловит решение, принятое для выдуманного «потрачено 0»); `nonce` не использован
+этим агентом; `ed25519_verify(tee_signature, canonical_bytes(decision), tee_pubkey)`. Запись оплачивается из
+`deposit_storage` агента, как `commit_proof` (FC-ключ не может приложить депозит).
+
+`Allow` → статус `Executing`, cross-contract `ft_transfer` (контракт — отправитель, 1 yocto из баланса контракта) →
+callback `on_transfer` → `Executed` и событие `action_executed`, либо `Failed` и `action_failed`, если токен отказал.
+`NeedsApproval` → `Pending` и `action_pending` (в очереди одного агента не больше 20); `approve` (если агент не на паузе
+и политика и ключ с момента решения не менялись) исполняет так же, событие
+`action_approved`; `reject` → `Rejected`, `action_rejected`. `Deny` → `Denied`, `action_denied`, без исполнения.
+Сумма входит в `spent_today` сразу при `Allow` и `NeedsApproval` (чтобы очередь ожидающих не обходила дневной лимит)
+и возвращается при `Rejected`/`Failed`; действие, одобренное в другие сутки, считается в сутки одобрения. `approve` не
+ограничен десятью минутами: срок решения относится к `propose_action`. `propose_action` и `approve` вызывать минимум с
+60 TGas (перевод и callback оплачиваются из них; 30 TGas по умолчанию в near-api-js не хватит).
 Событие `action_proposed {action_id, agent_id, verdict, policy_hash, policy_version, action_commit, model_proof_commit}` —
-без суммы и получателя; сам перевод на публичном testnet виден в транзакции (честно говорим об этом).
+без суммы и получателя; сам перевод на публичном testnet виден в транзакции (честно говорим об этом). Остальные события:
+`agent_registered`, `policy_updated`, `agent_paused`, `agent_unpaused`.
 
 Fallback (если OutLayer не взлетел): `propose_action(action, model_proof_commit)` без `decision`;
 политика в контракте: `caps {per_action, per_day}` публичны, whitelist как `Vec<sha256(salt_i || receiver_id)>`,
