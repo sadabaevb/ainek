@@ -3,8 +3,8 @@
 > **Status:** NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense,
 > Open Innovation, Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 >
-> **Done (Nov 4):** Tier 1 client, proof package, offline replay, auditor page; key-log contract live on testnet with entry #0.
-> **In progress:** `commit_proof`, the verifier daemon, Tier 2 (agent + policy in TDX).
+> **Done (Nov 5):** Tier 1 client, proof package, offline replay, auditor page; key-log contract v2 live on testnet with `commit_proof`; verifier daemon wrote its first entry (#3).
+> **In progress:** the verifier daemon as a hosted service (today it ran once, by hand), Tier 2 (agent + policy in TDX).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
@@ -28,10 +28,12 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
   A verifier logs a key only after checking the Intel TDX quote and the NVIDIA GPU evidence, and the client re-verifies the
   evidence itself as well, so the log is a second opinion, not the only one. If two trusted verifiers disagree on a model,
   you see a split view, not an average. Today: one verifier, ours; entry #0 was logged by hand from a report our code
-  verified with the SDK (its NVIDIA verdict hash was not recorded); the daemon is in progress.
+  verified with the SDK); entries #1 and #2 are re-logs of that same recording by a stopgap script (same nonce and report
+  hash); entry #3 is the first one written by the verifier daemon from a fresh attestation. No entry records the NVIDIA
+  verdict hash yet (the SDK's GPU verifier does not return it).
 - **Did this answer come from there?** The enclave signs `sha256(request)` and `sha256(response)`. Ainek keeps the exact
-  bytes, recomputes both hashes and checks the signature against the logged key. A salted hash of the proof will be committed
-  to NEAR (until `commit_proof` is deployed the commit stays in this browser). The salt and your copy of the exchange live
+  bytes, recomputes both hashes and checks the signature against the logged key. A salted hash of the proof is committed
+  to NEAR by your wallet (`commit_proof`, from storage your account prepays); until you connect one it stays in this browser. The salt and your copy of the exchange live
   only in this browser; disclosing to an auditor hands over one proof, its salt and the ciphertext bytes, never the plaintext.
 - **Did the agent do only what it was allowed to?** (Tier 2, in progress; a cap-check spike of the job exists.) The policy
   (whitelist, caps, approval threshold) is meant to run in an OutLayer job on Intel TDX that signs the decision with a key
@@ -50,6 +52,10 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 | ![The proof card: model, hardware, key in the public log, hashes, E2EE, on NEAR](docs/screenshots/proof-card.png) | ![Red card: key not in the public log, message not sent](docs/screenshots/refused.png) |
 | The public key log (`/log`) | A disclosure checked by an auditor (`/auditor`) |
 | ![The public key log page](docs/screenshots/log.png) | ![The auditor verdict card](docs/screenshots/auditor.png) |
+
+The card's compose hash is the one attested for this reply; it is shown, not compared with the matched entry (#3, whose
+compose differs: the provider answers from two deployments with the same signing key, and both composes are in the log).
+See "What we do not claim".
 
 ## How NEAR is used
 
@@ -102,7 +108,7 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
 
 With `pnpm -F web dev` running, at `http://localhost:3000`:
 
-1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. Until the verifier daemon runs, the log is refreshed by hand.
+1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log (entry #3 was its first run); until it runs as a hosted service, a stopgap refreshes it by hand.
 2. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
 3. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
 4. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
@@ -182,8 +188,8 @@ Known issues we inherited (and say so):
 
 ```
 browser ── E2EE via our relay ──▶ NEAR AI gateway (TEE) ──▶ model enclave (TDX + GPU): signs sha256(request), sha256(response)
-browser ── reads the key log; will commit a salted hash ──▶ NEAR contract (ainek-log-dastan.testnet)
-verifier(s) ── attestation report → SDK checks → KeyEntry ── log_key ──▶ NEAR contract        (daemon in progress)
+browser ── reads the key log; commits a salted hash (prepaid storage) ──▶ NEAR contract (ainek-log-dastan.testnet)
+verifier(s) ── attestation report → SDK checks → KeyEntry ── log_key ──▶ NEAR contract        (daemon: services/verifier)
 agent (function-call key) ──▶ OutLayer policy job (TDX) ── signed decision ──▶ contract: execute, or wait for Telegram approval
 stop button: DeleteKey + pause_agent                                                           (Tier 2, planned)
 ```
@@ -196,7 +202,7 @@ stop button: DeleteKey + pause_agent                                            
   verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust
   (`AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`).
 - Every attested exchange becomes a proof (`packages/proof`, SPEC §5): signature, hashes, log index, salt, commit. The commit
-  is `sha256(salt ‖ canonical_json(proof without salt/commit/commitTx))`, computed in the browser; the contract will store
+  is `sha256(salt ‖ canonical_json(proof without salt/commit/commitTx))`, computed in the browser; the contract stores
   only the commit. The Rust contract uses the same canonical JSON for the log's `entry_hash` (shared test vectors in
   `docs/test-vectors`).
 - Replay mode (`pnpm demo`) re-runs the SDK's own verification on recorded evidence: recorded Intel collateral, the recorded
@@ -213,16 +219,16 @@ stop button: DeleteKey + pause_agent                                            
 apps/web/            Next.js app: chat with the proof card, /verify, /log, /auditor, /trust; byte-exact relay to NEAR AI
 apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:live, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
-contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head);
-                     proof commits (SPEC §4.2) and Tier 2 (§4.3) next
+contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
+                     (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2); Tier 2 (§4.3) next
 jobs/policy/         Rust OutLayer WASI-P1 job: spike, cap check only, no signature yet (Tier 2)
-services/verifier/   placeholder: the attestation → KeyEntry → log_key daemon is in progress
+services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
 services/agent/      placeholder: NL → NEAR AI → OutLayer → contract (Tier 2, not started)
 docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
 ```
 
-Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test); `cargo test` in `contracts/ainek` (unit tests + a
-`near-sandbox` integration test); `pnpm -F demo check-contract` checks the deployed contract's ABI against SPEC §4.1.
+Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof` and `services/verifier`); `cargo test` in
+`contracts/ainek` (unit tests + a `near-sandbox` integration test); `pnpm -F demo check-contract` checks the deployed contract's ABI against SPEC §4.1.
 
 ## Disclosures
 
