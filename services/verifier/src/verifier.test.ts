@@ -5,9 +5,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { buildKeyEntryInput, type KeyEntry, type RawReport } from '@ainek/proof';
-import { selectModelAttestations } from './attest.ts';
+import { selectModelAttestations, withDeadline } from './attest.ts';
 import { MAX_INTERVAL_MIN, loadConfig } from './config.ts';
 import { alreadyLogged, parseLoggedIndex } from './log.ts';
+import { RETRY_AFTER_FAILURE_MS, failureStreaks, nextDelayMs } from './main.ts';
 
 const samples = new URL('../../../docs/samples/', import.meta.url);
 const reportBytes = readFileSync(new URL('attestation-report.json', samples));
@@ -68,4 +69,31 @@ test('loadConfig refuses to start without the verifier account and key, and boun
   assert.throws(() => loadConfig({ ...base, VERIFIER_INTERVAL_MIN: String(MAX_INTERVAL_MIN + 1) }), /between 1 and/);
   // A dry run sends nothing, so the .env.example placeholders must be enough (clean-clone rule).
   assert.equal(loadConfig({ VERIFIER_ACCOUNT_ID: 'v1.ainek.testnet', VERIFIER_PRIVATE_KEY: 'ed25519:...' }, { dryRun: true }).dryRun, true);
+});
+
+test('a new failure is retried within a minute; one that stays backs off without slowing the others', () => {
+  const interval = 15 * 60_000;
+  const failed = (key: string) => ({ model: 'a/b', key, outcome: 'failed', error: 'fetch failed' }) as const;
+  const ok = { model: 'a/b', key: 'ok', outcome: 'current', index: 3 } as const;
+  assert.equal(nextDelayMs(failureStreaks([ok], new Map()), interval), interval);
+  // Each lost round eats into the clients' 24 h window, so a transient error must not cost a whole interval.
+  let streaks = failureStreaks([ok, failed('bad')], new Map());
+  assert.equal(nextDelayMs(streaks, interval), RETRY_AFTER_FAILURE_MS);
+  // A replica whose evidence never verifies must not make us hit PCCS and NRAS every minute for as long as it is up.
+  streaks = failureStreaks([failed('bad')], failureStreaks([failed('bad')], streaks));
+  assert.equal(nextDelayMs(streaks, interval), 4 * RETRY_AFTER_FAILURE_MS);
+  for (let i = 0; i < 20; i++) streaks = failureStreaks([failed('bad')], streaks);
+  assert.equal(nextDelayMs(streaks, interval), interval);
+  // ...and that standing failure must not take the fast retry away from a fresh one on another key.
+  streaks = failureStreaks([failed('bad'), failed('new')], streaks);
+  assert.equal(nextDelayMs(streaks, interval), RETRY_AFTER_FAILURE_MS);
+  // A key that recovered starts from scratch the next time it fails.
+  assert.equal(failureStreaks([failed('bad')], failureStreaks([ok], streaks)).get('a/b/bad'), 1);
+  assert.equal(nextDelayMs(failureStreaks([failed('bad')], new Map()), 30_000), 30_000, 'never slower than the configured interval');
+});
+
+test('withDeadline fails a hung call instead of blocking the loop forever, and leaves a slow one alone', async () => {
+  await assert.rejects(withDeadline(new Promise(() => {}), 20, 'attestation of a/b'), /attestation of a\/b did not finish within/);
+  assert.equal(await withDeadline(new Promise((r) => setTimeout(() => r(7), 20)), 5_000, 'x'), 7);
+  await assert.rejects(withDeadline(Promise.reject(new Error('own failure')), 5_000, 'x'), /own failure/);
 });
