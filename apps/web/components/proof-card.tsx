@@ -14,7 +14,7 @@ import { CardHead, CheckList, Row } from './checks';
 import { RedCard } from './red-card';
 import { CopyButton } from './copy-button';
 
-export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcome: ChatOutcome; onCommit?: (outcome: VerifiedOutcome) => void }) {
+export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }: { outcome: ChatOutcome; onCommit?: (outcome: VerifiedOutcome) => void; /** Shown on a refusal caused by the tamper switch: send the same message again with the honest key. */ onRetry?: () => void }) {
   const { t } = useT();
   const cfg = useConfig();
   const { signedAccountId } = useNearWallet(); // the button's label follows the wallet as it is now, not the turn's frozen status
@@ -35,11 +35,14 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit }: { outcom
       'untrusted-only': [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))],
       absent: [t.refusedTitle, t.refusedBody],
     };
-    const [title, body] = texts[v.reason === 'ok' ? 'absent' : v.reason];
+    const reason = v.reason === 'ok' ? 'absent' : v.reason;
+    const [title, body] = texts[reason];
     return (
       <RedCard
         title={title}
         body={body}
+        note={t.refusedConsequence[reason]}
+        action={onRetry && <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button>}
         lines={[
           `key seen by the client: ${outcome.seenKey}`,
           `verdict: ${outcome.keyVerdict.status}: ${outcome.keyVerdict.detail}`,
