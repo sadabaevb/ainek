@@ -836,9 +836,10 @@ Verifier): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`, `VE
 `packages/proof`, метка времени на каждую строку. Не трогал: депозит в 1 yocto в `deposit_storage` (testnet, мелочь),
 пробник секрета в policy-job (уйдёт при переписывании под SPEC §6), `withdraw` (решено: не делаем).
 
-Проверка: `pnpm -F verifier once` → запись #4 (tx `Gwinh62Kmyx6aJaeUBbDDAdghU8WevLWVkk5AkWkCeR1`, compose `a0e3c6f4…`);
-`docker build` + `docker run --env-file .env ainek-verifier --once` → запись #5 (tx
-`EQVuhy1Bkyth26Ncwa1nki8vHCYCsYz6aJPM1J79qy6T`, compose `5f7ebd85…`). Это первые записи с живым nonce и report_hash.
+Проверка: первая живая запись демона — **#3** (04:58 UTC, свой nonce и report_hash, compose `5f7ebd85…`); далее
+`pnpm -F verifier once` → #4 (tx `Gwinh62Kmyx6aJaeUBbDDAdghU8WevLWVkk5AkWkCeR1`, compose `a0e3c6f4…`) и `docker build` +
+`docker run --env-file .env ainek-verifier --once` → #5 (tx `EQVuhy1Bkyth26Ncwa1nki8vHCYCsYz6aJPM1J79qy6T`, compose
+`5f7ebd85…`). Неподтверждённые (фикстура) — только #0–#2.
 За эндпоинтом **два деплоя glm-5.3-flash с одним ключом подписи и разными compose_hash** (`a0e3c6f4…` и `5f7ebd85…`),
 отчёт отдаёт то один, то другой — теперь в логе есть оба; клиенту при сверке по `composeHash` принимать любой
 залогированный compose для ключа.

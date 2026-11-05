@@ -46,7 +46,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig
     privateKey,
     models,
     intervalMs: intervalMin * 60_000,
-    reportsDir: env['VERIFIER_DATA_DIR'] ?? path.resolve(import.meta.dirname, '../data/reports'),
+    // `||`, not `??`: an empty `VERIFIER_DATA_DIR=` line in .env must mean "default", not mkdir('').
+    reportsDir: env['VERIFIER_DATA_DIR'] || path.resolve(import.meta.dirname, '../data/reports'),
     dedupWindowNs: SIX_HOURS_NS,
   };
 }

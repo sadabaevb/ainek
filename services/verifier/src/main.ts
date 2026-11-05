@@ -23,31 +23,26 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
   const results: KeyResult[] = [];
   for (const model of cfg.models) {
     const started = performance.now();
+    // Anything that fails before the per-key loop (attestation fetch, disk, reading the log) fails this model's
+    // round and nothing else: the daemon keeps running and tries again next interval.
     let round;
+    let recent;
     try {
       round = await attestModel(model, { baseUrl: cfg.nearaiBaseUrl, acceptedTcbStatuses: cfg.acceptedTcbStatuses });
+      mkdirSync(cfg.reportsDir, { recursive: true });
+      writeFileSync(path.join(cfg.reportsDir, `${round.reportHash}.json`), round.reportBytes);
+      log(`${model}: report with ${round.keys.length} attestation(s) checked in ${((performance.now() - started) / 1000).toFixed(1)} s`);
+      // Without the log we cannot dedup; writing blindly would spend gas on every round, so skip this model.
+      recent = await writer.recentByMe(model, cfg.dedupWindowNs);
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       log(`${model}: NOT logged: ${error}`);
       results.push({ model, key: '', outcome: 'failed', error });
       continue;
     }
-    mkdirSync(cfg.reportsDir, { recursive: true });
-    writeFileSync(path.join(cfg.reportsDir, `${round.reportHash}.json`), round.reportBytes);
-    const took = ((performance.now() - started) / 1000).toFixed(1);
-    log(`${model}: report with ${round.keys.length} attestation(s) checked in ${took} s`);
 
-    let recent;
-    try {
-      recent = await writer.recentByMe(model, cfg.dedupWindowNs);
-    } catch (err) {
-      // Without the log we cannot dedup; writing blindly would spend gas on every round, so skip this model.
-      const error = `cannot read the key log: ${err instanceof Error ? err.message : String(err)}`;
-      log(`${model}: NOT logged: ${error}`);
-      results.push({ model, key: '', outcome: 'failed', error });
-      continue;
-    }
-
+    // Keys logged earlier in this same round: two replicas with the same key and compose count once.
+    const loggedNow = new Set<string>();
     for (const k of round.keys) {
       if (!k.ok) {
         // Fail closed: a replica whose evidence does not verify is simply not logged; clients then refuse that key.
@@ -58,14 +53,16 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       const { entry } = k;
       const key = shortHex(entry.signing_address);
       log(`${model}: key ${key} verified: TCB ${entry.tcb_status}, GPU ${k.verified.gpuEvidence}, compose ${shortHex(entry.compose_hash)}, ${entry.image_digests.length} image digest(s)`);
+      const pair = `${entry.signing_address}/${entry.compose_hash}`;
       const seen = alreadyLogged(entry, recent);
-      if (seen) {
-        log(`${model}: key ${key} with this compose already logged by us at index ${seen.index} within 6 h, not logging again`);
-        results.push({ model, key: entry.signing_address, outcome: 'current', index: seen.index });
+      if (seen || loggedNow.has(pair)) {
+        log(`${model}: key ${key} with this compose already logged by us${seen ? ` at index ${seen.index} within 6 h` : ' in this round'}, not logging again`);
+        results.push({ model, key: entry.signing_address, outcome: 'current', index: seen?.index ?? -1 });
         continue;
       }
       try {
         const { index, txHash } = await writer.logKey(entry);
+        loggedNow.add(pair);
         log(`logged ${model} key ${key} at index ${index}, tx ${txHash}`);
         results.push({ model, key: entry.signing_address, outcome: 'logged', index, txHash });
       } catch (err) {
