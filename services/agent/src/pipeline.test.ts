@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
-import { ActionProof, actionCommitOf, bytesToBase64, bytesToHex, canonicalBytes, commitOf, type Action, type Decision, type ModelProof, type PolicyInput } from '@ainek/proof';
+import { ActionProof, actionCommitOf, bytesToBase64, bytesToHex, canonicalBytes, commitOf, verifyActionProof, type Action, type Decision, type ModelProof, type PolicyInput } from '@ainek/proof';
 import type { RunStats, Verified } from '@ainek/tier1-node';
 import type { ActionChain } from './chain.ts';
 import type { Extraction } from './llm.ts';
@@ -62,6 +62,7 @@ test('Allow: the policy gets the §6.2 input, the contract gets the signed decis
   assert.deepEqual(r.checks.filter((k) => k.status !== 'ok'), []);
   ActionProof.parse(r.proof);
   assert.equal(commitOf(r.proof.salt, r.proof), r.proof.commit);
+  assert.deepEqual(verifyActionProof(r.proof, { teePubkey, wasmHash }).checks.filter((k) => k.status !== 'ok'), []);
 });
 
 test('Deny and NeedsApproval are proposed too (the contract records them); nothing is executed', async () => {

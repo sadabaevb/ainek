@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
 import { canonicalBytes } from './canonical.ts';
-import { actionCommitOf } from './commit.ts';
+import { actionCommitOf, commitOf, proofPayload } from './commit.ts';
 import { bytesToBase64 } from './disclosure.ts';
 import { bytesToHex, sha256Hex } from './hash.ts';
-import { PolicyInput, PolicyOutput, checkPolicyOutput, verifyDecisionSignature } from './policy.ts';
-import type { Action, Decision } from './schema.ts';
+import { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
+import { ActionProof, type Action, type Decision } from './schema.ts';
 
 const action: Action = { kind: 'ft_transfer', token_id: 'token.ainek.testnet', receiver_id: 'vendor1.testnet', amount: '300000000', memo: 'October' };
 const modelProofCommit = 'ab'.repeat(32);
@@ -46,4 +46,38 @@ test('checkPolicyOutput: an honest Allow passes every check; each tampering is n
   assert.deepEqual(failed(checkPolicyOutput(signed(), { ...expect, action: { ...action, amount: '1' } })), ['action-commit']);
   assert.deepEqual(failed(checkPolicyOutput(signed(), { ...expect, modelProofCommit: 'ff'.repeat(32) })), ['model-proof-commit']);
   assert.deepEqual(failed(checkPolicyOutput(signed('Allow', { expires_at: String(now - 1) }), expect)), ['decision-expiry']);
+});
+
+/** A committed action proof over `signed()`. */
+function actionProof(): ActionProof {
+  const out = signed();
+  const payload = ActionProof.parse({ v: 1, kind: 'action', actionId: 7, action, actionCommit: actionCommitOf(action), modelProofCommit, decision: out.decision, teeSignature: out.sig, teePubkey: pubkey, wasmHash, attestationUrl: 'https://api.test/attestations/c1', proposeTx: 'TX', executeTx: 'TX', approver: null });
+  const salt = '11'.repeat(32);
+  return { ...payload, salt, commit: commitOf(salt, payload) };
+}
+const failedIds = (r: ReturnType<typeof verifyActionProof>) => r.checks.filter((c) => c.status === 'fail').map((c) => c.id);
+
+test('verifyActionProof: an honest proof passes; signer and build are "skipped" without the on-chain registration, compared with it', () => {
+  const r = verifyActionProof(actionProof());
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.checks.filter((c) => c.status === 'skipped').map((c) => c.id), ['decision-key', 'wasm-hash']);
+  assert.deepEqual(verifyActionProof(actionProof(), { teePubkey: pubkey, wasmHash }).checks.filter((c) => c.status !== 'ok'), []);
+  assert.deepEqual(failedIds(verifyActionProof(actionProof(), { teePubkey: 'ff'.repeat(32), wasmHash: 'ee'.repeat(32) })), ['decision-key', 'wasm-hash']);
+});
+
+test('verifyActionProof: every tampering is named', () => {
+  const p = actionProof();
+  const recommit = (x: ActionProof): ActionProof => ({ ...x, commit: commitOf('11'.repeat(32), x) });
+  assert.deepEqual(failedIds(verifyActionProof({ ...p, commit: 'ff'.repeat(32) })), ['commit']);
+  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, action: { ...action, amount: '1' } }))), ['action-commit']);
+  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, modelProofCommit: 'ff'.repeat(32) }))), ['model-proof-commit']);
+  assert.deepEqual(failedIds(verifyActionProof(recommit({ ...p, decision: { ...p.decision, verdict: 'Deny' } }))), ['decision-signature']);
+  assert.deepEqual(failedIds(verifyActionProof({ ...p, extra: 1 })), ['schema']);
+});
+
+test('verifyActionProof: a copy without the salt is still checkable; the commit is skipped, and expiry is not re-checked', () => {
+  const r = verifyActionProof(proofPayload(actionProof()));
+  assert.equal(r.ok, true);
+  assert.equal(r.checks.find((c) => c.id === 'commit')?.status, 'skipped');
+  assert.equal(r.checks.some((c) => c.id === 'decision-expiry'), false);
 });

@@ -3,10 +3,10 @@
 import nacl from 'tweetnacl';
 import { z } from 'zod';
 import { canonicalBytes } from './canonical.ts';
-import { actionCommitOf } from './commit.ts';
+import { actionCommitOf, commitOf } from './commit.ts';
 import { base64ToBytes } from './disclosure.ts';
 import { hexToBytes } from './hash.ts';
-import { Action, Decision, hex64, u128String } from './schema.ts';
+import { Action, ActionProof, Decision, hex64, u128String } from './schema.ts';
 import type { Check } from './verify.ts';
 
 /** stdin of the policy job. `now` is unix milliseconds. */
@@ -61,4 +61,36 @@ export function checkPolicyOutput(out: PolicyOutput, x: DecisionExpectations): C
     check('model-proof-commit', d.model_proof_commit === x.modelProofCommit, 'decision.model_proof_commit is this conversation', 'decision.model_proof_commit is not this conversation'),
     check('decision-expiry', BigInt(d.expires_at) > BigInt(x.now), `decision valid until ${new Date(Number(d.expires_at)).toISOString()}`, 'the decision has expired'),
   ];
+}
+
+export interface ActionProofReport {
+  ok: boolean;
+  checks: Check[];
+  proof: ActionProof | null;
+}
+
+/**
+ * Re-checks an action proof from the proof alone (SPEC §5.2), for an auditor: the action hashes to what the decision covers, the decision
+ * is signed by the key the proof names, and the salted commit reproduces. `expected` is what `register_agent` put on-chain: without it
+ * the key and the build are "skipped", because a proof cannot vouch for its own signer. Expiry is not re-checked: a decision has expired
+ * by the time anyone audits it, and the contract checked it when it mattered.
+ */
+export function verifyActionProof(value: unknown, expected: { teePubkey?: string; wasmHash?: string } = {}): ActionProofReport {
+  const parsed = ActionProof.safeParse(value);
+  if (!parsed.success) return { ok: false, checks: [{ id: 'schema', status: 'fail', detail: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }], proof: null };
+  const proof = parsed.data;
+  const pass = (id: Check['id'], ok: boolean, okText: string, failText: string): Check => ({ id, status: ok ? 'ok' : 'fail', detail: ok ? okText : failText });
+  const against = (id: Check['id'], actual: string, wanted: string | undefined, what: string): Check =>
+    wanted === undefined ? { id, status: 'skipped', detail: `${what} not compared with the on-chain registration` } : pass(id, actual === wanted, `${what} matches the on-chain registration`, `${what} ${actual.slice(0, 8)}… differs from the registered ${wanted.slice(0, 8)}…`);
+  const recomputed = actionCommitOf(proof.action);
+  const checks: Check[] = [
+    pass('schema', true, 'proof matches the ActionProof schema (SPEC §5.2)', ''),
+    pass('action-commit', proof.actionCommit === recomputed && proof.decision.action_commit === recomputed, 'sha256(canonical_json(action)) is what the proof and the decision cover', 'the action does not hash to what the proof and the decision cover'),
+    pass('model-proof-commit', proof.decision.model_proof_commit === proof.modelProofCommit, 'the decision binds the model proof this proof names', 'the decision binds a different model proof'),
+    pass('decision-signature', verifyDecisionSignature(proof.decision, proof.teeSignature, proof.teePubkey), `ed25519 signature verifies under ${proof.teePubkey.slice(0, 8)}…`, 'the decision signature does not verify'),
+    against('decision-key', proof.teePubkey, expected.teePubkey, 'the policy key'),
+    against('wasm-hash', proof.wasmHash, expected.wasmHash, 'the policy build'),
+    proof.salt !== undefined && proof.commit !== undefined ? pass('commit', commitOf(proof.salt, proof) === proof.commit, `commit ${proof.commit.slice(0, 12)}… reproduced from salt + proof`, 'the commit does not reproduce from the salt and the proof') : { id: 'commit', status: 'skipped', detail: 'no salt in this copy of the proof' },
+  ];
+  return { ok: !checks.some((c) => c.status === 'fail'), checks, proof };
 }
