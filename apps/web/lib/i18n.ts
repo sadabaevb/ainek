@@ -43,6 +43,7 @@ const en = {
   chainCommitting: 'committing the salted hash on NEAR…',
   connectWallet: 'Connect wallet',
   disconnect: 'Disconnect',
+  walletFailed: (reason: string) => `Wallet error: ${reason}`,
   refusedTitle: 'Key not in the public log. Message not sent.',
   refusedBody: 'The model reported a signing key that no trusted verifier has logged. Ainek refuses rather than trusts.',
   /** What the refusal protected against, where a counterfactual exists; the quorum and split-view bodies already say it all. */
@@ -273,6 +274,7 @@ const ru: typeof en = {
   chainCommitting: 'записываю солёный хеш в NEAR…',
   connectWallet: 'Подключить кошелёк',
   disconnect: 'Отключить',
+  walletFailed: (reason) => `Ошибка кошелька: ${reason}`,
   refusedTitle: 'Ключ не в публичном логе. Сообщение не отправлено.',
   refusedBody: 'Модель назвала ключ подписи, которого нет у доверенных верификаторов. Ainek отказывает, а не доверяет.',
   refusedConsequence: {

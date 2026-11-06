@@ -93,6 +93,7 @@ h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
 .nav .btn { white-space: nowrap; }
 .wallet { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.4rem 0.3rem 0.75rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.85rem; }
 .wallet .dot { box-shadow: 0 0 0 3px var(--ok-bg); }
+.wallet-error { position: absolute; top: 100%; right: 1rem; max-width: min(24rem, calc(100vw - 2rem)); margin: 0.25rem 0 0; padding: 0.35rem 0.6rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--surface); color: var(--fail); font-size: 0.8rem; overflow-wrap: anywhere; }
 .dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 999px; flex: none; }
 .dot.ok { background: var(--ok); }
 .dot.fail { background: var(--fail); }
