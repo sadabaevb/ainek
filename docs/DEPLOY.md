@@ -85,9 +85,8 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
 `.env.example`, block "Agent service". Before the first message:
 
 1. The agent account exists, with a function-call key scoped to the contract and to exactly `propose_action` and
-   `commit_proof`. The service reads the key's scope from the chain at start and refuses anything else. Set an allowance of at
-   least 1 NEAR: it cannot be raised later without a new key, and each `propose_action` ties up about 0.1 NEAR (100 TGas) until
-   the refund.
+   `commit_proof`. The service reads the key's scope from the chain at start and refuses anything else. The allowance cannot be raised later
+   without a new key: the deployed key has 0.25 NEAR, and five calls used 0.0018 NEAR (DEV-NOTES), so that covers hundreds of actions.
 2. The account prepaid its storage: `deposit_storage` with a full-access key. One action takes about 0.013 NEAR (two commits, SPEC §4.2, and the action record, SPEC §4.3), so 0.1 NEAR covers about 7 actions; the service stops before the model call when less than one action is left.
 3. `register_agent` ran with the policy hash, the job's public key and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
@@ -173,14 +172,15 @@ through the contract, like this one; a call through the HTTPS API returns its ow
 | policy public key (`tee_pubkey`) | `4c0761e240ee9d6837327f7dfc73728a8b62e7941f1c5457f6cd15e552f44740` |
 | `policy_hash` (policy version 1) | `ae503840a7a1c05eb3950e315a9cc6c4ad8b154194451194fabb21326a6c2051` |
 | first runs | request 10084 (tx `29KjawfJxXWg14vFWLtKnnCNwypFmriesN5w8WQLCce3`; the CLI timed out waiting for it) and request 10085 (tx `B6wfuy1Demw96Q211JS69BYeaHL3KxSFgLKbFEb5pt2B`), the same test action. Checked on 10085: `https://testnet-api.outlayer.ai/attestations/by-request/10085` (`wasm_hash` and `executed_wasm_sha256` equal the build above, `secrets_ref` `ainek-dev-dastan.testnet/default`) |
-| registered in the contract | not yet: `register_agent` waits for the contract upgrade (next section) |
+| registered in the contract | yes, Nov 6: `register_agent` tx `96fo9HFvukSfA7U39CRfkdQi1LuV8oQZt4fkVuQ1PkUw` (next section) |
 
 ## Tier 2 accounts on testnet (Dastan)
 
 What the agent flow of SPEC §4.3 needs on chain, in order. `<owner>` is the account that owns the Ainek contract,
 `<contract>` the contract (`AINEK_CONTRACT`), `<token>` and `<agent>` are sub-accounts of `<owner>`. Every command ends
-with `network-config testnet sign-with-keychain send`, written `…` below. Not run on testnet yet; the same sequence
-runs against a local node in `contracts/ainek/tests/test_agent.rs`.
+with `network-config testnet sign-with-keychain send`, written `…` below. Run on testnet on Nov 6, with
+the differences noted under "Deployed Tier 2 accounts" below; the same sequence runs against a local node in
+`contracts/ainek/tests/test_agent.rs`.
 
 ### 1. The demo token
 
@@ -216,7 +216,8 @@ cargo near deploy build-non-reproducible-wasm <contract> with-init-call migrate 
 ```
 
 `migrate` moves the stored state to the new layout; the key log, the proof commits and the storage credits stay
-(rehearsed in a local sandbox against the wasm that was live on testnet on Nov 6).
+(rehearsed in a local sandbox against the wasm that was live on testnet, then run on testnet on Nov 6: every stored
+key and value except the contract's root record was byte-for-byte the same before and after).
 
 ### 3. The agent account and its key
 
@@ -259,3 +260,25 @@ near contract call-function as-transaction <contract> approve json-args '{"actio
 
 The stop button is the owner's `pause_agent` (the contract refuses the agent from then on) plus deleting the
 function-call key from the agent account.
+
+### Deployed Tier 2 accounts
+
+| What | Value |
+|---|---|
+| contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash on chain `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The contract is its own owner, so owner calls are signed as `ainek-log-dastan.testnet` |
+| demo token | `token.ainek-dev-dastan.testnet` (deploy tx `6PjJPBANBCQqhUy2uYcgvnvUdy7ejBpz6RkaeLER2zG7`); 1,000,000 AINEK minted to `ainek-dev-dastan.testnet`, 10,000 of them sent to the contract |
+| agent | `agent.ainek-dev-dastan.testnet`, created with 0.5 NEAR, of which 0.1 NEAR is prepaid as storage on the contract |
+| agent's function-call key | `ed25519:72shb8mCbainyssgWPbzWmz8htdi96omzM2U4s7QWcM5`: `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (less than the 1 NEAR that "Agent service" above asks for; five calls used 0.0018 NEAR, the two texts are not reconciled yet). The account also has the full-access key it was created with (in Dastan's keychain) |
+| receivers registered on the token | the contract and one of the policy's two whitelisted receivers; the other is left unregistered on purpose (the `Failed` demo) |
+| first actions | action 0: `Allow`, 1 AINEK, `Executed` in the proposing tx `2Hpjzuq3BXdb1zGsPc1fpBcS4azoxDEH3ymLLS3kdMBd`. Action 1: `NeedsApproval`, 400 AINEK, proposed in `5LXLQQob287RaTkDph5RyTZfEvsuMSSwArTB2L9Gi8mc`, approved by the owner in `J68M3NSGuxTB4uR1ZSFauian46nftUAR9Gch9rVPtQaP`, `Executed` |
+
+On testnet the token and the agent are sub-accounts of `ainek-dev-dastan.testnet` (the names were fixed in the policy
+before the accounts existed), so `<owner>` in steps 1 and 3 was that account and in steps 2 and 4 the contract itself.
+The agent's key pair was generated locally and only its public key was added (`use-manually-provided-public-key`), so
+the secret was never printed.
+
+The two first actions were sent by a script standing in for the agent service: it signed with the agent's function-call
+key through `services/agent/src/chain.ts` and ran the policy job with `outlayer run`, but the model proof commit behind
+each action is a random placeholder, not a model answer (three such `model` commits by the agent are on the contract,
+one of them unused). The service itself (Telegram, the model, the job over HTTPS)
+has not run against these accounts yet; it still needs `OUTLAYER_PAYMENT_KEY`.
