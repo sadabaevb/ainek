@@ -19,7 +19,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
 - Only a **salted hash** of each proof goes on-chain (`commit_proof`, paid from storage the committing account prepays and
   cannot withdraw). Prompts, responses and policy contents never do.
-- (Tier 2) The agent holds **only a function-call key** scoped to `propose_action`. Funds sit in the contract.
+- (Tier 2) The agent holds **only a function-call key** scoped to `commit_proof` and `propose_action`. Funds sit in the contract.
   Revoking the key (`DeleteKey`) or `pause_agent` stops the agent at the chain level.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer); the contract
   verifies this signature before executing. The signature shows which key signed, not which code ran: that is in the
