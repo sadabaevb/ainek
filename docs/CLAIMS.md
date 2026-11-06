@@ -12,6 +12,9 @@ Honest limitations won prizes at previous NEAR hackathons.
   NEAR** written by verifiers (today: one, ours; the log is designed for independent verifiers). If the key is not in the
   log, the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
   only sets the default.
+- Among the 26 hackathon entries whose code we read on Nov 6, 2026 (`docs/FIELD.md`), none combines a public log of TEE keys, a
+  refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
+  of them has independent verifiers writing to a public log of AI model keys, and neither do we: today only one verifier writes to our log.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this holds while
