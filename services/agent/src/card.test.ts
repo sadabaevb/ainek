@@ -22,10 +22,10 @@ test('Allow and executed: the payment in the owner\'s units with the purpose, th
   assert.equal(approval, null);
 });
 
-test('the card says only what this service checked: the signature, not the attestation behind the url', () => {
+test('the card says what this service checked: the signature and the run', () => {
   const { text } = renderCard(proposed(proofOf('Allow')), cfg);
   assert.match(text, /signature verifies under the registered policy key/);
-  assert.match(text, /attestation \(not checked by this service\): https:\/\/api\.test\/attestations\/c1/);
+  assert.match(text, /the run was checked: published build, quote signed by Intel: https:\/\/api\.test\/attestations\/c1/);
   assert.doesNotMatch(text, /signed in the OutLayer TEE/);
 });
 

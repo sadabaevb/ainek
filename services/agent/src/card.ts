@@ -1,6 +1,6 @@
 // What the owner reads in Telegram (SPEC §5.3 in plain text, no parse mode). Text the model wrote is flattened to one line and labelled as
-// the model's: a forwarded injection must not be able to forge a line of the card above the approval buttons. The wording follows docs/CLAIMS.md: "attested deployment", "proof", and it says only what this service checked. It verifies the decision's
-// signature; it does not read the attestation behind the URL.
+// the model's: a forwarded injection must not be able to forge a line of the card above the approval buttons. The wording follows docs/CLAIMS.md: "attested deployment", "proof", and it says only what this service checked: before an action is
+// proposed, the decision's signature and the attestation of the run that made it.
 import { explorerTxUrl, shortHex as short, type Check, type ModelProof, type Verdict } from '@ainek/proof';
 import type { Result } from './pipeline.ts';
 import { fromMinimalUnits } from './units.ts';
@@ -51,7 +51,7 @@ export function renderCard(r: Result, cfg: { explorer: string; tokenDecimals: nu
           `Payment: ${fromMinimalUnits(action.amount, cfg.tokenDecimals)} ${action.token_id} to ${action.receiver_id}`,
           ...(r.purpose ? [`Purpose, in the model's words: "${oneLine(r.purpose, 200)}"`] : []),
           modelLine(r.modelProof),
-          `Decision: signature verifies under the registered policy key ${short(proof.teePubkey)}, policy hash ${short(decision.policy_hash)}; attestation (not checked by this service): ${proof.attestationUrl}`,
+          `Decision: signature verifies under the registered policy key ${short(proof.teePubkey)}, policy hash ${short(decision.policy_hash)}; the run was checked: published build, quote signed by Intel: ${proof.attestationUrl}`,
           `Contract: action #${proof.actionId}, ${txUrl(proof.proposeTx)}`,
           `Salted commits on NEAR: ${commits}`,
           ...(r.commitError ? [`Action proof not committed: ${oneLine(r.commitError)}. The action itself is on-chain, see above`] : []),

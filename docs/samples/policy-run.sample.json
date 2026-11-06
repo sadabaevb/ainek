@@ -1,5 +1,10 @@
 {
- "_about": "One real run of jobs/policy on OutLayer testnet (request 10085, transaction B6wfuy1Demw96Q211JS69BYeaHL3KxSFgLKbFEb5pt2B), recorded on 2026-11-06 for the offline check in `pnpm demo:policy`. attestation: GET https://testnet-api.outlayer.ai/attestations/by-request/10085. input and output: the run's transaction. collateral: Intel's data as OutLayer archived it for that moment (GET /public/collateral). measurementsApproved: is_measurements_approved on worker.outlayer.testnet when recorded. All of it is public.",
+ "_about": "One real run of jobs/policy on OutLayer testnet (request 10085, transaction B6wfuy1Demw96Q211JS69BYeaHL3KxSFgLKbFEb5pt2B), recorded on 2026-11-06 for the offline check in `pnpm demo:policy`. attestation: GET https://testnet-api.outlayer.ai/attestations/by-request/10085. input and output: the run's transaction. collateral: Intel's data as OutLayer archived it for that moment (GET /public/collateral). measurementsApproved: is_measurements_approved on worker.outlayer.testnet when recorded. published: the build and project in docs/DEPLOY.md and .env.example when recorded; a test fails when they move on, so a redeploy records a new sample. All of it is public.",
+ "published": {
+  "wasmHash": "8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb",
+  "project": "ainek-dev-dastan.testnet/policy",
+  "apiUrl": "https://testnet-api.outlayer.ai"
+ },
  "attestation": {
   "id": 18757,
   "task_id": 22608,

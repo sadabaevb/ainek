@@ -9,6 +9,7 @@ export const verifyTdxQuote: QuoteVerifier = (quote, collateral, atSeconds) => {
   if (!td) throw new Error('the quote is not a TD10 report');
   return {
     tcbStatus: verified.status,
+    advisoryIds: verified.advisory_ids,
     reportData: bytesToHex(td.reportData),
     measurements: { mrtd: bytesToHex(td.mrTd), rtmr0: bytesToHex(td.rtMr0), rtmr1: bytesToHex(td.rtMr1), rtmr2: bytesToHex(td.rtMr2), rtmr3: bytesToHex(td.rtMr3) },
   };
@@ -16,14 +17,14 @@ export const verifyTdxQuote: QuoteVerifier = (quote, collateral, atSeconds) => {
 
 /**
  * Fetches a run's attestation and checks it. OutLayer answers 404 until the worker has uploaded the quote, so this waits for it, within a
- * limit: no attestation means no way to tell which code ran.
+ * limit that covers every request here: no attestation means no way to tell which code ran.
  */
-export async function verifyPolicyRunAt(attestationUrl: string, x: { output: string; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): Promise<Check[]> {
+export async function verifyPolicyRunAt(attestationUrl: string, x: { output: string; input: string; freshness?: { nowSeconds: number; maxAgeSeconds: number }; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): Promise<Check[]> {
   const { fetch: f = fetch, pollMs = 1000, timeoutMs = 60_000, ...rest } = x;
   const signal = AbortSignal.timeout(timeoutMs);
   for (;;) {
     const res = await f(attestationUrl, { signal, redirect: 'error' });
-    if (res.ok) return verifyPolicyRun({ ...rest, run: PolicyRun.parse(await res.json()), verifyQuote: verifyTdxQuote, fetch: f });
+    if (res.ok) return verifyPolicyRun({ ...rest, run: PolicyRun.parse(await res.json()), verifyQuote: verifyTdxQuote, fetch: f, signal });
     if (res.status !== 404) throw new Error(`OutLayer attestation: HTTP ${res.status}`);
     await sleep(pollMs, undefined, { signal });
   }

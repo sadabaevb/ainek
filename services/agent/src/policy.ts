@@ -59,7 +59,12 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
   };
 }
 
-/** Which code made the decision: the signature names only a key, and that key is not tied to a build (SPEC §3.5). The job prints canonical JSON, so this reproduces the bytes the attestation covers. */
-export function outLayerRunCheck(cfg: { apiUrl: string; project: string; wasmHash: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number }) {
-  return (attestationUrl: string, output: PolicyOutput): Promise<Check[]> => verifyPolicyRunAt(attestationUrl, { ...cfg, output: canonicalJson(output) });
+/** A decision lives ten minutes (§6.2), so a run older than that cannot be the one just asked for. */
+const MAX_RUN_AGE_SECONDS = 600;
+
+/** Which code made the decision: the signature names only a key, and that key is not tied to a build (SPEC §3.5). The job reads and prints canonical JSON, so these are the bytes the attestation covers. */
+export function outLayerRunCheck(cfg: { apiUrl: string; project: string; wasmHash: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; now?: () => number }) {
+  const { now = Date.now, ...rest } = cfg;
+  return (attestationUrl: string, input: PolicyInput, output: PolicyOutput): Promise<Check[]> =>
+    verifyPolicyRunAt(attestationUrl, { ...rest, input: canonicalJson(input), output: canonicalJson(output), freshness: { nowSeconds: Math.floor(now() / 1000), maxAgeSeconds: MAX_RUN_AGE_SECONDS } });
 }

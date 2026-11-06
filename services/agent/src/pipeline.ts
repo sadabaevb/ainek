@@ -2,7 +2,7 @@
 // the whole path runs in tests with fakes; main.ts wires the real ones. Nothing is proposed unless the decision passes the
 // local checks, and nothing is sent to the model unless the key log confirms the attested key (inside extract). Nothing
 // after propose_action can throw out of here: by then the money may have moved, and the owner must get the action id.
-import { buildActionProof, checkPolicyOutput, type Check, type CommittedActionProof, type ModelProof, type PolicyOutput } from '@ainek/proof';
+import { buildActionProof, checkPolicyOutput, type Check, type CommittedActionProof, type ModelProof, type PolicyInput, type PolicyOutput } from '@ainek/proof';
 import type { ActionChain, Proposed } from './chain.ts';
 import { ContractRefused, errorText } from './errors.ts';
 import type { Extraction } from './llm.ts';
@@ -17,7 +17,7 @@ export interface Deps {
   /** From config: the build the deployed job should report. */
   wasmHash: string;
   /** Which code made the decision, from the run's attestation (`outLayerRunCheck`). */
-  checkRun: (attestationUrl: string, output: PolicyOutput) => Promise<Check[]>;
+  checkRun: (attestationUrl: string, input: PolicyInput, output: PolicyOutput) => Promise<Check[]>;
   now?: () => number;
 }
 
@@ -77,10 +77,12 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   // 2. The policy, inside its TEE; then the local checks on what came back.
   let evaluated;
   let registered;
+  let input: PolicyInput;
   try {
     registered = await deps.chain.agentState(); // read again: the model took seconds, and the contract rejects a decision made for a stale daily total
     if (registered.paused) return { kind: 'failed', stage: 'policy', reason: PAUSED };
-    evaluated = await deps.policy.evaluate({ action: x.action, model_proof_commit: modelProofCommit, spent_today: registered.spentToday, now: now() });
+    input = { action: x.action, model_proof_commit: modelProofCommit, spent_today: registered.spentToday, now: now() };
+    evaluated = await deps.policy.evaluate(input);
   } catch (err) {
     return { kind: 'failed', stage: 'policy', reason: errorText(err) };
   }
@@ -90,7 +92,7 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   // Money moves on this: a check that could not run counts as failed.
   let runChecks;
   try {
-    runChecks = await deps.checkRun(attestationUrl, output);
+    runChecks = await deps.checkRun(attestationUrl, input, output);
   } catch (err) {
     return { kind: 'failed', stage: 'policy', reason: `the policy run's attestation could not be checked: ${errorText(err)}` };
   }

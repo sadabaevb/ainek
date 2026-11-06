@@ -24,8 +24,9 @@ export const PolicyRun = z.looseObject({
   executed_wasm_sha256: hex64,
   input_hash: hex64,
   output_hash: hex64,
-  block_height: z.number().int(),
-  caller_account_id: z.string(),
+  // Nullable because a run made over HTTPS has no transaction of its own; an empty field then shows up as a report data mismatch, not as a crash.
+  block_height: z.number().int().nullish(),
+  caller_account_id: z.string().nullish(),
   project_id: z.string().nullish(),
   secrets_ref: z.string().nullish(),
   timestamp: z.number().int(),
@@ -44,6 +45,7 @@ export interface Measurements {
 /** A quote whose signature chain up to Intel has been verified; `reportData` and the measurements are read from it, as hex. */
 export interface VerifiedQuote {
   tcbStatus: string;
+  advisoryIds: string[];
   reportData: string;
   measurements: Measurements;
 }
@@ -73,7 +75,7 @@ export function taskHashOf(run: PolicyRun): string {
       text(run.wasm_hash),
       text(run.input_hash),
       text(run.output_hash),
-      le64(run.block_height),
+      le64(run.block_height ?? 0),
       text(run.caller_account_id),
       text(run.project_id),
       text(run.secrets_ref),
@@ -99,9 +101,13 @@ export interface PolicyRunEvidence {
   run: PolicyRun;
   /** The job's stdout: the decision being checked. */
   output: string;
+  /** The stdin the caller sent, canonical JSON. Without this check a real run on a false `spent_today` would pass. */
+  input: string;
   /** The published build (`docs/DEPLOY.md`, or rebuild it with `scripts/wasm-hash.sh`). */
   wasmHash: string;
   project?: string;
+  /** When money is about to move: a quote is judged at the run's own moment, so an old run must not pass as a new one. */
+  freshness?: { nowSeconds: number; maxAgeSeconds: number };
   /** Undefined when no verifier ran; `error` when the quote did not verify. */
   quote?: VerifiedQuote | { error: string };
   /** `is_measurements_approved` on OutLayer's contract; null when it could not be read. */
@@ -117,16 +123,20 @@ export function tryVerifyQuote(verify: QuoteVerifier, quote: Uint8Array, collate
   }
 }
 
-export function checkPolicyRun({ run, output, wasmHash, project, quote, measurementsApproved }: PolicyRunEvidence): Check[] {
+export function checkPolicyRun({ run, output, input, wasmHash, project, freshness, quote, measurementsApproved }: PolicyRunEvidence): Check[] {
   const buildOk = run.wasm_hash === wasmHash && run.executed_wasm_sha256 === wasmHash;
   const verified = quote && !('error' in quote) ? quote : null;
+  const advisories = verified?.advisoryIds.length ? ` (advisories: ${verified.advisoryIds.join(', ')})` : '';
+  const measurementOk = verified?.measurements.rtmr3 === run.worker_measurement;
   return [
     project !== undefined && run.project_id !== project
       ? check('run-build', false, '', `the run belongs to ${String(run.project_id)}, not to ${project}`)
       : check('run-build', buildOk, `the run executed the published build ${short(wasmHash)}`, `the run executed ${short(run.executed_wasm_sha256)}, not the published build ${short(wasmHash)}`),
+    check('run-input', sha256Hex(input) === run.input_hash, 'the run decided on this input', 'the run decided on a different input'),
     check('run-output', sha256Hex(output) === run.output_hash, 'this decision is what the run printed', 'this decision is not what the run printed'),
+    ...(freshness ? [check('run-fresh', run.timestamp <= freshness.nowSeconds + 120 && freshness.nowSeconds - run.timestamp <= freshness.maxAgeSeconds, 'the run happened just now', `the run is from ${run.timestamp} (unix seconds), not from just now (${freshness.nowSeconds})`)] : []),
     verified
-      ? check('run-quote', verified.tcbStatus === 'UpToDate', `Intel signature chain verifies; TCB ${verified.tcbStatus} at the time of the run`, `Intel signature chain verifies, but TCB is ${verified.tcbStatus} at the time of the run`)
+      ? check('run-quote', verified.tcbStatus === 'UpToDate', `Intel signature chain verifies; TCB ${verified.tcbStatus} at the time of the run${advisories}`, `Intel signature chain verifies, but TCB is ${verified.tcbStatus} at the time of the run${advisories}`)
       : quote
         ? check('run-quote', false, '', `the TDX quote did not verify: ${'error' in quote ? quote.error : ''}`)
         : { id: 'run-quote', status: 'skipped', detail: 'the TDX quote was not verified' },
@@ -134,33 +144,38 @@ export function checkPolicyRun({ run, output, wasmHash, project, quote, measurem
       ? check('run-binding', verified.reportData === `${taskHashOf(run)}${'0'.repeat(64)}`, 'the quote commits to this build, this input and this output', 'the quote does not commit to these hashes')
       : { id: 'run-binding', status: 'skipped', detail: 'without a verified quote, its report data proves nothing' },
     verified && typeof measurementsApproved === 'boolean'
-      ? check('run-worker', measurementsApproved && verified.measurements.rtmr3 === run.worker_measurement, "the worker's measurements are approved on OutLayer's contract", "the worker's measurements are not approved on OutLayer's contract")
+      ? !measurementOk
+        ? check('run-worker', false, '', "the attestation names a different worker measurement than the quote")
+        : check('run-worker', measurementsApproved, "the worker's measurements are on OutLayer's approved list", "the worker's measurements are not on OutLayer's approved list")
       : { id: 'run-worker', status: 'skipped', detail: "OutLayer's list of approved workers was not checked" },
   ];
 }
 
-/** The same checks with the network parts done: Intel's collateral as OutLayer archived it for the run's moment, and OutLayer's list of approved workers. */
-export async function verifyPolicyRun({ apiUrl, rpcUrl, network, verifyQuote, fetch: f = fetch, ...evidence }: Omit<PolicyRunEvidence, 'quote' | 'measurementsApproved'> & { apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; verifyQuote: QuoteVerifier; fetch?: typeof fetch }): Promise<Check[]> {
+/**
+ * The same checks with the network parts done: Intel's collateral as OutLayer archived it for the run's moment, and OutLayer's list of approved
+ * workers. A verdict comes back as checks; an outage throws, because "could not check" is a different thing to tell someone than "does not verify".
+ */
+export async function verifyPolicyRun({ apiUrl, rpcUrl, network, verifyQuote, fetch: f = fetch, signal, ...evidence }: Omit<PolicyRunEvidence, 'quote' | 'measurementsApproved'> & { apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; verifyQuote: QuoteVerifier; fetch?: typeof fetch; signal?: AbortSignal }): Promise<Check[]> {
   const { run } = evidence;
-  const bytes = base64ToBytes(run.tdx_quote);
-  const collateral = await collateralFor(bytes, run.timestamp, apiUrl, f);
-  const quote = 'error' in collateral ? collateral : tryVerifyQuote(verifyQuote, bytes, collateral.value, run.timestamp);
-  let measurementsApproved: boolean | null = null;
-  if (!('error' in quote)) {
-    const worker = network === 'mainnet' ? 'worker.outlayer.near' : 'worker.outlayer.testnet';
-    measurementsApproved = await viewFunction(rpcUrl, worker, 'is_measurements_approved', { measurements: quote.measurements }).then((v) => v === true, () => null);
-  }
-  return checkPolicyRun({ ...evidence, quote, measurementsApproved });
+  const quote = await verifiedQuoteOf(run, apiUrl, verifyQuote, f, signal);
+  if ('error' in quote) return checkPolicyRun({ ...evidence, quote });
+  const worker = network === 'mainnet' ? 'worker.outlayer.near' : 'worker.outlayer.testnet';
+  const approved = await viewFunction(rpcUrl, worker, 'is_measurements_approved', { measurements: quote.measurements }, signal);
+  return checkPolicyRun({ ...evidence, quote, measurementsApproved: approved === true });
 }
 
-async function collateralFor(quote: Uint8Array, atSeconds: number, apiUrl: string, f: typeof fetch): Promise<{ value: unknown } | { error: string }> {
-  const fmspc = fmspcOf(quote);
-  if (!fmspc) return { error: 'the quote names no Intel platform' };
+async function verifiedQuoteOf(run: PolicyRun, apiUrl: string, verifyQuote: QuoteVerifier, f: typeof fetch, signal?: AbortSignal): Promise<VerifiedQuote | { error: string }> {
+  let bytes: Uint8Array;
+  let fmspc: string | null;
   try {
-    const res = await f(`${apiUrl}/public/collateral?fmspc=${fmspc}&at=${atSeconds}`);
-    if (!res.ok) return { error: `Intel collateral for ${fmspc}: HTTP ${res.status}` };
-    return { value: JSON.parse(((await res.json()) as { collateral: string }).collateral) };
-  } catch (err) {
-    return { error: `Intel collateral for ${fmspc}: ${err instanceof Error ? err.message : String(err)}` };
+    bytes = base64ToBytes(run.tdx_quote);
+    fmspc = fmspcOf(bytes);
+  } catch {
+    return { error: 'the quote cannot be read' };
   }
+  if (!fmspc) return { error: 'the quote names no Intel platform' };
+  const res = await f(`${apiUrl}/public/collateral?fmspc=${fmspc}&at=${run.timestamp}`, { redirect: 'error', ...(signal ? { signal } : {}) });
+  if (!res.ok) throw new Error(`Intel collateral for platform ${fmspc}: HTTP ${res.status}`);
+  const { collateral } = (await res.json()) as { collateral: string };
+  return tryVerifyQuote(verifyQuote, bytes, JSON.parse(collateral), run.timestamp);
 }

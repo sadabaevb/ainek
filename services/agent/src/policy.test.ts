@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PolicyOutput } from '@ainek/proof';
+import { PolicyOutput, type PolicyInput } from '@ainek/proof';
 import { outLayerPolicy, outLayerRunCheck } from './policy.ts';
 
 const output = { decision: { verdict: 'Allow', policy_hash: 'ef'.repeat(32), policy_version: 3, action_commit: 'ab'.repeat(32), model_proof_commit: 'cd'.repeat(32), nonce: '12'.repeat(32), expires_at: '1' }, sig: 'c2ln', pubkey: '34'.repeat(32), wasm_hash: '56'.repeat(32) };
@@ -62,18 +62,24 @@ test('evaluate: a 408 with poll_url is polled, never resent; a run that stays pe
 });
 
 test('outLayerRunCheck: waits out the 404, then checks a real run end to end; another answer is an error', async () => {
-  const sample = JSON.parse(readFileSync(new URL('../../../docs/samples/policy-run.sample.json', import.meta.url), 'utf8')) as { attestation: { wasm_hash: string }; output: string; collateral: unknown };
-  const check = (f: typeof fetch) => outLayerRunCheck({ apiUrl: 'https://api.test', project: 'ainek-dev-dastan.testnet/policy', wasmHash: sample.attestation.wasm_hash, rpcUrl: 'http://rpc.test', network: 'testnet', fetch: f, pollMs: 0 });
+  const sample = JSON.parse(readFileSync(new URL('../../../docs/samples/policy-run.sample.json', import.meta.url), 'utf8')) as { attestation: { wasm_hash: string; timestamp: number }; input: string; output: string; collateral: unknown };
+  const runInput = JSON.parse(sample.input) as PolicyInput;
+  const check = (f: typeof fetch) => outLayerRunCheck({ apiUrl: 'https://api.test', project: 'ainek-dev-dastan.testnet/policy', wasmHash: sample.attestation.wasm_hash, rpcUrl: 'http://rpc.test', network: 'testnet', fetch: f, pollMs: 0, now: () => sample.attestation.timestamp * 1000 });
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async () => json(200, { result: { result: Array.from(Buffer.from('true')) } })) as typeof fetch;
   try {
     const { f, calls } = scripted([json(404, {}), json(200, sample.attestation), json(200, { collateral: JSON.stringify(sample.collateral) })]);
-    const checks = await check(f)(attestation, PolicyOutput.parse(JSON.parse(sample.output)));
-    assert.deepEqual(checks.map((c) => c.status), ['ok', 'ok', 'ok', 'ok', 'ok']);
+    const checks = await check(f)(attestation, runInput, PolicyOutput.parse(JSON.parse(sample.output)));
+    assert.deepEqual(checks.map((c) => [c.id, c.status]), [['run-build', 'ok'], ['run-input', 'ok'], ['run-output', 'ok'], ['run-fresh', 'ok'], ['run-quote', 'ok'], ['run-binding', 'ok'], ['run-worker', 'ok']]);
+    const lied = await check(scripted([json(200, sample.attestation), json(200, { collateral: JSON.stringify(sample.collateral) })]).f)(attestation, { ...runInput, spent_today: '999' }, PolicyOutput.parse(JSON.parse(sample.output)));
+    assert.equal(lied.find((c) => c.id === 'run-input')?.status, 'fail', 'a real run on another spent_today must not pass');
+    const old = await outLayerRunCheck({ apiUrl: 'https://api.test', project: 'ainek-dev-dastan.testnet/policy', wasmHash: sample.attestation.wasm_hash, rpcUrl: 'http://rpc.test', network: 'testnet', fetch: scripted([json(200, sample.attestation), json(200, { collateral: JSON.stringify(sample.collateral) })]).f, now: () => (sample.attestation.timestamp + 601) * 1000 })(attestation, runInput, PolicyOutput.parse(JSON.parse(sample.output)));
+    assert.equal(old.find((c) => c.id === 'run-fresh')?.status, 'fail', 'an old run must not pass as this one');
     assert.equal(calls.length, 3);
     assert.match(calls[2]?.url ?? '', /public\/collateral\?fmspc=b0c06f000000&at=\d+/);
   } finally {
     globalThis.fetch = realFetch;
   }
-  await assert.rejects(check(scripted([json(500, {})]).f)(attestation, output as PolicyOutput), /HTTP 500/);
+  await assert.rejects(check(scripted([json(500, {})]).f)(attestation, runInput, output as PolicyOutput), /HTTP 500/);
+  await assert.rejects(check(scripted([json(200, sample.attestation), json(502, {})]).f)(attestation, runInput, PolicyOutput.parse(JSON.parse(sample.output))), /collateral.*HTTP 502/, 'an outage is not a verdict');
 });
