@@ -118,6 +118,8 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 ### 4.1 Лог ключей
 ```
 register_verifier(account_id: AccountId)                         // owner, 1 yocto (§4.3) — ИЛИ открытая регистрация, см. ниже
+set_owner(new_owner: AccountId)                                  // owner, 1 yocto; не сам контракт; событие owner_changed {old_owner, new_owner}
+view owner() -> AccountId
 log_key(entry: KeyEntryInput) -> u64                             // verifier; returns index
 view head() -> Option<{ index: u64, entry_hash: String }>          // null while the log is empty
 view entry(index: u64) -> KeyEntry

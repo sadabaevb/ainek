@@ -79,6 +79,15 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .send_to(&network)
         .await?
         .assert_success();
+    // The contract account has no key from here on, as after the lock (docs/DEPLOY.md): everything below,
+    // the transfers and their callbacks included, must work without anyone able to sign as the contract.
+    let genesis_key: near_api::types::SecretKey = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse().unwrap();
+    near_api::Account(contract.account_id().clone())
+        .delete_key(genesis_key.public_key())
+        .with_signer(signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
 
     // The owner's methods need 1 yoctoNEAR: only a full-access key can attach it.
     let one_yocto = NearToken::from_yoctonear(1);

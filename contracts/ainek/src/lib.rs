@@ -185,6 +185,22 @@ impl Contract {
         self.owner.clone()
     }
 
+    /// Hands the owner role to another account. It exists so that the contract account can stop being its own
+    /// owner: once another account owns it, every key of the contract account can be deleted, and from then
+    /// on nobody can replace this code or rewrite the log, while the owner's methods keep working. The order
+    /// matters: check that the new owner can act before deleting the keys. Until then a mistyped account can
+    /// be undone by deploying code with a one-off method that rewrites `owner`; afterwards it is permanent,
+    /// and so is every later hand-over.
+    #[payable]
+    pub fn set_owner(&mut self, new_owner: AccountId) {
+        self.assert_owner_full_access();
+        // The contract as its own owner is exactly the state this method exists to leave: without keys on
+        // the contract account nobody could act as the owner again.
+        require!(new_owner != env::current_account_id(), "the contract cannot own itself");
+        emit("owner_changed", json!({ "old_owner": self.owner, "new_owner": new_owner }));
+        self.owner = new_owner;
+    }
+
     pub fn verifiers(&self) -> Vec<AccountId> {
         self.verifiers.iter().cloned().collect()
     }
@@ -476,6 +492,57 @@ mod tests {
         let mut c = contract_with_verifier("v1.ainek.testnet");
         set_caller("owner.testnet", 0);
         c.register_verifier(acc("v2.ainek.testnet"));
+    }
+
+    /// After the hand-over the new account has the owner's powers, and the change is announced.
+    #[test]
+    fn the_owner_role_moves_to_another_account() {
+        let mut c = contract_with_verifier("v1.ainek.testnet");
+        c.set_owner(acc("new-owner.testnet"));
+        assert_eq!(c.owner(), acc("new-owner.testnet"));
+        let log = get_logs().pop().unwrap();
+        let event: serde_json::Value = serde_json::from_str(log.strip_prefix("EVENT_JSON:").unwrap()).unwrap();
+        assert_eq!(event["event"], "owner_changed");
+        assert_eq!(event["data"][0], json!({ "old_owner": "owner.testnet", "new_owner": "new-owner.testnet" }));
+
+        set_caller_with_deposit("new-owner.testnet", 1);
+        c.register_verifier(acc("v2.ainek.testnet"));
+        assert_eq!(c.verifiers().len(), 2);
+    }
+
+    /// ...and the old owner is an outsider from then on.
+    #[test]
+    #[should_panic(expected = "only the owner can do this")]
+    fn the_old_owner_loses_the_role() {
+        let mut c = contract_with_verifier("v1.ainek.testnet");
+        c.set_owner(acc("new-owner.testnet"));
+        c.register_verifier(acc("v2.ainek.testnet"));
+    }
+
+    /// The contract owning itself is the state `set_owner` exists to leave; once its keys are gone, that
+    /// would leave nobody able to act as the owner.
+    #[test]
+    #[should_panic(expected = "the contract cannot own itself")]
+    fn the_contract_cannot_be_made_its_own_owner() {
+        let mut c = contract_with_verifier("v1.ainek.testnet");
+        c.set_owner(acc("ainek.testnet"));
+    }
+
+    #[test]
+    #[should_panic(expected = "only the owner can do this")]
+    fn only_the_owner_hands_the_role_over() {
+        let mut c = contract_with_verifier("v1.ainek.testnet");
+        set_caller_with_deposit("mallory.testnet", 1);
+        c.set_owner(acc("mallory.testnet"));
+    }
+
+    /// Like every method that decides who is trusted: not with a function-call key left on the owner's account.
+    #[test]
+    #[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+    fn the_owner_role_moves_only_with_a_full_access_key() {
+        let mut c = contract_with_verifier("v1.ainek.testnet");
+        set_caller("owner.testnet", 0);
+        c.set_owner(acc("new-owner.testnet"));
     }
 
     #[test]

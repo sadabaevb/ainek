@@ -282,3 +282,54 @@ key through `services/agent/src/chain.ts` and ran the policy job with `outlayer 
 each action is a random placeholder, not a model answer (three such `model` commits by the agent are on the contract,
 one of them unused). The service itself (Telegram, the model, the job over HTTPS)
 has not run against these accounts yet; it still needs `OUTLAYER_PAYMENT_KEY`.
+
+## Locking the contract (Dastan; not done yet)
+
+Today `ainek-log-dastan.testnet` owns itself and has one full-access key, so "append-only" rests on trusting whoever
+holds that key: they could deploy other code or rewrite the state. The lock removes that. It is the last step before
+submission, because after it nobody can fix a bug in the contract either.
+
+Before starting (none of this has been tried yet):
+
+- The repository is public. A reproducible build is only "rebuildable by anyone" then, and `cargo near` checks that
+  the commit is on the remote named in `Cargo.toml`.
+- `cargo near build reproducible-wasm` in `contracts/ainek` has run twice, better on two machines, with the same
+  sha256 both times. Note which `rustc` the build log shows: the build image is tagged Rust 1.96 while
+  `rust-toolchain.toml` pins 1.93, and we have not checked which one the container uses.
+- Everything that changes the contract is decided and merged: open verifier registration, and the two gaps listed at
+  the end of this section.
+
+Then, with every command ending in `network-config testnet sign-with-keychain send`:
+
+1. Deploy the final code as a reproducible build:
+   `cargo near deploy build-reproducible-wasm <contract> without-init-call …` from a clean, pushed commit (needs
+   Docker). No `migrate`: `set_owner` did not change the stored layout.
+2. Check the deploy before anything irreversible: the account's `code_hash` equals the hash of the local reproducible
+   wasm, and `contract_source_metadata` names the commit.
+3. Hand the owner role to an ordinary account that keeps a full-access key (the owner still registers verifiers and
+   agents and approves actions): `set_owner` with `{"new_owner":"<owner>"}`, 1 yoctoNEAR, signed as the contract.
+   Update `OWNER_ACCOUNT_ID` wherever it is set (`.env`, `.env.owner`, the agent's env: the bot prints
+   `sign-as <owner>` in its approve commands) and the "contract with agents" row above.
+4. Check the hand-over: `owner` returns `<owner>`, and `<owner>` can call a method that needs the full-access proof,
+   for example `unpause_agent` on the registered agent with 1 yoctoNEAR (`pause_agent` proves nothing, it takes no
+   deposit). A mistyped account can still be repaired here, by deploying code with a one-off method that rewrites
+   `owner`. After step 5 it cannot.
+5. Delete every key of the contract account: `near account list-keys <contract> network-config testnet now`, then
+   `near account delete-keys <contract> public-keys <key>,<key> …`.
+6. Publish in the README: the code hash, the commit it was built from, and the fact that `list-keys` is empty.
+
+What the lock makes final: the code, the existing log entries and the existing proof commits (the code has no way to
+change or remove them). What it does not change:
+
+- The owner still adds verifiers and agents, approves actions, and can hand the role on with `set_owner`, which is
+  then irreversible: a wrong account loses the role for good. Whoever owns the contract can also move every token it
+  holds, by registering an agent with a decision key of their own.
+- A registered verifier can still write entries, and there is no way to remove a verifier: a leaked verifier key can
+  append forever. Clients choose which verifiers they trust, so such entries can be ignored, not deleted.
+- The contract account pays for the storage of log entries. If its balance runs low, `log_key` fails until someone
+  sends the account NEAR; a plain transfer works and needs no key. NEAR on the account cannot be taken out again.
+
+The hand-over, the key deletion and the owner's and verifiers' calls after it run against a local node in
+`contracts/ainek/tests/test_basics.rs` (there the owner is a separate account from the start, and the build is not
+the reproducible one). `tests/test_agent.rs` runs the whole agent flow, transfers and callbacks included, on a
+contract account that has no key.
