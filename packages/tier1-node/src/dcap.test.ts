@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
-import { PolicyRun, base64ToBytes, checkPolicyRun, type PolicyRunEvidence } from '@ainek/proof';
+import { ActionProof, PolicyInput, PolicyOutput, PolicyRun, actionCommitOf, actionRunChecks, base64ToBytes, checkPolicyRun, type PolicyRunEvidence } from '@ainek/proof';
 import { verifyTdxQuote } from './dcap.ts';
 
 const read = (path: string) => JSON.parse(readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8'));
@@ -30,6 +30,26 @@ test('a real run over HTTPS passes every check against Intel', () => {
   const io = read('docs/spike-outlayer/by-call-allow.io.json') as { input: string; output: string };
   const checks = checkPolicyRun({ run: byCall, input: io.input, output: io.output, wasmHash, project, quote: verifyTdxQuote(base64ToBytes(byCall.tdx_quote), sample.collateral, byCall.timestamp), measurementsApproved: true });
   assert.deepEqual(checks.filter((c) => c.status !== 'ok'), []);
+});
+
+test('an action proof: its decision is rebuilt into what the run printed, and the quote passes against Intel in the same way', async () => {
+  const byCall = read('docs/spike-outlayer/by-call-allow.attestation.json') as object;
+  const io = read('docs/spike-outlayer/by-call-allow.io.json') as { input: string; output: string };
+  const { action, model_proof_commit } = PolicyInput.parse(JSON.parse(io.input));
+  const { decision, sig, pubkey, wasm_hash } = PolicyOutput.parse(JSON.parse(io.output));
+  const proof = ActionProof.parse({ v: 1, kind: 'action', actionId: 0, action, actionCommit: actionCommitOf(action), modelProofCommit: model_proof_commit, decision, teeSignature: sig, teePubkey: pubkey, wasmHash: wasm_hash, attestationUrl: 'https://api.test/attestations/by-call/x', proposeTx: 'tx' });
+  const f = (async (url: unknown) => {
+    const text = String(url);
+    if (text.endsWith('/attestations/by-call/x')) return new Response(JSON.stringify(byCall));
+    if (text.includes('/public/collateral')) return new Response(JSON.stringify({ collateral: JSON.stringify(sample.collateral) }));
+    return new Response(JSON.stringify({ result: { result: [...Buffer.from('true')] } })); // is_measurements_approved over JSON-RPC
+  }) as typeof fetch;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = f; // the view call goes through the global one
+  const checks = await actionRunChecks(proof, { apiUrl: 'https://api.test', project, wasmHash, rpcUrl: 'https://rpc.test', network: 'testnet', loadQuoteVerifier: async () => verifyTdxQuote, fetch: f }).finally(() => {
+    globalThis.fetch = realFetch;
+  });
+  assert.deepEqual(checks.map((c) => [c.id, c.status]), [['run-build', 'ok'], ['run-input', 'skipped'], ['run-output', 'ok'], ['run-quote', 'ok'], ['run-binding', 'ok'], ['run-worker', 'ok']]);
 });
 
 test('freshness is checked only where it is asked for, and an old run or one from the future fails it', () => {

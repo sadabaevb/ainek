@@ -112,7 +112,7 @@ function expectedRun(run: PolicyRun, { wasmHash, input, output, project }: Pick<
     commit_hash: null,
     build_target: 'wasm32-wasip1',
     wasm_hash: wasmHash,
-    input_hash: sha256Hex(input),
+    input_hash: input === null ? run.input_hash : sha256Hex(input),
     output_hash: sha256Hex(output),
     block_height: run.block_height,
     caller_account_id: owner,
@@ -124,11 +124,11 @@ function expectedRun(run: PolicyRun, { wasmHash, input, output, project }: Pick<
 }
 
 /** Two failures with different meanings: the record is not what the quote covers, or it is, and it is a run other than the one this decision needs. */
-function bindingCheck(run: PolicyRun, expected: HashedFields, reportData: string): Check {
+function bindingCheck(run: PolicyRun, expected: HashedFields, reportData: string, inputKnown: boolean): Check {
   const commitsTo = (r: HashedFields): boolean => reportData === `${taskHashOf(r)}${'0'.repeat(64)}`;
   if (!commitsTo(run)) return check('run-binding', false, '', 'the quote does not commit to this record');
   const differing = (Object.keys(expected) as Array<keyof HashedFields>).filter((field) => (run[field] ?? null) !== (expected[field] ?? null));
-  return check('run-binding', commitsTo(expected), 'the quote commits to this build, this input and this output, under this project and its owner', `the quote commits to a run that differs from what this decision needs in: ${differing.join(', ')}`);
+  return check('run-binding', commitsTo(expected), `the quote commits to this build, ${inputKnown ? 'this input and' : 'and'} this output, under this project and its owner`, `the quote commits to a run that differs from what this decision needs in: ${differing.join(', ')}`);
 }
 
 /** Intel's platform id, from the first certificate in the quote: it says which collateral to ask for. Only chooses what to fetch: a wrong one cannot pass the signature check. */
@@ -147,8 +147,8 @@ export interface PolicyRunEvidence {
   run: PolicyRun;
   /** The job's stdout: the decision being checked. */
   output: string;
-  /** The stdin the caller sent, canonical JSON. Without this check a real run on a false `spent_today` would pass. */
-  input: string;
+  /** The stdin the caller sent, canonical JSON. Without this check a real run on a false `spent_today` would pass. Null when re-checking later from a proof, which does not carry it: the contract recomputed the daily total itself. */
+  input: string | null;
   /** The published build (`docs/DEPLOY.md`, or rebuild it with `scripts/wasm-hash.sh`). */
   wasmHash: string;
   project: string;
@@ -158,6 +158,28 @@ export interface PolicyRunEvidence {
   quote?: VerifiedQuote | { error: string };
   /** `is_measurements_approved` on OutLayer's contract; null when it could not be read. */
   measurementsApproved?: boolean | null;
+}
+
+/** What `verify` from @phala/dcap-qvl returns, as far as we read it. */
+interface DcapResult {
+  status: string;
+  advisory_ids: string[];
+  report: { asTd10(): { reportData: Uint8Array; mrTd: Uint8Array; rtMr0: Uint8Array; rtMr1: Uint8Array; rtMr2: Uint8Array; rtMr3: Uint8Array } | null | undefined };
+}
+
+/** Turns dcap-qvl's `verify` into a `QuoteVerifier`. Node and the browser hand in their own import, so this package stays free of the library. */
+export function quoteVerifierOf<C>(verify: (quote: Uint8Array, collateral: C, atSeconds: number) => DcapResult): QuoteVerifier {
+  return (quote, collateral, atSeconds) => {
+    const verified = verify(quote, collateral as C, atSeconds);
+    const td = verified.report.asTd10();
+    if (!td) throw new Error('the quote is not a TD10 report');
+    return {
+      tcbStatus: verified.status,
+      advisoryIds: verified.advisory_ids,
+      reportData: bytesToHex(td.reportData),
+      measurements: { mrtd: bytesToHex(td.mrTd), rtmr0: bytesToHex(td.rtMr0), rtmr1: bytesToHex(td.rtMr1), rtmr2: bytesToHex(td.rtMr2), rtmr3: bytesToHex(td.rtMr3) },
+    };
+  };
 }
 
 /** A verifier that throws means the quote did not verify, which is a result, not a crash. */
@@ -178,7 +200,7 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
     run.project_id !== project
       ? check('run-build', false, '', `the run belongs to ${String(run.project_id)}, not to ${project}`)
       : check('run-build', buildOk, `the record names the published build ${short(wasmHash)}`, `the record names ${short(run.executed_wasm_sha256)}, not the published build ${short(wasmHash)}`),
-    check('run-input', sha256Hex(input) === run.input_hash, 'the run decided on this input', 'the run decided on a different input'),
+    input === null ? { id: 'run-input', status: 'skipped', detail: 'this proof does not carry the job input; the contract recomputed the daily total itself' } : check('run-input', sha256Hex(input) === run.input_hash, 'the run decided on this input', 'the run decided on a different input'),
     check('run-output', sha256Hex(output) === run.output_hash, 'this decision is what the run printed', 'this decision is not what the run printed'),
     ...(freshness ? [check('run-fresh', run.timestamp <= freshness.nowSeconds + 120 && freshness.nowSeconds - run.timestamp <= freshness.maxAgeSeconds, 'the run happened just now', `the run is from ${run.timestamp} (unix seconds), not from just now (${freshness.nowSeconds})`)] : []),
     verified
@@ -187,7 +209,7 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
         ? check('run-quote', false, '', `the TDX quote did not verify: ${'error' in quote ? quote.error : ''}`)
         : { id: 'run-quote', status: 'skipped', detail: 'the TDX quote was not verified' },
     verified
-      ? bindingCheck(run, expectedRun(run, { wasmHash, input, output, project }), verified.reportData)
+      ? bindingCheck(run, expectedRun(run, { wasmHash, input, output, project }), verified.reportData, input !== null)
       : { id: 'run-binding', status: 'skipped', detail: 'without a verified quote, its report data proves nothing' },
     verified && typeof measurementsApproved === 'boolean'
       ? !measurementOk

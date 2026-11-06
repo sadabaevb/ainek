@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
 import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import sampleAction from '../../../../docs/samples/action-proof.sample.json';
+import { ActionProofCard } from '@/components/action-proof-card';
 import { CardHead, CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
@@ -60,6 +62,7 @@ function VerifyInner() {
   const [commitStatus, setCommitStatus] = useState<Record<string, CommitStatus>>({}); // per exchange, what the previous click ended in: decides the button's label and what the next click may open
   const [missingId, setMissingId] = useState<string | null>(null); // ?id= not in this browser's store: worded at render, so it follows the language
   const [error, setError] = useState('');
+  const [actionProof, setActionProof] = useState<unknown>(null); // an action proof has its own card: there is no exchange to re-hash
 
   useEffect(() => {
     listExchanges().then(setStored).catch(() => undefined);
@@ -82,7 +85,9 @@ function VerifyInner() {
       const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
       const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
       if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin, ...(input.stored ? { stored: input.stored } : {}) });
-    })();
+    })().catch((e: unknown) => {
+      if (!cancelled) setError(describeError(e));
+    });
     return () => {
       cancelled = true;
     };
@@ -91,8 +96,17 @@ function VerifyInner() {
   function parsePasted() {
     setError('');
     setMissingId(null);
+    // Nothing from the previous click may stay on screen as if it were this one's verdict, and a check still running must not land later.
+    setActionProof(null);
+    setInput(null);
+    setResult(null);
     try {
       const parsed = JSON.parse(text) as unknown;
+      const isAction = (parsed as { kind?: unknown } | null)?.kind === 'action';
+      if (isAction) {
+        setActionProof(parsed);
+        return;
+      }
       if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
       else setInput({ proof: parsed, origin: 'pasted' });
     } catch (e) {
@@ -128,6 +142,7 @@ function VerifyInner() {
         <div className="actions">
           <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>{tv.verify}</button>
           <LoadFileButton onText={setText} onError={setError} />
+          <button type="button" className="btn" onClick={() => setText(JSON.stringify(sampleAction, null, 2))}>{tv.useActionSample}</button>
         </div>
       </div>
 
@@ -145,6 +160,7 @@ function VerifyInner() {
       {missingId && <RedCard title={tv.noExchange(missingId)} />}
       {error && <RedCard title={error} />}
 
+      {actionProof !== null && <ActionProofCard value={actionProof} />}
       {result && (
         <section className="card">
           <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>

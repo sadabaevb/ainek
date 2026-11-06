@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "kind": "action",
+  "actionId": 2,
+  "action": {
+    "kind": "ft_transfer",
+    "token_id": "token.ainek-dev-dastan.testnet",
+    "receiver_id": "aibek.ainek-dev-dastan.testnet",
+    "amount": "2000000",
+    "memo": ""
+  },
+  "actionCommit": "0e7e6cfc2ec86fb871489d26a8ee849cbde056092811673fe1fc74afdf19ff4f",
+  "modelProofCommit": "c15d24c5a230be8a1ab08a8d3ad8ef4756d4e726dae904af450f4039674eabdf",
+  "decision": {
+    "verdict": "Allow",
+    "policy_hash": "ae503840a7a1c05eb3950e315a9cc6c4ad8b154194451194fabb21326a6c2051",
+    "policy_version": 1,
+    "action_commit": "0e7e6cfc2ec86fb871489d26a8ee849cbde056092811673fe1fc74afdf19ff4f",
+    "model_proof_commit": "c15d24c5a230be8a1ab08a8d3ad8ef4756d4e726dae904af450f4039674eabdf",
+    "nonce": "6d3a378c4548fdc9dee36fd2c788a15336d5b5ce736f4e7ead8c31989f05a00f",
+    "expires_at": "1793965400220"
+  },
+  "teeSignature": "h9nUjr/VBd4C0YDmWUmkTnDiZ9cU+Fh5McafApHva6wyAKNNVRC6/NgIp1wFOD7lcOzuVjkmZeLSY2UN9f89AQ==",
+  "teePubkey": "4c0761e240ee9d6837327f7dfc73728a8b62e7941f1c5457f6cd15e552f44740",
+  "wasmHash": "8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb",
+  "attestationUrl": "https://testnet-api.outlayer.ai/attestations/by-call/48c62234-033e-4441-b684-0dae271d7375",
+  "proposeTx": "DfLBYkaTW6FZEViWXd1KM79279ikGJR3XM33gyLpWb4X"
+}

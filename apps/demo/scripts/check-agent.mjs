@@ -3,18 +3,11 @@
 // Re-checks every recorded decision here instead of trusting the contract's own check, and compares the registered key
 // with the one in the attested run behind `pnpm demo:policy`.
 import { readFileSync } from 'node:fs';
-import { actionCommitOf, ainekConfigFromEnv, checkProofCommit, keyScopeProblem, readProofCommit, shortHex, verifyDecisionSignature, viewFunction, withRetry } from '@ainek/proof';
+import { actionCommitOf, actionStatusProblem, ainekConfigFromEnv, checkProofCommit, keyScopeProblem, readProofCommit, shortHex, verifyDecisionSignature, viewFunction, withRetry } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
 const [agentId = process.env.AGENT_ACCOUNT_ID ?? 'agent.ainek-dev-dastan.testnet', rpc = cfg.rpcUrl] = process.argv.slice(2);
 const view = (method, args = {}, account = cfg.contract) => viewFunction(rpc, account, method, args);
-
-// What each verdict may end as (ActionStatus in contracts/ainek/src/agent.rs). A signed Deny that paid must not pass here.
-const STATUSES_OF = {
-  Allow: ['Executing', 'Executed', 'Failed'],
-  NeedsApproval: ['Pending', 'Executing', 'Executed', 'Failed', 'Rejected'],
-  Deny: ['Denied'],
-};
 
 // A read that still fails after its retries means "could not check": neither a pass nor a stack trace.
 process.on('uncaughtException', (err) => {
@@ -83,7 +76,7 @@ for (let action_id = 0; ; action_id += 1) {
   const failed = [
     !verifyDecisionSignature(decision, tee_signature, tee_pubkey) && 'the signature does not verify',
     decision.action_commit !== actionCommitOf(action) && 'the decision is for another action',
-    !STATUSES_OF[decision.verdict]?.includes(status) && `${decision.verdict} cannot end as ${status}`,
+    actionStatusProblem(decision.verdict, status),
     commit.status !== 'ok' && commit.detail,
   ].filter(Boolean);
   // update_policy can replace the key and the policy while old records stay as they were, so a difference is no failure.
