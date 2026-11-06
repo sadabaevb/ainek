@@ -11,8 +11,8 @@
    — та же функция, что в `packages/proof/canonical.ts`, тест-векторы общие.
 2. Логика §6.2; `nonce = sha256(action_commit || now)`; `expires_at = now + 10 мин`. Выход ≤ 900 байт — проверь тестом.
 3. Unit-тесты на все ветки (whitelist, per_action, per_day, needs_approval, deny_new_receivers). Детерминизм: один вход — один выход.
-4. Деплой на OutLayer testnet; секреты привязаны к `wasm_hash` («One build only»). Записать `wasm_hash` и `pubkey`
-   в docs/DEPLOY.md — они идут в `register_agent`.
+4. Деплой на OutLayer testnet; секреты закрыты правилом «One build only» (правило доступа, владелец может его перенести:
+   SPEC §3.5). Записать `wasm_hash` и `pubkey` в docs/DEPLOY.md; в `register_agent` идёт `pubkey`.
 
 **Контракт v2 (`contracts/ainek`):**
 1. Методы SPEC §4.3. `ed25519_verify` из `near_sdk::env`. Проверки в `propose_action` — все из §4.3, каждая с отдельным тестом.
@@ -28,7 +28,7 @@
    structured output через function tool `tools` + `tool_choice`, не `response_format` — его SDK не шифрует; аргументы вызова
    разбираются zod-схемой `Action`; system prompt «ты казначей, извлеки действие или откажись») → model proof как в клиенте.
 2. → OutLayer HTTPS API (`X-Payment-Key`, вход §6.2, `spent_today` из view контракта) → `Decision` + `sig`.
-3. → `propose_action` FC-ключом агента (`near-api-js`, ключ только на этот метод, allowance выставить).
+3. → `propose_action` FC-ключом агента (`near-api-js`, ключ только на `commit_proof` и `propose_action`, allowance выставить; model proof коммитится до предложения).
 4. `NeedsApproval` → inline-кнопки «Approve / Reject» владельцу; Approve → инструкция владельцу подтвердить в кошельке
    (или `near-cli` с полным ключом) — агент не должен уметь одобрять сам.
 5. Собрать `ActionProof` (SPEC §5.2), коммит, отправить карточку текстом + ссылку на web-карточку.
@@ -39,5 +39,5 @@
 
 **Воспроизводимая сборка (SPEC §3.5):** `rust-toolchain.toml` с точной версией, `Cargo.lock` в репо, профиль release с
 фиксированными флагами, скрипт `scripts/wasm-hash.sh` (sha256 от .wasm), GitHub Action, который собирает и печатает хеш.
-Проверить, что хеш с двух машин совпадает и равен `wasm_hash` в аттестации OutLayer и в `register_agent`. Если OutLayer
+Проверить, что хеш с двух машин совпадает и равен `wasm_hash` в аттестации OutLayer и в docs/DEPLOY.md. Если OutLayer
 добавляет к образу что-то своё (обёртку) — задокументировать, какой именно хеш аттестуется, и сверять его.

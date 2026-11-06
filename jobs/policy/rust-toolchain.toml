@@ -1,0 +1,8 @@
+# Pinned so that everyone gets the same ainek-policy.wasm, byte for byte (SPEC §3.5): its sha256 is what OutLayer
+# attests, what the secrets are locked to and what register_agent publishes. Same channel as contracts/ainek.
+# The reproducible build runs in a container pinned to the same version: when changing the channel, change the image
+# digest in scripts/wasm-hash.sh too.
+[toolchain]
+channel = "1.93.0"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-wasip1"]
