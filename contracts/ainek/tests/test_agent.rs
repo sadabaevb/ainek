@@ -1,5 +1,5 @@
 //! Integration test of tier 2 (SPEC §4.3): the real policy job (`jobs/policy`, run natively here) decides
-//! and signs, the agent submits with a function-call key that can only call `propose_action`, and the
+//! and signs, the agent submits with a function-call key that can only call `commit_proof` and `propose_action`, and the
 //! real contract wasm in a local NEAR sandbox node checks the decision with the node's own
 //! `ed25519_verify` and acts on it.
 //!
@@ -16,6 +16,8 @@ use common::{create_subaccount, now_ms};
 use near_api::NearToken;
 use near_sdk::serde_json::{self, json, Value};
 
+/// A recorded key-log entry: the agent's model proof must point at a logged key.
+const VECTORS: &str = include_str!("../../../docs/test-vectors/canonical.json");
 /// A published test seed (docs/test-vectors/policy-decision.json), never a real key.
 const TEST_KEY: &str = "ed25519:US517G5965aydkZ46HS38QLi7UQiSojurfbQfKCELFx";
 
@@ -70,6 +72,29 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .await?
         .assert_success();
 
+    // The owner's methods need 1 yoctoNEAR: only a full-access key can attach it.
+    let one_yocto = NearToken::from_yoctonear(1);
+
+    // One key in the log, so that a model proof has an entry to point at.
+    let verifier = create_subaccount(&sandbox, "v1.sandbox").await?;
+    contract
+        .call_function("register_verifier", json!({ "account_id": verifier.account_id() }))
+        .transaction()
+        .deposit(one_yocto)
+        .with_signer(owner.account_id().clone(), signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+    let mut entry = serde_json::from_str::<Value>(VECTORS)?["commits"]["entry_hash"]["input"].clone();
+    entry["observed_at"] = json!(now_ms().to_string());
+    contract
+        .call_function("log_key", json!({ "entry": entry }))
+        .transaction()
+        .with_signer(verifier.account_id().clone(), signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+
     let policy = json!({
         "version": 1, "principal": owner.account_id(), "agent": agent.account_id(),
         "token_id": token.account_id(), "whitelist": ["aibek.sandbox"],
@@ -111,13 +136,14 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
     contract
         .call_function("register_agent", registration)
         .transaction()
+        .deposit(one_yocto)
         .with_signer(owner.account_id().clone(), signer.clone())
         .send_to(&network)
         .await?
         .assert_success();
 
-    // The agent works with a function-call key that can call `propose_action` and nothing else. It
-    // cannot attach NEAR, so the agent account prepays storage once with its full-access key.
+    // The agent works with a function-call key that can call `commit_proof` and `propose_action` and
+    // nothing else. It cannot attach NEAR, so the agent account prepays storage once with its full-access key.
     let fc_secret = near_api::signer::generate_secret_key()?;
     let fc_signer = near_api::Signer::from_secret_key(fc_secret.clone())?;
     agent
@@ -126,7 +152,7 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
                 near_api::types::transaction::actions::FunctionCallPermission {
                     allowance: Some(NearToken::from_near(1)),
                     receiver_id: contract.account_id().to_string(),
-                    method_names: vec!["propose_action".into()],
+                    method_names: vec!["commit_proof".into(), "propose_action".into()],
                 },
             ),
             fc_secret.public_key(),
@@ -164,6 +190,16 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
     // ---- Deny: a receiver outside the whitelist. Recorded, nothing moves. ----------------------
     let denied = decide(action("mallory.sandbox", "1"), "0".into());
     assert_eq!(denied["decision"]["verdict"], "Deny");
+    // Nothing can be proposed about a model proof that is not on chain; the agent commits it first. (The
+    // very same call succeeds right after the commit, so the missing commit is what it failed on.)
+    propose(denied.clone()).await?.assert_failure();
+    contract
+        .call_function("commit_proof", json!({ "commit": model_proof_commit, "kind": "model", "log_index": 0 }))
+        .transaction()
+        .with_signer(agent.account_id().clone(), fc_signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
     propose(denied.clone()).await?.assert_success();
     assert_eq!(status_of(&contract, &network, 0).await, "Denied");
     // The same decision a second time is refused.
@@ -195,9 +231,40 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .send_to(&network)
         .await?
         .assert_failure();
+    // Not even a key on the owner's own account, if it is a function-call key (wallets leave such keys
+    // in the browser, for every method of the contract): it cannot attach the 1 yoctoNEAR.
+    let stray_secret = near_api::signer::generate_secret_key()?;
+    owner
+        .add_key(
+            near_api::types::AccessKeyPermission::FunctionCall(
+                near_api::types::transaction::actions::FunctionCallPermission {
+                    allowance: Some(NearToken::from_near(1)),
+                    receiver_id: contract.account_id().to_string(),
+                    method_names: vec![],
+                },
+            ),
+            stray_secret.public_key(),
+        )
+        .with_signer(signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+    let stray_signer = near_api::Signer::from_secret_key(stray_secret)?;
+    for method in ["approve", "reject"] {
+        contract
+            .call_function(method, json!({ "action_id": 1 }))
+            .transaction()
+            .gas(near_api::NearGas::from_tgas(100))
+            .with_signer(owner.account_id().clone(), stray_signer.clone())
+            .send_to(&network)
+            .await?
+            .assert_failure();
+    }
+    assert_eq!(status_of(&contract, &network, 1).await, "Pending");
     contract
         .call_function("reject", json!({ "action_id": 1 }))
         .transaction()
+        .deposit(one_yocto)
         .with_signer(owner.account_id().clone(), signer.clone())
         .send_to(&network)
         .await?

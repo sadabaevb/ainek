@@ -49,6 +49,7 @@ async fn key_log_end_to_end_on_sandbox() -> testresult::TestResult<()> {
     contract
         .call_function("register_verifier", json!({ "account_id": v1.account_id() }))
         .transaction()
+        .deposit(NearToken::from_yoctonear(1))
         .with_signer(owner.account_id().clone(), signer.clone())
         .send_to(&network)
         .await?

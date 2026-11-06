@@ -151,6 +151,8 @@ impl Contract {
     /// v2 -> v3 state upgrade, run once in the same transaction as the code deploy
     /// (`cargo near deploy ... with-init-call migrate`). The collections keep their prefixes, so
     /// only the root struct is rewritten; the key log and the proof commits are untouched.
+    /// Run again on v3 state it fails (the stored bytes are not a `ContractV2`). A later migration must
+    /// not rely on that: `#[private]` lets any key of the contract account call it, a function-call key too.
     #[private]
     #[init(ignore_state)]
     pub fn migrate() -> Self {
@@ -170,9 +172,11 @@ impl Contract {
 
     // ---- verifiers ------------------------------------------------------------------------------
 
-    /// Owner-gated for now (SPEC §4.1; open registration is pending the Nov 3 sync decision).
+    /// Owner-gated for now (SPEC §4.1; open registration is pending the Nov 3 sync decision). Needs 1 yoctoNEAR,
+    /// see `assert_owner_full_access`.
+    #[payable]
     pub fn register_verifier(&mut self, account_id: AccountId) {
-        self.assert_owner();
+        self.assert_owner_full_access();
         require!(self.verifiers.insert(account_id.clone()), "verifier is already registered");
         emit("verifier_registered", json!({ "account_id": account_id }));
     }
@@ -358,6 +362,15 @@ impl Contract {
     fn assert_owner(&self) {
         require!(env::predecessor_account_id() == self.owner, "only the owner can do this");
     }
+
+    /// For the owner's methods that decide who is trusted or let money move. NEAR does not let a
+    /// function-call key attach a deposit, so 1 yoctoNEAR proves the call was signed with a full-access key
+    /// of the owner. Without it, a function-call key on the owner's account would be enough, and wallets
+    /// leave such keys in the browser (one gave us a key for every method of the contract, DEV-NOTES).
+    fn assert_owner_full_access(&self) {
+        self.assert_owner();
+        near_sdk::assert_one_yocto();
+    }
 }
 
 fn commit_key(account: &AccountId, commit: &str) -> String {
@@ -449,10 +462,20 @@ mod tests {
     }
 
     fn contract_with_verifier(verifier: &str) -> Contract {
-        set_caller("owner.testnet", 0);
+        set_caller_with_deposit("owner.testnet", 1);
         let mut c = Contract::new(acc("owner.testnet"));
         c.register_verifier(acc(verifier));
         c
+    }
+
+    /// A function-call key on the owner's account (see `assert_owner_full_access`) must not be able to add
+    /// a verifier of its own to the log.
+    #[test]
+    #[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+    fn the_owner_registers_a_verifier_only_with_a_full_access_key() {
+        let mut c = contract_with_verifier("v1.ainek.testnet");
+        set_caller("owner.testnet", 0);
+        c.register_verifier(acc("v2.ainek.testnet"));
     }
 
     #[test]

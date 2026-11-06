@@ -87,7 +87,7 @@ action proof (в работе, Бектур). Поле `wasm_hash` выхода 
 Telegram-бот (grammY) и/или HTTP: текст владельца → NEAR AI (`runTier1` из `packages/tier1-node`: последовательность §7.1
 из Node, напрямую к шлюзу с TLS-пином; E2EE; structured output через function tool `tools` + `tool_choice`, не через
 `response_format` — его SDK не шифрует) →
-`ActionRequest` → OutLayer job (HTTPS API, не через контракт) → `propose_action` FC-ключом агента →
+`ActionRequest` → OutLayer job (HTTPS API, не через контракт) → `commit_proof(kind: "model")`, затем `propose_action` FC-ключом агента →
 при `NeedsApproval` кнопка владельцу в Telegram → `approve`. Пишет action proof и коммит.
 
 ### 3.8 Replay-режим (`pnpm demo`) — Бектур
@@ -112,11 +112,11 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 ## 4. ABI контракта (черновик — финализировать 1 ноября)
 
 Аккаунты: `ainek.testnet` (контракт, owner = `owner.ainek.testnet`), верификаторы `v1.`/`v2.ainek.testnet`,
-агент `agent.ainek.testnet` (FC-ключ только на `propose_action`), демо-токен `token.ainek.testnet` (NEP-141).
+агент `agent.ainek.testnet` (FC-ключ только на `commit_proof` и `propose_action`), демо-токен `token.ainek.testnet` (NEP-141).
 
 ### 4.1 Лог ключей
 ```
-register_verifier(account_id: AccountId)                         // owner — ИЛИ открытая регистрация, см. ниже
+register_verifier(account_id: AccountId)                         // owner, 1 yocto (§4.3) — ИЛИ открытая регистрация, см. ниже
 log_key(entry: KeyEntryInput) -> u64                             // verifier; returns index
 view head() -> Option<{ index: u64, entry_hash: String }>          // null while the log is empty
 view entry(index: u64) -> KeyEntry
@@ -183,11 +183,12 @@ view storage_balance_of(account: AccountId) -> U128                // yoctoNEAR 
 
 ### 4.3 Агенты и политика (ярус 2)
 ```
-register_agent(agent_id: AccountId, policy_hash: String, policy_version: u32, tee_pubkey: String, token_id: AccountId)  // owner
-update_policy(agent_id, policy_hash, policy_version, tee_pubkey)                                                   // owner
-pause_agent(agent_id) / unpause_agent(agent_id)                                                                    // owner
+register_agent(agent_id: AccountId, policy_hash: String, policy_version: u32, tee_pubkey: String, token_id: AccountId)  // owner, 1 yocto
+update_policy(agent_id, policy_hash, policy_version, tee_pubkey)                                                   // owner, 1 yocto
+pause_agent(agent_id)                                                                                              // owner
+unpause_agent(agent_id)                                                                                            // owner, 1 yocto
 propose_action(action: Action, model_proof_commit: String, decision: Decision, tee_signature: String) -> u64     // agent (FC key)
-approve(action_id: u64) / reject(action_id: u64)                                                                   // owner
+approve(action_id: u64) / reject(action_id: u64)                                                                   // owner, 1 yocto
 view agent(agent_id) -> AgentInfo | null
 view action(action_id) -> ActionRecord | null
 view pending_actions(agent_id) -> Vec<ActionRecord>
@@ -204,9 +205,20 @@ ActionRecord { action_id: u64, agent_id, action: Action, decision: Decision, tee
 `update_policy`); `tee_signature` — base64 подписи ed25519 над `canonical_bytes(decision)` (поле `sig`
 выхода job); `expires_at` — unix ms. `spent_today` — сумма за текущие сутки UTC по времени блока; её агент передаёт в job.
 
+**«owner, 1 yocto»**: метод требует приложить ровно 1 yoctoNEAR. FC-ключ приложить депозит не может, поэтому такой вызов
+подписан full-access ключом владельца. Без этого хватило бы FC-ключа на аккаунте владельца (кошелёк оставляет такой в
+браузере, Meteor выдавал нам ключ на все методы): им можно было бы зарегистрировать агента со своим ключом решений,
+подписать себе `Allow` и вывести токены контракта, или одобрить платёж без окна кошелька. Так же защищён
+`register_verifier` (§4.1). Исключение — `pause_agent`: стоп-кнопка должна оставаться простой, а худшее, что с ней
+сделает чужой ключ, это остановит агента.
+
 Проверки в `propose_action` (каждая со своим тестом): агент зарегистрирован и не на паузе; `action.kind == "ft_transfer"`
 и `action.token_id` совпадает с зарегистрированным; `decision.policy_hash/version` совпадают с реестром;
-`decision.action_commit == sha256(canonical_json(action))`; `decision.model_proof_commit == model_proof_commit`;
+`action.memo` не длиннее 256 байт; `decision.action_commit == sha256(canonical_json(action))`;
+`decision.model_proof_commit == model_proof_commit`, и этот коммит уже записан этим агентом через `commit_proof` с
+`kind: "model"` (агент сначала коммитит model proof, потом предлагает действие; это публичная датированная запись со
+ссылкой на запись лога, которую аудитор может попросить раскрыть, а не доказательство, что за коммитом стоит настоящий
+ответ модели: что в коммите, контракт не видит);
 `now < decision.expires_at <= now + 10 мин + 2 мин` (верхняя граница не даёт получить «вечное» решение, подав в job
 время из будущего); `decision.nonce == sha256(action_commit:(expires_at − 600000):spent_today)`, где `spent_today` —
 учёт самого контракта (§6.2: так контракт ловит решение, принятое для выдуманного «потрачено 0»); `nonce` не использован
@@ -219,8 +231,11 @@ callback `on_transfer` → `Executed` и событие `action_executed`, ли�
 и политика и ключ с момента решения не менялись) исполняет так же, событие
 `action_approved`; `reject` → `Rejected`, `action_rejected`. `Deny` → `Denied`, `action_denied`, без исполнения.
 Сумма входит в `spent_today` сразу при `Allow` и `NeedsApproval` (чтобы очередь ожидающих не обходила дневной лимит)
-и возвращается при `Rejected`/`Failed`; действие, одобренное в другие сутки, считается в сутки одобрения. `approve` не
-ограничен десятью минутами: срок решения относится к `propose_action`. `propose_action` и `approve` вызывать минимум с
+и возвращается при `Rejected`/`Failed`. Дневной лимит жёсткий, одобрение его не поднимает (§6.2): действие, оставшееся с
+прошлых суток, одобрить нельзя, только `reject`, после чего агент предлагает его заново через job (иначе вчерашняя очередь
+прошла бы поверх сегодняшнего лимита; цена правила: предложенное незадолго до 00:00 UTC, то есть до 06:00 по Бишкеку,
+нужно одобрить до этой границы; неотклонённые вчерашние действия занимают место в очереди из 20). В пределах суток `approve` не ограничен десятью минутами: срок решения относится
+к `propose_action`. `propose_action` и `approve` вызывать минимум с
 60 TGas (перевод и callback оплачиваются из них; 30 TGas по умолчанию в near-api-js не хватит).
 Событие `action_proposed {action_id, agent_id, verdict, policy_hash, policy_version, action_commit, model_proof_commit}` —
 без суммы и получателя; сам перевод на публичном testnet виден в транзакции (честно говорим об этом). Остальные события:
@@ -348,7 +363,7 @@ Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в 
 ### 7.2 Действие агента (ярус 2)
 1. Владелец пишет агенту. Агент → NEAR AI (`runTier1`, E2EE; structured output через function tool, не `response_format`) → `Action` + model proof (как 7.1).
 2. Агент → OutLayer job (HTTPS, вход из §6.2) → `Decision` + подпись.
-3. Агент → `propose_action` FC-ключом. Контракт проверяет и исполняет / ставит в pending / отклоняет.
+3. Агент → `commit_proof` для model proof, затем `propose_action`, оба FC-ключом. Контракт проверяет и исполняет / ставит в pending / отклоняет.
 4. `NeedsApproval` → Telegram-кнопка владельцу → `approve` полным ключом владельца (через кошелёк/CLI).
 5. Агент собирает action proof, коммитит, отдаёт карточку.
 6. Стоп-кнопка: владелец делает `DeleteKey` ключа агента и/или `pause_agent`; следующая попытка падает ончейн.

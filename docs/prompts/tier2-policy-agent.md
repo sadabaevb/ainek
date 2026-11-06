@@ -28,7 +28,7 @@
    structured output через function tool `tools` + `tool_choice`, не `response_format` — его SDK не шифрует; аргументы вызова
    разбираются zod-схемой `Action`; system prompt «ты казначей, извлеки действие или откажись») → model proof как в клиенте.
 2. → OutLayer HTTPS API (`X-Payment-Key`, вход §6.2, `spent_today` из view контракта) → `Decision` + `sig`.
-3. → `propose_action` FC-ключом агента (`near-api-js`, ключ только на этот метод, allowance выставить).
+3. → `propose_action` FC-ключом агента (`near-api-js`, ключ только на `commit_proof` и `propose_action`, allowance выставить; model proof коммитится до предложения).
 4. `NeedsApproval` → inline-кнопки «Approve / Reject» владельцу; Approve → инструкция владельцу подтвердить в кошельке
    (или `near-cli` с полным ключом) — агент не должен уметь одобрять сам.
 5. Собрать `ActionProof` (SPEC §5.2), коммит, отправить карточку текстом + ссылку на web-карточку.
