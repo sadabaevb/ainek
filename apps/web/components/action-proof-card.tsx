@@ -1,7 +1,7 @@
 'use client';
 // An action proof on /verify: checked against the contract's record and, in this browser, against the run's Intel-signed attestation.
 import { useEffect, useState } from 'react';
-import { actionRunChecks, quoteVerifierOf, verifyActionProofOnChain, type ActionReport } from '@ainek/proof';
+import { checkActionProof, quoteVerifierOf, type ActionReport } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
 import { describeError } from '@/lib/errors';
 import { explorerTxUrl } from '@/lib/links';
@@ -19,14 +19,15 @@ export function ActionProofCard({ value }: { value: unknown }) {
     let cancelled = false;
     setReport(null);
     setError('');
-    (async () => {
-      const onChain = await verifyActionProofOnChain(value, { rpcUrl: cfg.rpcUrl, contract: cfg.contract, wasmHash: cfg.policyWasmHash });
-      if (!onChain.proof || !onChain.ok) return onChain; // no point in asking Intel about a proof that already failed
-      const { verify } = await import('@phala/dcap-qvl'); // the library is large: only this card needs it on this page
-      const run = await actionRunChecks(onChain.proof, { apiUrl: cfg.outlayerApiUrl, project: cfg.policyProject, wasmHash: cfg.policyWasmHash, rpcUrl: cfg.rpcUrl, network: cfg.network, verifyQuote: quoteVerifierOf(verify) });
-      const checks = [...onChain.checks, ...run];
-      return { ...onChain, checks, ok: !checks.some((c) => c.status === 'fail') };
-    })()
+    checkActionProof(value, {
+      rpcUrl: cfg.rpcUrl,
+      contract: cfg.contract,
+      apiUrl: cfg.outlayerApiUrl,
+      project: cfg.policyProject,
+      wasmHash: cfg.policyWasmHash,
+      network: cfg.network,
+      loadQuoteVerifier: async () => quoteVerifierOf((await import('@phala/dcap-qvl')).verify),
+    })
       .then((r) => { if (!cancelled) setReport(r); })
       .catch((e: unknown) => { if (!cancelled) setError(describeError(e)); });
     return () => {
@@ -36,9 +37,11 @@ export function ActionProofCard({ value }: { value: unknown }) {
 
   if (error) return <RedCard title={error} />;
   if (!report) return <p className="muted">{tv.checking}</p>;
+  // A skipped attestation must not read as verified: the card stays green only when Intel was really asked about this run.
+  const runChecked = report.checks.some((c) => c.id === 'run-binding' && c.status === 'ok');
   return (
     <section className="card">
-      <CardHead status={report.ok ? 'ok' : 'fail'} when={tv.actionSource}>{report.ok ? tv.actionOk : tv.actionFailed}</CardHead>
+      <CardHead status={report.ok && runChecked ? 'ok' : 'fail'} when={tv.actionSource}>{!report.ok ? tv.actionFailed : runChecked ? tv.actionOk : tv.actionUnchecked}</CardHead>
       <CheckList items={report.checks} />
       {report.proof && (
         <div className="actions">

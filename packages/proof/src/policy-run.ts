@@ -128,7 +128,7 @@ function bindingCheck(run: PolicyRun, expected: HashedFields, reportData: string
   const commitsTo = (r: HashedFields): boolean => reportData === `${taskHashOf(r)}${'0'.repeat(64)}`;
   if (!commitsTo(run)) return check('run-binding', false, '', 'the quote does not commit to this record');
   const differing = (Object.keys(expected) as Array<keyof HashedFields>).filter((field) => (run[field] ?? null) !== (expected[field] ?? null));
-  return check('run-binding', commitsTo(expected), `the quote commits to this build, ${inputKnown ? 'this input and this output' : 'and this output'}, under this project and its owner`, `the quote commits to a run that differs from what this decision needs in: ${differing.join(', ')}`);
+  return check('run-binding', commitsTo(expected), `the quote commits to this build, ${inputKnown ? 'this input and' : 'and'} this output, under this project and its owner`, `the quote commits to a run that differs from what this decision needs in: ${differing.join(', ')}`);
 }
 
 /** Intel's platform id, from the first certificate in the quote: it says which collateral to ask for. Only chooses what to fetch: a wrong one cannot pass the signature check. */

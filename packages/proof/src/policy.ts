@@ -68,13 +68,19 @@ export function checkPolicyOutput(out: PolicyOutput, x: { action: Action; modelP
   ];
 }
 
+export interface ActionReport {
+  ok: boolean;
+  checks: Check[];
+  proof: ActionProof | null;
+}
+
 /**
  * Re-checks an action proof from the proof alone (SPEC §5.2), for an auditor: the action hashes to what the decision covers, the decision
  * is signed by the key the proof names, and the salted commit reproduces. `expected` is what `register_agent` put on-chain, and it is required:
  * a proof cannot vouch for its own signer, and anyone can sign a decision with a key of their own. Expiry is not re-checked: a decision has
  * expired by the time anyone audits it, and the contract checked it when it mattered.
  */
-export function verifyActionProof(value: unknown, expected: { teePubkey: string; wasmHash: string }): { ok: boolean; checks: Check[]; proof: ActionProof | null } {
+export function verifyActionProof(value: unknown, expected: { teePubkey: string; wasmHash: string }): ActionReport {
   const parsed = ActionProof.safeParse(value);
   if (!parsed.success) return { ok: false, checks: [{ id: 'schema', status: 'fail', detail: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }], proof: null };
   const proof = parsed.data;

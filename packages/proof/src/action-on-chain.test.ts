@@ -1,7 +1,7 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
-import { actionRunChecks, actionStatusProblem, verifyActionProofOnChain } from './action-on-chain.ts';
+import { actionRunChecks, actionStatusProblem, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
 import { buildActionProof } from './build.ts';
 import { canonicalBytes } from './canonical.ts';
 import { actionCommitOf } from './commit.ts';
@@ -105,3 +105,18 @@ test('actionRunChecks: a proof cannot make this browser call a server of its cho
   const broken = await runCheck('https://api.test/a', (async () => { throw new Error('offline'); }) as typeof fetch);
   assert.match(broken[0]?.detail ?? '', /could not be checked: offline/);
 });
+
+test('checkActionProof: the DCAP library is not loaded for a proof that failed on the chain, and an unreadable attestation is skipped, not passed', async () => {
+  const cfg = { rpcUrl: 'https://rpc.test', contract, apiUrl: 'https://api.test', project: 'o.testnet/policy', wasmHash, network: 'testnet' as const };
+  chain({ ...record, status: 'Denied' });
+  const refused = await checkActionProof(proof, { ...cfg, loadQuoteVerifier: () => assert.fail('no library expected') });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.checks.some((c) => c.id.startsWith('run-')), false);
+  chain();
+  const stubbed = globalThis.fetch;
+  globalThis.fetch = (async (url: unknown, init: RequestInit) => (String(url).startsWith('https://api.test') ? new Response(JSON.stringify({ not: 'a run' })) : stubbed(url as string, init))) as typeof fetch;
+  const r = await checkActionProof(proof, { ...cfg, loadQuoteVerifier: async () => () => assert.fail('no quote expected') });
+  assert.equal(r.ok, true);
+  assert.equal(statusOf(r.checks, 'run-binding'), 'skipped');
+});
+

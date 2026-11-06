@@ -98,10 +98,8 @@ function VerifyInner() {
       const parsed = JSON.parse(text) as unknown;
       const isAction = (parsed as { kind?: unknown } | null)?.kind === 'action';
       setActionProof(isAction ? parsed : null);
-      if (isAction) {
-        setInput(null);
-        setResult(null);
-      } else if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
+      if (isAction) return;
+      if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
       else setInput({ proof: parsed, origin: 'pasted' });
     } catch (e) {
       setError(tv.notProof(describeError(e)));
@@ -154,8 +152,7 @@ function VerifyInner() {
       {missingId && <RedCard title={tv.noExchange(missingId)} />}
       {error && <RedCard title={error} />}
 
-      {actionProof !== null && <ActionProofCard value={actionProof} />}
-      {result && (
+      {actionProof !== null ? <ActionProofCard value={actionProof} /> : result && (
         <section className="card">
           <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>
           <CheckList items={result.report.checks} />

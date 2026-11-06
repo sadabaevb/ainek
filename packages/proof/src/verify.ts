@@ -145,7 +145,7 @@ export function verifyModelProof(
 }
 
 /** A report with checks made outside verifyModelProof folded in (the chain re-read, the on-chain commit); `ok` is recomputed. */
-export function withChecks(report: VerifyReport, ...extra: Check[]): VerifyReport {
+export function withChecks<R extends { ok: boolean; checks: Check[] }>(report: R, ...extra: Check[]): R {
   const checks = [...report.checks, ...extra];
-  return { ...report, checks, ok: checks.every((c) => c.status !== 'fail') };
+  return { ...report, checks, ok: !checks.some((c) => c.status === 'fail') };
 }
