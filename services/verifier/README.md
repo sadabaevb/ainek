@@ -26,9 +26,19 @@ No NEAR account, no API key: it shows exactly what a registered verifier would a
 
 ## Run a verifier in 5 minutes
 
-You need a NEAR testnet account whose key you can export, and the contract owner must have called
-`register_verifier(<your account>)` once, with 1 yoctoNEAR attached (it must be signed with the owner's full-access
-key; open registration is pending, see DECISIONS).
+You need a NEAR testnet account, and the contract owner must have called `register_verifier(<your account>)` once,
+with 1 yoctoNEAR attached (it must be signed with the owner's full-access key; open registration is pending, see
+DECISIONS). Tell us the account name and we register it.
+
+Do not give the verifier your account's full-access key. It only ever calls `log_key`, so make it a key that can do
+nothing else (the command prints the new key pair once and does not store it: save the secret key, it is
+`VERIFIER_PRIVATE_KEY`):
+
+```sh
+near account add-key <your-account> grant-function-call-access --allowance '1 NEAR' \
+  --contract-account-id ainek-log-dastan.testnet --function-names log_key \
+  autogenerate-new-keypair print-to-terminal network-config testnet sign-with-keychain send
+```
 
 ```sh
 git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
@@ -42,6 +52,11 @@ Or with Docker (same variables through `-e`):
 docker build -t ainek-verifier -f services/verifier/Dockerfile .
 docker run --rm -e VERIFIER_ACCOUNT_ID=… -e VERIFIER_PRIVATE_KEY=… -v ainek-reports:/app/services/verifier/data ainek-verifier --once
 ```
+
+The `verifier-image` GitHub Action builds this image when the verifier changes and, from `main`, pushes it to
+`ghcr.io/sadabaevb/ainek-verifier` (`:latest` and the commit's 7-character hash). The package is not public yet; until
+it is, build the image yourself with the line above. Without `--once` the container loops; `--dry-run` needs no
+account at all.
 
 Expected output of a round:
 
