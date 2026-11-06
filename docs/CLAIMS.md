@@ -44,8 +44,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
 - **A measurement allowlist.** Our log is a *key* allowlist: the client sends only to a key a trusted verifier logged. The
   offline replay also compares the attested compose hash with the logged one; the browser and `demo:live` show it on the
-  card but do not compare it yet (SPEC §7.1 asks for it; enforcing it is a pending team decision), and acceptable compose
-  hashes are not governed yet (next steps).
+  card and point the proof at a log entry with that compose when there is one, but still send when there is none, and the
+  card says so (SPEC §7.1 asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not
+  governed yet (next steps). Instances of a model share one signing key, so the signature alone does not say which deployment
+  answered.
 - **A trustless read of the log.** The client reads `latest_keys` through one JSON-RPC endpoint (FastNear by default,
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested
@@ -54,6 +56,11 @@ Honest limitations won prizes at previous NEAR hackathons.
   (README "Who sees what").
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
+- **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants. Meteor allowed
+  every method of the contract, with a 0.25 NEAR gas allowance, in our Nov 5 testnet run. A function-call key still cannot attach a deposit or call
+  another contract, and for an ordinary account the other methods either reject it or only read. The page keeps the key in localStorage, so a script on
+  the page could use it, and Disconnect removes only that copy, not the key on the account. A contract owner or verifier account should not connect here,
+  because the owner and verifier methods would accept this key.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
 - **Hidden settlement.** On testnet the executed transfer (token, amount, receiver) is public; the conversation, the reasoning
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.

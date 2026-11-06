@@ -22,7 +22,7 @@ export {
   SigningAlgo,
   hex64,
 } from './schema.ts';
-export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, resolveLogEntry } from './key-log.ts';
+export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
 export { TIER1_STEPS, failurePhase } from './steps.ts';
 export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
@@ -35,7 +35,7 @@ export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
 export type { DisclosedExchange, ParsedDisclosure } from './disclosure.ts';
-export { buildKeyEntryInput, imageDigestsOf } from './key-entry.ts';
+export { buildKeyEntryInput, composeHashOf, imageDigestsOf } from './key-entry.ts';
 export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entry.ts';
 export { toModelAttestation, toGatewayAttestation } from './report.ts';
 export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
