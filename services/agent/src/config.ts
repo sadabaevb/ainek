@@ -39,6 +39,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   if (shared.logSource !== 'contract') throw new Error(`AINEK_LOG_SOURCE=${shared.logSource}: the agent trusts only the contract log`);
   const agentKey = need('AGENT_FC_PRIVATE_KEY');
   if (!agentKey.startsWith('ed25519:') || agentKey.length < 20) throw new Error('AGENT_FC_PRIVATE_KEY must be ed25519:… (the function-call key of the agent account)');
+  const outLayerApi = (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, '');
+  // The payment key travels in a header on every call.
+  if (URL.parse(outLayerApi)?.protocol !== 'https:') throw new Error('OUTLAYER_API_URL must be an https URL (docs/DEPLOY.md)');
   const wasmHash = need('OUTLAYER_WASM_HASH');
   if (!isHex64(wasmHash)) throw new Error('OUTLAYER_WASM_HASH must be 64 lowercase hex chars (docs/DEPLOY.md)');
   const token = env['TELEGRAM_BOT_TOKEN'];
@@ -50,7 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     agentKey,
     ownerId: need('OWNER_ACCOUNT_ID'),
     tokenId: need('AINEK_TOKEN'),
-    outlayer: { apiUrl: (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, ''), paymentKey: need('OUTLAYER_PAYMENT_KEY'), project: need('OUTLAYER_PROJECT'), wasmHash },
+    outlayer: { apiUrl: outLayerApi, paymentKey: need('OUTLAYER_PAYMENT_KEY'), project: need('OUTLAYER_PROJECT'), wasmHash },
     dataDir: env['AGENT_DATA_DIR'] ?? path.resolve(import.meta.dirname, '../data/proofs'),
     telegram: token && ownerChatId ? { token, ownerChatId } : null,
   };

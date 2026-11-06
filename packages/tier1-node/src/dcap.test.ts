@@ -25,6 +25,13 @@ test('a real run on another input does not pass: spent_today is not in the signe
   assert.equal(statusOf(evidence({ input: sample.input.replace('"spent_today":"0"', '"spent_today":"999"') }), 'run-input'), 'fail');
 });
 
+test('a real run over HTTPS passes every check against Intel', () => {
+  const byCall = PolicyRun.parse(read('docs/spike-outlayer/by-call-allow.attestation.json'));
+  const io = read('docs/spike-outlayer/by-call-allow.io.json') as { input: string; output: string };
+  const checks = checkPolicyRun({ run: byCall, input: io.input, output: io.output, wasmHash, project, quote: verifyTdxQuote(base64ToBytes(byCall.tdx_quote), sample.collateral, byCall.timestamp), measurementsApproved: true });
+  assert.deepEqual(checks.filter((c) => c.status !== 'ok'), []);
+});
+
 test('freshness is checked only where it is asked for, and an old run or one from the future fails it', () => {
   assert.equal(checkPolicyRun(evidence()).some((c) => c.id === 'run-fresh'), false);
   const at = (now: number) => statusOf(evidence({ freshness: { nowSeconds: now, maxAgeSeconds: 600 } }), 'run-fresh');

@@ -41,3 +41,7 @@ test('loadConfig: another service\'s key in the environment warns by name, witho
   assert.match(text, /VERIFIER_PRIVATE_KEY/);
   assert.doesNotMatch(text, /secret/);
 });
+
+test('loadConfig: the OutLayer API must be https, since the payment key travels to it', () => {
+  for (const url of ['http://api.test', 'api.test:443', '']) assert.throws(() => loadConfig({ ...env, OUTLAYER_API_URL: url }), /OUTLAYER_API_URL must be an https URL/, url);
+});
