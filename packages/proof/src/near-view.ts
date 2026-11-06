@@ -66,6 +66,8 @@ export interface KeyLogReader {
   entriesSince(index: number, limit: number): Promise<KeyEntry[]>;
   /** `head()`; null while the log is empty. */
   head(): Promise<{ index: number; entry_hash: string } | null>;
+  /** `verifiers()`: the accounts registered to write to the log. Being registered is not being trusted: that stays the client's choice. */
+  verifiers(): Promise<string[]>;
 }
 
 export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
@@ -78,6 +80,7 @@ export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
     },
     entriesSince: async (index, limit) => KeyEntry.array().parse(await view('entries_since', { index, limit })),
     head: async () => Head.parse((await view('head', {})) ?? null),
+    verifiers: async () => z.string().array().parse(await view('verifiers', {})),
   };
 }
 

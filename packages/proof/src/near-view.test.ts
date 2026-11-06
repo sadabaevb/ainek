@@ -87,6 +87,13 @@ test('readProofCommit: null or boolean u64 fields are rejected, not coerced to 0
   await assert.rejects(lookup);
 });
 
+test('keyLogReader.verifiers: the registered accounts, through the contract view', async () => {
+  const { keyLogReader } = await import('./near-view.ts');
+  const calls = rpcAnswering(viewResult(['a.testnet', 'b.testnet']));
+  assert.deepEqual(await keyLogReader('http://rpc.test', 'ainek.testnet').verifiers(), ['a.testnet', 'b.testnet']);
+  assert.deepEqual(calls, [{ method: 'verifiers', args: {} }]);
+});
+
 test('keyLogReader.latestKeys: the fail-closed window by default, any age when asked (the contract subtracts with saturation)', async () => {
   const { keyLogReader, LOG_WINDOW_NS, ANY_AGE_NS } = await import('./near-view.ts');
   const calls = rpcAnswering(viewResult([]));

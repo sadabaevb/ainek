@@ -79,15 +79,17 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   const confirmedBy = verifiersOf(matching);
   const loggedByUntrusted = verifiersOf(untrusted.filter(hasKey));
 
+  // The trust set can now come from the viewer's browser: whatever arrives here, no key passes without a confirmation.
+  const quorum = Math.max(1, query.quorum);
   const split = findSplitView(forModel, query.model, query.trustedVerifiers);
   if (split) return { status: 'split-view', reason: 'split-view', confirmedBy: [], matching: [], untrusted, loggedByUntrusted, detail: `${split.detail}: refusing to send` };
-  if (confirmedBy.length >= query.quorum) {
+  if (confirmedBy.length >= quorum) {
     return { status: 'ok', reason: 'ok', confirmedBy, matching, untrusted, loggedByUntrusted, detail: `key ${shortHex(wanted)} confirmed by ${confirmedBy.join(', ')}` };
   }
   // A trusted match short of quorum outranks entries from outside the trust set, which are named, never counted.
   const reason = matching.length > 0 ? 'below-quorum' : loggedByUntrusted.length > 0 ? 'untrusted-only' : 'absent';
   const why = {
-    'below-quorum': `only ${confirmedBy.length} of ${query.quorum} required confirmations`,
+    'below-quorum': `only ${confirmedBy.length} of ${quorum} required confirmations`,
     'untrusted-only': `key ${shortHex(wanted)} is logged only by ${loggedByUntrusted.join(', ')}, outside the trust set`,
     absent: `key ${shortHex(wanted)} is not in the public log`,
   }[reason];

@@ -40,6 +40,7 @@ export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestati
 export { stripHexPrefix, normalizeHex } from './hash.ts';
 export { ainekConfigFromEnv } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
+export { NEAR_ACCOUNT, TrustSet, parseTrustSet, clampQuorum } from './trust-set.ts';
 export { viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
 export { TCB_STATUSES } from './config.ts';
