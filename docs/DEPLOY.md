@@ -155,7 +155,7 @@ outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasi
   --secrets-account <owner> --secrets-profile default
 ```
 
-`pubkey` in the output is `tee_pubkey` (`POLICY_TEE_PUBKEY` in `.env`) for `register_agent`; `decision.policy_hash` is
+`pubkey` in the output is `tee_pubkey` for `register_agent` (the agent service reads it back from the contract); `decision.policy_hash` is
 `policy_hash`. Check the run's attestation
 (`GET https://testnet-api.outlayer.ai/attestations/by-request/<request_id>`; `request_id` is in the
 `execution_requested` event of the run's transaction): its `wasm_hash` must equal the hash from step 1, its
@@ -163,10 +163,6 @@ outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasi
 to the job, which is the JSON with sorted keys and no spaces, not the bytes you typed. That address is for runs made
 through the contract, like this one; a call through the HTTPS API returns its own `attestation_url`
 (`/attestations/by-call/<call_id>`, SPEC §5.2).
-
-`pubkey` in the output is `tee_pubkey` for `register_agent` (the agent service reads it back from the contract); `decision.policy_hash` is
-`policy_hash`. Check the run's attestation (`GET https://testnet-api.outlayer.ai/attestations/<job_id>`): its
-`wasm_hash` must equal the hash from step 1.
 
 ### Deployed values
 
