@@ -1,8 +1,8 @@
 // Assemble a ModelProof (SPEC §5.1) from what the client holds after a verified exchange. One implementation
 // for the web client and the agent service, so `e2ee`, `toolNames`, salt and commit cannot drift between them.
-import { commitOf } from './commit.ts';
+import { actionCommitOf, commitOf } from './commit.ts';
 import { randomHex32, sha256Hex } from './hash.ts';
-import { ModelProof, type KeyEntry, type SigningAlgo } from './schema.ts';
+import { ActionProof, ModelProof, type KeyEntry, type SigningAlgo } from './schema.ts';
 import { verifyModelProof, type VerifyReport } from './verify.ts';
 
 export interface BuildModelProofInput {
@@ -53,4 +53,16 @@ export function buildCheckedModelProof(input: BuildModelProofInput): { proof: Mo
   const report = verifyModelProof(proof, input.requestBody, input.responseBody, input.logEntry);
   if (!report.ok) throw new Error(report.checks.filter((c) => c.status === 'fail').map((c) => `${c.id}: ${c.detail}`).join('; '));
   return { proof, report };
+}
+
+export type BuildActionProofInput = Omit<ActionProof, 'v' | 'kind' | 'actionCommit' | 'salt' | 'commit' | 'commitTx'> & {
+  /** 32-byte hex; drawn at random when omitted. Fixed only in tests. */
+  salt?: string;
+};
+export type CommittedActionProof = ActionProof & { salt: string; commit: string };
+
+/** The action proof (SPEC §5.2): `actionCommit` recomputed from the action, validated against the schema, salted and committed the same way as a model proof (SPEC §4.2). */
+export function buildActionProof({ salt = randomHex32(), ...x }: BuildActionProofInput): CommittedActionProof {
+  const payload = ActionProof.parse({ ...x, v: 1, kind: 'action', actionCommit: actionCommitOf(x.action) });
+  return { ...payload, salt, commit: commitOf(salt, payload) };
 }

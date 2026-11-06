@@ -1,0 +1,26 @@
+{
+  "name": "agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ainek agent service (Tier 2): owner text \u2192 NEAR AI in a TEE (E2EE, function tool) \u2192 policy decision signed in an OutLayer TEE \u2192 propose_action on the contract \u2192 action proof (SPEC \u00a73.6, \u00a77.2)",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts",
+    "once": "node src/main.ts --once",
+    "stop": "node src/stop-cli.ts",
+    "test": "node --test 'src/**/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ainek/proof": "workspace:*",
+    "@ainek/tier1-node": "workspace:*",
+    "grammy": "1.46.0",
+    "near-api-js": "7.4.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "tweetnacl": "1.0.3",
+    "typescript": "5.9.3"
+  }
+}

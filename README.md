@@ -45,7 +45,7 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 
 1. **Swapped key → nothing is sent.** The key is not in the public log → the client refuses: "Result: REFUSED" (`pnpm demo:tamper`) or the red card "Key not in the public log. Message not sent." (`/?tamper=1`).
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
-3. **Agent over its mandate.** (Tier 2, planned) A prompt-injected "urgent transfer to a new vendor" → policy job says Deny inside TDX → contract refuses → `action_denied` with a signed reason.
+3. **Agent over its mandate.** (Tier 2, planned) A prompt-injected "urgent transfer to a new vendor" → policy job says Deny inside TDX → contract refuses → `action_denied`, with the signed decision and the policy hash.
 
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
@@ -116,9 +116,9 @@ With `pnpm -F web dev` running, at `http://localhost:3000`:
 3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
 5. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
-6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row says the sample was never committed (it was recorded before the contract accepted commits); enter a NEAR account in the field to look a committed disclosure up on-chain. The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 4–5 end in "differs from the embedded entry".
+6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row asks for the account that committed, because the chain decides, not the file; enter it to look a disclosure up on-chain (the sample was never committed, it was recorded before the contract accepted commits, so any account shows that). The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 5–6 end in "differs from the embedded entry".
 
-**Tier 2 flow (not in the repo yet; only the cap-check spike under `jobs/policy`):** Telegram "pay aibek.testnet 300 for October" → `action_executed`; "pay newguy.testnet 5000" (new vendor) → Deny; "pay aibek.testnet 3000" (over the threshold) → `NeedsApproval` → Reject; stop button: `DeleteKey` + `pause_agent` → the next proposal fails on-chain.
+**Tier 2 flow (the agent is in `services/agent`, tested against fakes; the contract and the policy job are in the repo and tested in a sandbox, but not yet set up on testnet, so this has not run end to end):** Telegram "pay aibek.testnet 300 for October" → `action_executed`; "pay newguy.testnet 5000" (new vendor) → Deny; "pay aibek.testnet 3000" (over the threshold) → `NeedsApproval` → Reject; stop button (`pnpm demo:stop`): `DeleteKey` + `pause_agent` → the next proposal is refused by the network, the key no longer exists.
 
 ## Who sees what
 
@@ -134,6 +134,7 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Model enclave | plaintext for the duration of inference | — | TDX + GPU attestation; retention inside the enclave is not provable by attestation |
 | NEAR blockchain | provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash | the policy contents, the conversation, the proofs | salted commits; transfer details are hidden only with Confidential Intents (out of scope) |
 | OutLayer policy job (Tier 2, planned) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
+| Agent service and Telegram (Tier 2, planned) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
 The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until the SDK
@@ -167,8 +168,16 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
 - **Hidden settlement.** On testnet the executed transfer (token, amount, receiver) is public; the conversation, the reasoning
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.
-- **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. Its blast radius is bounded on-chain
-  (function-call key, contract checks, TEE-signed policy decisions), not eliminated.
+- **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. It and Telegram read the owner's
+  messages in plaintext; E2EE covers the hop from the service to the model, not the hop from the owner to the service. Its
+  blast radius is bounded on-chain (function-call key, contract checks, TEE-signed policy decisions), not eliminated. The server
+  supplies `spent_today` to the policy job, but the contract recomputes the decision's nonce from its own daily total and refuses
+  a decision made for a false one. A compromised server can still leave a denied attempt out, and neither the job nor the contract
+  opens the model proof: the contract checks only that this agent committed that hash, which the server supplied.
+- **That the model resists prompt injection.** (Tier 2) It may or may not propose what an injected message asks. The limits
+  are enforced by the policy and the contract, not by the model.
+- **A policy nobody can infer.** (Tier 2) Its contents stay off-chain, but public actions and verdicts show over time who is on
+  the whitelist and roughly where the thresholds sit.
 - **Compliance or certification** of any kind.
 - **Independence from hardware vendors.** The root of trust is Intel and NVIDIA. A compromised CPU/GPU breaks every
   guarantee here, as it does for every TEE product.
@@ -253,11 +262,12 @@ contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, e
 contracts/demo-token/ plain NEP-141 token (near-contract-standards) for the Tier 2 demo and the sandbox test
 jobs/policy/         Rust OutLayer WASI-P1 job: evaluates the owner's policy, signs the decision (SPEC §6; Tier 2)
 services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
-services/agent/      placeholder: NL → NEAR AI → OutLayer → contract (Tier 2, not started)
+services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes, waits for
+                     contract §4.3 and the deployed policy job; not run end to end yet
 docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
 ```
 
-Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`, `packages/tier1-node` and `services/verifier`); `cargo test` in
+Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`, `packages/tier1-node`, `services/verifier` and `services/agent`); `cargo test` in
 `contracts/ainek` (unit tests + a `near-sandbox` integration test); `pnpm -F demo check-contract` checks the deployed contract's ABI against SPEC §4.1.
 
 ## Disclosures

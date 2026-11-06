@@ -26,9 +26,11 @@ export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, proofEntryOf, resolveL
 export { TIER1_STEPS, failurePhase } from './steps.ts';
 export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
-export { buildModelProof, buildCheckedModelProof } from './build.ts';
+export { buildModelProof, buildCheckedModelProof, buildActionProof } from './build.ts';
+export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
 export { withRetry } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
+export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
@@ -38,7 +40,7 @@ export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entr
 export { toModelAttestation, toGatewayAttestation } from './report.ts';
 export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
 export { stripHexPrefix, normalizeHex } from './hash.ts';
-export { ainekConfigFromEnv } from './config.ts';
+export { ainekConfigFromEnv, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';

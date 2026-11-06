@@ -9,6 +9,7 @@ COPY apps/demo/package.json apps/demo/
 COPY apps/web/package.json apps/web/
 COPY packages/proof/package.json packages/proof/
 COPY packages/tier1-node/package.json packages/tier1-node/
+COPY services/agent/package.json services/agent/
 COPY services/verifier/package.json services/verifier/
 RUN pnpm install --frozen-lockfile --filter verifier...
 

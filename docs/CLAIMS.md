@@ -20,7 +20,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
 - Only a **salted hash** of each proof goes on-chain (`commit_proof`, paid from storage the committing account prepays and
   cannot withdraw). Prompts, responses and policy contents never do.
-- (Tier 2) The agent holds **only a function-call key** scoped to `commit_proof` and `propose_action`. Funds sit in the contract.
+- (Tier 2) The agent holds **only a function-call key** scoped to `commit_proof` and `propose_action`, and refuses to start with any other. Funds sit in the contract.
   Revoking the key (`DeleteKey`) or `pause_agent` stops the agent at the chain level.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer); the contract
   verifies this signature before executing. The signature shows which key signed, not which code ran: that is in the
@@ -69,8 +69,16 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **Unlinkable usage.** Each commit is a transaction from your NEAR account: the chain shows who used Ainek, when and how often.
 - **Hidden settlement.** On testnet the executed transfer (token, amount, receiver) is public; the conversation, the reasoning
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.
-- **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. Its blast radius is bounded on-chain
-  (function-call key, contract checks, TEE-signed policy decisions), not eliminated.
+- **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. It and Telegram read the owner's
+  messages in plaintext; E2EE covers the hop from the service to the model, not the hop from the owner to the service. Its
+  blast radius is bounded on-chain (function-call key, contract checks, TEE-signed policy decisions), not eliminated. The server
+  supplies `spent_today` to the policy job, but the contract recomputes the decision's nonce from its own daily total and refuses
+  a decision made for a false one. A compromised server can still leave a denied attempt out, and neither the job nor the contract
+  opens the model proof: the contract checks only that this agent committed that hash, which the server supplied.
+- **That the model resists prompt injection.** (Tier 2) It may or may not propose what an injected message asks. The limits
+  are enforced by the policy and the contract, not by the model.
+- **A policy nobody can infer.** (Tier 2) Its contents stay off-chain, but public actions and verdicts show over time who is on
+  the whitelist and roughly where the thresholds sit.
 - **Compliance or certification** of any kind.
 - **Independence from hardware vendors.** The root of trust is Intel and NVIDIA. A compromised CPU/GPU breaks every
   guarantee here, as it does for every TEE product.
