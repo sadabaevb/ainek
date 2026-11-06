@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
-import { PolicyRun, base64ToBytes, checkPolicyRun, type PolicyRunEvidence } from '@ainek/proof';
+import { PolicyRun, base64ToBytes, checkPolicyRun, tryVerifyQuote, type PolicyRunEvidence } from '@ainek/proof';
 import { verifyTdxQuote } from './dcap.ts';
 
 const read = (path: string) => JSON.parse(readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8'));
@@ -23,6 +23,17 @@ test('an edited decision is not what the run printed', () => {
 
 test('a real run on another input does not pass: spent_today is not in the signed decision', () => {
   assert.equal(statusOf(evidence({ input: sample.input.replace('"spent_today":"0"', '"spent_today":"999"') }), 'run-input'), 'fail');
+});
+
+test('a real run over HTTPS passes every check against Intel, and a flipped bit in its quote does not verify', () => {
+  const byCall = PolicyRun.parse(read('docs/spike-outlayer/by-call-allow.attestation.json'));
+  const io = read('docs/spike-outlayer/by-call-allow.io.json') as { input: string; output: string };
+  const bytes = base64ToBytes(byCall.tdx_quote);
+  const checks = checkPolicyRun({ run: byCall, input: io.input, output: io.output, wasmHash, project, quote: verifyTdxQuote(bytes, sample.collateral, byCall.timestamp), measurementsApproved: true });
+  assert.deepEqual(checks.filter((c) => c.status !== 'ok'), []);
+  const flipped = bytes.slice();
+  flipped[570] = (flipped[570] ?? 0) ^ 1; // in the report data, which the signature covers
+  assert.ok('error' in tryVerifyQuote(verifyTdxQuote, flipped, sample.collateral, byCall.timestamp));
 });
 
 test('freshness is checked only where it is asked for, and an old run or one from the future fails it', () => {

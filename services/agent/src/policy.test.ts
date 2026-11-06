@@ -46,6 +46,7 @@ test('evaluate: the payment key never goes to another host, and an attestation u
   await assert.rejects(client(f).evaluate(input), /refusing to send the payment key/);
   assert.equal(calls.length, 1);
   await assert.rejects(client(scripted([done({ attestation_url: 'http://api.test/a' })]).f).evaluate(input), /not https/);
+  await assert.rejects(client(scripted([done({ attestation_url: 'https://evil.example/a' })]).f).evaluate(input), /not at the API/);
 });
 
 test('evaluate: a refusal carries the platform reason; a failed job says so', async () => {

@@ -9,6 +9,7 @@ import { bytesToHex, concatBytes, sha256Hex, shortHex as short, utf8Bytes } from
 import { viewFunction } from './near-view.ts';
 import { check } from './policy.ts';
 import { hex64 } from './schema.ts';
+import { NEAR_ACCOUNT } from './trust-set.ts';
 import type { Check } from './verify.ts';
 
 /** What `GET /attestations/...` answers. Fields we do not use are left alone. */
@@ -87,6 +88,29 @@ export function taskHashOf(run: PolicyRun): string {
   );
 }
 
+/** `<account>/<name>`, the form of `project_id` and `secrets_ref`. */
+const isOwnedName = (value: string): boolean => {
+  const [owner, name, ...rest] = value.split('/');
+  return rest.length === 0 && NEAR_ACCOUNT.test(owner ?? '') && /^[A-Za-z\d._-]{1,64}$/.test(name ?? '');
+};
+
+/**
+ * The worker hashes its text fields one after another with no separators, so the same bytes can be cut into fields in another way:
+ * a run of other code that carried the published hashes in `commit_hash` could be rewritten to name them, with the rest moved into
+ * the caller field. So only the form of a real run passes. The fixed fields put the hashes right after the build target, and the
+ * fields after them cannot hold another run's three hashes (192 hex digits): an account takes 64 characters and `/` breaks a run of hex.
+ */
+function formProblem(run: PolicyRun): string | null {
+  if (run.task_type !== 'execute') return `task_type is ${JSON.stringify(run.task_type)}`;
+  if (run.repo_url || run.commit_hash) return 'it names a repository, and a run of a published build names none';
+  if (run.build_target !== 'wasm32-wasip1') return `build_target is ${JSON.stringify(run.build_target)}`;
+  if (run.caller_account_id && !NEAR_ACCOUNT.test(run.caller_account_id)) return 'caller_account_id is not a NEAR account';
+  if (run.project_id && !isOwnedName(run.project_id)) return 'project_id is not <account>/<name>';
+  if (run.secrets_ref && !isOwnedName(run.secrets_ref)) return 'secrets_ref is not <account>/<name>';
+  if (run.attached_usd !== null && run.attached_usd !== undefined && !/^\d+(\.\d+)?$/.test(String(run.attached_usd))) return 'attached_usd is not an amount';
+  return null;
+}
+
 /** Intel's platform id, from the first certificate in the quote: it says which collateral to ask for. Only chooses what to fetch: a wrong one cannot pass the signature check. */
 export function fmspcOf(quote: Uint8Array): string | null {
   const pem = /-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/.exec(new TextDecoder('latin1').decode(quote));
@@ -130,6 +154,7 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
   const verified = quote && !('error' in quote) ? quote : null;
   const advisories = verified?.advisoryIds.length ? ` (advisories: ${verified.advisoryIds.join(', ')})` : '';
   const measurementOk = verified?.measurements.rtmr3 === run.worker_measurement;
+  const form = formProblem(run);
   return [
     project !== undefined && run.project_id !== project
       ? check('run-build', false, '', `the run belongs to ${String(run.project_id)}, not to ${project}`)
@@ -143,7 +168,7 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
         ? check('run-quote', false, '', `the TDX quote did not verify: ${'error' in quote ? quote.error : ''}`)
         : { id: 'run-quote', status: 'skipped', detail: 'the TDX quote was not verified' },
     verified
-      ? check('run-binding', verified.reportData === `${taskHashOf(run)}${'0'.repeat(64)}`, 'the quote commits to this build, this input and this output', 'the quote does not commit to these hashes')
+      ? check('run-binding', form === null && verified.reportData === `${taskHashOf(run)}${'0'.repeat(64)}`, 'the quote commits to this build, this input and this output', form ? `this record is not in the form of a real run: ${form}` : 'the quote does not commit to these hashes')
       : { id: 'run-binding', status: 'skipped', detail: 'without a verified quote, its report data proves nothing' },
     verified && typeof measurementsApproved === 'boolean'
       ? !measurementOk

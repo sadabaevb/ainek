@@ -56,6 +56,8 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
       const raw: unknown = typeof answer.output === 'string' ? JSON.parse(answer.output) : answer.output; // a WASI job prints JSON to stdout; the platform may hand it over parsed or as text
       const attestation = new URL(answer.attestation_url, apiUrl);
       if (attestation.protocol !== 'https:') throw new Error(`OutLayer: attestation_url is not https (${attestation.protocol})`);
+      // The check below reads the record from here and action proofs keep this URL for auditors, so it must be the API's own.
+      if (attestation.origin !== new URL(apiUrl).origin) throw new Error(`OutLayer: attestation_url points at ${attestation.origin}, not at the API`);
       return { output: PolicyOutput.parse(raw), attestationUrl: attestation.href };
     },
   };
