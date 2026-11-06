@@ -40,7 +40,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   const agentKey = need('AGENT_FC_PRIVATE_KEY');
   if (!agentKey.startsWith('ed25519:') || agentKey.length < 20) throw new Error('AGENT_FC_PRIVATE_KEY must be ed25519:… (the function-call key of the agent account)');
   const outLayerApi = (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, '');
-  if (!URL.canParse(outLayerApi)) throw new Error('OUTLAYER_API_URL is not a URL (docs/DEPLOY.md)');
+  // The payment key travels in a header on every call.
+  if (URL.parse(outLayerApi)?.protocol !== 'https:') throw new Error('OUTLAYER_API_URL must be an https URL (docs/DEPLOY.md)');
   const wasmHash = need('OUTLAYER_WASM_HASH');
   if (!isHex64(wasmHash)) throw new Error('OUTLAYER_WASM_HASH must be 64 lowercase hex chars (docs/DEPLOY.md)');
   const token = env['TELEGRAM_BOT_TOKEN'];

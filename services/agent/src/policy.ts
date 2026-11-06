@@ -1,7 +1,7 @@
 // The policy side (SPEC §7.2 step 2): one HTTPS call to the OutLayer job with the §6.2 input; the job's signed decision
 // comes back with the run's attestation URL. The answer is checked by `checkPolicyOutput` in the pipeline, not here.
 import { setTimeout as sleep } from 'node:timers/promises';
-import { POLICY_SECRETS_PROFILE, PolicyOutput, canonicalJson, type Check, type PolicyInput } from '@ainek/proof';
+import { policySecretsRef, PolicyOutput, canonicalJson, type Check, type PolicyInput } from '@ainek/proof';
 import { verifyPolicyRunAt } from '@ainek/tier1-node/dcap';
 
 export interface PolicyResult {
@@ -38,7 +38,7 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
         return answer;
       };
       // OutLayer fetches secrets only when the call asks for them: without this the job has no policy and no key, and exits 1.
-      const secretsRef = { profile: POLICY_SECRETS_PROFILE, account_id: project.split('/')[0] }; // the profile docs/DEPLOY.md sets them in, under the project owner
+      const secretsRef = policySecretsRef(project);
       // The input goes as canonical JSON: over HTTPS the attestation's `input_hash` covers the input as it was sent (key order included),
       // and `outLayerRunCheck` below compares it with the canonical bytes.
       let answer = await call(`${apiUrl}/call/${project}`, { method: 'POST', body: `{"input":${canonicalJson(input)},"secrets_ref":${JSON.stringify(secretsRef)}}` });
