@@ -21,9 +21,9 @@ export interface BotOptions {
 
 type CommandTarget = Pick<BotOptions, 'contract' | 'ownerId' | 'network'>;
 
-/** The agent cannot approve anything (SPEC §7.2): the buttons only tell the owner what to run with their own key. */
+/** The agent cannot approve anything (SPEC §7.2): the buttons only tell the owner what to run with their own key. The 1 yoctoNEAR is what makes the contract insist on a full-access key. */
 export function ownerCommand(o: CommandTarget, method: 'approve' | 'reject', actionId: number): string {
-  return `near contract call-function as-transaction ${o.contract} ${method} json-args '{"action_id":${actionId}}' prepaid-gas '100 Tgas' attached-deposit '0 NEAR' sign-as ${o.ownerId} network-config ${o.network} sign-with-keychain send`;
+  return `near contract call-function as-transaction ${o.contract} ${method} json-args '{"action_id":${actionId}}' prepaid-gas '100 Tgas' attached-deposit '1 yoctoNEAR' sign-as ${o.ownerId} network-config ${o.network} sign-with-keychain send`;
 }
 
 /** The card comes from the agent and `approve` binds only an id, so the owner reads what the contract holds before signing. */

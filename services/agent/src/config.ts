@@ -11,7 +11,7 @@ export interface AgentConfig extends AinekConfig {
   agentKey: string;
   ownerId: string;
   tokenId: string;
-  outlayer: { apiUrl: string; paymentKey: string; project: string; wasmHash: string; teePubkey: string };
+  outlayer: { apiUrl: string; paymentKey: string; project: string; secretsProfile: string; wasmHash: string };
   /** Where proofs and their salts are kept, one file per proof. */
   dataDir: string;
   /** Absent for `--once` runs without a bot. */
@@ -40,8 +40,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   const agentKey = need('AGENT_FC_PRIVATE_KEY');
   if (!agentKey.startsWith('ed25519:') || agentKey.length < 20) throw new Error('AGENT_FC_PRIVATE_KEY must be ed25519:… (the function-call key of the agent account)');
   const wasmHash = need('OUTLAYER_WASM_HASH');
-  const teePubkey = need('POLICY_TEE_PUBKEY');
-  if (!isHex64(wasmHash) || !isHex64(teePubkey)) throw new Error('OUTLAYER_WASM_HASH and POLICY_TEE_PUBKEY must be 64 lowercase hex chars (docs/DEPLOY.md, once the policy job is deployed)');
+  if (!isHex64(wasmHash)) throw new Error('OUTLAYER_WASM_HASH must be 64 lowercase hex chars (docs/DEPLOY.md)');
   const token = env['TELEGRAM_BOT_TOKEN'];
   const ownerChatId = env['TELEGRAM_OWNER_CHAT_ID'];
   return {
@@ -51,7 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     agentKey,
     ownerId: need('OWNER_ACCOUNT_ID'),
     tokenId: need('AINEK_TOKEN'),
-    outlayer: { apiUrl: (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, ''), paymentKey: need('OUTLAYER_PAYMENT_KEY'), project: need('OUTLAYER_PROJECT'), wasmHash, teePubkey },
+    outlayer: { apiUrl: (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, ''), paymentKey: need('OUTLAYER_PAYMENT_KEY'), project: need('OUTLAYER_PROJECT'), secretsProfile: env['OUTLAYER_SECRETS_PROFILE'] ?? 'default', wasmHash },
     dataDir: env['AGENT_DATA_DIR'] ?? path.resolve(import.meta.dirname, '../data/proofs'),
     telegram: token && ownerChatId ? { token, ownerChatId } : null,
   };

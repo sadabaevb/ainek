@@ -110,3 +110,8 @@ test('a cosmetic call that fails does not stop the message or the command, and a
   await h.bot.handleUpdate(click(OWNER, 'how:approve:7'));
   assert.ok(String(h.sent()[1]?.['text']).includes(ownerCommand(options, 'approve', 7)));
 });
+
+test('ownerCommand: attaches the 1 yoctoNEAR the contract needs, so only a full-access key can approve or reject', () => {
+  const target = { contract: 'c.testnet', ownerId: 'o.testnet', network: 'testnet' };
+  for (const method of ['approve', 'reject'] as const) assert.match(ownerCommand(target, method, 7), /attached-deposit '1 yoctoNEAR'/);
+});

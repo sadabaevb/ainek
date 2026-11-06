@@ -14,8 +14,7 @@ export interface Deps {
   policy: PolicyEvaluator;
   chain: ActionChain;
   keep: ProofKeeper;
-  /** From config: what `register_agent` put on-chain. */
-  teePubkey: string;
+  /** From config: the build the deployed job should report. */
   wasmHash: string;
   now?: () => number;
 }
@@ -33,6 +32,8 @@ export type Result =
       commitError: string | null;
       /** The commit landed, but the file on disk does not record its transaction. The salt is saved. */
       saveError: string | null;
+      /** The contract allowed it, but the token refused the transfer: nothing moved. */
+      transferFailed: boolean;
     }
   | { kind: 'declined' | 'bad-call'; reason: string; modelProof: ModelProof }
   | { kind: 'not-sent'; step: string; reason: string }
@@ -61,20 +62,22 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
 
   // 2. The policy, inside its TEE; then the local checks on what came back.
   let evaluated;
+  let registered;
   try {
-    const spentToday = await deps.chain.spentToday();
-    evaluated = await deps.policy.evaluate({ action: x.action, model_proof_commit: modelProofCommit, spent_today: spentToday, now: now() });
+    registered = await deps.chain.agentState();
+    if (registered.paused) return { kind: 'failed', stage: 'policy', reason: 'this agent is paused on the contract: the owner has to lift the pause first' };
+    evaluated = await deps.policy.evaluate({ action: x.action, model_proof_commit: modelProofCommit, spent_today: registered.spentToday, now: now() });
   } catch (err) {
     return { kind: 'failed', stage: 'policy', reason: errorText(err) };
   }
   const { output, attestationUrl } = evaluated;
-  const checks = checkPolicyOutput(output, { action: x.action, modelProofCommit, teePubkey: deps.teePubkey, wasmHash: deps.wasmHash, now: now() });
+  const checks = checkPolicyOutput(output, { action: x.action, modelProofCommit, teePubkey: registered.teePubkey, wasmHash: deps.wasmHash, now: now() });
   if (checks.some((c) => c.status === 'fail')) return { kind: 'decision-rejected', checks, modelProof: proven };
 
-  // 3. Room for both commits, then the model proof's commit, before any money can move: exhausted storage stops here, not after a transfer that could then never be proven.
+  // 3. Room for the whole action, then the model proof's commit, before any money can move: exhausted storage stops here, not after a transfer that could then never be proven. The contract also refuses a proposal whose model proof this agent has not committed.
   let modelProof: ModelProof;
   try {
-    if (!(await deps.chain.roomForCommits())) return { kind: 'failed', stage: 'commit', reason: 'the agent has no prepaid storage left for the two commits of an action: call deposit_storage' };
+    if (!(await deps.chain.roomForAction())) return { kind: 'failed', stage: 'commit', reason: 'the agent has no prepaid storage left for one more action: call deposit_storage' };
     modelProof = { ...proven, commitTx: await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex) };
   } catch (err) {
     return { kind: 'failed', stage: 'commit', reason: errorText(err) };
@@ -119,5 +122,5 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
       saveError = errorText(err);
     }
   }
-  return { kind: 'proposed', proof, purpose: x.purpose, modelProof, commitError, saveError };
+  return { kind: 'proposed', proof, purpose: x.purpose, modelProof, commitError, saveError, transferFailed: proposed.transferFailed };
 }

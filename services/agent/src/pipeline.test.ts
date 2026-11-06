@@ -31,20 +31,20 @@ function policy(opts: { verdict?: Decision['verdict']; signer?: nacl.SignKeyPair
   };
 }
 /** A contract that records what it is asked. */
-function chain(opts: { executed?: boolean; failCommit?: 'model' | 'action'; failPropose?: boolean; proposeTx?: string; actionId?: number | null; noRoom?: boolean } = {}): ActionChain & { proposals: unknown[]; commits: Array<[string, string, number]> } {
+function chain(opts: { executed?: boolean; failCommit?: 'model' | 'action'; failPropose?: boolean; proposeTx?: string; actionId?: number | null; noRoom?: boolean; paused?: boolean } = {}): ActionChain & { proposals: unknown[]; commits: Array<[string, string, number]> } {
   const proposals: unknown[] = [];
   const commits: Array<[string, string, number]> = [];
   return {
     proposals,
     commits,
-    proposeAction: async (args) => { if (opts.failPropose) throw new Error('rejected'); proposals.push(args); return { actionId: opts.actionId === undefined ? 7 : opts.actionId, txHash: opts.proposeTx ?? 'PROPOSE_TX', executed: opts.executed ?? false }; },
+    proposeAction: async (args) => { if (opts.failPropose) throw new Error('rejected'); proposals.push(args); return { actionId: opts.actionId === undefined ? 7 : opts.actionId, txHash: opts.proposeTx ?? 'PROPOSE_TX', executed: opts.executed ?? false, transferFailed: false }; },
     commitProof: async (commit, kind, logIndex) => { if (opts.failCommit === kind) throw new Error('not enough prepaid storage'); commits.push([commit, kind, logIndex]); return `${kind.toUpperCase()}_TX`; },
-    spentToday: async () => '100',
-    roomForCommits: async () => !opts.noRoom,
+    agentState: async () => ({ spentToday: '100', teePubkey, paused: opts.paused ?? false }),
+    roomForAction: async () => !opts.noRoom,
   };
 }
 const keeper = (over: Partial<ProofKeeper> = {}): ProofKeeper => ({ model: async () => undefined, intent: async () => undefined, settled: async () => undefined, unsettled: async () => [], action: async () => undefined, ...over });
-const deps = (over: Partial<Deps>): Deps => ({ extract: async () => extracted, policy: policy(), chain: chain({ executed: true }), keep: keeper(), teePubkey, wasmHash, now: () => now, ...over });
+const deps = (over: Partial<Deps>): Deps => ({ extract: async () => extracted, policy: policy(), chain: chain({ executed: true }), keep: keeper(), wasmHash, now: () => now, ...over });
 
 test('Allow: the policy gets the §6.2 input, the contract gets the signed decision, both proofs are committed to the model proof\'s log entry, and the action proof verifies', async () => {
   const p = policy();
@@ -89,12 +89,28 @@ test('model outcomes other than an action end before the policy runs and before 
   assert.deepEqual([quiet.inputs.length, saves], [0, 0]);
 });
 
+test('a paused agent asks nothing of the policy and proposes nothing', async () => {
+  const p = policy();
+  const c = chain({ paused: true });
+  const r = await handleOwnerText(deps({ policy: p, chain: c }), 'pay');
+  assert.equal(r.kind === 'failed' && r.stage, 'policy');
+  assert.equal(p.inputs.length, 0);
+  assert.equal(c.proposals.length, 0);
+});
+
+test('the decision is checked against the key the contract holds now, not one from config', async () => {
+  const c = chain();
+  const r = await handleOwnerText(deps({ chain: { ...c, agentState: async () => ({ spentToday: '100', teePubkey: 'ee'.repeat(32), paused: false }) } }), 'pay');
+  assert.equal(r.kind, 'decision-rejected');
+  assert.equal(c.proposals.length, 0);
+});
+
 test('order: the salt is saved before its commit, and the model proof is committed before any money can move', async () => {
   const order: string[] = [];
   const c = chain({ executed: true });
   const logged: ActionChain = {
-    spentToday: c.spentToday,
-    roomForCommits: c.roomForCommits,
+    agentState: c.agentState,
+    roomForAction: c.roomForAction,
     proposeAction: async (a) => { order.push('propose_action'); return c.proposeAction(a); },
     commitProof: async (commit, kind, i) => { order.push(`commit_proof ${kind}`); return c.commitProof(commit, kind, i); },
   };
@@ -106,14 +122,14 @@ test('before the money: a salt that cannot be saved, a spent_today that cannot b
   const p = policy();
   assert.deepEqual(await handleOwnerText(deps({ policy: p, keep: keeper({ model: async () => { throw new Error('disk full'); } }) }), 'pay'), { kind: 'failed', stage: 'store', reason: 'disk full' });
   assert.equal(p.inputs.length, 0);
-  assert.deepEqual(await handleOwnerText(deps({ policy: p, chain: { ...chain(), spentToday: async () => { throw new Error('the per-day cap cannot be checked'); } } }), 'pay'), { kind: 'failed', stage: 'policy', reason: 'the per-day cap cannot be checked' });
+  assert.deepEqual(await handleOwnerText(deps({ policy: p, chain: { ...chain(), agentState: async () => { throw new Error('the per-day cap cannot be checked'); } } }), 'pay'), { kind: 'failed', stage: 'policy', reason: 'the per-day cap cannot be checked' });
   assert.equal(p.inputs.length, 0);
   const c = chain({ failCommit: 'model' });
   assert.deepEqual(await handleOwnerText(deps({ chain: c }), 'pay'), { kind: 'failed', stage: 'commit', reason: 'not enough prepaid storage' });
   assert.deepEqual(c.proposals, []);
   const full = chain({ noRoom: true });
   const r = await handleOwnerText(deps({ chain: full }), 'pay');
-  assert.ok(r.kind === 'failed' && r.stage === 'commit' && /two commits/.test(r.reason));
+  assert.ok(r.kind === 'failed' && r.stage === 'commit' && /one more action/.test(r.reason));
   assert.deepEqual([full.commits, full.proposals], [[], []]);
   const noIntent = chain();
   assert.deepEqual(await handleOwnerText(deps({ chain: noIntent, keep: keeper({ intent: async () => { throw new Error('disk full'); } }) }), 'pay'), { kind: 'failed', stage: 'store', reason: 'disk full' });

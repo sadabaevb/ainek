@@ -3,7 +3,7 @@
 // transaction by default, with the contract's panic text, but only on the top-level status: a failed sub-receipt (the transfer) has to be read here.
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
 import { withDeadline } from '@ainek/tier1-node';
-import { readStorageBalance, viewFunction, type Action, type Decision } from '@ainek/proof';
+import { isHex64, readStorageBalance, viewFunction, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
   /** Null when the transaction landed but named no action: never a reason to lose the hash. */
@@ -11,15 +11,23 @@ export interface Proposed {
   txHash: string;
   /** The contract emitted `action_executed` and no receipt of this transaction failed. */
   executed: boolean;
+  /** The contract emitted `action_failed`: the token refused, nothing moved, and the amount is back in the day's total. */
+  transferFailed: boolean;
+}
+/** What the contract holds for this agent, read before each decision so that the chain, not a config value, says who may decide (it changes with `update_policy`). */
+export interface AgentState {
+  /** A U128 decimal string, for the policy's per-day cap. */
+  spentToday: string;
+  teePubkey: string;
+  paused: boolean;
 }
 export interface ActionChain {
   proposeAction(args: { action: Action; modelProofCommit: string; decision: Decision; teeSignature: string }): Promise<Proposed>;
   /** `commit_proof(commit, kind, log_index)` (SPEC §4.2); returns the transaction hash. */
   commitProof(commit: string, kind: 'model' | 'action', logIndex: number): Promise<string>;
-  /** What this agent spent today, a U128 decimal string, for the policy's per-day cap. */
-  spentToday(): Promise<string>;
-  /** Whether the agent's prepaid storage covers the two commits an action needs (SPEC §4.2). */
-  roomForCommits(): Promise<boolean>;
+  agentState(): Promise<AgentState>;
+  /** Whether the agent's prepaid storage covers everything one action charges it: both commits and the action record (SPEC §4.2, §4.3). */
+  roomForAction(): Promise<boolean>;
 }
 
 /** The parts of a near-api-js outcome the agent reads. */
@@ -58,17 +66,19 @@ export function parseProposed(outcome: TxOutcome): Proposed {
   const proposed = events.find((e) => e.event === 'action_proposed')?.data;
   const fromEvent = (Array.isArray(proposed) ? proposed[0] : proposed) as { action_id?: unknown } | undefined;
   const receiptFailed = outcome.receipts_outcome.some((r) => (r.outcome.status as { Failure?: unknown } | undefined)?.Failure !== undefined);
-  return { actionId: asId(returned) ?? asId(fromEvent?.action_id), txHash: outcome.transaction.hash, executed: !receiptFailed && events.some((e) => e.event === 'action_executed') };
+  return { actionId: asId(returned) ?? asId(fromEvent?.action_id), txHash: outcome.transaction.hash, executed: !receiptFailed && events.some((e) => e.event === 'action_executed'), transferFailed: events.some((e) => e.event === 'action_failed') };
 }
 
 /**
- * `spent_today` from `agent(agent_id) -> AgentInfo` (SPEC §4.3). Fail-closed: a missing view, an unregistered agent or a missing
+ * The agent's state from `agent(agent_id) -> AgentInfo` (SPEC §4.3). Fail-closed: a missing view, an unregistered agent or a missing
  * field stops the action. Falling back to "0" would let the policy check the per-day cap against nothing.
  */
-export function spentTodayOf(info: unknown): string {
-  const spent = (info as { spent_today?: unknown } | null | undefined)?.spent_today;
-  if (typeof spent !== 'string' || !/^\d+$/.test(spent)) throw new Error('the contract did not report spent_today for this agent: the per-day cap cannot be checked, nothing proposed');
-  return spent;
+export function agentStateOf(info: unknown): AgentState {
+  const i = (info ?? {}) as { spent_today?: unknown; tee_pubkey?: unknown; paused?: unknown };
+  if (typeof i.spent_today !== 'string' || !/^\d+$/.test(i.spent_today)) throw new Error('the contract did not report spent_today for this agent: the per-day cap cannot be checked, nothing proposed');
+  if (typeof i.tee_pubkey !== 'string' || !isHex64(i.tee_pubkey)) throw new Error('the contract did not report a policy key for this agent: the decision cannot be checked, nothing proposed');
+  if (typeof i.paused !== 'boolean') throw new Error('the contract did not say whether this agent is paused, nothing proposed');
+  return { spentToday: i.spent_today, teePubkey: i.tee_pubkey, paused: i.paused };
 }
 
 /** `decimals` from the token's NEP-148 `ft_metadata`. */
@@ -84,6 +94,12 @@ const STORAGE_BYTE_COST = 10n ** 19n;
 /** What the contract charges for one commit (SPEC §4.2: 130 + account + kind bytes). */
 export function commitCost(account: string, kind: 'model' | 'action'): bigint {
   return BigInt(130 + account.length + kind.length) * STORAGE_BYTE_COST;
+}
+/** What one proposal adds to the contract's storage: measured 971 bytes for an `Allow` with 19-character account ids, rounded up for longer ids and for a pending entry. */
+const ACTION_RECORD_BYTES = 1200n;
+/** Everything one action charges the agent's prepaid storage. */
+export function actionCost(account: string): bigint {
+  return commitCost(account, 'model') + commitCost(account, 'action') + ACTION_RECORD_BYTES * STORAGE_BYTE_COST;
 }
 /** No chain call may stall the one-at-a-time queue; a timed-out propose_action reads as "may have landed" on the card. */
 const CHAIN_TIMEOUT_MS = 120_000;
@@ -112,8 +128,8 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
     proposeAction: async ({ action, modelProofCommit, decision, teeSignature }) => parseProposed(await call('propose_action', { action, model_proof_commit: modelProofCommit, decision, tee_signature: teeSignature }, 100)),
     // Measured 2.19 TGas (DEV-NOTES); attached gas ties up allowance until the refund, so it stays small.
     commitProof: async (commit, kind, logIndex) => (await call('commit_proof', { commit, kind, log_index: logIndex }, 10)).transaction.hash,
-    spentToday: async () => spentTodayOf(await viewFunction(cfg.rpcUrl, cfg.contract, 'agent', { agent_id: cfg.agentId })),
-    roomForCommits: async () => (await readStorageBalance(cfg.rpcUrl, cfg.contract, cfg.agentId)) >= commitCost(cfg.agentId, 'model') + commitCost(cfg.agentId, 'action'),
+    agentState: async () => agentStateOf(await viewFunction(cfg.rpcUrl, cfg.contract, 'agent', { agent_id: cfg.agentId })),
+    roomForAction: async () => (await readStorageBalance(cfg.rpcUrl, cfg.contract, cfg.agentId)) >= actionCost(cfg.agentId),
     // The chain's own answer, not a config value: on a wrong scale the card would still read "300" while the transfer and the policy caps were off by orders of magnitude.
     tokenDecimals: async () => tokenDecimalsOf(await viewFunction(cfg.rpcUrl, cfg.tokenId, 'ft_metadata', {})),
   };

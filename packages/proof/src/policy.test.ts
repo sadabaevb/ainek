@@ -1,12 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
-import { canonicalBytes } from './canonical.ts';
+import { canonicalBytes, canonicalJson } from './canonical.ts';
 import { buildActionProof } from './build.ts';
 import { actionCommitOf, commitOf, proofPayload } from './commit.ts';
 import { bytesToBase64 } from './disclosure.ts';
-import { bytesToHex, sha256Hex } from './hash.ts';
+import { bytesToHex, sha256Hex, utf8Bytes } from './hash.ts';
 import { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
+import type { JsonValue } from './canonical.ts';
 import type { Action, ActionProof, Decision } from './schema.ts';
 
 const action: Action = { kind: 'ft_transfer', token_id: 'token.ainek.testnet', receiver_id: 'vendor1.testnet', amount: '300000000', memo: 'October' };
@@ -85,4 +87,20 @@ test('verifyActionProof: a copy without the salt is still checkable; the commit 
   assert.equal(r.ok, true);
   assert.equal(r.checks.find((c) => c.id === 'commit')?.status, 'skipped');
   assert.equal(r.checks.some((c) => c.id === 'decision-expiry'), false);
+});
+
+test('the real policy job: every recorded output (docs/test-vectors/policy-decision.json) passes the agent and auditor checks, and an edited verdict does not', () => {
+  const vectors = JSON.parse(readFileSync(new URL('../../../docs/test-vectors/policy-decision.json', import.meta.url), 'utf8')) as { policy: JsonValue; cases: Array<{ name: string; input: unknown; output: unknown }> };
+  assert.ok(vectors.cases.length >= 4);
+  for (const c of vectors.cases) {
+    const input = PolicyInput.parse(c.input);
+    const out = PolicyOutput.parse(c.output);
+    const expect = { action: input.action, modelProofCommit: input.model_proof_commit, teePubkey: out.pubkey, wasmHash: out.wasm_hash, now: input.now };
+    assert.deepEqual(checkPolicyOutput(out, expect).filter((x) => x.status === 'fail'), [], c.name);
+    assert.equal(out.decision.action_commit, actionCommitOf(input.action), c.name);
+    assert.equal(out.decision.policy_hash, sha256Hex(utf8Bytes(canonicalJson(vectors.policy))), c.name);
+    assert.equal(out.decision.nonce, sha256Hex(utf8Bytes(`${out.decision.action_commit}:${input.now}:${input.spent_today}`)), c.name);
+    const edited = { ...out, decision: { ...out.decision, verdict: out.decision.verdict === 'Allow' ? 'Deny' as const : 'Allow' as const } };
+    assert.ok(checkPolicyOutput(edited, expect).some((x) => x.id === 'decision-signature' && x.status === 'fail'), c.name);
+  }
 });

@@ -22,7 +22,7 @@ interface Answer {
   attestation_url?: string;
 }
 
-export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, pollMs = 1000, timeoutMs = 120_000 }: { apiUrl: string; paymentKey: string; /** `owner.testnet/project` */ project: string; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): PolicyEvaluator {
+export function outLayerPolicy({ apiUrl, paymentKey, project, secretsProfile = 'default', fetch: f = fetch, pollMs = 1000, timeoutMs = 120_000 }: { apiUrl: string; paymentKey: string; /** `owner.testnet/project` */ project: string; /** The keystore profile holding the job's secrets, under the project owner's account. */ secretsProfile?: string; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): PolicyEvaluator {
   const headers = { 'content-type': 'application/json', 'x-payment-key': paymentKey };
   return {
     evaluate: async (input) => {
@@ -35,7 +35,9 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
         if (!res.ok && !(res.status === 408 && answer.poll_url)) throw new Error(`OutLayer: ${answer.error ?? `HTTP ${res.status}`} (${answer.reason ?? `http_${res.status}`})`);
         return answer;
       };
-      let answer = await call(`${apiUrl}/call/${project}`, { method: 'POST', body: JSON.stringify({ input }) });
+      // OutLayer fetches secrets only when the call asks for them: without this the job has no policy and no key, and exits 1.
+      const secretsRef = { profile: secretsProfile, account_id: project.split('/')[0] };
+      let answer = await call(`${apiUrl}/call/${project}`, { method: 'POST', body: JSON.stringify({ input, secrets_ref: secretsRef }) });
       let pollUrl = answer.poll_url;
       while (answer.status !== 'completed' && answer.status !== 'failed') {
         if (!pollUrl) throw new Error(`OutLayer: unexpected answer status ${String(answer.status)}`);

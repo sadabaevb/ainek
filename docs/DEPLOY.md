@@ -48,7 +48,7 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
    least 1 NEAR: it cannot be raised later without a new key, and each `propose_action` ties up about 0.1 NEAR (100 TGas) until
    the refund.
 2. The account prepaid its commits: `deposit_storage` with a full-access key (two commits per action, SPEC §4.2).
-3. `register_agent` ran with the policy hash, `POLICY_TEE_PUBKEY` and the token.
+3. `register_agent` ran with the policy hash, the job's public key and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
 
 Give the agent its own env file. The owner's keys never go on this server: `pnpm demo:stop` runs on the owner's machine from
@@ -110,7 +110,7 @@ outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasi
   --secrets-account <owner> --secrets-profile default
 ```
 
-`pubkey` in the output is `tee_pubkey` (`POLICY_TEE_PUBKEY` in `.env`) for `register_agent`; `decision.policy_hash` is
+`pubkey` in the output is `tee_pubkey` for `register_agent` (the agent service reads it back from the contract); `decision.policy_hash` is
 `policy_hash`. Check the run's attestation (`GET https://testnet-api.outlayer.ai/attestations/<job_id>`): its
 `wasm_hash` must equal the hash from step 1.
 

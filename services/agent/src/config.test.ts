@@ -11,7 +11,6 @@ const env = {
   OUTLAYER_PAYMENT_KEY: 'o:n:s',
   OUTLAYER_PROJECT: 'o.testnet/policy',
   OUTLAYER_WASM_HASH: 'ab'.repeat(32),
-  POLICY_TEE_PUBKEY: 'cd'.repeat(32),
 } as NodeJS.ProcessEnv;
 
 test('loadConfig: the required variables are enough; the bot is optional and the API URL has a default', () => {

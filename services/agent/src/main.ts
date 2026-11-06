@@ -26,7 +26,6 @@ const deps: Deps = {
   policy: outLayerPolicy(cfg.outlayer),
   chain,
   keep,
-  teePubkey: cfg.outlayer.teePubkey,
   wasmHash: cfg.outlayer.wasmHash,
 };
 /** Anything a crash left between the intent and the action proof: a transaction may have landed that nobody recorded, and a resend would pay twice. Each is reported once. */
