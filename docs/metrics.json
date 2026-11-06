@@ -6,7 +6,8 @@
     "rpcUrl": "https://rpc.testnet.fastnear.com",
     "node": "v24.15.0",
     "measuredAt": "2026-11-06T20:17:22.675Z",
-    "note": "from Node, direct to NEAR AI (no relay), nothing cached between runs; times in ms"
+    "prompt": "Reply with the single word: ok.",
+    "note": "from Node, direct to NEAR AI (no relay), evidence re-fetched on every run; connections and proxy caches may be warm; times in ms"
   },
   "runs": [
     {
