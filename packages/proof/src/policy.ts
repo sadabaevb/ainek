@@ -41,7 +41,7 @@ export function verifyDecisionSignature(decision: Decision, sigBase64: string, p
   }
 }
 
-const check = (id: Check['id'], ok: boolean, okText: string, failText: string): Check => ({ id, status: ok ? 'ok' : 'fail', detail: ok ? okText : failText });
+export const check = (id: Check['id'], ok: boolean, okText: string, failText: string): Check => ({ id, status: ok ? 'ok' : 'fail', detail: ok ? okText : failText });
 const against = (id: Check['id'], actual: string, wanted: string, what: string): Check => check(id, actual === wanted, `${what} matches the registration`, `${what} ${short(actual)} differs from the registered ${short(wanted)}`);
 
 /** One wording and one rule for the agent's check and the auditor's, so they cannot drift. `coveredCommits` is every place that claims to cover the action. */
