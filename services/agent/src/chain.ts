@@ -4,7 +4,7 @@
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
 import { withDeadline } from '@ainek/tier1-node';
 import { ContractRefused, errorText } from './errors.ts';
-import { isHex64, readStorageBalance, viewFunction, type Action, type Decision } from '@ainek/proof';
+import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
   /** Null when the transaction landed but named no action: never a reason to lose the hash. */
@@ -90,7 +90,6 @@ export function tokenDecimalsOf(metadata: unknown): number {
   return decimals;
 }
 
-const KEY_METHODS = ['commit_proof', 'propose_action'];
 /** NEAR's storage price, yoctoNEAR per byte. */
 const STORAGE_BYTE_COST = 10n ** 19n;
 /** What the contract charges for one commit (SPEC §4.2: 130 + account + kind bytes). */
@@ -112,16 +111,6 @@ export function actionCost(account: string): bigint {
 /** No chain call may stall the one-at-a-time queue; a timed-out propose_action reads as "may have landed" on the card. */
 const CHAIN_TIMEOUT_MS = 120_000;
 
-/** The claim "the agent holds only a function-call key" rests on the key's on-chain scope, not on what the variable is called. An empty method list means every method. */
-export function keyScopeProblem(permission: unknown, contract: string): string | null {
-  const scope = (permission as { FunctionCall?: { receiver_id: string; method_names: string[] } }).FunctionCall;
-  if (!scope) return `it is not a function-call key (${JSON.stringify(permission).slice(0, 40)})`;
-  if (scope.receiver_id !== contract) return `it is scoped to ${scope.receiver_id}, not to ${contract}`;
-  const methods = [...scope.method_names].sort();
-  if (methods.join() !== KEY_METHODS.join()) return `its methods are [${methods.join(', ') || 'any'}], not [${KEY_METHODS.join(', ')}]`;
-  return null;
-}
-
 export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId: string; agentKey: string; tokenId: string }): ActionChain & { assertKeyScope(): Promise<void>; tokenDecimals(): Promise<number> } {
   const provider = new JsonRpcProvider({ url: cfg.rpcUrl });
   const signer = KeyPairSigner.fromSecretKey(cfg.agentKey as KeyPairString);
@@ -131,7 +120,7 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
     assertKeyScope: async () => {
       const key = await provider.viewAccessKey({ accountId: cfg.agentId, publicKey: await signer.getPublicKey(), finalityQuery: { finality: 'final' } });
       const problem = keyScopeProblem(key.permission, cfg.contract);
-      if (problem) throw new Error(`refusing to start: AGENT_FC_PRIVATE_KEY must be limited to ${KEY_METHODS.join(' and ')} on ${cfg.contract}, but ${problem}`);
+      if (problem) throw new Error(`refusing to start: AGENT_FC_PRIVATE_KEY must be limited to ${AGENT_KEY_METHODS.join(' and ')} on ${cfg.contract}, but ${problem}`);
     },
     proposeAction: async ({ action, modelProofCommit, decision, teeSignature }) => {
       try {

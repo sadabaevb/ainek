@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionCost, agentStateOf, commitCost, keyScopeProblem, parseProposed, refusalOf, tokenDecimalsOf } from './chain.ts';
+import { actionCost, agentStateOf, commitCost, parseProposed, refusalOf, tokenDecimalsOf } from './chain.ts';
 import { ContractRefused } from './errors.ts';
 
 const b64 = (s: string) => Buffer.from(s).toString('base64');
@@ -52,15 +52,6 @@ test('actionCost: room for both commits and the action record the contract charg
 
 test('parseProposed: a transfer the token refused reads as failed, not as executed', () => {
   assert.deepEqual(parseProposed(tx({ SuccessValue: b64('3') }, [[ev('action_proposed')], [ev('action_failed')]]), CONTRACT), { actionId: 3, txHash: 'TX', transfer: 'refused' });
-});
-
-test('keyScopeProblem: only a function-call key for this contract and exactly these two methods passes', () => {
-  const key = (receiver_id: string, method_names: string[]) => ({ FunctionCall: { allowance: '1', receiver_id, method_names } });
-  assert.equal(keyScopeProblem(key('c.testnet', ['propose_action', 'commit_proof']), 'c.testnet'), null);
-  assert.match(keyScopeProblem('FullAccess', 'c.testnet') ?? '', /not a function-call key/);
-  assert.match(keyScopeProblem(key('other.testnet', ['propose_action', 'commit_proof']), 'c.testnet') ?? '', /scoped to other\.testnet/);
-  assert.match(keyScopeProblem(key('c.testnet', []), 'c.testnet') ?? '', /\[any\]/);
-  assert.match(keyScopeProblem(key('c.testnet', ['propose_action', 'commit_proof', 'approve']), 'c.testnet') ?? '', /approve/);
 });
 
 test('parseProposed: only our contract can say what happened; a token logging the same event cannot', () => {

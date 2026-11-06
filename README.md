@@ -12,8 +12,7 @@ Ainek is a chat with a private model plus a proof you can check yourself. Before
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
 request is end-to-end encrypted to that key; the signed answer is re-verified in your browser, byte for byte. A salted hash of
 the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 lets an agent act on the answer only
-within a policy evaluated inside Intel TDX (OutLayer). Its contract and policy job are on testnet; the agent service has not
-run against them yet.
+within a policy evaluated inside Intel TDX (OutLayer).
 
 <!-- TODO before submission: 90-second video link, hosted demo link. -->
 
@@ -37,7 +36,7 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
   bytes, recomputes both hashes and checks the signature against the logged key. A salted hash of the proof is committed
   to NEAR by your wallet (`commit_proof`, from storage your account prepays); until you connect one it stays in this browser. The salt and your copy of the exchange live
   only in this browser; disclosing to an auditor hands over one proof, its salt and the ciphertext bytes, never the plaintext.
-- **Did the agent do only what it was allowed to?** (Tier 2: on testnet, not run end to end yet; see "Tier 2 flow".) The policy
+- **Did the agent do only what it was allowed to?** (Tier 2; status under "Tier 2 flow".) The policy
   (whitelist, caps, approval threshold) runs in an OutLayer job on Intel TDX that signs the decision with a key
   generated there; the contract checks that signature, then pays or waits for a human. Public: the proposed action and the
   executed transfer (testnet has no hidden settlement), the decision and the policy hash; never the policy contents or the
@@ -145,7 +144,7 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Model enclave | plaintext for the duration of inference | — | TDX + GPU attestation; retention inside the enclave is not provable by attestation |
 | NEAR blockchain | provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash | the policy contents, the conversation, the proofs | salted commits; transfer details are hidden only with Confidential Intents (out of scope) |
 | OutLayer policy job (Tier 2) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
-| Agent service and Telegram (Tier 2, not run end to end yet) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
+| Agent service and Telegram (Tier 2) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
 The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until the SDK
