@@ -25,6 +25,7 @@ interface Answer {
 
 export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, pollMs = 1000, timeoutMs = 120_000 }: { apiUrl: string; paymentKey: string; /** `owner.testnet/project` */ project: string; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): PolicyEvaluator {
   const headers = { 'content-type': 'application/json', 'x-payment-key': paymentKey };
+  const apiOrigin = new URL(apiUrl).origin;
   return {
     evaluate: async (input) => {
       // One deadline for the POST and every poll: bot updates run one at a time, so a stalled socket here would block every later message.
@@ -47,7 +48,7 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
         await sleep(pollMs, undefined, { signal });
         // The payment key goes only to the API it belongs to: a poll_url on another host would receive it.
         const target = new URL(pollUrl, apiUrl);
-        if (target.origin !== new URL(apiUrl).origin) throw new Error(`OutLayer: poll_url points at ${target.origin}, refusing to send the payment key there`);
+        if (target.origin !== apiOrigin) throw new Error(`OutLayer: poll_url points at ${target.origin}, refusing to send the payment key there`);
         answer = await call(target.href);
         pollUrl = answer.poll_url ?? pollUrl;
       }
@@ -57,7 +58,7 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
       const attestation = new URL(answer.attestation_url, apiUrl);
       if (attestation.protocol !== 'https:') throw new Error(`OutLayer: attestation_url is not https (${attestation.protocol})`);
       // The check below reads the record from here and action proofs keep this URL for auditors, so it must be the API's own.
-      if (attestation.origin !== new URL(apiUrl).origin) throw new Error(`OutLayer: attestation_url points at ${attestation.origin}, not at the API`);
+      if (attestation.origin !== apiOrigin) throw new Error(`OutLayer: attestation_url points at ${attestation.origin}, not at the API`);
       return { output: PolicyOutput.parse(raw), attestationUrl: attestation.href };
     },
   };

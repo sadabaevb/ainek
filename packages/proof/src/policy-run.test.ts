@@ -9,13 +9,24 @@ import { PolicyRun, checkPolicyRun, fmspcOf, taskHashOf, tryVerifyQuote } from '
 
 const sample = PolicyRun.parse(readRepoJson<{ attestation: unknown }>('docs/samples/policy-run.sample.json').attestation);
 
-test('the task hash layout matches the report data of every real quote we have', () => {
+// What a verified quote says about the record `quoted`. The signature itself is checked in tier1-node's dcap.test.ts.
+const bindingOf = (run: PolicyRun, quoted: PolicyRun = run) =>
+  checkPolicyRun({
+    run,
+    input: '',
+    output: '',
+    wasmHash: run.wasm_hash,
+    quote: { tcbStatus: 'UpToDate', advisoryIds: [], reportData: `${taskHashOf(quoted)}${'0'.repeat(64)}`, measurements: { mrtd: '', rtmr0: '', rtmr1: '', rtmr2: '', rtmr3: run.worker_measurement } },
+  }).find((c) => c.id === 'run-binding');
+
+test('the task hash layout and the form check match every real quote we have', () => {
   const dir = new URL('../../../docs/spike-outlayer/', import.meta.url);
   const runs = [sample, ...readdirSync(dir).filter((f) => f.endsWith('.attestation.json')).map((f) => PolicyRun.parse(readRepoJson(`docs/spike-outlayer/${f}`)))];
   assert.ok(runs.length >= 4);
   for (const run of runs) {
     const reportData = bytesToHex(base64ToBytes(run.tdx_quote).subarray(568, 600));
     assert.equal(taskHashOf(run), reportData, String(run.task_id));
+    assert.equal(bindingOf(run)?.status, 'ok', String(run.task_id));
     // A record of an on-chain run with its block height taken out must not pass as a run made over HTTPS.
     if (run.block_height !== null && run.block_height !== undefined) assert.notEqual(taskHashOf({ ...run, block_height: null }), reportData, String(run.task_id));
   }
@@ -32,24 +43,8 @@ test('a run made over HTTPS: no block height, and the hashes cover the canonical
   assert.equal(sha256Hex(io.output), run.output_hash);
 });
 
-// What a verified quote says about the record `quoted`. The signature itself is checked in tier1-node's dcap.test.ts.
-const bindingOf = (run: PolicyRun, quoted: PolicyRun = run) =>
-  checkPolicyRun({
-    run,
-    input: '',
-    output: '',
-    wasmHash: run.wasm_hash,
-    quote: { tcbStatus: 'UpToDate', advisoryIds: [], reportData: `${taskHashOf(quoted)}${'0'.repeat(64)}`, measurements: { mrtd: '', rtmr0: '', rtmr1: '', rtmr2: '', rtmr3: run.worker_measurement } },
-  }).find((c) => c.id === 'run-binding');
-
 const byCall = PolicyRun.parse(readRepoJson('docs/spike-outlayer/by-call-allow.attestation.json'));
 const sameHash = 'the same bytes cut differently hash the same, which is why the form is checked';
-
-test('the form check passes every real record we have', () => {
-  const dir = new URL('../../../docs/spike-outlayer/', import.meta.url);
-  const files = readdirSync(dir).filter((f) => f.endsWith('.attestation.json'));
-  for (const run of [sample, ...files.map((f) => PolicyRun.parse(readRepoJson(`docs/spike-outlayer/${f}`)))]) assert.equal(bindingOf(run)?.status, 'ok', String(run.task_id));
-});
 
 test('a text field moved across a field boundary is refused', () => {
   const moved = { ...byCall, repo_url: 'wasm32', build_target: '-wasip1' };

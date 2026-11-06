@@ -107,7 +107,7 @@ function formProblem(run: PolicyRun): string | null {
   if (run.caller_account_id && !NEAR_ACCOUNT.test(run.caller_account_id)) return 'caller_account_id is not a NEAR account';
   if (run.project_id && !isOwnedName(run.project_id)) return 'project_id is not <account>/<name>';
   if (run.secrets_ref && !isOwnedName(run.secrets_ref)) return 'secrets_ref is not <account>/<name>';
-  if (run.attached_usd !== null && run.attached_usd !== undefined && !/^\d+(\.\d+)?$/.test(String(run.attached_usd))) return 'attached_usd is not an amount';
+  if (run.attached_usd && !/^\d+(\.\d+)?$/.test(String(run.attached_usd))) return 'attached_usd is not an amount';
   return null;
 }
 
