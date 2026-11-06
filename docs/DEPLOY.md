@@ -1,7 +1,7 @@
 # Deploying Ainek
 
-Three things get deployed: the web demo (this section, Bektur), the Tier 2 policy job on OutLayer and the Tier 2
-accounts on testnet (the last two sections, Dastan). ROADMAP and the Tier 2 prompt point here.
+Four things get deployed: the web demo (this section, Bektur), the verifier daemon, the Tier 2 policy job on OutLayer
+and the Tier 2 accounts on testnet (the sections after it, Dastan). ROADMAP and the Tier 2 prompt point here.
 
 ## Web demo on Vercel
 
@@ -37,6 +37,47 @@ Settings names and defaults above are Vercel's as of Nov 2026; confirm them in t
 ## Local production check of the web app
 
 `pnpm -F web build && pnpm -F web start` serves the production build on http://localhost:3000 with the same root `.env`.
+
+## Verifier daemon on a server (Dastan)
+
+The daemon (`services/verifier`) has to run all the time: the client refuses a key that no trusted verifier logged in
+the last 24 hours. It runs in Docker on a Linux VPS (x86_64, clock synchronized) under the verifier account
+`ainek-dev-dastan.testnet`.
+
+On the server everything lives in `/opt/ainek-verifier`: `src/` is the tracked files of `main` (no `.env`), and
+`verifier.env` (mode 600, root only) holds `VERIFIER_ACCOUNT_ID` and `VERIFIER_PRIVATE_KEY` and nothing else. The
+contract, the RPC and the model come from the defaults in the code.
+
+The key on the server should be a function-call key that can only call `log_key` on the contract, not the account's
+full-access key: the daemon needs nothing else, and whoever reads the file can then only write log entries under the
+verifier's name (the client's quorum and the owner's `register_verifier` are the answer to that), not take the account.
+
+```
+near account add-key <verifier> grant-function-call-access --allowance '1 NEAR' --contract-account-id <contract> \
+  --function-names log_key autogenerate-new-keypair print-to-terminal network-config testnet sign-with-keychain send
+```
+
+The secret key it prints goes into `verifier.env` on the server and nowhere else. (Or generate the pair on the server
+and add only its public key with `use-manually-provided-public-key`, so the secret never leaves the server.)
+
+```
+# from the repo root on your machine; <server> is the ssh target
+git fetch origin && git archive --format=tar origin/main | ssh <server> \
+  'rm -rf /opt/ainek-verifier/src && mkdir -p /opt/ainek-verifier/src && tar -x -C /opt/ainek-verifier/src'
+ssh <server> "cd /opt/ainek-verifier/src && docker build -f services/verifier/Dockerfile \
+  -t ainek-verifier:latest -t ainek-verifier:$(git rev-parse --short origin/main) ."    # the tag says what is deployed
+ssh <server> 'docker run -d --name ainek-verifier --restart unless-stopped --memory 512m \
+  --log-opt max-size=10m --log-opt max-file=3 --env-file /opt/ainek-verifier/verifier.env \
+  -v ainek-verifier-data:/app/services/verifier/data ainek-verifier:latest'
+ssh <server> 'docker logs --tail 20 ainek-verifier'       # what the last rounds did
+```
+
+To update: repeat the first two commands (the first one replaces `src/`, so files deleted in git do not linger in the
+image; `verifier.env` is outside it), then `docker stop ainek-verifier && docker rm ainek-verifier` (stop lets a round
+in progress finish) and the `docker run` again. The reports stay in
+the `ainek-verifier-data` volume. `--restart unless-stopped` restarts the daemon after a crash, and after a reboot
+because the Docker service is enabled at boot on this server (`systemctl is-enabled docker`); the reboot itself has not
+been tried. Run one daemon per verifier account: two with the same key race and can write the same entry twice.
 
 ## Agent service (Tier 2)
 
@@ -90,6 +131,10 @@ outlayer secrets set --project <owner>/policy --build <sha256 from step 1> \
   '{"POLICY_JSON": "<the policy of SPEC §6.1 as one JSON string>", "WASM_HASH": "<sha256 from step 1>"}'
 ```
 
+- Who may run the job with these secrets is the row's reader list. Ours admits only the project owner's account, so a
+  service that calls the job with another account's payment key gets no secrets until that account is added:
+  `outlayer secrets access --project <owner>/policy --access whitelist:<owner>,<other account> --build <sha256>`
+  (from the CLI help; not run yet).
 - `PROTECTED_ED25519` is generated inside the TEE; we never see it. The job prints only its public key (`pubkey`).
 - `POLICY_JSON` is the owner's policy. It is never on-chain and never in git; only `policy_hash` is public, and the
   policy's `salt` (`openssl rand -hex 32`) keeps that hash from confirming guesses about the policy.
@@ -110,6 +155,15 @@ outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasi
   --secrets-account <owner> --secrets-profile default
 ```
 
+`pubkey` in the output is `tee_pubkey` (`POLICY_TEE_PUBKEY` in `.env`) for `register_agent`; `decision.policy_hash` is
+`policy_hash`. Check the run's attestation
+(`GET https://testnet-api.outlayer.ai/attestations/by-request/<request_id>`; `request_id` is in the
+`execution_requested` event of the run's transaction): its `wasm_hash` must equal the hash from step 1, its
+`output_hash` is the sha256 of the job's output, and its `input_hash` is the sha256 of the input as OutLayer passes it
+to the job, which is the JSON with sorted keys and no spaces, not the bytes you typed. That address is for runs made
+through the contract, like this one; a call through the HTTPS API returns its own `attestation_url`
+(`/attestations/by-call/<call_id>`, SPEC §5.2).
+
 `pubkey` in the output is `tee_pubkey` for `register_agent` (the agent service reads it back from the contract); `decision.policy_hash` is
 `policy_hash`. Check the run's attestation (`GET https://testnet-api.outlayer.ai/attestations/<job_id>`): its
 `wasm_hash` must equal the hash from step 1.
@@ -120,8 +174,10 @@ outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasi
 |---|---|
 | OutLayer project (testnet) | `ainek-dev-dastan.testnet/policy` |
 | `wasm_hash` of the deployed build | `8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb` (upload tx `6qEdLZfnDdbgn7PZyKrcgR19SVFVNTteDhv5JMZko5Ap`; the same hash from the `policy-wasm` Action on Linux and from a Mac) |
-| policy public key (`tee_pubkey`) | not generated yet: the secrets of step 3 are not set |
-| `policy_hash` | not registered yet |
+| policy public key (`tee_pubkey`) | `4c0761e240ee9d6837327f7dfc73728a8b62e7941f1c5457f6cd15e552f44740` |
+| `policy_hash` (policy version 1) | `ae503840a7a1c05eb3950e315a9cc6c4ad8b154194451194fabb21326a6c2051` |
+| first runs | request 10084 (tx `29KjawfJxXWg14vFWLtKnnCNwypFmriesN5w8WQLCce3`; the CLI timed out waiting for it) and request 10085 (tx `B6wfuy1Demw96Q211JS69BYeaHL3KxSFgLKbFEb5pt2B`), the same test action. Checked on 10085: `https://testnet-api.outlayer.ai/attestations/by-request/10085` (`wasm_hash` and `executed_wasm_sha256` equal the build above, `secrets_ref` `ainek-dev-dastan.testnet/default`) |
+| registered in the contract | not yet: `register_agent` waits for the contract upgrade (next section) |
 
 ## Tier 2 accounts on testnet (Dastan)
 
