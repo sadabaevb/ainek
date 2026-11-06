@@ -289,13 +289,16 @@ Today `ainek-log-dastan.testnet` owns itself and has one full-access key, so "ap
 holds that key: they could deploy other code or rewrite the state. The lock removes that. It is the last step before
 submission, because after it nobody can fix a bug in the contract either.
 
-Before starting (none of this has been tried yet):
+Before starting:
 
-- The repository is public. A reproducible build is only "rebuildable by anyone" then, and `cargo near` checks that
-  the commit is on the remote named in `Cargo.toml`.
-- `cargo near build reproducible-wasm` in `contracts/ainek` has run twice, better on two machines, with the same
-  sha256 both times. Note which `rustc` the build log shows: the build image is tagged Rust 1.96 while
-  `rust-toolchain.toml` pins 1.93, and we have not checked which one the container uses.
+- The repository is public. A reproducible build is only "rebuildable by anyone" then. The build itself already works
+  with the private repo; whether the deploy step insists on a public remote has not been tried.
+- `cargo near build reproducible-wasm` in `contracts/ainek` gives the same sha256 on a second machine. Tried on Nov 6
+  on one machine (an Apple-silicon Mac, the amd64 image under emulation): two builds of commit `c4a7752` both gave
+  `dbb7c5c041c2549d788e81ccfaba9975a824f2e0452eb8796b170077ffa99cc9`. The container compiles with Rust 1.96.0, the
+  version in the image tag, and ignores `rust-toolchain.toml` (1.93), which only governs local builds and tests. The
+  commit is written into the wasm (`contract_source_metadata`), so every commit has its own hash: the hash to publish
+  is the one of the exact commit that gets deployed.
 - Everything that changes the contract is decided and merged: open verifier registration, and the two gaps listed at
   the end of this section.
 
