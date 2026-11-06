@@ -2,20 +2,22 @@
 // The trust set as the viewer's own decision (SPEC §7.1): the log is open, and who counts is up to the client. Every change
 // applies at once, and the preview runs the same check the chat runs, so the consequence is visible before any message.
 import { useState, type FormEvent } from 'react';
-import { NEAR_ACCOUNT, chooseTrust, previewTrust, type KeyEntry } from '@ainek/proof';
+import { NEAR_ACCOUNT, chooseTrust, findSplitView, previewTrust, type KeyEntry, type TrustSet } from '@ainek/proof';
 import { useConfig, useT, useTrust } from '@/app/providers';
 import { observedUtc, short } from '@/lib/format';
 import { refusalText } from '@/lib/refusal';
 import { saveCustomTrust } from '@/lib/trust-set';
 
-export function TrustPanel({ entries, registered }: { entries: KeyEntry[] | null; registered: string[] }) {
+export function TrustPanel({ entries, registered }: { /** Null until the log answers. */ entries: KeyEntry[] | null; /** Null until the contract answers. */ registered: string[] | null }) {
   const cfg = useConfig();
   const { t } = useT();
   const tt = t.log.trust;
-  const { isCustom, siteDefault } = useTrust();
+  const { trust, isCustom } = useTrust();
   const [draft, setDraft] = useState('');
   const [badDraft, setBadDraft] = useState(false);
-  const selected = cfg.trustedVerifiers;
+  const [notSaved, setNotSaved] = useState(false);
+  const siteDefault = cfg.siteTrust;
+  const selected = trust.verifiers;
 
   const writers = new Map<string, { count: number; newest: KeyEntry }>();
   for (const e of entries ?? []) {
@@ -23,9 +25,10 @@ export function TrustPanel({ entries, registered }: { entries: KeyEntry[] | null
     if (seen) seen.count += 1; // the contract answers newest first, so the first entry per verifier stays the newest
     else writers.set(e.verifier, { count: 1, newest: e });
   }
-  const rows = [...new Set([...siteDefault.verifiers, ...registered, ...writers.keys(), ...selected])];
+  const rows = [...new Set([...siteDefault.verifiers, ...(registered ?? []), ...writers.keys(), ...selected])];
 
-  const apply = (verifiers: string[], quorum = cfg.quorum) => saveCustomTrust(cfg, chooseTrust({ verifiers, quorum }, siteDefault));
+  const save = (next: TrustSet | null) => setNotSaved(!saveCustomTrust(cfg, next));
+  const apply = (verifiers: string[], quorum = trust.quorum) => save(chooseTrust({ verifiers, quorum }, siteDefault));
   const toggle = (account: string) => apply(selected.includes(account) ? selected.filter((v) => v !== account) : [...selected, account]);
   const add = (e: FormEvent) => {
     e.preventDefault();
@@ -40,11 +43,11 @@ export function TrustPanel({ entries, registered }: { entries: KeyEntry[] | null
   };
   const tagOf = (account: string): string | undefined => {
     if (siteDefault.verifiers.includes(account)) return tt.tag.site;
-    if (registered.includes(account)) return tt.tag.registered;
-    return writers.has(account) ? undefined : tt.tag.added;
+    if (registered?.includes(account)) return tt.tag.registered;
+    return registered === null || writers.has(account) ? undefined : tt.tag.added; // until the contract answers, "added by you" is not known
   };
 
-  const preview = entries && previewTrust(entries, cfg.model, { verifiers: selected, quorum: cfg.quorum });
+  const preview = entries && previewTrust(entries, cfg.model, trust);
   const previewText = (): string | null => {
     if (!preview) return null;
     if (preview.kind === 'nobody') return tt.verdict.nobody;
@@ -55,6 +58,9 @@ export function TrustPanel({ entries, registered }: { entries: KeyEntry[] | null
   const willSend = preview?.kind === 'checked' && preview.verdict.status === 'ok';
 
   const onlyWriter = writers.size === 1 ? [...writers.keys()][0] : undefined;
+  // Unticking one side clears the chat's refusal, so the disagreement stays on screen even then.
+  const hiddenSplit = entries && !findSplitView(entries, cfg.model, selected) ? findSplitView(entries, cfg.model, [...writers.keys()]) : null;
+  const quorumOptions = Math.max(1, selected.length, trust.quorum);
   return (
     <section className="card trust" id="trust">
       <div className="trust-head">
@@ -65,17 +71,14 @@ export function TrustPanel({ entries, registered }: { entries: KeyEntry[] | null
       <ul className="trust-list">
         {rows.map((account) => {
           const seen = writers.get(account);
-          const tag = tagOf(account);
+          const activity = entries === null ? null : seen ? tt.seen(seen.count, observedUtc(seen.newest.observed_at)) : tt.notSeen;
           return (
             <li key={account}>
               <label>
                 <input type="checkbox" checked={selected.includes(account)} onChange={() => toggle(account)} />
                 <span className="mono">{account}</span>
               </label>
-              <span className="muted small">
-                {seen ? tt.seen(seen.count, observedUtc(seen.newest.observed_at)) : tt.notSeen}
-                {tag && ` · ${tag}`}
-              </span>
+              <span className="muted small">{[activity, tagOf(account)].filter(Boolean).join(' · ')}</span>
             </li>
           );
         })}
@@ -90,13 +93,15 @@ export function TrustPanel({ entries, registered }: { entries: KeyEntry[] | null
       </form>
       <div className="trust-quorum">
         <label htmlFor="trust-quorum" className="small">{tt.quorum}</label>
-        <select id="trust-quorum" value={cfg.quorum} disabled={selected.length < 2} onChange={(e) => apply(selected, Number(e.target.value))}>
-          {Array.from({ length: Math.max(1, selected.length, cfg.quorum) }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+        <select id="trust-quorum" value={trust.quorum} disabled={quorumOptions < 2} onChange={(e) => apply(selected, Number(e.target.value))}>
+          {Array.from({ length: quorumOptions }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
-        {isCustom && <button type="button" className="btn small" onClick={() => saveCustomTrust(cfg, null)}>{tt.reset}</button>}
+        {isCustom && <button type="button" className="btn small" onClick={() => save(null)}>{tt.reset}</button>}
       </div>
+      {notSaved && <p className="small trust-bad" role="alert">{tt.notSaved}</p>}
       {preview && <p className={`trust-verdict ${willSend ? 'ok' : 'fail'}`} role="status">{previewText()}</p>}
       <p className="muted small">{tt.verdictNote}</p>
+      {hiddenSplit && <p className="small" role="status">{tt.hiddenSplit(hiddenSplit.verifierA, hiddenSplit.verifierB)}</p>}
       {onlyWriter && <p className="muted small">{tt.oneWriter(onlyWriter)}</p>}
       <p className="muted small">{tt.hostNote}</p>
     </section>

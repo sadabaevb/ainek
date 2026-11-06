@@ -33,14 +33,19 @@ export function useCustomTrust(cfg: Scope): TrustSet | null {
   return useMemo(() => parseTrustSet(raw), [raw]);
 }
 
-/** `null` forgets the choice, so the site default applies again. */
-export function saveCustomTrust(cfg: Scope, next: TrustSet | null): void {
+/**
+ * `null` forgets the choice, so the site default applies again. False when nothing changed: the browser refused, or the value
+ * would not survive being read back (a site verifier that is no valid account, too long a list), and the caller says so.
+ */
+export function saveCustomTrust(cfg: Scope, next: TrustSet | null): boolean {
   const key = keyOf(cfg);
+  if (next && !parseTrustSet(JSON.stringify(next))) return false;
   try {
     if (next) localStorage.setItem(key, JSON.stringify(next));
     else localStorage.removeItem(key);
   } catch {
-    return; // storage refused: nothing changed, and the page keeps showing what still applies
+    return false;
   }
   window.dispatchEvent(new Event(CHANGED));
+  return true;
 }

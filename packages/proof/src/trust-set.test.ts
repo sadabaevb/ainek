@@ -24,10 +24,13 @@ test('parseTrustSet: anything malformed is no choice at all, so the caller keeps
   }
 });
 
-test('chooseTrust: the quorum follows the list down and never goes below 1', () => {
-  assert.deepEqual(chooseTrust({ verifiers: ['b.testnet', 'c.testnet'], quorum: 2 }, site), { verifiers: ['b.testnet', 'c.testnet'], quorum: 2 });
-  assert.deepEqual(chooseTrust({ verifiers: ['b.testnet'], quorum: 2 }, site), { verifiers: ['b.testnet'], quorum: 1 });
-  assert.deepEqual(chooseTrust({ verifiers: [], quorum: 2 }, site), { verifiers: [], quorum: 1 });
+test('chooseTrust: unticking a verifier never lowers the quorum, so ticking it again cannot weaken the policy', () => {
+  const both = { verifiers: ['a.testnet', 'b.testnet'], quorum: 2 };
+  const unticked = chooseTrust({ verifiers: ['a.testnet'], quorum: both.quorum }, both);
+  assert.deepEqual(unticked, { verifiers: ['a.testnet'], quorum: 2 });
+  assert.equal(chooseTrust({ verifiers: ['a.testnet', 'b.testnet'], quorum: unticked?.quorum ?? 0 }, both), null);
+  const short = previewTrust([entry('a.testnet')], 'm', { verifiers: ['a.testnet'], quorum: 2 });
+  assert.equal(short.kind === 'checked' && short.verdict.reason, 'below-quorum');
 });
 
 test('chooseTrust: a choice equal to the site default is forgotten, whatever the order', () => {
@@ -49,6 +52,15 @@ test('previewTrust: says what the chat would do for the newest key', () => {
   assert.equal(reasonOf(log, ['a.testnet', 'b.testnet'], 2), 'below-quorum');
   assert.equal(reasonOf(log, ['b.testnet'], 1), 'untrusted-only');
   assert.equal(reasonOf([entry('a.testnet', KEY_A), entry('b.testnet', KEY_B)], ['a.testnet', 'b.testnet'], 1), 'split-view');
+});
+
+test('previewTrust: a writer outside the list cannot steer the preview by logging a newer key', () => {
+  const log = [entry('stranger.testnet', KEY_B), entry('a.testnet', KEY_A)];
+  const p = previewTrust(log, 'm', site);
+  assert.equal(p.kind === 'checked' && p.key, KEY_A);
+  assert.equal(p.kind === 'checked' && p.verdict.status, 'ok');
+  const none = previewTrust(log, 'm', { verifiers: ['b.testnet'], quorum: 1 });
+  assert.equal(none.kind === 'checked' && none.key, KEY_B);
 });
 
 test('evaluateKeyLog: an empty trust set or a quorum below 1 lets nothing through, and the verdict names the quorum it used', () => {

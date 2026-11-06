@@ -11,7 +11,7 @@ import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
 import { hoursSince, observedUtc, short } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
-import { useConfig, useT } from '../providers';
+import { useConfig, useT, useTrust } from '../providers';
 
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
 
@@ -25,31 +25,32 @@ interface LogWindow {
 
 export default function LogPage() {
   const cfg = useConfig();
+  const { trust } = useTrust();
   const { t } = useT();
   const tl = t.log;
   const [log, setLog] = useState<LogWindow | null>(null);
   const [error, setError] = useState('');
-  const [registered, setRegistered] = useState<string[]>([]);
+  /** Null until the contract answers: an unanswered view must not read as "nobody is registered". */
+  const [registered, setRegistered] = useState<string[] | null>(null);
   const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
-  const { rpcUrl, contract, logSource, model } = cfg; // not cfg itself: it also holds the trust set, and choosing who to trust must not read the log again
   useEffect(() => {
-    const reader = keyLogFor({ rpcUrl, contract, logSource });
+    const reader = keyLogFor(cfg);
     reader
-      .latestKeys(model)
+      .latestKeys(cfg.model)
       .then((entries) => {
         setLog({ entries }); // the window (and the explanation card) first; the staleness lookup must not delay or hide it
         if (entries.length === 0) {
           reader
-            .latestKeys(model, ANY_AGE_NS)
+            .latestKeys(cfg.model, ANY_AGE_NS)
             .then((all) => setLog({ entries, newest: all[0] ?? null }))
             .catch(() => undefined);
         }
       })
       .catch((e: unknown) => setError(describeError(e)));
     reader.verifiers().then(setRegistered).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
-  }, [rpcUrl, contract, logSource, model]);
+  }, [cfg]);
 
   useEffect(() => {
     if (!signedAccountId) {
@@ -61,12 +62,12 @@ export default function LogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedAccountId]);
 
-  const split = log ? findSplitView(log.entries, cfg.model, cfg.trustedVerifiers) : null;
+  const split = log ? findSplitView(log.entries, cfg.model, trust.verifiers) : null;
   const c = tl.columns;
   const columns: Column<KeyEntry>[] = [
     { label: c.index, cell: (e) => e.index },
     { label: c.model, cell: (e) => e.model, className: 'mono' },
-    { label: c.verifier, cell: (e) => (cfg.trustedVerifiers.includes(e.verifier) ? e.verifier : `${e.verifier} ${tl.notTrusted}`), className: 'mono' },
+    { label: c.verifier, cell: (e) => (trust.verifiers.includes(e.verifier) ? e.verifier : `${e.verifier} ${tl.notTrusted}`), className: 'mono' },
     { label: c.key, cell: (e) => short(e.signing_address), className: 'mono' },
     { label: c.compose, cell: (e) => short(e.compose_hash), className: 'mono' },
     { label: c.tcb, cell: (e) => e.tcb_status },

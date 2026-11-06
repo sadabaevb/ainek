@@ -37,7 +37,11 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
         title={title}
         body={body}
         note={t.refusedConsequence[reason]}
-        action={outcome.tampered ? onRetry && <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button> : <Link className="btn" href="/log#trust">{t.refusedChangeTrust}</Link>}
+        action={
+          outcome.tampered ? onRetry && <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button>
+          // A new tab, because the thread lives in this page; the choice reaches it through storage. Not on a split view: a disagreement is an alarm to read, not a list to edit.
+          : reason !== 'split-view' && <Link className="btn" href="/log#trust" target="_blank" rel="noopener">{t.refusedChangeTrust}</Link>
+        }
         lines={[
           `key seen by the client: ${outcome.seenKey}`,
           `verdict: ${outcome.keyVerdict.status}: ${outcome.keyVerdict.detail}`,

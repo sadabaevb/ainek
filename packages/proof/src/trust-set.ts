@@ -29,21 +29,25 @@ export function parseTrustSet(raw: string | null): TrustSet | null {
 }
 
 /**
- * What to store for a change, with the quorum brought within reach of the list (an empty list still needs 1, so it refuses
- * everything). A choice equal to the site default is no choice: null forgets it, so a later change of the default reaches this viewer.
+ * What to store for a change. A choice equal to the site default is no choice: null forgets it, so a later change of the
+ * default reaches this viewer. The quorum is kept as asked even when the list falls short of it: the chat then refuses until
+ * the viewer lowers it, because lowering it here would quietly weaken the policy when a verifier is unticked and ticked again.
  */
 export function chooseTrust(next: TrustSet, siteDefault: TrustSet): TrustSet | null {
-  const quorum = Math.max(1, Math.min(next.quorum, next.verifiers.length));
   const sameList = next.verifiers.length === siteDefault.verifiers.length && next.verifiers.every((v) => siteDefault.verifiers.includes(v));
-  return sameList && quorum === siteDefault.quorum ? null : { verifiers: next.verifiers, quorum };
+  return sameList && next.quorum === siteDefault.quorum ? null : next;
 }
 
 export type TrustPreview = { kind: 'nobody' } | { kind: 'no-entries' } | { kind: 'checked'; key: string; verdict: KeyLogVerdict };
 
-/** What a trust set means right now, before any message: the chat's own check, run on the newest key in the log, because the model's key is known only after attestation. */
+/**
+ * What a trust set means right now, before any message: the chat's own check, run on the newest key from a verifier the viewer
+ * counts (or from anyone, when nobody on the list wrote), because the model's key is known only after attestation.
+ */
 export function previewTrust(entries: readonly KeyEntry[], model: string, trust: TrustSet): TrustPreview {
   if (trust.verifiers.length === 0) return { kind: 'nobody' };
-  const newest = entries.find((e) => e.model === model); // the contract answers newest first
+  const forModel = entries.filter((e) => e.model === model); // the contract answers newest first
+  const newest = forModel.find((e) => trust.verifiers.includes(e.verifier)) ?? forModel[0];
   if (!newest) return { kind: 'no-entries' };
   return { kind: 'checked', key: newest.signing_address, verdict: evaluateKeyLog(entries, { model, signingAddress: newest.signing_address, trustedVerifiers: trust.verifiers, quorum: trust.quorum }) };
 }

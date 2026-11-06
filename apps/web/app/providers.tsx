@@ -4,12 +4,13 @@
 import { NearProvider } from 'near-connect-hooks';
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import type { TrustSet } from '@ainek/proof';
 import type { PublicConfig } from '@/lib/config';
 import { LANG_COOKIE, dict, type Dict, type Lang } from '@/lib/i18n';
 import { useCustomTrust } from '@/lib/trust-set';
 
 const ConfigContext = createContext<PublicConfig | null>(null);
-const TrustContext = createContext<{ isCustom: boolean; siteDefault: { verifiers: string[]; quorum: number } } | null>(null);
+const TrustContext = createContext<{ trust: TrustSet; isCustom: boolean } | null>(null);
 const LangContext = createContext<{ lang: Lang; t: Dict; toggle: () => void } | null>(null);
 
 export function Providers({ config, lang, children }: { config: PublicConfig; lang: Lang; children: ReactNode }) {
@@ -17,17 +18,16 @@ export function Providers({ config, lang, children }: { config: PublicConfig; la
   // A refresh re-serializes the props; the config keeps its identity unless its values change, so effects keyed on it do not re-run.
   const configJson = JSON.stringify(config);
   const stableConfig = useMemo(() => JSON.parse(configJson) as PublicConfig, [configJson]);
-  // The viewer's own trust set replaces the site's in the config every page reads, so the chat's check, the log page and the refusal cards cannot disagree.
+  // Kept apart from the config, whose identity effects are keyed on: choosing who to trust must not re-run a page's reads.
   const custom = useCustomTrust(stableConfig);
-  const effectiveConfig = useMemo(() => (custom ? { ...stableConfig, trustedVerifiers: custom.verifiers, quorum: custom.quorum } : stableConfig), [stableConfig, custom]);
-  const trust = useMemo(() => ({ isCustom: custom !== null, siteDefault: { verifiers: stableConfig.trustedVerifiers, quorum: stableConfig.quorum } }), [custom, stableConfig]);
+  const trust = useMemo(() => ({ trust: custom ?? stableConfig.siteTrust, isCustom: custom !== null }), [custom, stableConfig]);
   // The cookie is the only source of truth: the toggle writes it and re-renders the server tree (client state survives a refresh).
   const toggle = () => {
     document.cookie = `${LANG_COOKIE}=${lang === 'en' ? 'ru' : 'en'}; path=/; max-age=31536000; SameSite=Lax`;
     router.refresh();
   };
   return (
-    <ConfigContext.Provider value={effectiveConfig}>
+    <ConfigContext.Provider value={stableConfig}>
       <TrustContext.Provider value={trust}>
         <LangContext.Provider value={{ lang, t: dict[lang], toggle }}>
           <NearProvider config={{ network: stableConfig.network }}>{children}</NearProvider>

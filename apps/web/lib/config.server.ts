@@ -5,6 +5,6 @@ import type { PublicConfig } from './config';
 
 /** Validation (unknown statuses dropped, never empty, quorum >= 1) happens in ainekConfigFromEnv; the names are the SDK's. */
 export function readPublicConfig(): PublicConfig {
-  const cfg = ainekConfigFromEnv(process.env);
-  return { ...cfg, acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] };
+  const { trustedVerifiers, quorum, ...cfg } = ainekConfigFromEnv(process.env);
+  return { ...cfg, acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[], siteTrust: { verifiers: trustedVerifiers, quorum } };
 }

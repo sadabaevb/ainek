@@ -19,7 +19,7 @@ function sampleLog(): KeyLog {
   };
 }
 
-export function keyLogFor(cfg: Pick<PublicConfig, 'logSource' | 'rpcUrl' | 'contract'>): KeyLog {
+export function keyLogFor(cfg: PublicConfig): KeyLog {
   return cfg.logSource === 'contract' ? { source: 'contract', ...keyLogReader(cfg.rpcUrl, cfg.contract) } : sampleLog();
 }
 
