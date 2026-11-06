@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Disclosure, parseDisclosure, type CommittedActionProof } from '@ainek/proof';
@@ -54,4 +54,12 @@ test('fileKeeper: a directory that does not exist yet has nothing unsettled, and
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('fileKeeper: an unreadable folder fails instead of reading as "no unfinished payments"', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'ainek-agent-'));
+  const notAFolder = path.join(root, 'file');
+  writeFileSync(notAFolder, 'x');
+  await assert.rejects(fileKeeper(notAFolder).unsettled());
+  rmSync(root, { recursive: true });
 });

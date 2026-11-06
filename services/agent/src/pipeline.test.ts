@@ -5,6 +5,7 @@ import { actionCommitOf, bytesToBase64, bytesToHex, canonicalBytes, verifyAction
 import type { RunStats, Verified } from '@ainek/tier1-node';
 import type { ActionChain } from './chain.ts';
 import type { Extraction } from './llm.ts';
+import { ContractRefused } from './errors.ts';
 import { handleOwnerText, type Deps } from './pipeline.ts';
 import type { PolicyEvaluator } from './policy.ts';
 import type { ProofKeeper } from './store.ts';
@@ -37,7 +38,7 @@ function chain(opts: { executed?: boolean; failCommit?: 'model' | 'action'; fail
   return {
     proposals,
     commits,
-    proposeAction: async (args) => { if (opts.failPropose) throw new Error('rejected'); proposals.push(args); return { actionId: opts.actionId === undefined ? 7 : opts.actionId, txHash: opts.proposeTx ?? 'PROPOSE_TX', executed: opts.executed ?? false, transferFailed: false }; },
+    proposeAction: async (args) => { if (opts.failPropose) throw new Error('rejected'); proposals.push(args); return { actionId: opts.actionId === undefined ? 7 : opts.actionId, txHash: opts.proposeTx ?? 'PROPOSE_TX', transfer: opts.executed ? 'executed' : 'none' }; },
     commitProof: async (commit, kind, logIndex) => { if (opts.failCommit === kind) throw new Error('not enough prepaid storage'); commits.push([commit, kind, logIndex]); return `${kind.toUpperCase()}_TX`; },
     agentState: async () => ({ spentToday: '100', teePubkey, paused: opts.paused ?? false }),
     roomForAction: async () => !opts.noRoom,
@@ -54,7 +55,7 @@ test('Allow: the policy gets the §6.2 input, the contract gets the signed decis
   if (r.kind !== 'proposed') return;
   assert.deepEqual(p.inputs[0], { action, model_proof_commit: 'ab'.repeat(32), spent_today: '100', now });
   assert.equal(r.proof.decision.verdict, 'Allow');
-  assert.equal(r.proof.executeTx, 'PROPOSE_TX');
+  assert.equal(r.transfer, 'executed');
   assert.equal(r.proof.commitTx, 'ACTION_TX');
   assert.equal(r.modelProof.commitTx, 'MODEL_TX');
   assert.equal(r.purpose, 'October');
@@ -65,7 +66,7 @@ test('Allow: the policy gets the §6.2 input, the contract gets the signed decis
 
 test('Deny is proposed too (the contract records the attempt); nothing is executed', async () => {
   const r = await handleOwnerText(deps({ policy: policy({ verdict: 'Deny' }), chain: chain() }), 'pay');
-  assert.ok(r.kind === 'proposed' && r.proof.decision.verdict === 'Deny' && r.proof.executeTx === null);
+  assert.ok(r.kind === 'proposed' && r.proof.decision.verdict === 'Deny' && r.transfer === 'none');
 });
 
 test('a decision signed by another key never reaches the contract', async () => {
@@ -125,7 +126,7 @@ test('order: the salt is saved before its commit, and the model proof is committ
     commitProof: async (commit, kind, i) => { order.push(`commit_proof ${kind}`); return c.commitProof(commit, kind, i); },
   };
   await handleOwnerText(deps({ chain: logged, keep: keeper({ model: async (x) => void order.push(x.proof.commitTx ? 'keep model with tx' : 'keep model'), intent: async () => void order.push('keep intent'), settled: async () => void order.push('settled'), action: async (p) => void order.push(p.commitTx ? 'keep action with tx' : 'keep action') }) }), 'pay');
-  assert.deepEqual(order, ['keep model', 'commit_proof model', 'keep model with tx', 'keep intent', 'propose_action', 'keep action', 'settled', 'commit_proof action', 'keep action with tx']);
+  assert.deepEqual(order, ['keep model', 'commit_proof model', 'keep model with tx', 'keep intent', 'propose_action', 'keep action', 'commit_proof action', 'keep action with tx']);
 });
 
 test('before the money: a salt that cannot be saved, a spent_today that cannot be read, or a model commit that fails (no storage) stops everything', async () => {
@@ -156,7 +157,7 @@ test('a failed propose_action is the chain stage; nothing is saved as an action,
 
 test('after the money: a commit or a save that fails is reported on the proposed result, never thrown', async () => {
   const noCommit = await handleOwnerText(deps({ chain: chain({ executed: true, failCommit: 'action' }) }), 'pay');
-  assert.ok(noCommit.kind === 'proposed' && noCommit.proof.commitTx === undefined && noCommit.proof.executeTx === 'PROPOSE_TX' && noCommit.commitError === 'not enough prepaid storage');
+  assert.ok(noCommit.kind === 'proposed' && noCommit.proof.commitTx === undefined && noCommit.transfer === 'executed' && noCommit.commitError === 'not enough prepaid storage');
 
   const c = chain({ executed: true });
   const noSave = await handleOwnerText(deps({ chain: c, keep: keeper({ action: async () => { throw new Error('disk full'); } }) }), 'pay');
@@ -184,4 +185,19 @@ test('after the money: a proof that cannot be built still names the action and i
     assert.equal(r.stage, 'after-propose');
     assert.match(r.reason, /action #7 is on-chain/);
   }
+});
+
+test('the intent outlives the transfer and the commit: it goes only when the caller says the owner has the card', async () => {
+  let settled = 0;
+  const r = await handleOwnerText(deps({ chain: chain({ executed: true }), keep: keeper({ settled: async () => void settled++ }) }), 'pay');
+  assert.equal(settled, 0);
+  if (r.kind === 'proposed') await r.settle();
+  assert.equal(settled, 1);
+});
+
+test('a contract refusal is not "it may have landed": nothing moved, and the intent is done with', async () => {
+  let settled = 0;
+  const refusing = { ...chain(), proposeAction: async () => { throw new ContractRefused('Contract panicked: this decision was already used'); } };
+  const r = await handleOwnerText(deps({ chain: refusing, keep: keeper({ settled: async () => void settled++ }) }), 'pay');
+  assert.deepEqual([r.kind === 'failed' && r.stage, settled], ['contract', 1]);
 });

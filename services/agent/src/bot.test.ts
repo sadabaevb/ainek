@@ -52,6 +52,13 @@ test('the owner gets the card; a verdict without a decision to make has no butto
   assert.equal(h.sent()[0]?.['reply_markup'], undefined);
 });
 
+test('the card is delivered first, and only then does the service forget the unfinished payment', async () => {
+  const order: string[] = [];
+  const h = harness({ text: 'the card', approval: null, delivered: async () => void order.push(`delivered after ${h.sent().length} message`) });
+  await h.bot.handleUpdate(update({ id: OWNER, type: 'private' }, 'pay vendor1 300'));
+  assert.deepEqual(order, ['delivered after 1 message']);
+});
+
 test('NeedsApproval: two buttons, and pressing one shows the command for the owner\'s own key', async () => {
   const h = harness({ text: 'needs approval', approval: 7 });
   await h.bot.handleUpdate(update({ id: OWNER, type: 'private' }, 'pay vendor1 400'));

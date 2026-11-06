@@ -10,7 +10,8 @@ import { requireEnv } from './config.ts';
 import { stopAgent, type StepResult } from './stop.ts';
 
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
-for (const file of ['.env', '.env.owner']) if (existsSync(path.join(repoRoot, file))) process.loadEnvFile(path.join(repoRoot, file));
+// A variable already set wins, so the owner's file goes first: stopping must act on the owner's accounts, not on what a shared .env says.
+for (const file of ['.env.owner', '.env']) if (existsSync(path.join(repoRoot, file))) process.loadEnvFile(path.join(repoRoot, file));
 const need = (name: string): string => requireEnv(process.env, name);
 const cfg = ainekConfigFromEnv(process.env);
 const provider = new JsonRpcProvider({ url: cfg.rpcUrl });

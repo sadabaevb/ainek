@@ -170,10 +170,10 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
   and the policy contents stay private. NEAR Confidential Intents could hide settlement; out of scope here.
 - **A trust-minimized agent server.** (Tier 2) The agent service is ordinary code we run. It and Telegram read the owner's
   messages in plaintext; E2EE covers the hop from the service to the model, not the hop from the owner to the service. Its
-  blast radius is bounded on-chain (function-call key, contract checks, TEE-signed policy decisions), not eliminated. Today the
-  server itself supplies `spent_today` to the policy job, so the per-day cap holds only while the server is honest; the whitelist,
-  the per-action cap and the approval threshold do not depend on that. A compromised server can also leave a denied attempt out,
-  and neither the job nor the contract opens the model proof: to them it is a hash the server supplied.
+  blast radius is bounded on-chain (function-call key, contract checks, TEE-signed policy decisions), not eliminated. The server
+  supplies `spent_today` to the policy job, but the contract recomputes the decision's nonce from its own daily total and refuses
+  a decision made for a false one. A compromised server can still leave a denied attempt out, and neither the job nor the contract
+  opens the model proof: the contract checks only that this agent committed that hash, which the server supplied.
 - **That the model resists prompt injection.** (Tier 2) It may or may not propose what an injected message asks. The limits
   are enforced by the policy and the contract, not by the model.
 - **A policy nobody can infer.** (Tier 2) Its contents stay off-chain, but public actions and verdicts show over time who is on

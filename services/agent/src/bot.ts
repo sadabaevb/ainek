@@ -44,6 +44,7 @@ export function createBot(o: BotOptions): Bot {
     const options = card.approval === null ? {} : { reply_markup: new InlineKeyboard().text('How to approve', `how:approve:${card.approval}`).text('How to reject', `how:reject:${card.approval}`) };
     // The money may have moved by now, and this card may hold the only approval buttons: a Telegram hiccup is retried.
     await withRetry(() => ctx.reply(text, options), { retryable: () => true, attempts: 3, pauseMs: SEND_RETRY_PAUSE_MS });
+    await card.delivered?.().catch((err: unknown) => console.error(`after the card: ${errorText(err)}`)); // the owner has it; the worst left is a warning at the next start
   });
   bot.callbackQuery(/^how:(approve|reject):(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery().catch(() => undefined); // updates run one at a time, so a late answer is rejected as "query is too old": the command still has to go out

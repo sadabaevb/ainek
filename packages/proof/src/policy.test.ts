@@ -59,7 +59,7 @@ test('checkPolicyOutput: an expires_at in nanoseconds (the wrong unit) fails the
 /** A committed action proof over `signed()`. */
 function actionProof(): ActionProof {
   const out = signed();
-  return buildActionProof({ actionId: 7, action, modelProofCommit, decision: out.decision, teeSignature: out.sig, teePubkey: pubkey, wasmHash, attestationUrl: 'https://api.test/attestations/c1', proposeTx: 'TX', executeTx: 'TX', approver: null, salt: '11'.repeat(32) });
+  return buildActionProof({ actionId: 7, action, modelProofCommit, decision: out.decision, teeSignature: out.sig, teePubkey: pubkey, wasmHash, attestationUrl: 'https://api.test/attestations/c1', proposeTx: 'TX', salt: '11'.repeat(32) });
 }
 const failedIds = (r: ReturnType<typeof verifyActionProof>) => r.checks.filter((c) => c.status === 'fail').map((c) => c.id);
 

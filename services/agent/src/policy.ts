@@ -29,7 +29,7 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
       // One deadline for the POST and every poll: bot updates run one at a time, so a stalled socket here would block every later message.
       const signal = AbortSignal.timeout(timeoutMs);
       const call = async (url: string, init: RequestInit = {}): Promise<Answer> => {
-        const res = await f(url, { ...init, headers, signal });
+        const res = await f(url, { ...init, headers, signal, redirect: 'error' }); // fetch would carry the payment key to wherever a redirect points
         const answer = (await res.json().catch(() => ({}))) as Answer;
         // A synchronous timeout (408) means the job may still be running: poll, never resend (a resend would run and be charged twice).
         if (!res.ok && !(res.status === 408 && answer.poll_url)) throw new Error(`OutLayer: ${answer.error ?? `HTTP ${res.status}`} (${answer.reason ?? `http_${res.status}`})`);

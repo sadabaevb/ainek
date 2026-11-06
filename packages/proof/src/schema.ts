@@ -88,8 +88,6 @@ export const ActionProof = z
     wasmHash: hex64,
     attestationUrl: z.url(),
     proposeTx: nonEmpty,
-    executeTx: nonEmpty.nullable(),
-    approver: nonEmpty.nullable(),
     ...envelope,
   })
   .strict();

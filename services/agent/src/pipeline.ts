@@ -3,8 +3,8 @@
 // local checks, and nothing is sent to the model unless the key log confirms the attested key (inside extract). Nothing
 // after propose_action can throw out of here: by then the money may have moved, and the owner must get the action id.
 import { buildActionProof, checkPolicyOutput, type Check, type CommittedActionProof, type ModelProof } from '@ainek/proof';
-import type { ActionChain } from './chain.ts';
-import { errorText } from './errors.ts';
+import type { ActionChain, Proposed } from './chain.ts';
+import { ContractRefused, errorText } from './errors.ts';
 import type { Extraction } from './llm.ts';
 import type { PolicyEvaluator } from './policy.ts';
 import type { ProofKeeper } from './store.ts';
@@ -22,8 +22,11 @@ export interface Deps {
 export type Result =
   | {
       kind: 'proposed';
-      /** Verdict, action id, transactions and whether it executed are all in here. */
+      /** Verdict, action id and transactions are in here. What happened to the action afterwards is the chain's to say (`action(id)`). */
       proof: CommittedActionProof;
+      transfer: Proposed['transfer'];
+      /** Call once the owner has been told: until then a restart must warn about this payment. */
+      settle: () => Promise<void>;
       /** What the payment is for, for the card only: never on-chain. */
       purpose: string;
       /** Carries `commitTx`: its commit landed before the action was proposed. */
@@ -32,15 +35,13 @@ export type Result =
       commitError: string | null;
       /** The commit landed, but the file on disk does not record its transaction. The salt is saved. */
       saveError: string | null;
-      /** The contract allowed it, but the token refused the transfer: nothing moved. */
-      transferFailed: boolean;
     }
   | { kind: 'declined' | 'bad-call'; reason: string; modelProof: ModelProof }
   | { kind: 'not-sent'; step: string; reason: string }
   /** The policy answered, but the answer is not one this agent may act on: nothing proposed, no gas spent. */
   | { kind: 'decision-rejected'; checks: Check[]; modelProof: ModelProof }
-  /** `after-propose`: the action is on-chain and the reason names it. Every other stage but `chain` ended before anything was proposed. */
-  | { kind: 'failed'; stage: 'model' | 'store' | 'policy' | 'commit' | 'chain' | 'after-propose'; reason: string };
+  /** `after-propose`: the action is on-chain and the reason names it. `chain`: a transaction may have landed. Every other stage ended with nothing moved. */
+  | { kind: 'failed'; stage: 'model' | 'store' | 'policy' | 'commit' | 'contract' | 'chain' | 'after-propose'; reason: string; settle?: () => Promise<void> };
 
 const PAUSED = 'this agent is paused on the contract: the owner has to lift the pause first';
 
@@ -105,22 +106,25 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   try {
     proposed = await deps.chain.proposeAction({ action: x.action, modelProofCommit, decision: output.decision, teeSignature: output.sig });
   } catch (err) {
-    return { kind: 'failed', stage: 'chain', reason: errorText(err) };
+    if (!(err instanceof ContractRefused)) return { kind: 'failed', stage: 'chain', reason: errorText(err) }; // the intent stays: a transaction may have landed
+    // Refused on-chain, so no resend can pay twice and the intent is done with. If removing it fails, the next start warns about a payment that did not happen: the safe side.
+    await deps.keep.settled(modelProofCommit).catch(() => undefined);
+    return { kind: 'failed', stage: 'contract', reason: err.message };
   }
+  const settle = () => deps.keep.settled(modelProofCommit);
 
   // 5. The action proof and its salted commit, salt saved first. The action already happened, so nothing from here on may throw or read as "nothing happened".
-  if (proposed.actionId === null) return { kind: 'failed', stage: 'after-propose', reason: `transaction ${proposed.txHash} landed, but the contract named no action: check it on the explorer before retrying` };
+  if (proposed.actionId === null) return { kind: 'failed', stage: 'after-propose', reason: `transaction ${proposed.txHash} landed, but the contract named no action: check it on the explorer before retrying`, settle };
   let proof: CommittedActionProof;
   try {
-    proof = buildActionProof({ actionId: proposed.actionId, action: x.action, modelProofCommit, decision: output.decision, teeSignature: output.sig, teePubkey: output.pubkey, wasmHash: output.wasm_hash, attestationUrl, proposeTx: proposed.txHash, executeTx: proposed.executed ? proposed.txHash : null, approver: null });
+    proof = buildActionProof({ actionId: proposed.actionId, action: x.action, modelProofCommit, decision: output.decision, teeSignature: output.sig, teePubkey: output.pubkey, wasmHash: output.wasm_hash, attestationUrl, proposeTx: proposed.txHash });
   } catch (err) {
-    return { kind: 'failed', stage: 'after-propose', reason: `action #${proposed.actionId} is on-chain (transaction ${proposed.txHash}), but its proof could not be built: ${errorText(err)}` };
+    return { kind: 'failed', stage: 'after-propose', reason: `action #${proposed.actionId} is on-chain (transaction ${proposed.txHash}), but its proof could not be built: ${errorText(err)}`, settle };
   }
   let commitError: string | null = null;
   let saveError: string | null = null;
   try {
     await deps.keep.action(proof);
-    await deps.keep.settled(modelProofCommit);
     proof = { ...proof, commitTx: await deps.chain.commitProof(proof.commit, 'action', proven.logIndex) };
   } catch (err) {
     commitError = errorText(err);
@@ -132,5 +136,5 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
       saveError = errorText(err);
     }
   }
-  return { kind: 'proposed', proof, purpose: x.purpose, modelProof, commitError, saveError, transferFailed: proposed.transferFailed };
+  return { kind: 'proposed', proof, purpose: x.purpose, modelProof, commitError, saveError, transfer: proposed.transfer, settle };
 }

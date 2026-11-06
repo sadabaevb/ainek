@@ -23,6 +23,7 @@ test('evaluate: POST /call/{project} with the payment key and {input}, under a d
   assert.equal((calls[0]?.init?.headers as Record<string, string>)['x-payment-key'], 'o:n:s');
   assert.deepEqual(JSON.parse(String(calls[0]?.init?.body)), { input, secrets_ref: { profile: 'default', account_id: 'o.testnet' } });
   assert.ok(calls[0]?.init?.signal instanceof AbortSignal);
+  assert.equal(calls[0]?.init?.redirect, 'error', 'a redirect must not carry the payment key to another host');
   assert.deepEqual(r, { output, attestationUrl: attestation });
 });
 

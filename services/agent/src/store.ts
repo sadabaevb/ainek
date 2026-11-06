@@ -57,7 +57,10 @@ export function fileKeeper(dir: string): ProofKeeper {
     intent: (x) => write(intentFile(x.modelProofCommit), x),
     settled: (commit) => rm(path.join(dir, intentFile(commit)), { force: true }),
     unsettled: async () => {
-      const names = await readdir(dir).catch(() => [] as string[]);
+      const names = await readdir(dir).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === 'ENOENT') return [] as string[]; // nothing was ever saved
+        throw err; // an unreadable folder must not read as "no unfinished payments": the owner could resend and pay twice
+      });
       return Promise.all(names.filter((n) => n.startsWith('intent-') && n.endsWith('.json')).map(async (n) => JSON.parse(await readFile(path.join(dir, n), 'utf8')) as Intent));
     },
     action: (proof) => write(`action-${proof.commit}.json`, proof),

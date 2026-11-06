@@ -2,7 +2,7 @@
 // model answers by calling one of them, and the call's arguments become an Action. It is the same Tier-1 sequence as the
 // chat, so the conversation gets a model proof that the decision and the contract bind to (`model_proof_commit`).
 import { z } from 'zod';
-import type { Action } from '@ainek/proof';
+import { NEAR_ACCOUNT, type Action } from '@ainek/proof';
 import { functionCallsOf, nothingSent, runTier1, type ChatTool, type ReadLog, type RunStats, type Verified } from '@ainek/tier1-node';
 import type { AgentConfig } from './config.ts';
 import { toMinimalUnits } from './units.ts';
@@ -48,7 +48,6 @@ export function treasurerPrompt(tokenId: string, ownerId: string): string {
   ].join(' ');
 }
 
-const NEAR_ACCOUNT = /^(?=.{2,64}$)([a-z\d]+([-_][a-z\d]+)*\.)*[a-z\d]+([-_][a-z\d]+)*$/;
 /** The arguments of a `propose_transfer` call. `amount` is checked by toMinimalUnits. The length cap on `purpose` keeps the card sendable: a reply that fails after the money moved is the worst moment to fail. */
 const Proposal = z
   .object({

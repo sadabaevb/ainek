@@ -8,7 +8,7 @@ const cfg = { explorer: 'https://testnet.nearblocks.io', tokenDecimals: 6 };
 const action: Action = { kind: 'ft_transfer', token_id: 'token.ainek.testnet', receiver_id: 'vendor1.testnet', amount: '300000000', memo: '' };
 const modelProof = { model: 'z-ai/glm-5.3-flash', logIndex: 3, commitTx: 'MTX' } as unknown as ModelProof;
 const proofOf = (verdict: Decision['verdict'], over: Partial<CommittedActionProof> = {}) => ({ actionId: 7, action, decision: { verdict, policy_version: 3, policy_hash: 'ef'.repeat(32) }, commit: 'ab'.repeat(32), teePubkey: '12'.repeat(32), wasmHash: '34'.repeat(32), attestationUrl: 'https://api.test/attestations/c1', proposeTx: 'PTX', executeTx: verdict === 'Allow' ? 'PTX' : null, commitTx: 'CTX', ...over }) as unknown as CommittedActionProof;
-const proposed = (proof: CommittedActionProof, commitError: string | null = null, over: { purpose?: string; saveError?: string } = {}): Result => ({ kind: 'proposed', proof, purpose: over.purpose ?? 'October', modelProof, commitError, saveError: over.saveError ?? null, transferFailed: false });
+const proposed = (proof: CommittedActionProof, commitError: string | null = null, over: { purpose?: string; saveError?: string } = {}): Result => ({ kind: 'proposed', proof, purpose: over.purpose ?? 'October', modelProof, commitError, saveError: over.saveError ?? null, transfer: 'executed', settle: async () => undefined });
 
 test('Allow and executed: the payment in the owner\'s units with the purpose, the model line, both commits, the contract transaction', () => {
   const { text, approval } = renderCard(proposed(proofOf('Allow')), cfg);
@@ -34,9 +34,9 @@ test('Deny says nothing moved; NeedsApproval asks and carries the action id; All
   const needs = renderCard(proposed(proofOf('NeedsApproval')), cfg);
   assert.match(needs.text, /^\? Needs your approval/);
   assert.equal(needs.approval, 7);
-  const refused = renderCard({ ...proposed(proofOf('Allow', { executeTx: null })), transferFailed: true } as Result, cfg).text;
-  assert.match(refused, /token refused the transfer/);
-  const odd = renderCard(proposed(proofOf('Allow', { executeTx: null })), cfg).text;
+  const refused = renderCard({ ...proposed(proofOf('Allow')), transfer: 'refused' } as Result, cfg).text;
+  assert.match(refused, /token refused the transfer.*no longer counts/);
+  const odd = renderCard({ ...proposed(proofOf('Allow')), transfer: 'none' } as Result, cfg).text;
   assert.match(odd, /reported no execution/);
   assert.doesNotMatch(odd, /and executed/);
 });

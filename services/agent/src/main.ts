@@ -49,13 +49,21 @@ if (flags.once) {
   await reportUnsettled(async (warning) => console.log(warning));
   const result = await handle(text);
   console.log(renderCard(result, cardCfg).text);
+  if (result.kind === 'proposed' || result.kind === 'failed') await result.settle?.();
   process.exitCode = result.kind === 'proposed' || result.kind === 'declined' ? 0 : 1;
 } else {
   if (!cfg.telegram) throw new Error('TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_CHAT_ID are required for the bot; see .env.example');
-  const bot = createBot({ token: cfg.telegram.token, ownerChatId: cfg.telegram.ownerChatId, contract: cfg.contract, ownerId: cfg.ownerId, network: cfg.network, handle: async (text) => renderCard(await handle(text), cardCfg) });
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => void bot.stop());
+  const bot = createBot({ token: cfg.telegram.token, ownerChatId: cfg.telegram.ownerChatId, contract: cfg.contract, ownerId: cfg.ownerId, network: cfg.network, handle: async (text) => {
+      const result = await handle(text);
+      return { ...renderCard(result, cardCfg), ...(result.kind === 'proposed' || result.kind === 'failed' ? { delivered: result.settle } : {}) };
+    } });
+  let stopping = false;
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => {
+    stopping = true; // bot.stop() does nothing before bot.start(): a signal during the warnings must still end the service
+    void bot.stop();
+  });
   console.log(`Ainek agent: ${cfg.agentId} for ${cfg.ownerId}, contract ${cfg.contract} on ${cfg.network}, model ${cfg.model}`);
   const { ownerChatId } = cfg.telegram;
   await reportUnsettled((warning) => bot.api.sendMessage(ownerChatId, warning));
-  await startBot(bot);
+  if (!stopping) await startBot(bot);
 }

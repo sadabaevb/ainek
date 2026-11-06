@@ -6,6 +6,8 @@ import type { Result } from './pipeline.ts';
 import { fromMinimalUnits } from './units.ts';
 
 export interface Card {
+  /** Runs once the owner has received the card. */
+  delivered?: () => Promise<void>;
   text: string;
   /** Set when the owner has to decide: the action to approve or reject. */
   approval: number | null;
@@ -40,7 +42,7 @@ export function renderCard(r: Result, cfg: { explorer: string; tokenDecimals: nu
       const heads: Record<Verdict, string> = {
         Deny: `✗ Denied by policy v${v}. Nothing moved.`,
         NeedsApproval: `? Needs your approval (policy v${v}). Nothing moved yet.`,
-        Allow: proof.executeTx ? `✓ Allowed by policy v${v} and executed.` : r.transferFailed ? `✗ Allowed by policy v${v}, but the token refused the transfer. Nothing moved, and the amount is back in today's total.` : `? Allowed by policy v${v}, but the contract reported no execution in this transaction. Check the link below.`,
+        Allow: r.transfer === 'executed' ? `✓ Allowed by policy v${v} and executed.` : r.transfer === 'refused' ? `✗ Allowed by policy v${v}, but the token refused the transfer. Nothing moved, and the amount no longer counts toward today's total.` : `? Allowed by policy v${v}, but the contract reported no execution in this transaction. Check the link below.`,
       };
       const commits = [proof.commitTx ? `action proof ${txUrl(proof.commitTx)}` : null, r.modelProof.commitTx ? `model proof ${txUrl(r.modelProof.commitTx)}` : null].filter(Boolean).join(', ');
       return {

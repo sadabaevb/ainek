@@ -3,16 +3,15 @@
 // transaction by default, with the contract's panic text, but only on the top-level status: a failed sub-receipt (the transfer) has to be read here.
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
 import { withDeadline } from '@ainek/tier1-node';
+import { ContractRefused, errorText } from './errors.ts';
 import { isHex64, readStorageBalance, viewFunction, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
   /** Null when the transaction landed but named no action: never a reason to lose the hash. */
   actionId: number | null;
   txHash: string;
-  /** The contract emitted `action_executed` and no receipt of this transaction failed. */
-  executed: boolean;
-  /** The contract emitted `action_failed`: the token refused, nothing moved, and the amount is back in the day's total. */
-  transferFailed: boolean;
+  /** From this transaction only; `action(id)` stays the authority, and an action waiting for approval moves in a later one. `refused`: the token said no, nothing moved, and the amount no longer counts toward the day's total. */
+  transfer: 'executed' | 'refused' | 'none';
 }
 /** What the contract holds for this agent, read before each decision so that the chain, not a config value, says who may decide (it changes with `update_policy`). */
 export interface AgentState {
@@ -34,12 +33,13 @@ export interface ActionChain {
 interface TxOutcome {
   status: unknown;
   transaction: { hash: string };
-  receipts_outcome: Array<{ outcome: { logs: string[]; status?: unknown } }>;
+  receipts_outcome: Array<{ outcome: { executor_id?: string; logs: string[]; status?: unknown } }>;
 }
 
 /** NEP-297 events from the logs. A log line that does not parse is someone else's (a token, a callee), never a reason to lose a landed transaction. */
-function eventsOf(outcome: TxOutcome): Array<{ event?: unknown; data?: unknown }> {
+function eventsOf(outcome: TxOutcome, contract: string): Array<{ event?: unknown; data?: unknown }> {
   return outcome.receipts_outcome
+    .filter((r) => r.outcome.executor_id === contract) // a token logs in the same transaction: its log must not be able to say what our contract did
     .flatMap((r) => r.outcome.logs)
     .filter((l) => l.startsWith('EVENT_JSON:'))
     .flatMap((l) => {
@@ -59,25 +59,27 @@ const asId = (value: unknown): number | null => {
  * Never throws: this runs after the transaction landed, when losing the hash is the worst outcome. The id comes from the return value, or from
  * `action_proposed` when the contract returns its callback's value instead (a u64 as a number, a U64 as a decimal string).
  */
-export function parseProposed(outcome: TxOutcome): Proposed {
-  const events = eventsOf(outcome);
+export function parseProposed(outcome: TxOutcome, contract: string): Proposed {
+  const events = eventsOf(outcome, contract);
   const value = (outcome.status as { SuccessValue?: string }).SuccessValue;
   const returned = value === undefined ? '' : Buffer.from(value, 'base64').toString('utf8').replaceAll('"', '');
   const proposed = events.find((e) => e.event === 'action_proposed')?.data;
   const fromEvent = (Array.isArray(proposed) ? proposed[0] : proposed) as { action_id?: unknown } | undefined;
   const receiptFailed = outcome.receipts_outcome.some((r) => (r.outcome.status as { Failure?: unknown } | undefined)?.Failure !== undefined);
-  return { actionId: asId(returned) ?? asId(fromEvent?.action_id), txHash: outcome.transaction.hash, executed: !receiptFailed && events.some((e) => e.event === 'action_executed'), transferFailed: events.some((e) => e.event === 'action_failed') };
+  return { actionId: asId(returned) ?? asId(fromEvent?.action_id), txHash: outcome.transaction.hash, transfer: events.some((e) => e.event === 'action_failed') ? 'refused' : !receiptFailed && events.some((e) => e.event === 'action_executed') ? 'executed' : 'none' };
 }
 
 /**
  * The agent's state from `agent(agent_id) -> AgentInfo` (SPEC §4.3). Fail-closed: a missing view, an unregistered agent or a missing
  * field stops the action. Falling back to "0" would let the policy check the per-day cap against nothing.
  */
-export function agentStateOf(info: unknown): AgentState {
-  const i = (info ?? {}) as { spent_today?: unknown; tee_pubkey?: unknown; paused?: unknown };
+export function agentStateOf(info: unknown, tokenId: string): AgentState {
+  const i = (info ?? {}) as { spent_today?: unknown; tee_pubkey?: unknown; paused?: unknown; token_id?: unknown };
   if (typeof i.spent_today !== 'string' || !/^\d+$/.test(i.spent_today)) throw new Error('the contract did not report spent_today for this agent: the per-day cap cannot be checked, nothing proposed');
   if (typeof i.tee_pubkey !== 'string' || !isHex64(i.tee_pubkey)) throw new Error('the contract did not report a policy key for this agent: the decision cannot be checked, nothing proposed');
   if (typeof i.paused !== 'boolean') throw new Error('the contract did not say whether this agent is paused, nothing proposed');
+  // Before anything is paid for: the contract would refuse only after the model, the job and a commit.
+  if (i.token_id !== tokenId) throw new Error(`this agent is registered for token ${String(i.token_id)}, not for AINEK_TOKEN ${tokenId}: nothing proposed`);
   return { spentToday: i.spent_today, teePubkey: i.tee_pubkey, paused: i.paused };
 }
 
@@ -95,6 +97,12 @@ const STORAGE_BYTE_COST = 10n ** 19n;
 export function commitCost(account: string, kind: 'model' | 'action'): bigint {
   return BigInt(130 + account.length + kind.length) * STORAGE_BYTE_COST;
 }
+/** near-api-js reports a landed transaction whose contract call failed as `Contract panicked: <message>`. */
+export function refusalOf(err: unknown): unknown {
+  const text = errorText(err);
+  return /Contract panicked:|Smart contract panicked/.test(text) ? new ContractRefused(text) : err;
+}
+
 /** What one proposal adds to the contract's storage: measured 971 bytes for an `Allow` with 19-character account ids, rounded up for longer ids and for a pending entry. */
 const ACTION_RECORD_BYTES = 1200n;
 /** Everything one action charges the agent's prepaid storage. */
@@ -125,10 +133,16 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
       const problem = keyScopeProblem(key.permission, cfg.contract);
       if (problem) throw new Error(`refusing to start: AGENT_FC_PRIVATE_KEY must be limited to ${KEY_METHODS.join(' and ')} on ${cfg.contract}, but ${problem}`);
     },
-    proposeAction: async ({ action, modelProofCommit, decision, teeSignature }) => parseProposed(await call('propose_action', { action, model_proof_commit: modelProofCommit, decision, tee_signature: teeSignature }, 100)),
+    proposeAction: async ({ action, modelProofCommit, decision, teeSignature }) => {
+      try {
+        return parseProposed(await call('propose_action', { action, model_proof_commit: modelProofCommit, decision, tee_signature: teeSignature }, 100), cfg.contract);
+      } catch (err) {
+        throw refusalOf(err);
+      }
+    },
     // Measured 2.19 TGas (DEV-NOTES); attached gas ties up allowance until the refund, so it stays small.
     commitProof: async (commit, kind, logIndex) => (await call('commit_proof', { commit, kind, log_index: logIndex }, 10)).transaction.hash,
-    agentState: async () => agentStateOf(await viewFunction(cfg.rpcUrl, cfg.contract, 'agent', { agent_id: cfg.agentId })),
+    agentState: async () => agentStateOf(await viewFunction(cfg.rpcUrl, cfg.contract, 'agent', { agent_id: cfg.agentId }), cfg.tokenId),
     roomForAction: async () => (await readStorageBalance(cfg.rpcUrl, cfg.contract, cfg.agentId)) >= actionCost(cfg.agentId),
     // The chain's own answer, not a config value: on a wrong scale the card would still read "300" while the transfer and the policy caps were off by orders of magnitude.
     tokenDecimals: async () => tokenDecimalsOf(await viewFunction(cfg.rpcUrl, cfg.tokenId, 'ft_metadata', {})),

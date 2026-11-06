@@ -277,10 +277,11 @@ EIP-191 recover через `ethers` для ecdsa). Сырые байты и `sal
   "actionCommit": "<hex>", "modelProofCommit": "<hex>",
   "decision": { "verdict": "Allow", "policy_hash": "<hex>", "policy_version": 3, "action_commit": "<hex>", "model_proof_commit": "<hex>", "nonce": "<hex>", "expires_at": "..." },
   "teeSignature": "<base64>", "teePubkey": "<hex>", "wasmHash": "<hex>", "attestationUrl": "https://api.outlayer.ai/attestations/by-call/...",
-  "proposeTx": "<tx hash>", "executeTx": "<tx hash | null>", "approver": "<account | null>",
+  "proposeTx": "<tx hash>",
   "salt": "<hex>", "commit": "<hex>", "commitTx": "<tx hash>"
 }
 ```
+Action proof коммитится при предложении и описывает, что предложено и на каком решении. Что случилось потом (исполнено, одобрено кем, отказ токена), он не утверждает: это `action(id).status` и транзакции на цепочке.
 
 Агент оставляет `memo` пустым: аргументы действия публичны на цепочке, а слова владельца туда не идут. Назначение платежа показывается только на карточке.
 
@@ -371,7 +372,7 @@ Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в 
 2. Агент → OutLayer job (HTTPS, вход из §6.2) → `Decision` + подпись.
 3. Агент сохраняет соль model proof и коммитит его (`commit_proof`, `kind: model`): нет предоплаты — стоп здесь, а не после перевода. Затем `propose_action` тем же FC-ключом. Контракт проверяет и исполняет / ставит в pending / отклоняет.
 4. `NeedsApproval` → Telegram-кнопка владельцу → `approve` полным ключом владельца (через кошелёк/CLI).
-5. Агент собирает action proof, сохраняет соль, коммитит его (`commit_proof`, `kind: action`, `log_index` записи из model proof; `/auditor` ищет раскрытый обмен по `proof_commit` с аккаунтом агента), отдаёт карточку. Без предложенного действия (отказ модели, нет платежа) коммитов нет. Агентский аккаунт один раз вносит `deposit_storage`: два коммита на действие, 0.1 NEAR хватает примерно на 30 действий.
+5. Агент собирает action proof, сохраняет соль, коммитит его (`commit_proof`, `kind: action`, `log_index` записи из model proof; `/auditor` ищет раскрытый обмен по `proof_commit` с аккаунтом агента), отдаёт карточку. Без предложенного действия (отказ модели, нет платежа) коммитов нет. Агентский аккаунт один раз вносит `deposit_storage`: два коммита и запись действия, 0.1 NEAR хватает примерно на 7 действий.
 6. Стоп-кнопка: владелец делает `DeleteKey` ключа агента и/или `pause_agent`; следующую попытку отвергает сеть: ключа больше нет (транзакции не будет, на цепочке виден сам `DeleteKey`).
 
 ### 7.3 Три поимки (сценарий демо и README)
