@@ -38,7 +38,9 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
       };
       // OutLayer fetches secrets only when the call asks for them: without this the job has no policy and no key, and exits 1.
       const secretsRef = { profile: 'default', account_id: project.split('/')[0] }; // the profile docs/DEPLOY.md sets them in, under the project owner
-      let answer = await call(`${apiUrl}/call/${project}`, { method: 'POST', body: JSON.stringify({ input, secrets_ref: secretsRef }) });
+      // The input goes as canonical JSON: over HTTPS the attestation's `input_hash` covers the input as it was sent (key order included),
+      // and `outLayerRunCheck` below compares it with the canonical bytes.
+      let answer = await call(`${apiUrl}/call/${project}`, { method: 'POST', body: `{"input":${canonicalJson(input)},"secrets_ref":${JSON.stringify(secretsRef)}}` });
       let pollUrl = answer.poll_url;
       while (answer.status !== 'completed' && answer.status !== 'failed') {
         if (!pollUrl) throw new Error(`OutLayer: unexpected answer status ${String(answer.status)}`);

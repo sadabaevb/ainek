@@ -42,7 +42,7 @@ What each tag needs:
 
 ## Did the agent do only what it was allowed to?
 
-**Status (Tier 2):** the contract, the policy job, the token and the agent account are on testnet, and test actions went through them. The agent service (Telegram → model → job → chain) passes its tests against fakes and has not run against them, so this has not run end to end.
+**Status (Tier 2):** the contract, the policy job, the token and the agent account are on testnet. One real payment went through the whole chain with `pnpm -F agent once` on Nov 6 (action #2 in `check-agent`). Not run live: the Telegram bot, an approval or a denial through the service, a token refusal, the stop button against this agent.
 
 | Claim | Code | Run | You should see |
 | --- | --- | --- | --- |
@@ -51,7 +51,7 @@ What each tag needs:
 | The contract pays only after checking the decision's signature | `propose_action` in [`contracts/ainek/src/agent.rs`](../contracts/ainek/src/agent.rs) | Rust (`contracts/ainek`): `cargo test a_decision`<br>network: `pnpm -F demo check-agent` | Refusals for another key, an edited decision, another action or model proof, a replaced policy, an understated daily total. `check-agent` re-verifies every recorded signature outside the contract and that each verdict ended in a status it allows. **Limit:** neither the contract nor `check-agent` opens the model proof, and the first test actions used placeholders |
 | A denied action is recorded and moves nothing | [`contracts/ainek/tests/test_agent.rs`](../contracts/ainek/tests/test_agent.rs) | Rust (`contracts/ainek`): `cargo test` | The sandbox test passes. **Limit:** it signs with a published test key, and no Deny has gone through testnet yet |
 | The job applies the whitelist, the caps and the approval threshold, then signs | [`jobs/policy/src/main.rs`](../jobs/policy/src/main.rs), [`docs/test-vectors/policy-decision.json`](test-vectors/policy-decision.json) | Rust (`jobs/policy`): `cargo test` | The tests pass, and the job reproduces every output in the vectors byte for byte |
-| An Intel-signed quote commits to the build, the input and the decision of a real run | [`packages/proof/src/policy-run.ts`](../packages/proof/src/policy-run.ts), [`packages/tier1-node/src/dcap.ts`](../packages/tier1-node/src/dcap.ts) | offline: `pnpm demo:policy`, then `pnpm demo:policy --tamper`<br>network: `pnpm demo:policy --live` | `Result: VERIFIED` with six checks; `Result: REFUSED` for an edited decision and another build. **Limit:** this checks one recorded run; the contract does not check attestation |
+| An Intel-signed quote commits to the build, the input and the decision of a real run | [`packages/proof/src/policy-run.ts`](../packages/proof/src/policy-run.ts), [`packages/tier1-node/src/dcap.ts`](../packages/tier1-node/src/dcap.ts) | offline: `pnpm demo:policy`, then `pnpm demo:policy --tamper`<br>network: `pnpm demo:policy --live` | `Result: VERIFIED` with six checks; `Result: REFUSED` for an edited decision and another build. **Limit:** the contract does not check attestation; the agent service does before it proposes (`outLayerRunCheck` in [`services/agent/src/policy.ts`](../services/agent/src/policy.ts)) |
 | The key on chain is the key in that run | [`docs/samples/policy-run.sample.json`](samples/policy-run.sample.json), [`apps/demo/scripts/check-agent.mjs`](../apps/demo/scripts/check-agent.mjs) | network: `pnpm -F demo check-agent` | `✓ the same decision key is in the attested run`. **Limit:** the key is not tied to one build; see "We do not claim" in [CLAIMS.md](CLAIMS.md) |
 | Anyone can rebuild the job and get the same hash | [`scripts/wasm-hash.sh`](../scripts/wasm-hash.sh), [`jobs/policy/rust-toolchain.toml`](../jobs/policy/rust-toolchain.toml) | Docker: `scripts/wasm-hash.sh` | The hash on the last line of `pnpm demo:policy` |
 | The job has no network or file interfaces | [`jobs/policy/src/main.rs`](../jobs/policy/src/main.rs) | after the build above:<br>`node -e 'const m=new WebAssembly.Module(require("fs").readFileSync("jobs/policy/target/repro/wasm32-wasip1/release/ainek-policy.wasm"));console.log(WebAssembly.Module.imports(m).map(i=>i.name).join(" "))'` | `fd_read fd_write environ_get environ_sizes_get proc_exit`: nothing opens a file or a socket. **Limit:** this covers the job, not the OutLayer worker around it or the model enclave |
@@ -60,6 +60,6 @@ What each tag needs:
 
 ## What no command here shows
 
-- That the agent service works end to end: see the status above and "Tier 2 flow" in the [README](../README.md).
+- The agent paths that have not run live: see the status above and "Tier 2 flow" in the [README](../README.md).
 - What the model enclave does with data after inference, the model's weights, or anything about Intel's and NVIDIA's hardware: "We do not claim" in [CLAIMS.md](CLAIMS.md).
 - The comparison with other hackathon entries: it rests on reading their code on Nov 6, 2026. The list and the method are in [FIELD.md](FIELD.md).

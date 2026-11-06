@@ -370,7 +370,7 @@ Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в 
 
 ### 7.2 Действие агента (ярус 2)
 1. Владелец пишет агенту. Агент → NEAR AI (`runTier1`, E2EE; structured output через function tool, не `response_format`) → `Action` + model proof (как 7.1).
-2. Агент → OutLayer job (HTTPS, вход из §6.2) → `Decision` + подпись.
+2. Агент → OutLayer job (HTTPS, вход из §6.2 каноническим JSON: аттестация вызова хеширует вход как он послан) → `Decision` + подпись.
 3. Агент сохраняет соль model proof и коммитит его (`commit_proof`, `kind: model`): нет предоплаты — стоп здесь, а не после перевода. Затем `propose_action` тем же FC-ключом. Контракт проверяет и исполняет / ставит в pending / отклоняет.
 4. `NeedsApproval` → Telegram-кнопка владельцу → `approve` полным ключом владельца (через кошелёк/CLI).
 5. Агент собирает action proof, сохраняет соль, коммитит его (`commit_proof`, `kind: action`, `log_index` записи из model proof; `/auditor` ищет раскрытый обмен по `proof_commit` с аккаунтом агента), отдаёт карточку. Без предложенного действия (отказ модели, нет платежа) коммитов нет. Агентский аккаунт один раз вносит `deposit_storage`: два коммита и запись действия, 0.1 NEAR хватает примерно на 7 действий.
