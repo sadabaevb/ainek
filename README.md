@@ -11,8 +11,8 @@
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
 request is end-to-end encrypted to that key; the signed answer is re-verified in your browser, byte for byte. A salted hash of
-the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 lets an agent act on the answer only
-within a policy evaluated inside Intel TDX (OutLayer).
+the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 is built to let an agent act on the answer
+only within a policy evaluated inside Intel TDX (OutLayer); status under "Tier 2 flow".
 
 <!-- TODO before submission: 90-second video link, hosted demo link. -->
 
