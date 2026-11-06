@@ -40,7 +40,65 @@ Settings names and defaults above are Vercel's as of Nov 2026; confirm them in t
 
 ## Policy job on OutLayer (Tier 2, Dastan)
 
-Recorded here once the job is deployed, because `register_agent` and the README need them: the project name on
-OutLayer testnet, the `wasm_hash` of the reproducible build, the policy public key (`POLICY_TEE_PUBKEY`, derived from
-the `PROTECTED_SIGNING_KEY:ed25519` secret inside the TEE) and the command that reproduces the hash from the repo.
-Until then see `docs/spike-outlayer/` and the spike B section of `docs/DEV-NOTES.md`.
+The job is `jobs/policy` (SPEC §3.5, §6): a WASI P1 binary that reads the action from stdin, the policy and the
+signing key from OutLayer secrets, and prints a signed decision.
+
+### 1. Build and hash
+
+```
+scripts/wasm-hash.sh        # needs Docker; prints: <sha256>  target/repro/wasm32-wasip1/release/ainek-policy.wasm
+```
+
+The script builds inside a pinned linux/amd64 container with the pinned toolchain and `Cargo.lock`, so the hash is the
+same on every machine. A plain `cargo build` on your own machine gives a working wasm with a **different** hash (why:
+the script's header), so always deploy and compare the file this script produced. The
+`policy-wasm` GitHub Action runs the same script on every push that touches the job and keeps the wasm as an
+artifact. If your number differs from the one in the table below, you are not looking at the deployed code.
+
+### 2. Upload and deploy (OutLayer testnet)
+
+```
+outlayer upload jobs/policy/target/repro/wasm32-wasip1/release/ainek-policy.wasm
+outlayer deploy policy <url printed by upload> --target wasm32-wasip1
+```
+
+### 3. Secrets, locked to this build
+
+```
+outlayer secrets set --project <owner>/policy --build <sha256 from step 1> \
+  --generate PROTECTED_ED25519:ed25519 \
+  '{"POLICY_JSON": "<the policy of SPEC §6.1 as one JSON string>", "WASM_HASH": "<sha256 from step 1>"}'
+```
+
+- `PROTECTED_ED25519` is generated inside the TEE; we never see it. The job prints only its public key (`pubkey`).
+- `POLICY_JSON` is the owner's policy. It is never on-chain and never in git; only `policy_hash` is public, and the
+  policy's `salt` (`openssl rand -hex 32`) keeps that hash from confirming guesses about the policy.
+- `WASM_HASH` is the hash from step 1: the job cannot hash itself, so it reports this value in `wasm_hash`.
+- `--build` locks all three to this exact wasm ("one build only"): another build of the job cannot read the key or
+  the policy. This is an access rule the project owner can move, not a property of the key, so the contract will not
+  notice a move (what follows from that: SPEC §3.5, CLAIMS). For a new build:
+  `outlayer secrets access --project <owner>/policy --build <new sha256>`, then
+  `outlayer secrets update --project <owner>/policy '{"WASM_HASH": "<new sha256>"}'` (`update` keeps `PROTECTED_*`;
+  do **not** repeat the `secrets set --generate` above, it overwrites the row and makes a new key), then update the
+  table below. The public key and `policy_hash` stay the same, so no `update_policy`. This is from the CLI help and
+  OutLayer's docs; we have not moved a lock live yet.
+
+### 4. First run: get the public key
+
+```
+outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasip1 \
+  --secrets-account <owner> --secrets-profile default
+```
+
+`pubkey` in the output is `tee_pubkey` (`POLICY_TEE_PUBKEY` in `.env`) for `register_agent`; `decision.policy_hash` is
+`policy_hash`. Check the run's attestation (`GET https://testnet-api.outlayer.ai/attestations/<job_id>`): its
+`wasm_hash` must equal the hash from step 1.
+
+### Deployed values
+
+| What | Value |
+|---|---|
+| OutLayer project (testnet) | `ainek-dev-dastan.testnet/policy` |
+| `wasm_hash` of the deployed build | `8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb` (upload tx `6qEdLZfnDdbgn7PZyKrcgR19SVFVNTteDhv5JMZko5Ap`; the same hash from the `policy-wasm` Action on Linux and from a Mac) |
+| policy public key (`tee_pubkey`) | not generated yet: the secrets of step 3 are not set |
+| `policy_hash` | not registered yet |

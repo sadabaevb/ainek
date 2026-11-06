@@ -21,8 +21,9 @@ Honest limitations won prizes at previous NEAR hackathons.
   cannot withdraw). Prompts, responses and policy contents never do.
 - (Tier 2) The agent holds **only a function-call key** scoped to `propose_action`. Funds sit in the contract.
   Revoking the key (`DeleteKey`) or `pause_agent` stops the agent at the chain level.
-- (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer),
-  bound to the job's `wasm_hash`; the contract verifies this signature before executing.
+- (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer); the contract
+  verifies this signature before executing. The signature shows which key signed, not which code ran: that is in the
+  run's attestation (`wasm_hash`), which the contract does not check.
 - (Tier 2) The policy job **cannot retain or exfiltrate its input by construction**: it is a WASI-P1 binary with no
   network and no storage interfaces, its build is reproducible (`Cargo.lock`, pinned toolchain), and the `wasm_hash`
   you get from building the repo equals the hash in the attestation. This is a proof of *inability to retain*, not a
@@ -33,6 +34,9 @@ Honest limitations won prizes at previous NEAR hackathons.
 
 ## We do not claim
 
+- **That the decision key is tied to one build of the policy job.** OutLayer's "one build only" lock is an access
+  rule: per OutLayer's docs the owner of the OutLayer project (in the demo: us) can move it to another build or
+  remove it, the key stays the same and the contract would not notice.
 - **Verified model weights.** Attestation measures the deployment (container image digests, compose hash), not the
   weights. We say "attested deployment of model X".
 - **No retention inside the model enclave.** Attestation cannot prove what NEAR AI's model enclave does with data after

@@ -63,13 +63,23 @@ Incognito-маршрут (§3.9) пользователь выбирает са�
 
 ### 3.5 Policy job `jobs/policy` (Rust, OutLayer WASI-P1) — Дастан
 Чистая функция: stdin JSON → stdout JSON ≤ 900 байт. Читает политику из секрета `POLICY_JSON`,
-ключ решений из `PROTECTED_ED25519` (генерируется в TEE, привязан к `wasm_hash`). Детерминирована.
+ключ решений из `PROTECTED_ED25519` (генерируется в TEE). Детерминирована.
+Секреты закрыты правилом «one build only»: их читает только сборка с указанным `wasm_hash`. Это правило доступа, а не
+свойство ключа: владелец проекта OutLayer может перенести его на другую сборку, ключ при этом не меняется, и контракт
+этого не заметит (как: `docs/DEPLOY.md`). Поэтому подпись доказывает только, что решение подписано ключом, записанным в
+контракте (`tee_pubkey`); что ключ создан в TEE и доступен одной сборке — гарантия OutLayer, а не подписи. Какой код
+исполнялся, показывает только `wasm_hash` в аттестации прогона; контракт её не проверяет, сверять её должна проверка
+action proof (в работе, Бектур). Поле `wasm_hash` выхода справочное: берётся из секрета `WASM_HASH` (P1-модуль не может
+посчитать хеш самого себя), в подпись не входит и после переноса правила на другую сборку назовёт старую, пока секрет
+не обновят. Сверять нужно хеш из аттестации, а не это поле.
 
-**Ретеншн невозможен по конструкции.** WASI-P1 даёт бинарю только stdin/stdout и случайность — ни сетевых, ни файловых
+**Ретеншн невозможен по конструкции.** WASI-P1 даёт бинарю только stdin/stdout, переменные окружения и случайность — ни сетевых, ни файловых
 интерфейсов по формату исполнения, то есть коду физически некуда сохранить или отправить вход. Чтобы это было
-проверяемо, сборка воспроизводима: `Cargo.lock` закоммичен, `cargo build --release --target wasm32-wasip1` в
-зафиксированной версии toolchain (`rust-toolchain.toml`) даёт один и тот же `wasm_hash`; CI печатает его, он же
-публикуется в `register_agent` и совпадает с хешем в аттестации OutLayer. Любой может собрать из репо и сверить.
+проверяемо, сборка воспроизводима: `Cargo.lock` закоммичен, `scripts/wasm-hash.sh` (`cargo build --release --locked
+--target wasm32-wasip1` в зафиксированном по digest контейнере linux/amd64 и зафиксированной версии toolchain,
+`jobs/policy/rust-toolchain.toml`) даёт один и тот же `wasm_hash` на любой машине; сборка вне контейнера рабочая, но хеш
+у неё зависит от платформы хоста; CI (`.github/workflows/policy-wasm.yml`) печатает его, он же
+опубликован в `docs/DEPLOY.md` и совпадает с хешем в аттестации OutLayer (в контракт он не записывается). Любой может собрать из репо и сверить.
 Это доказательство невозможности сохранить, а не доказательство удаления — так и формулируем. К модели NEAR AI
 не относится (их serving-образ закрыт).
 
@@ -266,15 +276,37 @@ EIP-191 recover через `ethers` для ecdsa). Сырые байты и `sal
   "whitelist": ["aibek.testnet", "vendor1.testnet"],
   "caps": { "per_action": "500000000", "per_day": "2000000000" },
   "needs_approval_above": "300000000",
-  "deny_new_receivers": true
+  "deny_new_receivers": true,
+  "salt": "<64 hex, случайные 32 байта: openssl rand -hex 32>"
 }
 policy_hash = sha256(canonical_json(policy))  // публикуется в register_agent
 ```
+`salt` обязателен: политика низкоэнтропийна (круглые лимиты, получатели видны в переводах), и без соли любой мог бы
+подтвердить догадку о всей политике по публичному `policy_hash`. Все поля обязательны, лишние — ошибка.
 ### 6.2 Вход и выход джоба
 Вход (stdin): `{ "action": Action, "model_proof_commit": "<hex>", "spent_today": "<U128>", "now": <unix ms> }`.
 Выход (stdout, ≤ 900 байт): `{ "decision": Decision, "sig": "<base64 ed25519 over canonical_bytes(decision)>", "pubkey": "<hex>", "wasm_hash": "<hex>" }`.
-Логика: receiver ∈ whitelist, иначе Deny; amount ≤ per_action и spent_today+amount ≤ per_day, иначе Deny;
-amount > needs_approval_above → NeedsApproval; иначе Allow. `nonce` = sha256(action_commit || now).
+Логика, срабатывает первое подходящее правило:
+1. `kind != "ft_transfer"`, `token_id != policy.token_id` или amount = 0 → Deny;
+2. receiver ∉ whitelist и `deny_new_receivers: true` → Deny;
+3. amount > per_action или spent_today + amount > per_day (переполнение u128 тоже) → Deny: лимит жёсткий, одобрение
+   владельца его не снимает;
+4. receiver ∉ whitelist (значит, `deny_new_receivers: false`) или amount > needs_approval_above → NeedsApproval;
+5. иначе Allow.
+
+`nonce` = sha256(utf8(action_commit + ":" + now + ":" + spent_today)): 64 hex-символа `action_commit`, `now` и
+`spent_today` десятичными строками. `now` и `spent_today` приходят от агента, то есть от стороны, которую политика
+ограничивает, и в `Decision` их нет; через `nonce` контракт может пересчитать их по своим данным
+(`now = expires_at − 600000`, `spent_today` — свой учёт за сутки) и отклонить решение, принятое для выдуманных значений.
+`expires_at = now + 600000` (10 минут, unix ms).
+
+Строгость входа: `action_commit` считается от `action` ровно в том виде, как он пришёл; лишние поля во входе, в
+`action` и в политике — ошибка, как и отсутствующие (`principal`, `agent` обязательны). U128 только в том виде, как их
+печатает near-sdk: цифры без знака и ведущих нулей (иначе контракт пересериализует сумму и получит другой
+`action_commit`). `policy.version` — u32, как `policy_version` в контракте. Числа в JSON пишутся целыми, без дробной
+части и экспоненты (`3`, не `3.0`): Rust такие отклоняет, хотя JS принял бы. Некорректный вход, политика или ключ →
+код выхода 1 и текст в stderr без содержимого политики и ключа; решения нет (fail closed).
+Эталонные входы и выходы с тестовым ключом: `docs/test-vectors/policy-decision.json`, Rust воспроизводит их побайтно.
 Канонические байты: детерминированный JSON — одна и та же функция в Rust и TS (`packages/proof/src/canonical.ts`,
 `jobs/policy/src/canonical.rs`), тест-векторы в `docs/test-vectors/canonical.json`. Правила: ключи отсортированы по
 Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в JS сортировать явно, `sort()` сравнивает UTF-16),
