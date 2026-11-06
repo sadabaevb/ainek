@@ -75,7 +75,13 @@ outlayer secrets set --project <owner>/policy --build <sha256 from step 1> \
   policy's `salt` (`openssl rand -hex 32`) keeps that hash from confirming guesses about the policy.
 - `WASM_HASH` is the hash from step 1: the job cannot hash itself, so it reports this value in `wasm_hash`.
 - `--build` locks all three to this exact wasm ("one build only"): another build of the job cannot read the key or
-  the policy. A new build therefore means new secrets, a **new public key** and `update_policy` on the contract.
+  the policy. This is an access rule the project owner can move, not a property of the key, so the contract will not
+  notice a move (what follows from that: SPEC §3.5, CLAIMS). For a new build:
+  `outlayer secrets access --project <owner>/policy --build <new sha256>`, then
+  `outlayer secrets update --project <owner>/policy '{"WASM_HASH": "<new sha256>"}'` (`update` keeps `PROTECTED_*`;
+  do **not** repeat the `secrets set --generate` above, it overwrites the row and makes a new key), then update the
+  table below. The public key and `policy_hash` stay the same, so no `update_policy`. This is from the CLI help and
+  OutLayer's docs; we have not moved a lock live yet.
 
 ### 4. First run: get the public key
 
@@ -93,6 +99,6 @@ outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasi
 | What | Value |
 |---|---|
 | OutLayer project (testnet) | `ainek-dev-dastan.testnet/policy` |
-| `wasm_hash` of the deployed build | not deployed yet; the spike build `882c5c5a…1c5f` is still the active one |
-| policy public key (`tee_pubkey`) | not generated yet |
+| `wasm_hash` of the deployed build | `8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb` (upload tx `6qEdLZfnDdbgn7PZyKrcgR19SVFVNTteDhv5JMZko5Ap`; the same hash from the `policy-wasm` Action on Linux and from a Mac) |
+| policy public key (`tee_pubkey`) | not generated yet: the secrets of step 3 are not set |
 | `policy_hash` | not registered yet |
