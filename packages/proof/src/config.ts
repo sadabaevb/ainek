@@ -56,7 +56,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.
-    outlayerApiUrl: env['OUTLAYER_API_URL'] || 'https://testnet-api.outlayer.ai',
+    outlayerApiUrl: (env['OUTLAYER_API_URL'] || (network === 'mainnet' ? 'https://api.outlayer.ai' : 'https://testnet-api.outlayer.ai')).replace(/\/$/, ''),
     policyProject: env['OUTLAYER_PROJECT'] || 'ainek-dev-dastan.testnet/policy',
     policyWasmHash: env['OUTLAYER_WASM_HASH'] || '8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb',
   };

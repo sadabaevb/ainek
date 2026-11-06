@@ -43,6 +43,7 @@ export { stripHexPrefix, normalizeHex } from './hash.ts';
 export { ainekConfigFromEnv, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { actionRunChecks, actionStatusProblem, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
+export type { ActionVerdict } from './action-on-chain.ts';
 export type { ActionReport } from './policy.ts';
 export { PolicyRun, checkPolicyRun, policySecretsRef, quoteVerifierOf, tryVerifyQuote, verifyPolicyRun } from './policy-run.ts';
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';

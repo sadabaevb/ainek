@@ -46,7 +46,7 @@ test('an action proof: its decision is rebuilt into what the run printed, and th
   }) as typeof fetch;
   const realFetch = globalThis.fetch;
   globalThis.fetch = f; // the view call goes through the global one
-  const checks = await actionRunChecks(proof, { apiUrl: 'https://api.test', project, wasmHash, rpcUrl: 'https://rpc.test', network: 'testnet', verifyQuote: verifyTdxQuote, fetch: f }).finally(() => {
+  const checks = await actionRunChecks(proof, { apiUrl: 'https://api.test', project, wasmHash, rpcUrl: 'https://rpc.test', network: 'testnet', loadQuoteVerifier: async () => verifyTdxQuote, fetch: f }).finally(() => {
     globalThis.fetch = realFetch;
   });
   assert.deepEqual(checks.map((c) => [c.id, c.status]), [['run-build', 'ok'], ['run-input', 'skipped'], ['run-output', 'ok'], ['run-quote', 'ok'], ['run-binding', 'ok'], ['run-worker', 'ok']]);

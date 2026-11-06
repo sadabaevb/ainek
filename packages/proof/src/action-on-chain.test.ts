@@ -21,6 +21,7 @@ const decision: Decision = { verdict: 'Allow', policy_hash: 'ef'.repeat(32), pol
 const sig = bytesToBase64(nacl.sign.detached(canonicalBytes(decision), keys.secretKey));
 const proof = buildActionProof({ actionId: 7, action, modelProofCommit, decision, teeSignature: sig, teePubkey: pubkey, wasmHash, attestationUrl: 'https://api.test/attestations/by-call/x', proposeTx: 'tx1' });
 const record = { action_id: 7, agent_id: agent, action, decision, tee_signature: sig, tee_pubkey: pubkey, status: 'Executed' };
+const runRecord = { task_type: 'execute', task_id: 1, tdx_quote: 'AA==', worker_measurement: '', build_target: 'wasm32-wasip1', wasm_hash: wasmHash, executed_wasm_sha256: wasmHash, input_hash: wasmHash, output_hash: wasmHash, timestamp: 1 };
 const commitFor = (kind: 'action' | 'model') => ({ kind, log_index: 3, block_height: 9 });
 
 const realFetch = globalThis.fetch;
@@ -71,21 +72,28 @@ test('a verdict in a status it cannot end in fails', async () => {
   assert.equal(actionStatusProblem('NeedsApproval', 'Rejected'), null);
 });
 
-test('the commits are looked up under the agent, by kind; without a salt the proof\'s own commit is skipped, not failed', async () => {
+test('the commits: the model\'s must exist, the proof\'s own may still be missing, and either fails on the wrong kind', async () => {
   chain(record, {});
   const none = await check();
-  assert.equal(statusOf(none.checks, 'on-chain-commit'), 'fail');
+  assert.equal(none.ok, false);
+  assert.equal(statusOf(none.checks, 'on-chain-commit'), 'skipped');
   assert.equal(statusOf(none.checks, 'model-commit-on-chain'), 'fail');
   chain(record, { [proof.commit]: commitFor('model'), [modelProofCommit]: commitFor('action') });
   const swapped = await check();
   assert.equal(statusOf(swapped.checks, 'on-chain-commit'), 'fail');
   assert.equal(statusOf(swapped.checks, 'model-commit-on-chain'), 'fail');
-  chain();
-  const { salt: _salt, commit: _commit, ...bare } = proof;
+});
+
+test('a commit counts as the proof\'s own only when it reproduces from the salt: a file cannot borrow another commit of this agent', async () => {
+  chain(record, { [proof.commit]: commitFor('action'), [modelProofCommit]: commitFor('model') });
+  const { salt: _salt, ...saltless } = proof;
+  const borrowed = await check(saltless);
+  assert.equal(statusOf(borrowed.checks, 'commit'), 'skipped');
+  assert.equal(statusOf(borrowed.checks, 'on-chain-commit'), 'skipped');
+  const { commit: _commit, ...bare } = saltless;
   const r = await check(bare);
   assert.equal(r.ok, true);
   assert.equal(statusOf(r.checks, 'on-chain-commit'), 'skipped');
-  assert.equal(statusOf(r.checks, 'commit'), 'skipped');
 });
 
 test('a malformed proof stops at the schema, with no view call', async () => {
@@ -96,7 +104,7 @@ test('a malformed proof stops at the schema, with no view call', async () => {
 });
 
 test('actionRunChecks: a proof cannot make this browser call a server of its choosing, and an outage is not a verdict', async () => {
-  const runCheck = (url: string, f: typeof fetch) => actionRunChecks({ ...proof, attestationUrl: url }, { apiUrl: 'https://api.test', project: 'o.testnet/policy', wasmHash, rpcUrl: 'https://rpc.test', network: 'testnet', verifyQuote: () => assert.fail('no quote expected'), fetch: f });
+  const runCheck = (url: string, f: typeof fetch) => actionRunChecks({ ...proof, attestationUrl: url }, { apiUrl: 'https://api.test', project: 'o.testnet/policy', wasmHash, rpcUrl: 'https://rpc.test', network: 'testnet', loadQuoteVerifier: () => assert.fail('no library expected'), fetch: f });
   const elsewhere = await runCheck('https://evil.example/a', (() => assert.fail('no call expected')) as typeof fetch);
   assert.equal(elsewhere[0]?.status, 'skipped');
   assert.match(elsewhere[0]?.detail ?? '', /evil\.example.*not fetched/);
@@ -104,19 +112,19 @@ test('actionRunChecks: a proof cannot make this browser call a server of its cho
   assert.match(down[0]?.detail ?? '', /HTTP 502/);
   const broken = await runCheck('https://api.test/a', (async () => { throw new Error('offline'); }) as typeof fetch);
   assert.match(broken[0]?.detail ?? '', /could not be checked: offline/);
+  const noLibrary = await actionRunChecks(proof, { apiUrl: 'https://api.test', project: 'o.testnet/policy', wasmHash, rpcUrl: 'https://rpc.test', network: 'testnet', loadQuoteVerifier: () => Promise.reject(new Error('chunk failed')), fetch: (async () => new Response(JSON.stringify(runRecord))) as typeof fetch });
+  assert.match(noLibrary[0]?.detail ?? '', /could not be checked: chunk failed/);
 });
 
-test('checkActionProof: the DCAP library is not loaded for a proof that failed on the chain, and an unreadable attestation is skipped, not passed', async () => {
+test('checkActionProof: a chain failure is failed with no library loaded, and an unreadable attestation is unchecked, not verified', async () => {
   const cfg = { rpcUrl: 'https://rpc.test', contract, apiUrl: 'https://api.test', project: 'o.testnet/policy', wasmHash, network: 'testnet' as const };
   chain({ ...record, status: 'Denied' });
   const refused = await checkActionProof(proof, { ...cfg, loadQuoteVerifier: () => assert.fail('no library expected') });
-  assert.equal(refused.ok, false);
+  assert.equal(refused.verdict, 'failed');
   assert.equal(refused.checks.some((c) => c.id.startsWith('run-')), false);
   chain();
-  const stubbed = globalThis.fetch;
-  globalThis.fetch = (async (url: unknown, init: RequestInit) => (String(url).startsWith('https://api.test') ? new Response(JSON.stringify({ not: 'a run' })) : stubbed(url as string, init))) as typeof fetch;
-  const r = await checkActionProof(proof, { ...cfg, loadQuoteVerifier: async () => () => assert.fail('no quote expected') });
-  assert.equal(r.ok, true);
+  const r = await checkActionProof(proof, { ...cfg, loadQuoteVerifier: () => assert.fail('no library expected'), fetch: (async () => new Response(JSON.stringify({ not: 'a run' }))) as typeof fetch });
+  assert.equal(r.verdict, 'unchecked');
   assert.equal(statusOf(r.checks, 'run-binding'), 'skipped');
 });
 

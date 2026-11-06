@@ -50,7 +50,7 @@ function decisionChecks(x: { decision: Decision; sig: string; pubkey: string; ac
   return [
     check('decision-signature', verifyDecisionSignature(x.decision, x.sig, x.pubkey), `ed25519 signature verifies under ${short(x.pubkey)} over canonical_bytes(decision)`, 'the decision signature does not verify under the key the proof names'),
     against('decision-key', x.pubkey, x.teePubkey, 'the policy key'),
-    against('wasm-hash', x.wasmHash, x.expectedWasmHash, 'the build the job reports'),
+    check('wasm-hash', x.wasmHash === x.expectedWasmHash, 'the build the job reports is the published one', `the build the job reports ${short(x.wasmHash)} is not the published ${short(x.expectedWasmHash)}`),
     check('action-commit', x.coveredCommits.every((c) => c === recomputed), 'sha256(canonical_json(action)) is what the decision covers', 'the decision does not cover this action'),
     check('model-proof-commit', x.decision.model_proof_commit === x.modelProofCommit, 'the decision binds this model proof', 'the decision binds a different model proof'),
   ];

@@ -39,7 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
   if (shared.logSource !== 'contract') throw new Error(`AINEK_LOG_SOURCE=${shared.logSource}: the agent trusts only the contract log`);
   const agentKey = need('AGENT_FC_PRIVATE_KEY');
   if (!agentKey.startsWith('ed25519:') || agentKey.length < 20) throw new Error('AGENT_FC_PRIVATE_KEY must be ed25519:… (the function-call key of the agent account)');
-  const outLayerApi = shared.outlayerApiUrl.replace(/\/$/, '');
+  const outLayerApi = shared.outlayerApiUrl;
   // The payment key travels in a header on every call.
   if (URL.parse(outLayerApi)?.protocol !== 'https:') throw new Error('OUTLAYER_API_URL must be an https URL (docs/DEPLOY.md)');
   const wasmHash = need('OUTLAYER_WASM_HASH');

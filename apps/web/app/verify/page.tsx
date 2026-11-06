@@ -85,7 +85,9 @@ function VerifyInner() {
       const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
       const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
       if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin, ...(input.stored ? { stored: input.stored } : {}) });
-    })();
+    })().catch((e: unknown) => {
+      if (!cancelled) setError(describeError(e));
+    });
     return () => {
       cancelled = true;
     };
@@ -94,11 +96,17 @@ function VerifyInner() {
   function parsePasted() {
     setError('');
     setMissingId(null);
+    // Nothing from the previous click may stay on screen as if it were this one's verdict, and a check still running must not land later.
+    setActionProof(null);
+    setInput(null);
+    setResult(null);
     try {
       const parsed = JSON.parse(text) as unknown;
       const isAction = (parsed as { kind?: unknown } | null)?.kind === 'action';
-      setActionProof(isAction ? parsed : null);
-      if (isAction) return;
+      if (isAction) {
+        setActionProof(parsed);
+        return;
+      }
       if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
       else setInput({ proof: parsed, origin: 'pasted' });
     } catch (e) {
@@ -152,7 +160,8 @@ function VerifyInner() {
       {missingId && <RedCard title={tv.noExchange(missingId)} />}
       {error && <RedCard title={error} />}
 
-      {actionProof !== null ? <ActionProofCard value={actionProof} /> : result && (
+      {actionProof !== null && <ActionProofCard value={actionProof} />}
+      {result && (
         <section className="card">
           <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>
           <CheckList items={result.report.checks} />

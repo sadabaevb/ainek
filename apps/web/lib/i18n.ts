@@ -184,7 +184,7 @@ const en = {
     actionFailed: 'Action proof failed',
     actionUnchecked: 'Matches the chain, but which code ran was not checked',
     actionSource: 'source: the proof, the contract, the attestation',
-    proposeTx: 'Proposal on nearblocks',
+    proposeTx: 'Transaction this proof names',
     attestation: 'Raw attestation',
   },
   auditor: {
@@ -413,7 +413,7 @@ const ru: typeof en = {
     actionFailed: 'Proof действия не прошёл',
     actionUnchecked: 'Сходится с цепочкой, но какой код работал, не проверено',
     actionSource: 'источник: proof, контракт, аттестация',
-    proposeTx: 'Предложение на nearblocks',
+    proposeTx: 'Транзакция, которую называет proof',
     attestation: 'Исходная аттестация',
   },
   auditor: {
