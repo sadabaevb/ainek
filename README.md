@@ -4,7 +4,7 @@
 > Open Innovation, Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 >
 > **Done (Nov 5):** Tier 1 client, proof package, offline replay, auditor page; key-log contract v2 live on testnet with `commit_proof`; verifier daemon wrote its first entry (#3).
-> **In progress:** Tier 2 (agent + policy in TDX). The verifier daemon runs on a server since Nov 6 (docs/DEPLOY.md). The contract was upgraded to v3 (agents) and the Tier 2 accounts were set up on testnet on Nov 6; the agent service has not run against them.
+> **In progress:** Tier 2 (agent + policy in TDX). The verifier daemon runs on a server since Nov 6 (docs/DEPLOY.md). The contract was upgraded to v3 (agents) and the Tier 2 accounts were set up on testnet on Nov 6; the agent service made one real payment through them without Telegram, the bot itself has not run.
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
@@ -70,7 +70,7 @@ claim".
 
 ## Prior art in this hackathon (and what Ainek adds)
 
-We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Rows marked (Tier 2) describe a part of Ainek that has not run end to end yet; see "Tier 2 flow" below.
+We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Rows marked (Tier 2) describe a part of Ainek of which one `Allow` payment has run end to end (Nov 6, without Telegram); see "Tier 2 flow" below.
 
 | Project | What it does | Where it is ahead of Ainek | What Ainek adds |
 | --- | --- | --- | --- |
@@ -127,7 +127,7 @@ With `pnpm -F web dev` running, at `http://localhost:3000`:
 5. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
 6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row asks for the account that committed, because the chain decides, not the file; enter it to look a disclosure up on-chain (the sample was never committed, it was recorded before the contract accepted commits, so any account shows that). The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 5–6 end in "differs from the embedded entry".
 
-**Tier 2 flow (the agent is in `services/agent`, tested against fakes; the contract, the policy job, the demo token and the agent account have been on testnet since Nov 6, and a script sent two test actions through them with the agent's key and the real policy job but a placeholder instead of a model proof, `docs/DEPLOY.md`; the agent service itself has not run against them, so this has not run end to end):** Telegram "pay aibek.testnet 300 for October" → `action_executed`; "pay newguy.testnet 5000" (new vendor) → Deny; "pay aibek.testnet 3000" (over the threshold) → `NeedsApproval` → Reject; stop button (`pnpm demo:stop`): `DeleteKey` + `pause_agent` → the next proposal is refused by the network, the key no longer exists.
+**Tier 2 flow (the agent is in `services/agent`; the contract, the policy job, the demo token and the agent account have been on testnet since Nov 6, `docs/DEPLOY.md`; one real payment went through the whole chain on Nov 6 with `pnpm -F agent once` (the model, the policy job over HTTPS with its attestation checked, the contract, the token); the Telegram bot, an approval or a denial through the service, a token refusal, and the stop button against this agent (it ran against a throwaway account on Nov 5) have not run live, so the scenes below are the plan, not a record):** Telegram "pay aibek.testnet 300 for October" → `action_executed`; "pay newguy.testnet 5000" (new vendor) → Deny; "pay aibek.testnet 3000" (over the threshold) → `NeedsApproval` → Reject; stop button (`pnpm demo:stop`): `DeleteKey` + `pause_agent` → the next proposal is refused by the network, the key no longer exists.
 
 ## Who sees what
 
@@ -271,8 +271,8 @@ contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, e
 contracts/demo-token/ plain NEP-141 token (near-contract-standards) for the Tier 2 demo and the sandbox test
 jobs/policy/         Rust OutLayer WASI-P1 job: evaluates the owner's policy, signs the decision (SPEC §6; Tier 2)
 services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
-services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes; contract §4.3 and
-                     the policy job are on testnet, the service has not run against them yet
+services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes; one real
+                     payment on testnet without Telegram (Nov 6), the bot has not run live
 docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
 ```
 
