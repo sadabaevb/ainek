@@ -89,13 +89,23 @@ test('model outcomes other than an action end before the policy runs and before 
   assert.deepEqual([quiet.inputs.length, saves], [0, 0]);
 });
 
-test('a paused agent asks nothing of the policy and proposes nothing', async () => {
+test('paused, or no room for the action: nothing paid for, not even the model', async () => {
+  for (const c of [chain({ paused: true }), chain({ noRoom: true })]) {
+    const p = policy();
+    let modelCalls = 0;
+    const r = await handleOwnerText(deps({ policy: p, chain: c, extract: async () => { modelCalls += 1; return extracted; } }), 'pay');
+    assert.equal(r.kind, 'failed');
+    assert.deepEqual([modelCalls, p.inputs.length, c.proposals.length], [0, 0, 0]);
+  }
+});
+
+test('a pause that lands while the model is answering still stops the action before the policy', async () => {
   const p = policy();
-  const c = chain({ paused: true });
-  const r = await handleOwnerText(deps({ policy: p, chain: c }), 'pay');
+  const c = chain();
+  let reads = 0;
+  const r = await handleOwnerText(deps({ policy: p, chain: { ...c, agentState: async () => ({ spentToday: '100', teePubkey, paused: ++reads > 1 }) } }), 'pay');
   assert.equal(r.kind === 'failed' && r.stage, 'policy');
-  assert.equal(p.inputs.length, 0);
-  assert.equal(c.proposals.length, 0);
+  assert.deepEqual([p.inputs.length, c.proposals.length], [0, 0]);
 });
 
 test('the decision is checked against the key the contract holds now, not one from config', async () => {

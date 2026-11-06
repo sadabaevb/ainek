@@ -47,7 +47,7 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
    `commit_proof`. The service reads the key's scope from the chain at start and refuses anything else. Set an allowance of at
    least 1 NEAR: it cannot be raised later without a new key, and each `propose_action` ties up about 0.1 NEAR (100 TGas) until
    the refund.
-2. The account prepaid its commits: `deposit_storage` with a full-access key (two commits per action, SPEC §4.2).
+2. The account prepaid its storage: `deposit_storage` with a full-access key. One action takes about 0.013 NEAR (two commits, SPEC §4.2, and the action record, SPEC §4.3), so 0.1 NEAR covers about 7 actions; the service stops before the model call when less than one action is left.
 3. `register_agent` ran with the policy hash, the job's public key and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
 

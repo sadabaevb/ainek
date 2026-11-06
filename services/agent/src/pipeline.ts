@@ -42,8 +42,19 @@ export type Result =
   /** `after-propose`: the action is on-chain and the reason names it. Every other stage but `chain` ended before anything was proposed. */
   | { kind: 'failed'; stage: 'model' | 'store' | 'policy' | 'commit' | 'chain' | 'after-propose'; reason: string };
 
+const PAUSED = 'this agent is paused on the contract: the owner has to lift the pause first';
+
 export async function handleOwnerText(deps: Deps, text: string): Promise<Result> {
   const now = deps.now ?? Date.now;
+
+  // 0. Paused, or no room for the whole action? Stop before the paid model and policy calls, not after a transfer that could then never be proven.
+  try {
+    const [state, room] = await Promise.all([deps.chain.agentState(), deps.chain.roomForAction()]);
+    if (state.paused) return { kind: 'failed', stage: 'policy', reason: PAUSED };
+    if (!room) return { kind: 'failed', stage: 'commit', reason: 'the agent has no prepaid storage left for one more action: call deposit_storage' };
+  } catch (err) {
+    return { kind: 'failed', stage: 'policy', reason: errorText(err) };
+  }
 
   // 1. The model, under E2EE, with the fail-closed log check: an Action or a reason there is none, plus the model proof.
   const x = await deps.extract(text);
@@ -64,8 +75,8 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   let evaluated;
   let registered;
   try {
-    registered = await deps.chain.agentState();
-    if (registered.paused) return { kind: 'failed', stage: 'policy', reason: 'this agent is paused on the contract: the owner has to lift the pause first' };
+    registered = await deps.chain.agentState(); // read again: the model took seconds, and the contract rejects a decision made for a stale daily total
+    if (registered.paused) return { kind: 'failed', stage: 'policy', reason: PAUSED };
     evaluated = await deps.policy.evaluate({ action: x.action, model_proof_commit: modelProofCommit, spent_today: registered.spentToday, now: now() });
   } catch (err) {
     return { kind: 'failed', stage: 'policy', reason: errorText(err) };
@@ -74,10 +85,9 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   const checks = checkPolicyOutput(output, { action: x.action, modelProofCommit, teePubkey: registered.teePubkey, wasmHash: deps.wasmHash, now: now() });
   if (checks.some((c) => c.status === 'fail')) return { kind: 'decision-rejected', checks, modelProof: proven };
 
-  // 3. Room for the whole action, then the model proof's commit, before any money can move: exhausted storage stops here, not after a transfer that could then never be proven. The contract also refuses a proposal whose model proof this agent has not committed.
+  // 3. The model proof's commit, before any money can move. The contract refuses a proposal whose model proof this agent has not committed.
   let modelProof: ModelProof;
   try {
-    if (!(await deps.chain.roomForAction())) return { kind: 'failed', stage: 'commit', reason: 'the agent has no prepaid storage left for one more action: call deposit_storage' };
     modelProof = { ...proven, commitTx: await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex) };
   } catch (err) {
     return { kind: 'failed', stage: 'commit', reason: errorText(err) };

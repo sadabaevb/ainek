@@ -11,7 +11,7 @@ export interface AgentConfig extends AinekConfig {
   agentKey: string;
   ownerId: string;
   tokenId: string;
-  outlayer: { apiUrl: string; paymentKey: string; project: string; secretsProfile: string; wasmHash: string };
+  outlayer: { apiUrl: string; paymentKey: string; project: string; wasmHash: string };
   /** Where proofs and their salts are kept, one file per proof. */
   dataDir: string;
   /** Absent for `--once` runs without a bot. */
@@ -50,7 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     agentKey,
     ownerId: need('OWNER_ACCOUNT_ID'),
     tokenId: need('AINEK_TOKEN'),
-    outlayer: { apiUrl: (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, ''), paymentKey: need('OUTLAYER_PAYMENT_KEY'), project: need('OUTLAYER_PROJECT'), secretsProfile: env['OUTLAYER_SECRETS_PROFILE'] ?? 'default', wasmHash },
+    outlayer: { apiUrl: (env['OUTLAYER_API_URL'] ?? 'https://testnet-api.outlayer.ai').replace(/\/$/, ''), paymentKey: need('OUTLAYER_PAYMENT_KEY'), project: need('OUTLAYER_PROJECT'), wasmHash },
     dataDir: env['AGENT_DATA_DIR'] ?? path.resolve(import.meta.dirname, '../data/proofs'),
     telegram: token && ownerChatId ? { token, ownerChatId } : null,
   };

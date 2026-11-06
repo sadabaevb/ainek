@@ -49,9 +49,7 @@ test('actionCost: room for both commits and the action record the contract charg
 });
 
 test('parseProposed: a transfer the token refused reads as failed, not as executed', () => {
-  const event = (name: string) => `EVENT_JSON:${JSON.stringify({ standard: 'ainek', event: name, data: [{ action_id: 3 }] })}`;
-  const r = parseProposed({ status: { SuccessValue: Buffer.from('3').toString('base64') }, transaction: { hash: 'T' }, receipts_outcome: [{ outcome: { logs: [event('action_proposed')] } }, { outcome: { logs: [], status: { Failure: {} } } }, { outcome: { logs: [event('action_failed')] } }] });
-  assert.deepEqual(r, { actionId: 3, txHash: 'T', executed: false, transferFailed: true });
+  assert.deepEqual(parseProposed(tx({ SuccessValue: b64('3') }, [[ev('action_proposed')], [ev('action_failed')]])), { actionId: 3, txHash: 'TX', executed: false, transferFailed: true });
 });
 
 test('keyScopeProblem: only a function-call key for this contract and exactly these two methods passes', () => {
