@@ -148,9 +148,9 @@ h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
 .scenario .sub { display: block; margin-top: 0.25rem; color: var(--muted); font-size: 0.85rem; }
 .controls { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; align-items: center; margin: 1rem 0; }
 .controls .field { display: flex; flex-direction: column; gap: 0.25rem; flex: 1 1 16rem; min-width: 0; font-size: 0.9rem; color: var(--muted); }
-select, textarea.json, .controls input[type="text"] { width: 100%; padding: 0.6rem 0.85rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--fg); font: inherit; }
+select, textarea.json, .controls input[type="text"], .trust-add input[type="text"] { width: 100%; padding: 0.6rem 0.85rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--fg); font: inherit; }
 select { padding-right: 2rem; }
-select:focus, textarea.json:focus, .controls input[type="text"]:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; }
+select:focus, textarea.json:focus, .controls input[type="text"]:focus, .trust-add input[type="text"]:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; }
 textarea.json { font-family: var(--mono); font-size: 12px; resize: vertical; }
 textarea.json.drop { border-style: dashed; border-color: var(--accent); background: var(--accent-soft); }
 .thread { display: flex; flex-direction: column; gap: 1.25rem; }
@@ -203,3 +203,24 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
   .nav .link { padding: 0.3rem 0.5rem; font-size: 0.95rem; }
   .page { padding-top: 1rem; }
 }
+
+/* Who you trust (/log) */
+.trust { display: grid; gap: 0.75rem; margin: 1.5rem 0; scroll-margin-top: 1rem; }
+.trust h2 { margin: 0; }
+.trust p { margin: 0; }
+.trust-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
+.trust-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.trust-list li { display: grid; gap: 0.1rem; padding: 0.5rem 0; border-top: 1px solid var(--line); min-width: 0; }
+.trust-list li:first-child { border-top: 0; }
+.trust-list label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; min-width: 0; }
+.trust-list input { flex: none; accent-color: var(--accent); }
+.trust-list li > span { padding-left: 1.6rem; }
+.trust-add { display: grid; gap: 0.35rem; }
+.trust-add > div { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.trust-add input[type="text"] { flex: 1 1 14rem; width: auto; min-width: 0; }
+.trust-bad { color: var(--fail); }
+.trust-quorum { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.trust-quorum select { width: auto; min-width: 4.5rem; }
+.trust-verdict { padding: 0.55rem 0.8rem; border-radius: 8px; font-weight: 500; }
+.trust-verdict.ok { background: var(--ok-bg); color: var(--ok); }
+.trust-verdict.fail { background: var(--fail-bg); color: var(--fail); }

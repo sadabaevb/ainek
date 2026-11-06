@@ -5,7 +5,7 @@ import sample from '../../../docs/samples/key-entry.sample.json';
 import type { PublicConfig } from './config';
 
 /** The two views the pages use, with the shared reader's signatures (one source of truth), plus where they come from. */
-export interface KeyLog extends Pick<KeyLogReader, 'latestKeys' | 'entry'> {
+export interface KeyLog extends Pick<KeyLogReader, 'latestKeys' | 'entry' | 'verifiers'> {
   source: 'contract' | 'sample';
 }
 
@@ -15,6 +15,7 @@ function sampleLog(): KeyLog {
     source: 'sample',
     latestKeys: async (model) => entries.filter((e) => e.model === model), // the sample never ages out
     entry: async (index) => entries.find((e) => e.index === index) ?? null,
+    verifiers: async () => [...new Set(entries.map((e) => e.verifier))],
   };
 }
 

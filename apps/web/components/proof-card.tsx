@@ -44,7 +44,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
         title={title}
         body={body}
         note={t.refusedConsequence[reason]}
-        action={onRetry && <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button>}
+        action={onRetry ? <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button> : <Link className="btn" href="/log#trust">{t.refusedChangeTrust}</Link>}
         lines={[
           `key seen by the client: ${outcome.seenKey}`,
           `verdict: ${outcome.keyVerdict.status}: ${outcome.keyVerdict.detail}`,

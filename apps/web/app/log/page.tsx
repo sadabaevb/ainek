@@ -6,6 +6,7 @@ import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
 import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
 import { RedCard } from '@/components/red-card';
 import { StackTable, type Column } from '@/components/stack-table';
+import { TrustPanel } from '@/components/trust-panel';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
 import { hoursSince, observedUtc, short } from '@/lib/format';
@@ -28,6 +29,7 @@ export default function LogPage() {
   const tl = t.log;
   const [log, setLog] = useState<LogWindow | null>(null);
   const [error, setError] = useState('');
+  const [registered, setRegistered] = useState<string[]>([]);
   const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
@@ -45,7 +47,10 @@ export default function LogPage() {
         }
       })
       .catch((e: unknown) => setError(describeError(e)));
-  }, [cfg]);
+    reader.verifiers().then(setRegistered).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
+    // The trust set is in cfg too, and choosing who to trust must not read the log again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg.rpcUrl, cfg.contract, cfg.model, cfg.logSource]);
 
   useEffect(() => {
     if (!signedAccountId) {
@@ -73,7 +78,7 @@ export default function LogPage() {
     <main className="page">
       <h1>{tl.title}</h1>
       <p className="muted">
-        {fill(tl.intro(cfg.network, cfg.trustedVerifiers.join(', '), cfg.quorum), { contract: <span className="mono">{cfg.contract}</span> })}
+        {fill(tl.intro(cfg.network), { contract: <span className="mono">{cfg.contract}</span> })}
         {cfg.logSource === 'sample' && ` ${tl.sampleNote}`}
       </p>
       {error && <RedCard title={error} />}
@@ -89,6 +94,8 @@ export default function LogPage() {
       ) : (
         <StackTable columns={columns} rows={log.entries} rowKey={(e) => String(e.index)} />
       ))}
+
+      <TrustPanel entries={log?.entries ?? null} registered={registered} />
 
       <h2>{tl.wallet}</h2>
       <p className="muted small">{fill(tl.walletNote, { method: <span className="mono">commit_proof</span> })}</p>
