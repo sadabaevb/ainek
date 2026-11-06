@@ -46,6 +46,7 @@ services/agent/      Node 24 service: NL -> NEAR AI -> OutLayer -> contract     
 packages/proof/      Shared TS: proof schema, canonical bytes, hashing, verify fns  (shared)
 packages/tier1-node/ Shared TS, Node only: the Tier-1 sequence for demo:live/metrics and the agent   (shared)
 contracts/ainek/     Rust near-sdk-rs contract                                       (services)
+contracts/demo-token/ Plain NEP-141 token (near-contract-standards) for the Tier 2 demo and sandbox tests  (services)
 jobs/policy/         Rust OutLayer WASI job: evaluate policy, sign decision          (services)
 docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.md, prompts/
 ```
