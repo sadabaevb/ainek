@@ -45,7 +45,7 @@ function chain(opts: { executed?: boolean; failCommit?: 'model' | 'action'; fail
   };
 }
 const keeper = (over: Partial<ProofKeeper> = {}): ProofKeeper => ({ model: async () => undefined, intent: async () => undefined, settled: async () => undefined, unsettled: async () => [], action: async () => undefined, ...over });
-const deps = (over: Partial<Deps>): Deps => ({ extract: async () => extracted, policy: policy(), chain: chain({ executed: true }), keep: keeper(), wasmHash, now: () => now, ...over });
+const deps = (over: Partial<Deps>): Deps => ({ extract: async () => extracted, policy: policy(), chain: chain({ executed: true }), keep: keeper(), wasmHash, checkRun: async () => [], now: () => now, ...over });
 
 test('Allow: the policy gets the §6.2 input, the contract gets the signed decision, both proofs are committed to the model proof\'s log entry, and the action proof verifies', async () => {
   const p = policy();
@@ -200,4 +200,18 @@ test('a contract refusal is not "it may have landed": nothing moved, and the int
   const refusing = { ...chain(), proposeAction: async () => { throw new ContractRefused('Contract panicked: this decision was already used'); } };
   const r = await handleOwnerText(deps({ chain: refusing, keep: keeper({ settled: async () => void settled++ }) }), 'pay');
   assert.deepEqual([r.kind === 'failed' && r.stage, settled], ['contract', 1]);
+});
+
+test('which code decided: a failed or unchecked run stops the action before any commit, and so does an attestation that cannot be read', async () => {
+  for (const status of ['fail', 'skipped'] as const) {
+    const c = chain();
+    const r = await handleOwnerText(deps({ chain: c, checkRun: async () => [{ id: 'run-build', status, detail: 'not the published build' }] }), 'pay');
+    assert.equal(r.kind, 'decision-rejected');
+    assert.equal(r.kind === 'decision-rejected' && r.checks[0]?.status, 'fail');
+    assert.deepEqual([c.commits.length, c.proposals.length], [0, 0]);
+  }
+  const c = chain();
+  const r = await handleOwnerText(deps({ chain: c, checkRun: async () => { throw new Error('HTTP 500'); } }), 'pay');
+  assert.equal(r.kind === 'failed' && r.stage, 'policy');
+  assert.deepEqual([c.commits.length, c.proposals.length], [0, 0]);
 });

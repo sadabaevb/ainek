@@ -42,6 +42,8 @@ export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestati
 export { stripHexPrefix, normalizeHex } from './hash.ts';
 export { ainekConfigFromEnv, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
+export { PolicyRun, checkPolicyRun, tryVerifyQuote, verifyPolicyRun } from './policy-run.ts';
+export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
 export { viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';

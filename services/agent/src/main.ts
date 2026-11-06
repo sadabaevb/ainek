@@ -9,7 +9,7 @@ import { nearActionChain } from './chain.ts';
 import { loadConfig } from './config.ts';
 import { extractAction } from './llm.ts';
 import { handleOwnerText, type Deps } from './pipeline.ts';
-import { outLayerPolicy } from './policy.ts';
+import { outLayerPolicy, outLayerRunCheck } from './policy.ts';
 import { fileKeeper } from './store.ts';
 import { fromMinimalUnits } from './units.ts';
 
@@ -27,6 +27,7 @@ const deps: Deps = {
   chain,
   keep,
   wasmHash: cfg.outlayer.wasmHash,
+  checkRun: outLayerRunCheck({ apiUrl: cfg.outlayer.apiUrl, project: cfg.outlayer.project, wasmHash: cfg.outlayer.wasmHash, rpcUrl: cfg.rpcUrl, network: cfg.network }),
 };
 /** Anything a crash left between the intent and the action proof: a transaction may have landed that nobody recorded, and a resend would pay twice. Each is reported once. */
 async function reportUnsettled(say: (text: string) => Promise<unknown>): Promise<void> {

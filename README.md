@@ -99,6 +99,9 @@ pnpm demo                        # offline replay, no key, no network (~1 s): SD
                                  #   fail-closed rule, two signed exchanges (plaintext, E2EE) → ✓/✗ per step, proof card,
                                  #   "Result: VERIFIED"
 pnpm demo:tamper                 # same recording, the key the client sees is swapped → "Result: REFUSED", nothing is sent
+pnpm demo:policy                 # offline: which code made a policy decision? A real run on OutLayer testnet is re-checked:
+                                 #   Intel signed the quote, and the quote commits to the published build and to the decision
+                                 #   → ✓ per check, "Result: VERIFIED". `--tamper` → "Result: REFUSED". `--live` fetches it all again
 pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
                                  #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
 
@@ -280,7 +283,7 @@ Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`
 
 - Libraries: `@nearai/inference-sdk` 0.2.1 (attestation and signature verification, E2EE), `@hot-labs/near-connect` +
   `near-connect-hooks` (wallet), `near-api-js` 7 (RPC error types), `zod` (schemas), `tweetnacl` (ed25519), `ethers`
-  (sha256, EIP-191 recovery for ecdsa signatures), `@phala/dcap-qvl` and `jose` (offline replay of Intel and NVIDIA
+  (sha256, EIP-191 recovery for ecdsa signatures), `@phala/dcap-qvl` (checks the TDX quote of a policy run; with `jose`, offline replay of Intel and NVIDIA
   evidence), Next.js 16 / React 19, the Inter font self-hosted under `apps/web/public/fonts` (SIL OFL 1.1, licence
   alongside); Rust: `near-sdk` 5, `near-contract-standards` 5 (the demo token), `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
 - Copied pattern: `contracts/demo-token/src/lib.rs` wires up `near-contract-standards` the way the official
