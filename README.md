@@ -3,15 +3,17 @@
 > **Status:** NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense,
 > Open Innovation, Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 >
-> **Done (Nov 5):** Tier 1 client, proof package, offline replay, auditor page; key-log contract v2 live on testnet with `commit_proof`; verifier daemon wrote its first entry (#3).
-> **In progress:** Tier 2 (agent + policy in TDX). The verifier daemon runs on a server since Nov 6 (docs/DEPLOY.md). The contract was upgraded to v3 (agents) and the Tier 2 accounts were set up on testnet on Nov 6; the agent service has not run against them.
+> **Done:** Tier 1 client, proof package, offline replay, auditor page; key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (docs/DEPLOY.md). Tier 2 on testnet since Nov 6: contract v3 with agents, the policy job on OutLayer, the demo token, the agent account.
+> **In progress:** the agent service has not run against them, so Tier 2 has not run end to end.
+>
+> **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
 request is end-to-end encrypted to that key; the signed answer is re-verified in your browser, byte for byte. A salted hash of
-the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 (in progress) is meant to let an agent act on the
-answer only within a policy evaluated inside Intel TDX (OutLayer); if OutLayer does not work in time, the policy moves into
-the contract.
+the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 lets an agent act on the answer only
+within a policy evaluated inside Intel TDX (OutLayer). Its contract and policy job are on testnet; the agent service has not
+run against them yet.
 
 <!-- TODO before submission: 90-second video link, hosted demo link. -->
 
@@ -35,8 +37,8 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
   bytes, recomputes both hashes and checks the signature against the logged key. A salted hash of the proof is committed
   to NEAR by your wallet (`commit_proof`, from storage your account prepays); until you connect one it stays in this browser. The salt and your copy of the exchange live
   only in this browser; disclosing to an auditor hands over one proof, its salt and the ciphertext bytes, never the plaintext.
-- **Did the agent do only what it was allowed to?** (Tier 2, in progress; a cap-check spike of the job exists.) The policy
-  (whitelist, caps, approval threshold) is meant to run in an OutLayer job on Intel TDX that signs the decision with a key
+- **Did the agent do only what it was allowed to?** (Tier 2: on testnet, not run end to end yet; see "Tier 2 flow".) The policy
+  (whitelist, caps, approval threshold) runs in an OutLayer job on Intel TDX that signs the decision with a key
   generated there; the contract checks that signature, then pays or waits for a human. Public: the proposed action and the
   executed transfer (testnet has no hidden settlement), the decision and the policy hash; never the policy contents or the
   conversation.
@@ -45,7 +47,7 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 
 1. **Swapped key → nothing is sent.** The key is not in the public log → the client refuses: "Result: REFUSED" (`pnpm demo:tamper`) or the red card "Key not in the public log. Message not sent." (`/?tamper=1`).
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
-3. **Agent over its mandate.** (Tier 2, planned) A prompt-injected "urgent transfer to a new vendor" → policy job says Deny inside TDX → contract refuses → `action_denied`, with the signed decision and the policy hash.
+3. **Agent over its mandate.** (Tier 2, not shown live yet) A prompt-injected "urgent transfer to a new vendor" → policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. So far the contract's part has run in `contracts/ainek/tests/test_agent.rs` with a test key, and the job's Deny in `cd jobs/policy && cargo test`.
 
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
@@ -142,8 +144,8 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | NEAR RPC endpoint (FastNear by default, `NEAR_RPC_URL`) | the browser's IP and the time of every log read (one per message), the model id; on a commit, `/verify` and `/auditor` also the NEAR account and the commit looked up; the signed `commit_proof` transaction, which the wallet connector broadcasts through its own FastNear endpoint (the storage deposit goes through the wallet's) | contents | none for privacy; the log read is a plain JSON-RPC view with no light-client proof, so the client trusts what the endpoint answers: a lying endpoint can pass an unlogged key or refuse a logged one, not swap in an unattested key (attestation is checked locally) |
 | Model enclave | plaintext for the duration of inference | — | TDX + GPU attestation; retention inside the enclave is not provable by attestation |
 | NEAR blockchain | provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash | the policy contents, the conversation, the proofs | salted commits; transfer details are hidden only with Confidential Intents (out of scope) |
-| OutLayer policy job (Tier 2, planned) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
-| Agent service and Telegram (Tier 2, planned) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
+| OutLayer policy job (Tier 2) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open |
+| Agent service and Telegram (Tier 2, not run end to end yet) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
 The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until the SDK
@@ -167,6 +169,10 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
   card says so (SPEC §7.1 asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not
   governed yet (next steps). Instances of a model share one signing key, so the signature alone does not say which deployment
   answered.
+- **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
+  previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
+  rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the
+  account has.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants. Meteor allowed
@@ -221,7 +227,7 @@ browser ── E2EE via our relay ──▶ NEAR AI gateway (TEE) ──▶ mode
 browser ── reads the key log; commits a salted hash (prepaid storage) ──▶ NEAR contract (ainek-log-dastan.testnet)
 verifier(s) ── attestation report → SDK checks → KeyEntry ── log_key ──▶ NEAR contract        (daemon: services/verifier)
 agent (function-call key) ──▶ OutLayer policy job (TDX) ── signed decision ──▶ contract: execute, or wait for Telegram approval
-stop button: DeleteKey + pause_agent                                                           (Tier 2, planned)
+stop button: DeleteKey + pause_agent                                                                    (Tier 2)
 ```
 
 - The browser does the verification itself with the NEAR AI SDK (Intel DCAP quote verification; the NVIDIA verdict fetched
@@ -264,7 +270,7 @@ apps/web/            Next.js app: chat with the proof card, /verify, /log, /audi
 apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:live, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
-                     demo:live and demo:metrics, planned for the Tier-2 agent service; mirrors apps/web/lib/flow.ts
+                     demo:live, demo:metrics and the Tier 2 agent service; mirrors apps/web/lib/flow.ts
 contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
                      (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2), agents and policy
                      decisions (register_agent, propose_action, approve, reject, pause_agent; SPEC §4.3)
@@ -277,7 +283,7 @@ docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (re
 ```
 
 Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`, `packages/tier1-node`, `services/verifier` and `services/agent`); `cargo test` in
-`contracts/ainek` (unit tests + a `near-sandbox` integration test); `pnpm -F demo check-contract` checks the deployed contract's ABI against SPEC §4.1.
+`contracts/ainek` (unit tests + a `near-sandbox` integration test); `pnpm -F demo check-contract` checks the deployed contract's ABI against SPEC §4.1; `pnpm -F demo check-agent` re-checks the agent's keys, funds and recorded decisions on chain.
 
 ## Disclosures
 

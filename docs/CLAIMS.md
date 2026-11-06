@@ -63,6 +63,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   key, because attestation is checked locally. The endpoint also sees the browser's IP and the timing of every message's
   log read, and the signed commit transaction, which the wallet connector broadcasts through its own FastNear endpoint
   (README "Who sees what").
+- **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
+  previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
+  rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the
+  account has.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants. Meteor allowed

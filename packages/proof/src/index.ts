@@ -30,7 +30,7 @@ export { buildModelProof, buildCheckedModelProof, buildActionProof } from './bui
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
 export { withRetry } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
-export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof } from './policy.ts';
+export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
