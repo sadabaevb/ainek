@@ -112,10 +112,11 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
 With `pnpm -F web dev` running, at `http://localhost:3000`:
 
 1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log (entry #3 was its first run); until it runs as a hosted service, a stopgap refreshes it by hand.
-2. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
-3. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
-4. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
-5. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row asks for the account that committed, because the chain decides, not the file; enter it to look a disclosure up on-chain (the sample was never committed, it was recorded before the contract accepted commits, so any account shows that). The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 4–5 end in "differs from the embedded entry".
+2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
+3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
+4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
+5. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
+6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row asks for the account that committed, because the chain decides, not the file; enter it to look a disclosure up on-chain (the sample was never committed, it was recorded before the contract accepted commits, so any account shows that). The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 5–6 end in "differs from the embedded entry".
 
 **Tier 2 flow (the agent is in `services/agent`, tested against fakes; contract §4.3 and the policy job are not deployed, so this has not run end to end):** Telegram "pay aibek.testnet 300 for October" → `action_executed`; "pay newguy.testnet 5000" (new vendor) → Deny; "pay aibek.testnet 3000" (over the threshold) → `NeedsApproval` → Reject; stop button (`pnpm demo:stop`): `DeleteKey` + `pause_agent` → the next proposal is refused by the network, the key no longer exists.
 
@@ -219,8 +220,8 @@ stop button: DeleteKey + pause_agent                                            
   the user-chosen Incognito route, plaintext, and the card says so. The relay code logs no bodies; on the hosted demo that is
   taken on trust.
 - The key log is a key allowlist: the client sends only to a key a trusted verifier logged (what the verifier checked is the
-  verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust
-  (`AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`).
+  verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust:
+  `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` set what the site offers, and a visitor can replace them on `/log`.
 - Every attested exchange becomes a proof (`packages/proof`, SPEC §5): signature, hashes, log index, salt, commit. The commit
   is `sha256(salt ‖ canonical_json(proof without salt/commit/commitTx))`, computed in the browser; the contract stores
   only the commit. The Rust contract uses the same canonical JSON for the log's `entry_hash` (shared test vectors in
@@ -256,8 +257,10 @@ packages/proof/      shared TS: proof schema, canonical JSON, hashing, signature
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
                      demo:live and demo:metrics, planned for the Tier-2 agent service; mirrors apps/web/lib/flow.ts
 contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
-                     (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2); Tier 2 (§4.3) next
-jobs/policy/         Rust OutLayer WASI-P1 job: spike, cap check only, no signature yet (Tier 2)
+                     (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2), agents and policy
+                     decisions (register_agent, propose_action, approve, reject, pause_agent; SPEC §4.3)
+contracts/demo-token/ plain NEP-141 token (near-contract-standards) for the Tier 2 demo and the sandbox test
+jobs/policy/         Rust OutLayer WASI-P1 job: evaluates the owner's policy, signs the decision (SPEC §6; Tier 2)
 services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
 services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes, waits for
                      contract §4.3 and the deployed policy job; not run end to end yet
@@ -273,8 +276,10 @@ Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`
   `near-connect-hooks` (wallet), `near-api-js` 7 (RPC error types), `zod` (schemas), `tweetnacl` (ed25519), `ethers`
   (sha256, EIP-191 recovery for ecdsa signatures), `@phala/dcap-qvl` and `jose` (offline replay of Intel and NVIDIA
   evidence), Next.js 16 / React 19, the Inter font self-hosted under `apps/web/public/fonts` (SIL OFL 1.1, licence
-  alongside); Rust: `near-sdk` 5, `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
-- Reference material followed (no code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
+  alongside); Rust: `near-sdk` 5, `near-contract-standards` 5 (the demo token), `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
+- Copied pattern: `contracts/demo-token/src/lib.rs` wires up `near-contract-standards` the way the official
+  `near-examples/FT` example does (the token logic itself is that library).
+- Reference material followed (no other code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
   verification guide, `near-examples/nearai-cloud-verification-example`, `nearai/nearai-cloud-verifier`,
   `out-layer/private-dao-example` (Tier 2).
 - AI-generated code: substantial parts were written with Claude Code and reviewed by the team; the TypeScript branches went

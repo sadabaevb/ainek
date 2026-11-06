@@ -63,13 +63,23 @@ Incognito-маршрут (§3.9) пользователь выбирает са�
 
 ### 3.5 Policy job `jobs/policy` (Rust, OutLayer WASI-P1) — Дастан
 Чистая функция: stdin JSON → stdout JSON ≤ 900 байт. Читает политику из секрета `POLICY_JSON`,
-ключ решений из `PROTECTED_ED25519` (генерируется в TEE, привязан к `wasm_hash`). Детерминирована.
+ключ решений из `PROTECTED_ED25519` (генерируется в TEE). Детерминирована.
+Секреты закрыты правилом «one build only»: их читает только сборка с указанным `wasm_hash`. Это правило доступа, а не
+свойство ключа: владелец проекта OutLayer может перенести его на другую сборку, ключ при этом не меняется, и контракт
+этого не заметит (как: `docs/DEPLOY.md`). Поэтому подпись доказывает только, что решение подписано ключом, записанным в
+контракте (`tee_pubkey`); что ключ создан в TEE и доступен одной сборке — гарантия OutLayer, а не подписи. Какой код
+исполнялся, показывает только `wasm_hash` в аттестации прогона; контракт её не проверяет, сверять её должна проверка
+action proof (в работе, Бектур). Поле `wasm_hash` выхода справочное: берётся из секрета `WASM_HASH` (P1-модуль не может
+посчитать хеш самого себя), в подпись не входит и после переноса правила на другую сборку назовёт старую, пока секрет
+не обновят. Сверять нужно хеш из аттестации, а не это поле.
 
-**Ретеншн невозможен по конструкции.** WASI-P1 даёт бинарю только stdin/stdout и случайность — ни сетевых, ни файловых
+**Ретеншн невозможен по конструкции.** WASI-P1 даёт бинарю только stdin/stdout, переменные окружения и случайность — ни сетевых, ни файловых
 интерфейсов по формату исполнения, то есть коду физически некуда сохранить или отправить вход. Чтобы это было
-проверяемо, сборка воспроизводима: `Cargo.lock` закоммичен, `cargo build --release --target wasm32-wasip1` в
-зафиксированной версии toolchain (`rust-toolchain.toml`) даёт один и тот же `wasm_hash`; CI печатает его, он же
-публикуется в `register_agent` и совпадает с хешем в аттестации OutLayer. Любой может собрать из репо и сверить.
+проверяемо, сборка воспроизводима: `Cargo.lock` закоммичен, `scripts/wasm-hash.sh` (`cargo build --release --locked
+--target wasm32-wasip1` в зафиксированном по digest контейнере linux/amd64 и зафиксированной версии toolchain,
+`jobs/policy/rust-toolchain.toml`) даёт один и тот же `wasm_hash` на любой машине; сборка вне контейнера рабочая, но хеш
+у неё зависит от платформы хоста; CI (`.github/workflows/policy-wasm.yml`) печатает его, он же
+опубликован в `docs/DEPLOY.md` и совпадает с хешем в аттестации OutLayer (в контракт он не записывается). Любой может собрать из репо и сверить.
 Это доказательство невозможности сохранить, а не доказательство удаления — так и формулируем. К модели NEAR AI
 не относится (их serving-образ закрыт).
 
@@ -77,7 +87,7 @@ Incognito-маршрут (§3.9) пользователь выбирает са�
 Telegram-бот (grammY) и/или HTTP: текст владельца → NEAR AI (`runTier1` из `packages/tier1-node`: последовательность §7.1
 из Node, напрямую к шлюзу с TLS-пином; E2EE; structured output через function tool `tools` + `tool_choice`, не через
 `response_format` — его SDK не шифрует) →
-`ActionRequest` → OutLayer job (HTTPS API, не через контракт) → `propose_action` FC-ключом агента →
+`ActionRequest` → OutLayer job (HTTPS API, не через контракт) → `commit_proof(kind: "model")`, затем `propose_action` FC-ключом агента →
 при `NeedsApproval` кнопка владельцу в Telegram → `approve`. Пишет action proof и коммит.
 
 ### 3.8 Replay-режим (`pnpm demo`) — Бектур
@@ -102,16 +112,17 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 ## 4. ABI контракта (черновик — финализировать 1 ноября)
 
 Аккаунты: `ainek.testnet` (контракт, owner = `owner.ainek.testnet`), верификаторы `v1.`/`v2.ainek.testnet`,
-агент `agent.ainek.testnet` (FC-ключ только на `propose_action` и `commit_proof`; сервис проверяет это на цепочке при старте и иначе не запускается), демо-токен `token.ainek.testnet` (NEP-141).
+агент `agent.ainek.testnet` (FC-ключ только на `commit_proof` и `propose_action`; сервис проверяет это на цепочке при старте и иначе не запускается), демо-токен `token.ainek.testnet` (NEP-141).
 
 ### 4.1 Лог ключей
 ```
-register_verifier(account_id: AccountId)                         // owner — ИЛИ открытая регистрация, см. ниже
+register_verifier(account_id: AccountId)                         // owner, 1 yocto (§4.3) — ИЛИ открытая регистрация, см. ниже
 log_key(entry: KeyEntryInput) -> u64                             // verifier; returns index
 view head() -> Option<{ index: u64, entry_hash: String }>          // null while the log is empty
 view entry(index: u64) -> KeyEntry
 view entries_since(index: u64, limit: u32) -> Vec<KeyEntry>
 view latest_keys(model: String, max_age_ns: U64) -> Vec<KeyEntry>
+view verifiers() -> Vec<AccountId>                                  // registered writers; who counts is the client's choice
 ```
 ```
 KeyEntryInput {
@@ -173,27 +184,63 @@ view storage_balance_of(account: AccountId) -> U128                // yoctoNEAR 
 
 ### 4.3 Агенты и политика (ярус 2)
 ```
-register_agent(agent_id: AccountId, policy_hash: String, policy_version: u32, tee_pubkey: String, token_id: AccountId)  // owner
-update_policy(agent_id, policy_hash, policy_version, tee_pubkey)                                                   // owner
-pause_agent(agent_id) / unpause_agent(agent_id)                                                                    // owner
+register_agent(agent_id: AccountId, policy_hash: String, policy_version: u32, tee_pubkey: String, token_id: AccountId)  // owner, 1 yocto
+update_policy(agent_id, policy_hash, policy_version, tee_pubkey)                                                   // owner, 1 yocto
+pause_agent(agent_id)                                                                                              // owner
+unpause_agent(agent_id)                                                                                            // owner, 1 yocto
 propose_action(action: Action, model_proof_commit: String, decision: Decision, tee_signature: String) -> u64     // agent (FC key)
-approve(action_id: u64) / reject(action_id: u64)                                                                   // owner
-view agent(agent_id) -> AgentInfo
-view action(action_id) -> ActionRecord
+approve(action_id: u64) / reject(action_id: u64)                                                                   // owner, 1 yocto
+view agent(agent_id) -> AgentInfo | null
+view action(action_id) -> ActionRecord | null
 view pending_actions(agent_id) -> Vec<ActionRecord>
 ```
 ```
 Action   { kind: "ft_transfer", token_id: AccountId, receiver_id: AccountId, amount: U128, memo: String }
 Decision { verdict: "Allow" | "Deny" | "NeedsApproval", policy_hash: String, policy_version: u32,
            action_commit: String, model_proof_commit: String, nonce: String, expires_at: U64 }
+AgentInfo    { agent_id, policy_hash, policy_version, tee_pubkey, token_id, paused: bool, spent_today: U128 }
+ActionRecord { action_id: u64, agent_id, action: Action, decision: Decision, tee_signature: String, tee_pubkey: String,
+               status: "Pending" | "Executing" | "Executed" | "Failed" | "Denied" | "Rejected", day: u64, block_height: u64 }
 ```
-Проверки в `propose_action`: агент зарегистрирован и не на паузе; `decision.policy_hash/version`
-совпадают с реестром; `decision.action_commit == sha256(canonical_json(action))`;
-`decision.expires_at > now`; `nonce` не использован; `ed25519_verify(tee_signature, canonical_bytes(decision), tee_pubkey)`.
-`Allow` → cross-contract `ft_transfer` (контракт — отправитель) → `action_executed`.
-`NeedsApproval` → pending → `action_pending`; `approve` исполняет. `Deny` → `action_denied`, без исполнения.
+`policy_hash`, `tee_pubkey` — 64 hex (в `ActionRecord` — ключ, которым проверена подпись этого действия, он переживает
+`update_policy`); `tee_signature` — base64 подписи ed25519 над `canonical_bytes(decision)` (поле `sig`
+выхода job); `expires_at` — unix ms. `spent_today` — сумма за текущие сутки UTC по времени блока; её агент передаёт в job.
+
+**«owner, 1 yocto»**: метод требует приложить ровно 1 yoctoNEAR. FC-ключ приложить депозит не может, поэтому такой вызов
+подписан full-access ключом владельца. Без этого хватило бы FC-ключа на аккаунте владельца (кошелёк оставляет такой в
+браузере, Meteor выдавал нам ключ на все методы): им можно было бы зарегистрировать агента со своим ключом решений,
+подписать себе `Allow` и вывести токены контракта, или одобрить платёж без окна кошелька. Так же защищён
+`register_verifier` (§4.1). Исключение — `pause_agent`: стоп-кнопка должна оставаться простой, а худшее, что с ней
+сделает чужой ключ, это остановит агента.
+
+Проверки в `propose_action` (каждая со своим тестом): агент зарегистрирован и не на паузе; `action.kind == "ft_transfer"`
+и `action.token_id` совпадает с зарегистрированным; `decision.policy_hash/version` совпадают с реестром;
+`action.memo` не длиннее 256 байт; `decision.action_commit == sha256(canonical_json(action))`;
+`decision.model_proof_commit == model_proof_commit`, и этот коммит уже записан этим агентом через `commit_proof` с
+`kind: "model"` (агент сначала коммитит model proof, потом предлагает действие; это публичная датированная запись со
+ссылкой на запись лога, которую аудитор может попросить раскрыть, а не доказательство, что за коммитом стоит настоящий
+ответ модели: что в коммите, контракт не видит);
+`now < decision.expires_at <= now + 10 мин + 2 мин` (верхняя граница не даёт получить «вечное» решение, подав в job
+время из будущего); `decision.nonce == sha256(action_commit:(expires_at − 600000):spent_today)`, где `spent_today` —
+учёт самого контракта (§6.2: так контракт ловит решение, принятое для выдуманного «потрачено 0»); `nonce` не использован
+этим агентом; `ed25519_verify(tee_signature, canonical_bytes(decision), tee_pubkey)`. Запись оплачивается из
+`deposit_storage` агента, как `commit_proof` (FC-ключ не может приложить депозит).
+
+`Allow` → статус `Executing`, cross-contract `ft_transfer` (контракт — отправитель, 1 yocto из баланса контракта) →
+callback `on_transfer` → `Executed` и событие `action_executed`, либо `Failed` и `action_failed`, если токен отказал.
+`NeedsApproval` → `Pending` и `action_pending` (в очереди одного агента не больше 20); `approve` (если агент не на паузе
+и политика и ключ с момента решения не менялись) исполняет так же, событие
+`action_approved`; `reject` → `Rejected`, `action_rejected`. `Deny` → `Denied`, `action_denied`, без исполнения.
+Сумма входит в `spent_today` сразу при `Allow` и `NeedsApproval` (чтобы очередь ожидающих не обходила дневной лимит)
+и возвращается при `Rejected`/`Failed`. Дневной лимит жёсткий, одобрение его не поднимает (§6.2): действие, оставшееся с
+прошлых суток, одобрить нельзя, только `reject`, после чего агент предлагает его заново через job (иначе вчерашняя очередь
+прошла бы поверх сегодняшнего лимита; цена правила: предложенное незадолго до 00:00 UTC, то есть до 06:00 по Бишкеку,
+нужно одобрить до этой границы; неотклонённые вчерашние действия занимают место в очереди из 20). В пределах суток `approve` не ограничен десятью минутами: срок решения относится
+к `propose_action`. `propose_action` и `approve` вызывать минимум с
+60 TGas (перевод и callback оплачиваются из них; 30 TGas по умолчанию в near-api-js не хватит).
 Событие `action_proposed {action_id, agent_id, verdict, policy_hash, policy_version, action_commit, model_proof_commit}` —
-без суммы и получателя; сам перевод на публичном testnet виден в транзакции (честно говорим об этом).
+без суммы и получателя; сам перевод на публичном testnet виден в транзакции (честно говорим об этом). Остальные события:
+`agent_registered`, `policy_updated`, `agent_paused`, `agent_unpaused`.
 
 Fallback (если OutLayer не взлетел): `propose_action(action, model_proof_commit)` без `decision`;
 политика в контракте: `caps {per_action, per_day}` публичны, whitelist как `Vec<sha256(salt_i || receiver_id)>`,
@@ -268,15 +315,37 @@ EIP-191 recover через `ethers` для ecdsa). Сырые байты и `sal
   "whitelist": ["aibek.testnet", "vendor1.testnet"],
   "caps": { "per_action": "500000000", "per_day": "2000000000" },
   "needs_approval_above": "300000000",
-  "deny_new_receivers": true
+  "deny_new_receivers": true,
+  "salt": "<64 hex, случайные 32 байта: openssl rand -hex 32>"
 }
 policy_hash = sha256(canonical_json(policy))  // публикуется в register_agent
 ```
+`salt` обязателен: политика низкоэнтропийна (круглые лимиты, получатели видны в переводах), и без соли любой мог бы
+подтвердить догадку о всей политике по публичному `policy_hash`. Все поля обязательны, лишние — ошибка.
 ### 6.2 Вход и выход джоба
 Вход (stdin): `{ "action": Action, "model_proof_commit": "<hex>", "spent_today": "<U128>", "now": <unix ms> }`.
 Выход (stdout, ≤ 900 байт): `{ "decision": Decision, "sig": "<base64 ed25519 over canonical_bytes(decision)>", "pubkey": "<hex>", "wasm_hash": "<hex>" }`.
-Логика: receiver ∈ whitelist, иначе Deny; amount ≤ per_action и spent_today+amount ≤ per_day, иначе Deny;
-amount > needs_approval_above → NeedsApproval; иначе Allow. `nonce` = sha256(action_commit || now).
+Логика, срабатывает первое подходящее правило:
+1. `kind != "ft_transfer"`, `token_id != policy.token_id` или amount = 0 → Deny;
+2. receiver ∉ whitelist и `deny_new_receivers: true` → Deny;
+3. amount > per_action или spent_today + amount > per_day (переполнение u128 тоже) → Deny: лимит жёсткий, одобрение
+   владельца его не снимает;
+4. receiver ∉ whitelist (значит, `deny_new_receivers: false`) или amount > needs_approval_above → NeedsApproval;
+5. иначе Allow.
+
+`nonce` = sha256(utf8(action_commit + ":" + now + ":" + spent_today)): 64 hex-символа `action_commit`, `now` и
+`spent_today` десятичными строками. `now` и `spent_today` приходят от агента, то есть от стороны, которую политика
+ограничивает, и в `Decision` их нет; через `nonce` контракт может пересчитать их по своим данным
+(`now = expires_at − 600000`, `spent_today` — свой учёт за сутки) и отклонить решение, принятое для выдуманных значений.
+`expires_at = now + 600000` (10 минут, unix ms).
+
+Строгость входа: `action_commit` считается от `action` ровно в том виде, как он пришёл; лишние поля во входе, в
+`action` и в политике — ошибка, как и отсутствующие (`principal`, `agent` обязательны). U128 только в том виде, как их
+печатает near-sdk: цифры без знака и ведущих нулей (иначе контракт пересериализует сумму и получит другой
+`action_commit`). `policy.version` — u32, как `policy_version` в контракте. Числа в JSON пишутся целыми, без дробной
+части и экспоненты (`3`, не `3.0`): Rust такие отклоняет, хотя JS принял бы. Некорректный вход, политика или ключ →
+код выхода 1 и текст в stderr без содержимого политики и ключа; решения нет (fail closed).
+Эталонные входы и выходы с тестовым ключом: `docs/test-vectors/policy-decision.json`, Rust воспроизводит их побайтно.
 Канонические байты: детерминированный JSON — одна и та же функция в Rust и TS (`packages/proof/src/canonical.ts`,
 `jobs/policy/src/canonical.rs`), тест-векторы в `docs/test-vectors/canonical.json`. Правила: ключи отсортированы по
 Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в JS сортировать явно, `sort()` сравнивает UTF-16),
@@ -289,7 +358,10 @@ Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в 
 1. Клиент: `client.verify(model)` (кеш 60 мин) → `signing_address`, `signing_public_key`, `compose_hash`.
 2. Клиент: view `latest_keys(model, 24h)` → требуется запись с тем же `signing_address` и `compose_hash`
    хотя бы от `QUORUM` верификаторов из `TRUSTED_VERIFIERS` (записи незнакомых верификаторов показываются, но не считаются); если два верификатора дают разные наборы ключей за одно окно — баннер
-   «split-view» и отказ. Нет записи — отказ с объяснением, без отправки.
+   «split-view» и отказ. Нет записи — отказ с объяснением, без отправки. `TRUSTED_VERIFIERS` и `QUORUM` из окружения —
+   только значения по умолчанию: посетитель меняет их на `/log` (хранятся в его браузере, отдельно для сети и контракта;
+   действуют со следующего сообщения). Кандидаты в список: значения по умолчанию, `verifiers()`, авторы записей в окне и любой
+   добавленный вручную аккаунт NEAR. Кворум не бывает меньше 1: это проверяет и разбор сохранённого выбора, и `evaluateKeyLog`.
 3. Клиент: E2EE-запрос через relay, `X-Model-Pub-Key` = ключ из проверенного отчёта.
 4. Клиент: сохраняет сырые байты; `GET /v1/signature/{id}?signing_algo=ed25519` через relay; проверяет
    подпись и хеши локально; собирает model proof; `commit_proof` FC-ключом; показывает карточку.
@@ -297,7 +369,7 @@ Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в 
 ### 7.2 Действие агента (ярус 2)
 1. Владелец пишет агенту. Агент → NEAR AI (`runTier1`, E2EE; structured output через function tool, не `response_format`) → `Action` + model proof (как 7.1).
 2. Агент → OutLayer job (HTTPS, вход из §6.2) → `Decision` + подпись.
-3. Агент сохраняет соль model proof и коммитит его (`commit_proof`, `kind: model`): нет предоплаты — стоп здесь, а не после перевода. Затем `propose_action` FC-ключом (ключ только на `propose_action` и `commit_proof`). Контракт проверяет и исполняет / ставит в pending / отклоняет.
+3. Агент сохраняет соль model proof и коммитит его (`commit_proof`, `kind: model`): нет предоплаты — стоп здесь, а не после перевода. Затем `propose_action` тем же FC-ключом. Контракт проверяет и исполняет / ставит в pending / отклоняет.
 4. `NeedsApproval` → Telegram-кнопка владельцу → `approve` полным ключом владельца (через кошелёк/CLI).
 5. Агент собирает action proof, сохраняет соль, коммитит его (`commit_proof`, `kind: action`, `log_index` записи из model proof; `/auditor` ищет раскрытый обмен по `proof_commit` с аккаунтом агента), отдаёт карточку. Без предложенного действия (отказ модели, нет платежа) коммитов нет. Агентский аккаунт один раз вносит `deposit_storage`: два коммита на действие, 0.1 NEAR хватает примерно на 30 действий.
 6. Стоп-кнопка: владелец делает `DeleteKey` ключа агента и/или `pause_agent`; следующую попытку отвергает сеть: ключа больше нет (транзакции не будет, на цепочке виден сам `DeleteKey`).

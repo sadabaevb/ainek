@@ -27,7 +27,8 @@ No NEAR account, no API key: it shows exactly what a registered verifier would a
 ## Run a verifier in 5 minutes
 
 You need a NEAR testnet account whose key you can export, and the contract owner must have called
-`register_verifier(<your account>)` once (open registration is pending, see DECISIONS).
+`register_verifier(<your account>)` once, with 1 yoctoNEAR attached (it must be signed with the owner's full-access
+key; open registration is pending, see DECISIONS).
 
 ```sh
 git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i

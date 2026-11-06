@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -100,6 +100,8 @@ export interface ChatParams {
   model: string;
   messages: ChatMessage[];
   tamper: boolean;
+  /** Who counts for the key-log check: the viewer's choice or the site default (useTrust). */
+  trust: TrustSet;
   onStep: Emit;
 }
 
@@ -124,7 +126,7 @@ export async function runChat(cfg: PublicConfig, params: ChatParams): Promise<Ch
   }
 }
 
-async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
+async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
 
   // 0. The user chose the private model: it must support model attestation, otherwise nothing is sent (never a silent downgrade to plaintext).
@@ -142,7 +144,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, onStep: em
   // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
   const entries = await runStep(emit, 'key-log', `reading the public key log (${log.source})`, () => keyLogPromise, (e) => `${e.length} entr${e.length === 1 ? 'y' : 'ies'} in window (source: ${log.source})`);
   const seenKey = tamper ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
-  const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
+  const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: trust.verifiers, quorum: trust.quorum });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
     return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey };
@@ -274,10 +276,10 @@ export async function commitOutcome(outcome: VerifiedOutcome, resolveCommitter: 
 }
 
 /** The user picked the Incognito model (SPEC §3.9): no model evidence, no E2EE; plaintext goes through our proxy and the gateway, and the card says so. */
-async function nonTeeRoute(cfg: PublicConfig, { model, messages, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
+async function nonTeeRoute(cfg: PublicConfig, { model, messages, trust, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
   const meta = await runStep(emit, 'metadata', `asking the gateway about ${model}`, () => fetchModelMetadata(model), (m) => `${model}: provider ${String(m.providerType)}, model attestation ${m.attestationSupported === true ? 'supported' : 'not supported'}`);
-  if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, onStep: emit }, progress); // it is attested after all: use the real path
+  if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, trust, onStep: emit }, progress); // it is attested after all: use the real path
   const gateway = await runStep(emit, 'attestation', 'verifying the gateway only (this model has no model attestation)', () => verifyGateway(policy), (g) => `gateway ${g.tcbStatus}; no model evidence exists for ${model}`, 'attestation-gateway');
   emit({ id: 'key-log', status: 'skipped', detail: 'no model key to look up: nothing to verify against the log' });
   const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`, 'send-plain');

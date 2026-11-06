@@ -1,0 +1,37 @@
+# Runs scripts/wasm-hash.sh on a clean machine and prints the sha256 of the policy wasm; see docs/DEPLOY.md.
+name: policy-wasm
+
+on:
+  push:
+    paths: ['jobs/policy/**', 'scripts/wasm-hash.sh', 'docs/test-vectors/**', '.github/workflows/policy-wasm.yml']
+  pull_request:
+    paths: ['jobs/policy/**', 'scripts/wasm-hash.sh', 'docs/test-vectors/**', '.github/workflows/policy-wasm.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # rustup reads jobs/policy/rust-toolchain.toml and installs exactly that toolchain and target.
+      - name: Unit tests
+        working-directory: jobs/policy
+        run: cargo test --locked
+      - name: Build and hash
+        run: |
+          # No pipe: a failed build must fail the step, not print an empty hash.
+          line=$(scripts/wasm-hash.sh)
+          hash=${line%% *}
+          [ ${#hash} -eq 64 ]
+          echo "ainek-policy.wasm sha256: $hash"
+          echo "### ainek-policy.wasm" >> "$GITHUB_STEP_SUMMARY"
+          echo "sha256: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"
+      # The exact bytes that were hashed, so a differing local build can be compared with them.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ainek-policy-wasm
+          path: jobs/policy/target/repro/wasm32-wasip1/release/ainek-policy.wasm
+          if-no-files-found: error
