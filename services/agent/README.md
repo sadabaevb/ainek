@@ -5,8 +5,8 @@ under E2EE, a policy job in an OutLayer TEE signs a decision, and the contract c
 proposed action leaves two salted commits and the files to open them; a message that proposes nothing leaves no proof.
 
 **Status:** tested against fakes (`pnpm -F agent test`), with the model step, the key-scope check and the stop command also run
-live. The contract and the policy job are in the repo and tested in a sandbox, but they are not set up on testnet yet (`docs/DEPLOY.md`),
-so it has not run end to end. Open questions are in `docs/DEV-NOTES.md`.
+live. The contract, the policy job, the demo token and the agent account are on testnet since Nov 6 (`docs/DEPLOY.md`, "Deployed Tier 2
+accounts"), but the service has not run against them (no `OUTLAYER_PAYMENT_KEY` yet), so it has not run end to end. Open questions are in `docs/DEV-NOTES.md`.
 
 ```bash
 pnpm -F agent start              # the Telegram bot; variables in .env.example, setup in docs/DEPLOY.md
