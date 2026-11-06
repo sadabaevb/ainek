@@ -112,8 +112,9 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
 With `pnpm -F web dev` running, at `http://localhost:3000`:
 
 1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log (entry #3 was its first run); until it runs as a hosted service, a stopgap refreshes it by hand.
-2. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
-3. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
+2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" brings you back; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
+3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
+4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
 4. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
 5. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row says the sample was never committed (it was recorded before the contract accepted commits); enter a NEAR account in the field to look a committed disclosure up on-chain. The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 4–5 end in "differs from the embedded entry".
 
@@ -210,8 +211,8 @@ stop button: DeleteKey + pause_agent                                            
   the user-chosen Incognito route, plaintext, and the card says so. The relay code logs no bodies; on the hosted demo that is
   taken on trust.
 - The key log is a key allowlist: the client sends only to a key a trusted verifier logged (what the verifier checked is the
-  verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust
-  (`AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`).
+  verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust:
+  `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` set what the site offers, and a visitor can replace them on `/log`.
 - Every attested exchange becomes a proof (`packages/proof`, SPEC §5): signature, hashes, log index, salt, commit. The commit
   is `sha256(salt ‖ canonical_json(proof without salt/commit/commitTx))`, computed in the browser; the contract stores
   only the commit. The Rust contract uses the same canonical JSON for the log's `entry_hash` (shared test vectors in
