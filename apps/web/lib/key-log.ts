@@ -1,6 +1,6 @@
 // The public key log as the browser reads it (SPEC §4.1 views). The source is chosen once from config:
 // live view calls to the contract (shared reader in @ainek/proof), or the recorded sample entry (offline).
-import { KeyEntry, keyLogReader, resolveLogEntry as resolveFromLog, type KeyLogReader, type ResolvedEntry } from '@ainek/proof';
+import { KeyEntry, keyLogReader, resolveLogEntry as resolveFromLog, verifiersOf, type KeyLogReader, type ResolvedEntry } from '@ainek/proof';
 import sample from '../../../docs/samples/key-entry.sample.json';
 import type { PublicConfig } from './config';
 
@@ -15,11 +15,11 @@ function sampleLog(): KeyLog {
     source: 'sample',
     latestKeys: async (model) => entries.filter((e) => e.model === model), // the sample never ages out
     entry: async (index) => entries.find((e) => e.index === index) ?? null,
-    verifiers: async () => [...new Set(entries.map((e) => e.verifier))],
+    verifiers: async () => verifiersOf(entries),
   };
 }
 
-export function keyLogFor(cfg: PublicConfig): KeyLog {
+export function keyLogFor(cfg: Pick<PublicConfig, 'logSource' | 'rpcUrl' | 'contract'>): KeyLog {
   return cfg.logSource === 'contract' ? { source: 'contract', ...keyLogReader(cfg.rpcUrl, cfg.contract) } : sampleLog();
 }
 

@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { memo, useMemo, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { composeHashOf, normalizeHex, toDisclosure, type KeyLogReason } from '@ainek/proof';
+import { composeHashOf, normalizeHex, toDisclosure } from '@ainek/proof';
 import { useConfig, useT } from '@/app/providers';
+import { refusalText } from '@/lib/refusal';
 import { canCommitNow, commitAction, failurePhase, type ChatOutcome, type VerifiedOutcome } from '@/lib/flow';
 import { commitLabel } from '@/lib/commit-label';
 import { DEPOSIT_NEAR } from '@/lib/wallet';
@@ -30,21 +31,13 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   }
   if (outcome.kind === 'refused') {
     // The decision is the same (nothing sent); the wording follows the verdict's reason, decided once in @ainek/proof.
-    const v = outcome.keyVerdict;
-    const texts: Record<Exclude<KeyLogReason, 'ok'>, [string, string]> = {
-      'split-view': [t.refusedSplitTitle, t.refusedSplitBody],
-      'below-quorum': [t.refusedQuorumTitle, t.refusedQuorumBody(v.confirmedBy.length, cfg.quorum)],
-      'untrusted-only': [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))],
-      absent: [t.refusedTitle, t.refusedBody],
-    };
-    const reason = v.reason === 'ok' ? 'absent' : v.reason;
-    const [title, body] = texts[reason];
+    const { reason, title, body } = refusalText(t, outcome.keyVerdict);
     return (
       <RedCard
         title={title}
         body={body}
         note={t.refusedConsequence[reason]}
-        action={onRetry ? <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button> : <Link className="btn" href="/log#trust">{t.refusedChangeTrust}</Link>}
+        action={outcome.tampered ? onRetry && <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button> : <Link className="btn" href="/log#trust">{t.refusedChangeTrust}</Link>}
         lines={[
           `key seen by the client: ${outcome.seenKey}`,
           `verdict: ${outcome.keyVerdict.status}: ${outcome.keyVerdict.detail}`,

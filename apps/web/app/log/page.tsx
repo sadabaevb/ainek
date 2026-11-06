@@ -33,24 +33,23 @@ export default function LogPage() {
   const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
+  const { rpcUrl, contract, logSource, model } = cfg; // not cfg itself: it also holds the trust set, and choosing who to trust must not read the log again
   useEffect(() => {
-    const reader = keyLogFor(cfg);
+    const reader = keyLogFor({ rpcUrl, contract, logSource });
     reader
-      .latestKeys(cfg.model)
+      .latestKeys(model)
       .then((entries) => {
         setLog({ entries }); // the window (and the explanation card) first; the staleness lookup must not delay or hide it
         if (entries.length === 0) {
           reader
-            .latestKeys(cfg.model, ANY_AGE_NS)
+            .latestKeys(model, ANY_AGE_NS)
             .then((all) => setLog({ entries, newest: all[0] ?? null }))
             .catch(() => undefined);
         }
       })
       .catch((e: unknown) => setError(describeError(e)));
     reader.verifiers().then(setRegistered).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
-    // The trust set is in cfg too, and choosing who to trust must not read the log again.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cfg.rpcUrl, cfg.contract, cfg.model, cfg.logSource]);
+  }, [rpcUrl, contract, logSource, model]);
 
   useEffect(() => {
     if (!signedAccountId) {

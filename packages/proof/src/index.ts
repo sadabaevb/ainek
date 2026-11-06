@@ -22,7 +22,7 @@ export {
   SigningAlgo,
   hex64,
 } from './schema.ts';
-export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
+export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry, verifiersOf } from './key-log.ts';
 export { TIER1_STEPS, failurePhase } from './steps.ts';
 export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
@@ -40,7 +40,8 @@ export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestati
 export { stripHexPrefix, normalizeHex } from './hash.ts';
 export { ainekConfigFromEnv } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
-export { NEAR_ACCOUNT, TrustSet, parseTrustSet, clampQuorum } from './trust-set.ts';
+export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
+export type { TrustPreview, TrustSet } from './trust-set.ts';
 export { viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
 export { TCB_STATUSES } from './config.ts';

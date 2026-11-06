@@ -30,14 +30,7 @@ function read(key: string): string | null {
 export function useCustomTrust(cfg: Scope): TrustSet | null {
   const key = keyOf(cfg);
   const raw = useSyncExternalStore(subscribe, () => read(key), () => null);
-  return useMemo(() => {
-    if (!raw) return null;
-    try {
-      return parseTrustSet(JSON.parse(raw));
-    } catch {
-      return null;
-    }
-  }, [raw]);
+  return useMemo(() => parseTrustSet(raw), [raw]);
 }
 
 /** `null` forgets the choice, so the site default applies again. */
