@@ -1014,6 +1014,29 @@ Rust из того же чистого клона: `cargo test` контракт
 Ярус 1, последний пункт: коммит FC-ключом кошелька на живом testnet сделан Бектуром — tx
 `6ESFaiCahb4hBqYHnrrDSND8jjpJhaYNqKb8sUVg5baJ` и `FLHbBzAvaBN6jkmAQ1fnuAXAaViPZkgLi1XoWnhSiDnR`.
 
+## 2026-11-06 — контрольная точка: чистая проверка яруса 1 (Бектур)
+
+Проверяли коммит `e356952`, клон из локального bundle (репозиторий пока приватный).
+
+**Контейнер `node:24`** (v24.22.2, arm64):
+- После `pnpm i`, с `--network none`: `pnpm demo` → VERIFIED, `pnpm demo:tamper` → REFUSED, тесты 87 + 7 + 7 прошли.
+- С сетью: `pnpm -F verifier dry-run` — exit 0 для обеих моделей из `.env.example`; `pnpm -F verifier once` без аккаунта —
+  exit 2 с подсказкой; `pnpm -F web build` и typecheck — ок; отслеживаемые файлы не изменились.
+
+**Браузер из чистой копии** (`localhost:3200`: другой origin, поэтому данные сайта пустые; кошелёк Meteor на testnet), 5 ноября, UTC:
+- 18:59:10 — AddKey при входе, tx `2ws2ERqctM8Yt3oLf33Ru2L3wXyqK7TbeAAfwYUn4rX9`.
+- 18:59:36 — `commit_proof`, tx `4Fp9hNGYCa4EQKYuZsBZAhscmsGo46mmxCPkDxNfH3iq` (commit `7fe052069318…`, запись лога 6).
+- `/verify` — все проверки зелёные.
+
+**Ограничения:**
+- Тот же Mac и люди, которые знают проект, так что пункт ROADMAP «на чистой машине по README без подсказок» закрыт не
+  полностью. Прогон постороннего человека запланирован на 10–11 ноября.
+- На момент проверки у демона не было постоянного хоста, а все записи лога сделал один верификатор.
+- При закрытии окна кошелька в консоли дважды `unhandledRejection: User closed the window before completing the action`.
+  Шаблон закрытого окна в `apps/web/lib/wallet.ts` (`User rejected|Wallet closed`) этот текст не покрывает; откуда отказ, не разобрано.
+
+Решение: GO на ярус 2, условия в `docs/DECISIONS.md`.
+
 
 ## 2026-11-05 — Tier 2: настоящий policy job (SPEC §6) — Дастан
 
