@@ -247,7 +247,25 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-<!-- TODO Nov 10–11: paste the table printed by `pnpm demo:metrics --runs 50` (it also writes docs/metrics.json); add the policy-block and time-to-execute rows from the Tier 2 run if it ships; the same day re-time the browser (3 runs, Ainek's IndexedDB cache cleared, runs > 30 s apart because of the collateral proxy's cache header) and update the browser sentence below, keeping it next to the table -->
+<!-- TODO by Nov 12: add the policy-block and time-to-execute rows from the Tier 2 run if it ships; re-time the browser (3 runs, Ainek's IndexedDB cache cleared, runs > 30 s apart because of the collateral proxy's cache header) and update the browser sentence below, keeping it next to the table; re-run `pnpm demo:metrics --runs 50` if the Tier 1 sequence changes before submission -->
+
+50 runs in one sitting on Nov 6, 20:08–20:17 UTC, from one Mac with `z-ai/glm-5.3-flash`; every run's timings are in
+[`docs/metrics.json`](docs/metrics.json). Nine minutes on one machine shows that the sequence holds, not how the services
+behave over days.
+
+| Metric | Value (50 runs) |
+| --- | --- |
+| Verified end to end | 50 of 50 |
+| Swapped key refused before sending (the chat's switch, against each run's log read) | 50 of 50 |
+| Honest key refused (log window empty or key unlogged) | 0 of 50 |
+| Runs that needed an SDK retry | 0 of 50 |
+| Attestation (gateway + model, cold, in Node) | median 5.0 s, p90 9.1 s |
+| Public log read (latest_keys view on rpc.testnet.fastnear.com) | median 0.3 s, p90 0.3 s |
+| E2EE round trip to the model | median 2.5 s, p90 6.3 s |
+| Signature fetch | median 0.6 s, p90 1.6 s |
+| First message of the hour, whole run | median 9.9 s, p90 15.0 s |
+| Later message, attestation cached (derived from the same runs) | median 3.7 s, p90 7.9 s |
+| Ciphertext per exchange | 293 B sent, 1103 B received |
 
 Measured by `pnpm demo:metrics --runs N`: N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
 the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
