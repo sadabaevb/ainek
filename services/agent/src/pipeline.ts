@@ -2,7 +2,7 @@
 // the whole path runs in tests with fakes; main.ts wires the real ones. Nothing is proposed unless the decision passes the
 // local checks, and nothing is sent to the model unless the key log confirms the attested key (inside extract). Nothing
 // after propose_action can throw out of here: by then the money may have moved, and the owner must get the action id.
-import { buildActionProof, checkPolicyOutput, type Check, type CommittedActionProof, type ModelProof } from '@ainek/proof';
+import { buildActionProof, checkPolicyOutput, type Check, type CommittedActionProof, type ModelProof, type PolicyOutput } from '@ainek/proof';
 import type { ActionChain, Proposed } from './chain.ts';
 import { ContractRefused, errorText } from './errors.ts';
 import type { Extraction } from './llm.ts';
@@ -16,6 +16,8 @@ export interface Deps {
   keep: ProofKeeper;
   /** From config: the build the deployed job should report. */
   wasmHash: string;
+  /** Which code made the decision, from the run's attestation (`outLayerRunCheck`). */
+  checkRun: (attestationUrl: string, output: PolicyOutput) => Promise<Check[]>;
   now?: () => number;
 }
 
@@ -85,6 +87,15 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   const { output, attestationUrl } = evaluated;
   const checks = checkPolicyOutput(output, { action: x.action, modelProofCommit, teePubkey: registered.teePubkey, wasmHash: deps.wasmHash, now: now() });
   if (checks.some((c) => c.status === 'fail')) return { kind: 'decision-rejected', checks, modelProof: proven };
+  // Money moves on this: a check that could not run counts as failed.
+  let runChecks;
+  try {
+    runChecks = await deps.checkRun(attestationUrl, output);
+  } catch (err) {
+    return { kind: 'failed', stage: 'policy', reason: `the policy run's attestation could not be checked: ${errorText(err)}` };
+  }
+  const unproven = runChecks.filter((c) => c.status !== 'ok').map((c) => ({ ...c, status: 'fail' as const }));
+  if (unproven.length > 0) return { kind: 'decision-rejected', checks: unproven, modelProof: proven };
 
   // 3. The model proof's commit, before any money can move. The contract refuses a proposal whose model proof this agent has not committed.
   let modelProof: ModelProof;

@@ -11,7 +11,8 @@
     "record": "node scripts/record-evidence.mjs",
     "typecheck": "tsc --noEmit",
     "check-contract": "node scripts/check-contract.mjs",
-    "metrics": "node src/metrics.ts"
+    "metrics": "node src/metrics.ts",
+    "policy": "node src/policy-run.ts"
   },
   "dependencies": {
     "@ainek/proof": "workspace:*",

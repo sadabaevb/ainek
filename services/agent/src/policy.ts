@@ -1,7 +1,8 @@
 // The policy side (SPEC §7.2 step 2): one HTTPS call to the OutLayer job with the §6.2 input; the job's signed decision
 // comes back with the run's attestation URL. The answer is checked by `checkPolicyOutput` in the pipeline, not here.
 import { setTimeout as sleep } from 'node:timers/promises';
-import { PolicyOutput, type PolicyInput } from '@ainek/proof';
+import { PolicyOutput, PolicyRun, policyOutputText, verifyPolicyRun, type Check, type PolicyInput } from '@ainek/proof';
+import { verifyTdxQuote } from '@ainek/tier1-node/dcap';
 
 export interface PolicyResult {
   output: PolicyOutput;
@@ -55,5 +56,21 @@ export function outLayerPolicy({ apiUrl, paymentKey, project, fetch: f = fetch, 
       if (attestation.protocol !== 'https:') throw new Error(`OutLayer: attestation_url is not https (${attestation.protocol})`);
       return { output: PolicyOutput.parse(raw), attestationUrl: attestation.href };
     },
+  };
+}
+
+/**
+ * Which code made the decision: the signature names only a key, and that key is not tied to a build (SPEC §3.5). OutLayer answers 404 until
+ * the worker has uploaded the quote, so this waits for it, within a limit: no attestation means no way to tell, and the action does not go ahead.
+ */
+export function outLayerRunCheck({ apiUrl, project, wasmHash, rpcUrl, network, fetch: f = fetch, pollMs = 1000, timeoutMs = 60_000 }: { apiUrl: string; project: string; wasmHash: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }) {
+  return async (attestationUrl: string, output: PolicyOutput): Promise<Check[]> => {
+    const signal = AbortSignal.timeout(timeoutMs);
+    for (;;) {
+      const res = await f(attestationUrl, { signal, redirect: 'error' });
+      if (res.ok) return verifyPolicyRun({ run: PolicyRun.parse(await res.json()), output: policyOutputText(output), wasmHash, project, apiUrl, rpcUrl, network, verifyQuote: verifyTdxQuote, fetch: f });
+      if (res.status !== 404) throw new Error(`OutLayer attestation: HTTP ${res.status}`);
+      await sleep(pollMs, undefined, { signal });
+    }
   };
 }

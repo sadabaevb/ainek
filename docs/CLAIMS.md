@@ -27,7 +27,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   Revoking the key (`DeleteKey`) or `pause_agent` stops the agent at the chain level.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer); the contract
   verifies this signature before executing. The signature shows which key signed, not which code ran: that is in the
-  run's attestation (`wasm_hash`), which the contract does not check.
+  run's attestation (`wasm_hash`). The contract does not check it. The agent service does before it proposes anything, and `pnpm demo:policy`
+  shows the whole check on a recorded run: the quote is signed by Intel and commits to the published build and to the decision.
 - (Tier 2) The policy job **cannot retain or exfiltrate its input by construction**: it is a WASI-P1 binary with no
   network and no storage interfaces, its build is reproducible (`Cargo.lock`, pinned toolchain), and the `wasm_hash`
   you get from building the repo equals the hash in the attestation. This is a proof of *inability to retain*, not a

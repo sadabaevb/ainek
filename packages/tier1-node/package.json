@@ -14,6 +14,10 @@
     "./errors": {
       "types": "./src/errors.ts",
       "default": "./src/errors.ts"
+    },
+    "./dcap": {
+      "types": "./src/dcap.ts",
+      "default": "./src/dcap.ts"
     }
   },
   "scripts": {
@@ -22,7 +26,8 @@
   },
   "dependencies": {
     "@ainek/proof": "workspace:*",
-    "@nearai/inference-sdk": "0.2.1"
+    "@nearai/inference-sdk": "0.2.1",
+    "@phala/dcap-qvl": "0.7.0"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

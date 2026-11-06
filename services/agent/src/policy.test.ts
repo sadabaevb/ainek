@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { outLayerPolicy } from './policy.ts';
+import { readFileSync } from 'node:fs';
+import { PolicyOutput } from '@ainek/proof';
+import { outLayerPolicy, outLayerRunCheck } from './policy.ts';
 
 const output = { decision: { verdict: 'Allow', policy_hash: 'ef'.repeat(32), policy_version: 3, action_commit: 'ab'.repeat(32), model_proof_commit: 'cd'.repeat(32), nonce: '12'.repeat(32), expires_at: '1' }, sig: 'c2ln', pubkey: '34'.repeat(32), wasm_hash: '56'.repeat(32) };
 const input = { action: { kind: 'ft_transfer' as const, token_id: 't', receiver_id: 'r', amount: '1', memo: '' }, model_proof_commit: 'cd'.repeat(32), spent_today: '0', now: 1 };
@@ -57,4 +59,21 @@ test('evaluate: a 408 with poll_url is polled, never resent; a run that stays pe
   assert.equal(calls.filter((c) => c.init?.method === 'POST').length, 1);
   const forever = (async () => json(200, { status: 'pending', poll_url: '/calls/c3' })) as typeof fetch;
   await assert.rejects(outLayerPolicy({ apiUrl: 'https://api.test', paymentKey: 'o:n:s', project: 'o.testnet/policy', fetch: forever, pollMs: 1, timeoutMs: 20 }).evaluate(input));
+});
+
+test('outLayerRunCheck: waits out the 404, then checks a real run end to end; another answer is an error', async () => {
+  const sample = JSON.parse(readFileSync(new URL('../../../docs/samples/policy-run.sample.json', import.meta.url), 'utf8')) as { attestation: { wasm_hash: string }; output: string; collateral: unknown };
+  const check = (f: typeof fetch) => outLayerRunCheck({ apiUrl: 'https://api.test', project: 'ainek-dev-dastan.testnet/policy', wasmHash: sample.attestation.wasm_hash, rpcUrl: 'http://rpc.test', network: 'testnet', fetch: f, pollMs: 0 });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => json(200, { result: { result: Array.from(Buffer.from('true')) } })) as typeof fetch;
+  try {
+    const { f, calls } = scripted([json(404, {}), json(200, sample.attestation), json(200, { collateral: JSON.stringify(sample.collateral) })]);
+    const checks = await check(f)(attestation, PolicyOutput.parse(JSON.parse(sample.output)));
+    assert.deepEqual(checks.map((c) => c.status), ['ok', 'ok', 'ok', 'ok', 'ok']);
+    assert.equal(calls.length, 3);
+    assert.match(calls[2]?.url ?? '', /public\/collateral\?fmspc=b0c06f000000&at=\d+/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  await assert.rejects(check(scripted([json(500, {})]).f)(attestation, output as PolicyOutput), /HTTP 500/);
 });

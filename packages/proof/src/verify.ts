@@ -15,6 +15,11 @@ export interface Check {
 }
 
 export type CheckId =
+  | 'run-build'
+  | 'run-output'
+  | 'run-quote'
+  | 'run-binding'
+  | 'run-worker'
   | 'schema'
   | 'route'
   | 'signed-text'
