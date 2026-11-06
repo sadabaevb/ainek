@@ -20,6 +20,9 @@ import { useConfig, useT } from '../providers';
 
 type Line = Omit<Check, 'id'>;
 
+/** Check details stay English (components/checks.tsx). This one asks the reader to act, so the card shows it translated. */
+const NEEDS_ACCOUNT = 'enter the NEAR account that committed to look the commit up on-chain';
+
 interface Result {
   d: ParsedDisclosure;
   report: VerifyReport;
@@ -32,7 +35,7 @@ async function lookupCommit(cfg: PublicConfig, d: ParsedDisclosure, account: str
   const { commit } = d.proof;
   if (commit === undefined) return { id, status: 'skipped', detail: 'the proof carries no commit: nothing to look up' };
   if (cfg.logSource === 'sample') return { id, status: 'skipped', detail: 'chain not consulted (AINEK_LOG_SOURCE=sample)' };
-  if (!account) return { id, status: 'skipped', detail: 'enter the NEAR account that committed to look the commit up on-chain' };
+  if (!account) return { id, status: 'skipped', detail: NEEDS_ACCOUNT };
   try {
     return checkProofCommit(d.proof, await readProofCommit(cfg.rpcUrl, cfg.contract, account, commit), account);
   } catch (err) {
@@ -73,7 +76,7 @@ function VerdictCard({ d, report, cfg }: Result & { cfg: PublicConfig }) {
       <Row status={signed.status} label={ta.rowSigned}>{signed.detail}</Row>
       <Row status={key.status} label={t.rowKey}>{key.detail}</Row>
       <Row status={chain.status} label={t.rowChain}>
-        {chain.detail}
+        {chain.detail === NEEDS_ACCOUNT ? ta.enterAccount : chain.detail}
         {proof.commitTx && <> · {ta.senderTx} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a></>}
       </Row>
       <div className="actions">
