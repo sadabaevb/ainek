@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
 import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import sampleAction from '../../../../docs/samples/action-proof.sample.json';
+import { ActionProofCard } from '@/components/action-proof-card';
 import { CardHead, CheckList } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
@@ -60,6 +62,7 @@ function VerifyInner() {
   const [commitStatus, setCommitStatus] = useState<Record<string, CommitStatus>>({}); // per exchange, what the previous click ended in: decides the button's label and what the next click may open
   const [missingId, setMissingId] = useState<string | null>(null); // ?id= not in this browser's store: worded at render, so it follows the language
   const [error, setError] = useState('');
+  const [actionProof, setActionProof] = useState<unknown>(null); // an action proof has its own card: there is no exchange to re-hash
 
   useEffect(() => {
     listExchanges().then(setStored).catch(() => undefined);
@@ -93,7 +96,12 @@ function VerifyInner() {
     setMissingId(null);
     try {
       const parsed = JSON.parse(text) as unknown;
-      if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
+      const isAction = (parsed as { kind?: unknown } | null)?.kind === 'action';
+      setActionProof(isAction ? parsed : null);
+      if (isAction) {
+        setInput(null);
+        setResult(null);
+      } else if (isDisclosure(parsed)) setInput(inputOf(parseDisclosure(parsed), 'disclosure'));
       else setInput({ proof: parsed, origin: 'pasted' });
     } catch (e) {
       setError(tv.notProof(describeError(e)));
@@ -128,6 +136,7 @@ function VerifyInner() {
         <div className="actions">
           <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>{tv.verify}</button>
           <LoadFileButton onText={setText} onError={setError} />
+          <button type="button" className="btn" onClick={() => setText(JSON.stringify(sampleAction, null, 2))}>{tv.useActionSample}</button>
         </div>
       </div>
 
@@ -145,6 +154,7 @@ function VerifyInner() {
       {missingId && <RedCard title={tv.noExchange(missingId)} />}
       {error && <RedCard title={error} />}
 
+      {actionProof !== null && <ActionProofCard value={actionProof} />}
       {result && (
         <section className="card">
           <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>

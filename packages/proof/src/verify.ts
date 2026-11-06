@@ -38,7 +38,11 @@ export type CheckId =
   | 'wasm-hash'
   | 'action-commit'
   | 'model-proof-commit'
-  | 'decision-expiry';
+  | 'decision-expiry'
+  // an action proof against the contract's record (action-on-chain.ts)
+  | 'action-record'
+  | 'action-status'
+  | 'model-commit-on-chain';
 
 export interface VerifyReport {
   /** True only when no check failed. Skipped checks (no raw bytes given) do not make it false. */
