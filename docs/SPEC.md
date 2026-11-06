@@ -122,6 +122,7 @@ view head() -> Option<{ index: u64, entry_hash: String }>          // null while
 view entry(index: u64) -> KeyEntry
 view entries_since(index: u64, limit: u32) -> Vec<KeyEntry>
 view latest_keys(model: String, max_age_ns: U64) -> Vec<KeyEntry>
+view verifiers() -> Vec<AccountId>                                  // registered writers; who counts is the client's choice
 ```
 ```
 KeyEntryInput {
@@ -355,7 +356,10 @@ Unicode code point (= порядок UTF-8-байт = `BTreeMap<String, _>`; в 
 1. Клиент: `client.verify(model)` (кеш 60 мин) → `signing_address`, `signing_public_key`, `compose_hash`.
 2. Клиент: view `latest_keys(model, 24h)` → требуется запись с тем же `signing_address` и `compose_hash`
    хотя бы от `QUORUM` верификаторов из `TRUSTED_VERIFIERS` (записи незнакомых верификаторов показываются, но не считаются); если два верификатора дают разные наборы ключей за одно окно — баннер
-   «split-view» и отказ. Нет записи — отказ с объяснением, без отправки.
+   «split-view» и отказ. Нет записи — отказ с объяснением, без отправки. `TRUSTED_VERIFIERS` и `QUORUM` из окружения —
+   только значения по умолчанию: посетитель меняет их на `/log` (хранятся в его браузере, отдельно для сети и контракта;
+   действуют со следующего сообщения). Кандидаты в список: значения по умолчанию, `verifiers()`, авторы записей в окне и любой
+   добавленный вручную аккаунт NEAR. Кворум не бывает меньше 1: это проверяет и разбор сохранённого выбора, и `evaluateKeyLog`.
 3. Клиент: E2EE-запрос через relay, `X-Model-Pub-Key` = ключ из проверенного отчёта.
 4. Клиент: сохраняет сырые байты; `GET /v1/signature/{id}?signing_algo=ed25519` через relay; проверяет
    подпись и хеши локально; собирает model proof; `commit_proof` FC-ключом; показывает карточку.

@@ -8,7 +8,7 @@ import { CheckList } from '@/components/checks';
 import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter, type Consent } from '@/lib/wallet';
-import { useConfig, useT } from './providers';
+import { useConfig, useT, useTrust } from './providers';
 
 interface Turn {
   message: ChatMessage;
@@ -95,6 +95,7 @@ function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
 
 export default function ChatPage() {
   const cfg = useConfig();
+  const { trust } = useTrust();
   const { t } = useT();
   const wallet = useNearWallet();
   const [model, setModel] = useState(cfg.model);
@@ -159,7 +160,7 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { ...opts, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
+      const outcome = await runChat(cfg, { ...opts, trust, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
       setTurns(atTurn(idx, withOutcome(outcome)));
       if (outcome.kind === 'verified') void commitTurn(idx, outcome, 'none');
     } finally {

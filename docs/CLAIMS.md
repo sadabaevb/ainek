@@ -10,7 +10,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   The client verifies the TDX quote and the GPU attestation itself (browser SDK; the NVIDIA verdict is fetched through
   NEAR AI's proxy and checked against NVIDIA's keys) and checks the signing key against a **public, append-only log on
   NEAR** written by verifiers (today: one, ours; the log is designed for independent verifiers). If the key is not in the
-  log, the client refuses to send.
+  log, the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
+  only sets the default.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this holds while
