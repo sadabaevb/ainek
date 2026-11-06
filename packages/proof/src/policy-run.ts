@@ -24,7 +24,7 @@ export const PolicyRun = z.looseObject({
   executed_wasm_sha256: hex64,
   input_hash: hex64,
   output_hash: hex64,
-  // Nullable because a run made over HTTPS has no transaction of its own; an empty field then shows up as a report data mismatch, not as a crash.
+  // Absent on a run made over HTTPS (`/attestations/by-call/...`): it has no transaction of its own.
   block_height: z.number().int().nullish(),
   caller_account_id: z.string().nullish(),
   project_id: z.string().nullish(),
@@ -61,7 +61,9 @@ const le64 = (value: number): Uint8Array => {
 
 /**
  * What OutLayer's worker puts in the quote's report data. Text fields are their UTF-8 bytes, hashes their hex text. The layout
- * comes from OutLayer's dashboard code (DEV-NOTES 2026-11-04) and is checked against real quotes in the tests.
+ * comes from OutLayer's dashboard code (DEV-NOTES 2026-11-04) and is checked against real quotes in the tests. A run made over
+ * HTTPS has no block height, and the worker then leaves the field out of the hash instead of hashing a zero (found on the first
+ * real by-call records, DEV-NOTES 2026-11-06).
  */
 export function taskHashOf(run: PolicyRun): string {
   const text = (value: string | number | null | undefined): Uint8Array => utf8Bytes(value === null || value === undefined ? '' : String(value));
@@ -75,7 +77,7 @@ export function taskHashOf(run: PolicyRun): string {
       text(run.wasm_hash),
       text(run.input_hash),
       text(run.output_hash),
-      le64(run.block_height ?? 0),
+      ...(run.block_height === null || run.block_height === undefined ? [] : [le64(run.block_height)]),
       text(run.caller_account_id),
       text(run.project_id),
       text(run.secrets_ref),
