@@ -247,8 +247,10 @@ packages/proof/      shared TS: proof schema, canonical JSON, hashing, signature
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
                      demo:live and demo:metrics, planned for the Tier-2 agent service; mirrors apps/web/lib/flow.ts
 contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
-                     (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2); Tier 2 (§4.3) next
-jobs/policy/         Rust OutLayer WASI-P1 job: spike, cap check only, no signature yet (Tier 2)
+                     (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2), agents and policy
+                     decisions (register_agent, propose_action, approve, reject, pause_agent; SPEC §4.3)
+contracts/demo-token/ plain NEP-141 token (near-contract-standards) for the Tier 2 demo and the sandbox test
+jobs/policy/         Rust OutLayer WASI-P1 job: evaluates the owner's policy, signs the decision (SPEC §6; Tier 2)
 services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
 services/agent/      placeholder: NL → NEAR AI → OutLayer → contract (Tier 2, not started)
 docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
@@ -263,8 +265,10 @@ Tests: `pnpm test` and `pnpm typecheck` (TypeScript, node:test: `packages/proof`
   `near-connect-hooks` (wallet), `near-api-js` 7 (RPC error types), `zod` (schemas), `tweetnacl` (ed25519), `ethers`
   (sha256, EIP-191 recovery for ecdsa signatures), `@phala/dcap-qvl` and `jose` (offline replay of Intel and NVIDIA
   evidence), Next.js 16 / React 19, the Inter font self-hosted under `apps/web/public/fonts` (SIL OFL 1.1, licence
-  alongside); Rust: `near-sdk` 5, `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
-- Reference material followed (no code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
+  alongside); Rust: `near-sdk` 5, `near-contract-standards` 5 (the demo token), `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
+- Copied pattern: `contracts/demo-token/src/lib.rs` wires up `near-contract-standards` the way the official
+  `near-examples/FT` example does (the token logic itself is that library).
+- Reference material followed (no other code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
   verification guide, `near-examples/nearai-cloud-verification-example`, `nearai/nearai-cloud-verifier`,
   `out-layer/private-dao-example` (Tier 2).
 - AI-generated code: substantial parts were written with Claude Code and reviewed by the team; the TypeScript branches went

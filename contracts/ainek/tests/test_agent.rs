@@ -3,9 +3,10 @@
 //! real contract wasm in a local NEAR sandbox node checks the decision with the node's own
 //! `ed25519_verify` and acts on it.
 //!
-//! Not covered here: a transfer that succeeds. There is no NEP-141 token in the sandbox, so the `Allow`
-//! case ends `Failed` (the "token" account has no contract), which exercises the callback and the
-//! give-back of the daily total. The success branch is covered by the unit tests in `src/agent.rs`.
+//! The token is real too: `contracts/demo-token`, NEAR's own NEP-141 implementation. So an allowed action
+//! and an approved one really move tokens, and a transfer the token refuses (a receiver who is not
+//! registered on it) ends `Failed` and leaves the daily total. `spent_today` is read from the contract
+//! before each decision, as the agent service does.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -47,6 +48,10 @@ async fn agent_info(contract: &near_api::Contract, network: &near_api::NetworkCo
     view(contract, network, "agent", json!({ "agent_id": agent.account_id() })).await
 }
 
+async fn balance_of(token: &near_api::Contract, network: &near_api::NetworkConfig, account_id: &str) -> String {
+    view(token, network, "ft_balance_of", json!({ "account_id": account_id })).await.as_str().unwrap().to_string()
+}
+
 async fn status_of(contract: &near_api::Contract, network: &near_api::NetworkConfig, action_id: u64) -> String {
     view(contract, network, "action", json!({ "action_id": action_id })).await["status"].as_str().unwrap().to_string()
 }
@@ -54,12 +59,15 @@ async fn status_of(contract: &near_api::Contract, network: &near_api::NetworkCon
 #[tokio::test]
 async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
     let wasm = std::fs::read(cargo_near_build::build_with_cli(Default::default())?)?;
+    let token_wasm = std::fs::read(cargo_near_build::build_with_cli(cargo_near_build::BuildOpts {
+        manifest_path: Some(concat!(env!("CARGO_MANIFEST_DIR"), "/../demo-token/Cargo.toml").into()),
+        ..Default::default()
+    })?)?;
     let sandbox = near_sandbox::Sandbox::start_sandbox().await?;
     let network = near_api::NetworkConfig::from_rpc_url("sandbox", sandbox.rpc_addr.parse()?);
     let owner = create_subaccount(&sandbox, "owner.sandbox").await?;
     let agent = create_subaccount(&sandbox, "agent.sandbox").await?;
-    // An account without a contract: every ft_transfer to it fails.
-    let token = create_subaccount(&sandbox, "token.sandbox").await?;
+    let token = create_subaccount(&sandbox, "token.sandbox").await?.as_contract();
     let contract = create_subaccount(&sandbox, "ainek.sandbox").await?.as_contract();
     let signer = near_api::Signer::from_secret_key(
         near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse().unwrap(),
@@ -74,15 +82,36 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
 
     // The owner's methods need 1 yoctoNEAR: only a full-access key can attach it.
     let one_yocto = NearToken::from_yoctonear(1);
+    // The token: the owner holds the supply, registers the contract and one receiver (NEP-145: an account
+    // must be registered on a token before it can hold it) and gives the contract 1000 tokens to pay from.
+    // `vendor1.sandbox` is in the policy's whitelist but not registered, so the token refuses to pay it.
+    near_api::Contract::deploy(token.account_id().clone())
+        .use_code(token_wasm)
+        .with_init_call("new", json!({ "owner_id": owner.account_id(), "total_supply": "1000000000000" }))?
+        .with_signer(signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+    let as_owner = |target: &near_api::Contract, method: &str, args: Value, deposit: NearToken| {
+        target
+            .call_function(method, args)
+            .transaction()
+            .gas(near_api::NearGas::from_tgas(100))
+            .deposit(deposit)
+            .with_signer(owner.account_id().clone(), signer.clone())
+            .send_to(&network)
+    };
+    for account_id in [contract.account_id().as_str(), "aibek.sandbox"] {
+        as_owner(&token, "storage_deposit", json!({ "account_id": account_id }), NearToken::from_millinear(10))
+            .await?
+            .assert_success();
+    }
+    let funding = json!({ "receiver_id": contract.account_id(), "amount": "1000000000" });
+    as_owner(&token, "ft_transfer", funding, one_yocto).await?.assert_success();
 
     // One key in the log, so that a model proof has an entry to point at.
     let verifier = create_subaccount(&sandbox, "v1.sandbox").await?;
-    contract
-        .call_function("register_verifier", json!({ "account_id": verifier.account_id() }))
-        .transaction()
-        .deposit(one_yocto)
-        .with_signer(owner.account_id().clone(), signer.clone())
-        .send_to(&network)
+    as_owner(&contract, "register_verifier", json!({ "account_id": verifier.account_id() }), one_yocto)
         .await?
         .assert_success();
     let mut entry = serde_json::from_str::<Value>(VECTORS)?["commits"]["entry_hash"]["input"].clone();
@@ -97,7 +126,7 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
 
     let policy = json!({
         "version": 1, "principal": owner.account_id(), "agent": agent.account_id(),
-        "token_id": token.account_id(), "whitelist": ["aibek.sandbox"],
+        "token_id": token.account_id(), "whitelist": ["aibek.sandbox", "vendor1.sandbox"],
         "caps": { "per_action": "500000000", "per_day": "2000000000" },
         "needs_approval_above": "300000000", "deny_new_receivers": true, "salt": "5a".repeat(32),
     });
@@ -133,14 +162,7 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .send_to(&network)
         .await?
         .assert_failure();
-    contract
-        .call_function("register_agent", registration)
-        .transaction()
-        .deposit(one_yocto)
-        .with_signer(owner.account_id().clone(), signer.clone())
-        .send_to(&network)
-        .await?
-        .assert_success();
+    as_owner(&contract, "register_agent", registration, one_yocto).await?.assert_success();
 
     // The agent works with a function-call key that can call `commit_proof` and `propose_action` and
     // nothing else. It cannot attach NEAR, so the agent account prepays storage once with its full-access key.
@@ -187,8 +209,12 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .await;
     assert!(unpause.is_err() || unpause.unwrap().is_failure(), "the scoped key must not reach other methods");
 
+    let spent_today = || async {
+        agent_info(&contract, &network, &agent).await["spent_today"].as_str().unwrap().to_string()
+    };
+
     // ---- Deny: a receiver outside the whitelist. Recorded, nothing moves. ----------------------
-    let denied = decide(action("mallory.sandbox", "1"), "0".into());
+    let denied = decide(action("mallory.sandbox", "1"), spent_today().await);
     assert_eq!(denied["decision"]["verdict"], "Deny");
     // Nothing can be proposed about a model proof that is not on chain; the agent commits it first. (The
     // very same call succeeds right after the commit, so the missing commit is what it failed on.)
@@ -209,12 +235,12 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
     other_action["action"]["receiver_id"] = json!("aibek.sandbox");
     propose(other_action).await?.assert_failure();
     // ...and cannot be edited into an Allow.
-    let mut edited = decide(action("mallory.sandbox", "2"), "0".into());
+    let mut edited = decide(action("mallory.sandbox", "2"), spent_today().await);
     edited["decision"]["verdict"] = json!("Allow");
     propose(edited).await?.assert_failure();
 
     // ---- NeedsApproval: above the threshold. Waits for the owner, who rejects. ------------------
-    let big = decide(action("aibek.sandbox", "400000000"), "0".into());
+    let big = decide(action("aibek.sandbox", "400000000"), spent_today().await);
     assert_eq!(big["decision"]["verdict"], "NeedsApproval");
     propose(big).await?.assert_success();
     assert_eq!(status_of(&contract, &network, 1).await, "Pending");
@@ -261,35 +287,52 @@ async fn agent_flow_end_to_end_on_sandbox() -> testresult::TestResult<()> {
             .assert_failure();
     }
     assert_eq!(status_of(&contract, &network, 1).await, "Pending");
-    contract
-        .call_function("reject", json!({ "action_id": 1 }))
-        .transaction()
-        .deposit(one_yocto)
-        .with_signer(owner.account_id().clone(), signer.clone())
-        .send_to(&network)
-        .await?
-        .assert_success();
+    as_owner(&contract, "reject", json!({ "action_id": 1 }), one_yocto).await?.assert_success();
     assert_eq!(status_of(&contract, &network, 1).await, "Rejected");
     assert_eq!(agent_info(&contract, &network, &agent).await["spent_today"], "0");
 
-    // ---- Allow: the contract sends ft_transfer; this "token" has no contract, so it fails, the
-    // callback records that and the amount leaves the daily total again. ---------------------------
-    let small = decide(action("aibek.sandbox", "100000000"), "0".into());
+    // ---- Allow: the tokens move in the same transaction and the day's total keeps the amount. ----
+    let small = decide(action("aibek.sandbox", "100000000"), spent_today().await);
     assert_eq!(small["decision"]["verdict"], "Allow");
     propose(small).await?.assert_success();
-    assert_eq!(status_of(&contract, &network, 2).await, "Failed");
-    assert_eq!(agent_info(&contract, &network, &agent).await["spent_today"], "0");
+    assert_eq!(status_of(&contract, &network, 2).await, "Executed");
+    assert_eq!(balance_of(&token, &network, "aibek.sandbox").await, "100000000");
+    assert_eq!(agent_info(&contract, &network, &agent).await["spent_today"], "100000000");
+
+    // ---- NeedsApproval, approved: nothing moves until the owner says so. ------------------------
+    let big = decide(action("aibek.sandbox", "400000000"), spent_today().await);
+    assert_eq!(big["decision"]["verdict"], "NeedsApproval");
+    propose(big).await?.assert_success();
+    assert_eq!(status_of(&contract, &network, 3).await, "Pending");
+    assert_eq!(balance_of(&token, &network, "aibek.sandbox").await, "100000000");
+    as_owner(&contract, "approve", json!({ "action_id": 3 }), one_yocto).await?.assert_success();
+    assert_eq!(status_of(&contract, &network, 3).await, "Executed");
+    assert_eq!(balance_of(&token, &network, "aibek.sandbox").await, "500000000");
+    assert_eq!(balance_of(&token, &network, contract.account_id().as_str()).await, "500000000");
+    assert_eq!(agent_info(&contract, &network, &agent).await["spent_today"], "500000000");
+
+    // ---- Allow, but the token refuses (the receiver is not registered on it): the callback records
+    // the failure and the amount leaves the daily total again. Nothing more moved. -----------------
+    let refused = decide(action("vendor1.sandbox", "100000000"), spent_today().await);
+    assert_eq!(refused["decision"]["verdict"], "Allow");
+    propose(refused).await?.assert_success();
+    assert_eq!(status_of(&contract, &network, 4).await, "Failed");
+    assert_eq!(agent_info(&contract, &network, &agent).await["spent_today"], "500000000");
+    assert_eq!(balance_of(&token, &network, contract.account_id().as_str()).await, "500000000");
 
     // ---- Stop button: a paused agent cannot propose. --------------------------------------------
-    contract
-        .call_function("pause_agent", json!({ "agent_id": agent.account_id() }))
-        .transaction()
-        .with_signer(owner.account_id().clone(), signer.clone())
-        .send_to(&network)
-        .await?
-        .assert_success();
+    // The stop button needs no deposit.
+    let no_deposit = NearToken::from_yoctonear(0);
+    as_owner(&contract, "pause_agent", json!({ "agent_id": agent.account_id() }), no_deposit).await?.assert_success();
     assert_eq!(agent_info(&contract, &network, &agent).await["paused"], true);
-    propose(decide(action("aibek.sandbox", "100000000"), "0".into())).await?.assert_failure();
+    let while_paused = decide(action("aibek.sandbox", "100000000"), spent_today().await);
+    assert_eq!(while_paused["decision"]["verdict"], "Allow");
+    propose(while_paused.clone()).await?.assert_failure();
+    // The pause was the only reason: the very same decision goes through once the owner lifts it.
+    as_owner(&contract, "unpause_agent", json!({ "agent_id": agent.account_id() }), one_yocto).await?.assert_success();
+    propose(while_paused).await?.assert_success();
+    assert_eq!(status_of(&contract, &network, 5).await, "Executed");
+    assert_eq!(balance_of(&token, &network, "aibek.sandbox").await, "600000000");
 
     Ok(())
 }

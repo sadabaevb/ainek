@@ -1,0 +1,26 @@
+[package]
+name = "ainek-demo-token"
+description = "Ainek: a plain NEP-141 token without minting, for the Tier 2 demo and the sandbox tests. Worth nothing."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+repository = "https://github.com/sadabaevb/ainek"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "5.29"
+near-contract-standards = "5.29"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+panic = "abort"
+overflow-checks = true
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(near)']
