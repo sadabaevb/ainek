@@ -31,7 +31,8 @@ function assertSucceeded(outcome: { status: unknown }, method: string): void {
   if (typeof status === 'object' && status !== null && 'Failure' in status) throw new Error(`${method} failed: ${safeString((status as { Failure: unknown }).Failure)}`);
 }
 
-export const errorText = (err: unknown): string => (err instanceof Error ? err.message : safeString(err));
+/** Text of whatever a wallet threw: an Error, a plain string, or a structured-cloned object from its sandbox. */
+export const errorText = (err: unknown): string => (err instanceof Error ? err.message : typeof err === 'string' ? err : safeString(err));
 
 /** `commit_proof(commit, "model", log_index)` (SPEC §4.2) with the function-call key (default 30 TGas, no deposit); returns the transaction hash. */
 export async function commitProofOnChain(callFunctionRaw: NearContextValue['callFunctionRaw'], cfg: PublicConfig, proof: ModelProof): Promise<string> {

@@ -14,6 +14,7 @@ import type { PublicConfig } from '@/lib/config';
 import { describeError } from '@/lib/errors';
 import { short, utcMinute } from '@/lib/format';
 import { fill } from '@/lib/fill';
+import { dict } from '@/lib/i18n';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { useConfig, useT } from '../providers';
@@ -21,7 +22,7 @@ import { useConfig, useT } from '../providers';
 type Line = Omit<Check, 'id'>;
 
 /** Check details stay English (components/checks.tsx). This one asks the reader to act, so the card shows it translated. */
-const NEEDS_ACCOUNT = 'enter the NEAR account that committed to look the commit up on-chain';
+const NEEDS_ACCOUNT = dict.en.auditor.enterAccount;
 
 interface Result {
   d: ParsedDisclosure;

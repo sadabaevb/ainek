@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { useConfig, useT } from '@/app/providers';
+import { describeError } from '@/lib/errors';
 import { short } from '@/lib/format';
-import { errorText, fcKeyLogin, isDialogClosed } from '@/lib/wallet';
+import { fcKeyLogin, isDialogClosed } from '@/lib/wallet';
 
 /** Implicit (hex) accounts are 64 characters; named ones show whole. */
 const shortAccount = (id: string) => (/^[0-9a-f]{64}$/.test(id) ? short(id) : id);
@@ -18,26 +19,21 @@ export function WalletButton() {
   const attempt = (action: () => Promise<void>) => {
     setFailed('');
     action().catch((err: unknown) => {
-      if (!isDialogClosed(err)) setFailed(errorText(err));
+      if (!isDialogClosed(err)) setFailed(describeError(err));
     });
   };
-  const alert = failed && <p className="wallet-error" role="alert">{t.walletFailed(failed)}</p>;
-  if (signedAccountId) {
-    return (
-      <>
+  return (
+    <>
+      {signedAccountId ? (
         <span className="wallet">
           <span className="dot ok" aria-hidden />
           <span className="mono" title={signedAccountId}>{shortAccount(signedAccountId)}</span>
           <button type="button" className="btn small" onClick={() => attempt(signOut)}>{t.disconnect}</button>
         </span>
-        {alert}
-      </>
-    );
-  }
-  return (
-    <>
-      <button type="button" className="btn small" onClick={() => attempt(() => fcKeyLogin(signIn, cfg))} disabled={loading}>{t.connectWallet}</button>
-      {alert}
+      ) : (
+        <button type="button" className="btn small" onClick={() => attempt(() => fcKeyLogin(signIn, cfg))} disabled={loading}>{t.connectWallet}</button>
+      )}
+      {failed && <p className="wallet-error" role="alert">{t.walletFailed(failed)}</p>}
     </>
   );
 }
