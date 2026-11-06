@@ -250,8 +250,7 @@ stop button: DeleteKey + pause_agent                                            
 <!-- TODO by Nov 12: add the policy-block and time-to-execute rows from the Tier 2 run if it ships; re-time the browser (3 runs, Ainek's IndexedDB cache cleared, runs > 30 s apart because of the collateral proxy's cache header) and update the browser sentence below, keeping it next to the table; re-run `pnpm demo:metrics --runs 50` if the Tier 1 sequence changes before submission -->
 
 50 runs in one sitting on Nov 6, 20:08–20:17 UTC, from one Mac with `z-ai/glm-5.3-flash`; every run's timings are in
-[`docs/metrics.json`](docs/metrics.json). Nine minutes on one machine shows that the sequence holds, not how the services
-behave over days.
+[`docs/metrics.json`](docs/metrics.json). That shows the sequence holds, not how the services behave over days.
 
 | Metric | Value (50 runs) |
 | --- | --- |
