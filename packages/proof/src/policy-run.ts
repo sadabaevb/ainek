@@ -9,7 +9,6 @@ import { bytesToHex, concatBytes, sha256Hex, shortHex as short, utf8Bytes } from
 import { viewFunction } from './near-view.ts';
 import { check } from './policy.ts';
 import { hex64 } from './schema.ts';
-import { NEAR_ACCOUNT } from './trust-set.ts';
 import type { Check } from './verify.ts';
 
 /** What `GET /attestations/...` answers. Fields we do not use are left alone. */
@@ -88,27 +87,30 @@ export function taskHashOf(run: PolicyRun): string {
   );
 }
 
-/** `<account>/<name>`, the form of `project_id` and `secrets_ref`. */
-const isOwnedName = (value: string): boolean => {
-  const [owner, name, ...rest] = value.split('/');
-  return rest.length === 0 && NEAR_ACCOUNT.test(owner ?? '') && /^[A-Za-z\d._-]{1,64}$/.test(name ?? '');
-};
+/** The secrets profile the job's policy and key are read from (docs/DEPLOY.md). The agent asks for it by this name. */
+export const POLICY_SECRETS_PROFILE = 'default';
 
 /**
- * The worker hashes its text fields one after another with no separators, so the same bytes can be cut into fields in another way:
- * a run of other code that carried the published hashes in `commit_hash` could be rewritten to name them, with the rest moved into
- * the caller field. So only the form of a real run passes. The fixed fields put the hashes right after the build target, and the
- * fields after them cannot hold another run's three hashes (192 hex digits): an account takes 64 characters and `/` breaks a run of hex.
+ * The record this decision has to come from. The worker hashes its text fields one after another with no separators, so the same bytes can
+ * be cut into fields in another way (DEV-NOTES 2026-11-06), and what a record says cannot be trusted field by field. So the text fields come
+ * from what we already know: the published build, the hashes of this input and output, our project, called by its owner with its secrets.
+ * The record supplies only the fixed-width fields and the last one, which leaves no boundary to move.
  */
-function formProblem(run: PolicyRun): string | null {
-  if (run.task_type !== 'execute') return `task_type is ${JSON.stringify(run.task_type)}`;
-  if (run.repo_url || run.commit_hash) return 'it names a repository, and a run of a published build names none';
-  if (run.build_target !== 'wasm32-wasip1') return `build_target is ${JSON.stringify(run.build_target)}`;
-  if (run.caller_account_id && !NEAR_ACCOUNT.test(run.caller_account_id)) return 'caller_account_id is not a NEAR account';
-  if (run.project_id && !isOwnedName(run.project_id)) return 'project_id is not <account>/<name>';
-  if (run.secrets_ref && !isOwnedName(run.secrets_ref)) return 'secrets_ref is not <account>/<name>';
-  if (run.attached_usd && !/^\d+(\.\d+)?$/.test(String(run.attached_usd))) return 'attached_usd is not an amount';
-  return null;
+function expectedRun(run: PolicyRun, { wasmHash, input, output, project }: Pick<PolicyRunEvidence, 'wasmHash' | 'input' | 'output' | 'project'>): PolicyRun {
+  const owner = project.split('/')[0] ?? '';
+  return {
+    ...run,
+    task_type: 'execute',
+    repo_url: null,
+    commit_hash: null,
+    build_target: 'wasm32-wasip1',
+    wasm_hash: wasmHash,
+    input_hash: sha256Hex(input),
+    output_hash: sha256Hex(output),
+    caller_account_id: owner,
+    project_id: project,
+    secrets_ref: `${owner}/${POLICY_SECRETS_PROFILE}`,
+  };
 }
 
 /** Intel's platform id, from the first certificate in the quote: it says which collateral to ask for. Only chooses what to fetch: a wrong one cannot pass the signature check. */
@@ -131,7 +133,7 @@ export interface PolicyRunEvidence {
   input: string;
   /** The published build (`docs/DEPLOY.md`, or rebuild it with `scripts/wasm-hash.sh`). */
   wasmHash: string;
-  project?: string;
+  project: string;
   /** When money is about to move: a quote is judged at the run's own moment, so an old run must not pass as a new one. */
   freshness?: { nowSeconds: number; maxAgeSeconds: number };
   /** Undefined when no verifier ran; `error` when the quote did not verify. */
@@ -154,11 +156,11 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
   const verified = quote && !('error' in quote) ? quote : null;
   const advisories = verified?.advisoryIds.length ? ` (advisories: ${verified.advisoryIds.join(', ')})` : '';
   const measurementOk = verified?.measurements.rtmr3 === run.worker_measurement;
-  const form = formProblem(run);
+  const reportDataOf = (r: PolicyRun): string => `${taskHashOf(r)}${'0'.repeat(64)}`;
   return [
-    project !== undefined && run.project_id !== project
+    run.project_id !== project
       ? check('run-build', false, '', `the run belongs to ${String(run.project_id)}, not to ${project}`)
-      : check('run-build', buildOk, `the run executed the published build ${short(wasmHash)}`, `the run executed ${short(run.executed_wasm_sha256)}, not the published build ${short(wasmHash)}`),
+      : check('run-build', buildOk, `the record names the published build ${short(wasmHash)}`, `the record names ${short(run.executed_wasm_sha256)}, not the published build ${short(wasmHash)}`),
     check('run-input', sha256Hex(input) === run.input_hash, 'the run decided on this input', 'the run decided on a different input'),
     check('run-output', sha256Hex(output) === run.output_hash, 'this decision is what the run printed', 'this decision is not what the run printed'),
     ...(freshness ? [check('run-fresh', run.timestamp <= freshness.nowSeconds + 120 && freshness.nowSeconds - run.timestamp <= freshness.maxAgeSeconds, 'the run happened just now', `the run is from ${run.timestamp} (unix seconds), not from just now (${freshness.nowSeconds})`)] : []),
@@ -168,7 +170,7 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
         ? check('run-quote', false, '', `the TDX quote did not verify: ${'error' in quote ? quote.error : ''}`)
         : { id: 'run-quote', status: 'skipped', detail: 'the TDX quote was not verified' },
     verified
-      ? check('run-binding', form === null && verified.reportData === `${taskHashOf(run)}${'0'.repeat(64)}`, 'the quote commits to this build, this input and this output', form ? `this record is not in the form of a real run: ${form}` : 'the quote does not commit to these hashes')
+      ? check('run-binding', [run, expectedRun(run, { wasmHash, input, output, project })].every((r) => verified.reportData === reportDataOf(r)), 'the quote commits to this build, this input and this output, under this project and its owner', 'the quote does not commit to these hashes under this project and its owner')
       : { id: 'run-binding', status: 'skipped', detail: 'without a verified quote, its report data proves nothing' },
     verified && typeof measurementsApproved === 'boolean'
       ? !measurementOk

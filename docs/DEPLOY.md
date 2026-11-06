@@ -101,7 +101,7 @@ service stopped in the middle of a payment, it tells the owner when it is back. 
 
 ### Payment key for the job (testnet)
 
-The service pays for each call of the job with an OutLayer payment key (`OUTLAYER_PAYMENT_KEY`, `owner:nonce:secret`).
+The service pays for each call of the job with an OutLayer payment key (`OUTLAYER_PAYMENT_KEY`, `owner:nonce:secret`). It must belong to the project's owner: the run's record names the key's owner as its caller, and the attestation check accepts only the owner.
 Ours belongs to the OutLayer project owner (`<owner>` below), who may read the job's secrets; a key of another account
 was not tried. The `outlayer` CLI is the one from the next section. On testnet the key is
 funded with a test token anyone can mint (which token: `get_payment_token_contract` on `outlayer.testnet`; on Nov 6 it

@@ -8,25 +8,16 @@ import { bytesToHex, sha256Hex } from './hash.ts';
 import { PolicyRun, checkPolicyRun, fmspcOf, taskHashOf, tryVerifyQuote } from './policy-run.ts';
 
 const sample = PolicyRun.parse(readRepoJson<{ attestation: unknown }>('docs/samples/policy-run.sample.json').attestation);
+const byCall = PolicyRun.parse(readRepoJson('docs/spike-outlayer/by-call-allow.attestation.json'));
+const io = readRepoJson<{ input: string; output: string }>('docs/spike-outlayer/by-call-allow.io.json');
 
-// What a verified quote says about the record `quoted`. The signature itself is checked in tier1-node's dcap.test.ts.
-const bindingOf = (run: PolicyRun, quoted: PolicyRun = run) =>
-  checkPolicyRun({
-    run,
-    input: '',
-    output: '',
-    wasmHash: run.wasm_hash,
-    quote: { tcbStatus: 'UpToDate', advisoryIds: [], reportData: `${taskHashOf(quoted)}${'0'.repeat(64)}`, measurements: { mrtd: '', rtmr0: '', rtmr1: '', rtmr2: '', rtmr3: run.worker_measurement } },
-  }).find((c) => c.id === 'run-binding');
-
-test('the task hash layout and the form check match every real quote we have', () => {
+test('the task hash layout matches the report data of every real quote we have', () => {
   const dir = new URL('../../../docs/spike-outlayer/', import.meta.url);
   const runs = [sample, ...readdirSync(dir).filter((f) => f.endsWith('.attestation.json')).map((f) => PolicyRun.parse(readRepoJson(`docs/spike-outlayer/${f}`)))];
   assert.ok(runs.length >= 4);
   for (const run of runs) {
     const reportData = bytesToHex(base64ToBytes(run.tdx_quote).subarray(568, 600));
     assert.equal(taskHashOf(run), reportData, String(run.task_id));
-    assert.equal(bindingOf(run)?.status, 'ok', String(run.task_id));
     // A record of an on-chain run with its block height taken out must not pass as a run made over HTTPS.
     if (run.block_height !== null && run.block_height !== undefined) assert.notEqual(taskHashOf({ ...run, block_height: null }), reportData, String(run.task_id));
   }
@@ -34,38 +25,50 @@ test('the task hash layout and the form check match every real quote we have', (
 
 // The agent calls the job over HTTPS, and that record differs from an on-chain run's: no block height, and the input hash covers the input as sent.
 test('a run made over HTTPS: no block height, and the hashes cover the canonical input and output', () => {
-  const run = PolicyRun.parse(readRepoJson('docs/spike-outlayer/by-call-allow.attestation.json'));
-  const io = readRepoJson<{ input: string; output: string }>('docs/spike-outlayer/by-call-allow.io.json');
-  assert.equal(run.block_height ?? null, null);
+  assert.equal(byCall.block_height ?? null, null);
   // The memo is Cyrillic with quotes and an emoji: OutLayer hashes the bytes as sent, it does not re-escape them.
   for (const text of [io.input, io.output]) assert.equal(canonicalJson(JSON.parse(text)), text);
-  assert.equal(sha256Hex(io.input), run.input_hash);
-  assert.equal(sha256Hex(io.output), run.output_hash);
+  assert.equal(sha256Hex(io.input), byCall.input_hash);
+  assert.equal(sha256Hex(io.output), byCall.output_hash);
 });
 
-const byCall = PolicyRun.parse(readRepoJson('docs/spike-outlayer/by-call-allow.attestation.json'));
-const sameHash = 'the same bytes cut differently hash the same, which is why the form is checked';
+const project = 'ainek-dev-dastan.testnet/policy';
+/** What the check says when the API serves `served` and the verified quote is really about `quoted`. The signature itself is checked in tier1-node's dcap.test.ts. */
+const bindingOf = (served: PolicyRun, quoted: PolicyRun = served) =>
+  checkPolicyRun({
+    run: served,
+    ...io,
+    wasmHash: byCall.wasm_hash,
+    project,
+    quote: { tcbStatus: 'UpToDate', advisoryIds: [], reportData: `${taskHashOf(quoted)}${'0'.repeat(64)}`, measurements: { mrtd: '', rtmr0: '', rtmr1: '', rtmr2: '', rtmr3: served.worker_measurement } },
+  }).find((c) => c.id === 'run-binding')?.status;
+const sameBytes = 'the same bytes cut differently hash the same, which is why the hash is rebuilt from known values';
 
-test('a text field moved across a field boundary is refused', () => {
+test('the binding: a real record passes, and how a record cuts the same bytes changes nothing', () => {
+  assert.equal(bindingOf(byCall), 'ok');
   const moved = { ...byCall, repo_url: 'wasm32', build_target: '-wasip1' };
-  assert.equal(taskHashOf(moved), taskHashOf(byCall), sameHash);
-  assert.equal(bindingOf(moved, byCall)?.status, 'fail');
+  assert.equal(taskHashOf(moved), taskHashOf(byCall), sameBytes);
+  assert.equal(bindingOf(moved, byCall), 'ok');
 });
 
-test('a run of other code cannot be rewritten to name the published build', () => {
+test('the binding: a run of other code cannot be rewritten to name the published build', () => {
   const [other, input, output] = ['a', 'b', 'c'].map((c) => c.repeat(64));
   const real = { ...byCall, commit_hash: `${byCall.build_target}${byCall.wasm_hash}${byCall.input_hash}${byCall.output_hash}`, wasm_hash: other!, input_hash: input!, output_hash: output! };
   const forged = { ...byCall, caller_account_id: `${byCall.build_target}${other}${input}${output}${byCall.caller_account_id}` };
-  assert.equal(taskHashOf(forged), taskHashOf(real), sameHash);
-  assert.match(bindingOf(forged, real)?.detail ?? '', /caller_account_id is not a NEAR account/);
+  assert.equal(taskHashOf(forged), taskHashOf(real), sameBytes);
+  assert.equal(bindingOf(forged, real), 'fail');
 });
 
-test('an on-chain record cannot pass as a run over HTTPS by moving its block height into the caller', () => {
-  const height = new Uint8Array(8);
-  new DataView(height.buffer).setBigInt64(0, BigInt(sample.block_height ?? 0), true);
-  const forged = { ...sample, block_height: null, caller_account_id: `${new TextDecoder().decode(height)}${sample.caller_account_id}` };
-  assert.equal(taskHashOf(forged), taskHashOf(sample), sameHash);
-  assert.equal(bindingOf(forged, sample)?.status, 'fail');
+test('the binding: a run under another project cannot be rewritten to name ours, even with our secrets', () => {
+  const real = { ...byCall, caller_account_id: 'evil.testnet', project_id: `evilz${project}` };
+  const forged = { ...byCall, caller_account_id: 'evil.testnetevilz' };
+  assert.equal(taskHashOf(forged), taskHashOf(real), sameBytes);
+  assert.equal(bindingOf(forged, real), 'fail');
+});
+
+test('the binding: another caller, other secrets or none, and an on-chain record without its height all fail', () => {
+  for (const over of [{ caller_account_id: 'other.testnet' }, { secrets_ref: 'other.testnet/default' }, { secrets_ref: null }]) assert.equal(bindingOf({ ...byCall, ...over }), 'fail', JSON.stringify(over));
+  assert.equal(bindingOf(byCall, { ...byCall, block_height: 276457284 }), 'fail');
 });
 
 test('fmspcOf reads the platform id from the quote certificate', () => {
