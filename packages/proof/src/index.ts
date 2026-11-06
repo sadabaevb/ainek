@@ -30,7 +30,7 @@ export { buildModelProof, buildCheckedModelProof, buildActionProof } from './bui
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
 export { withRetry } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
-export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof } from './policy.ts';
+export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
@@ -46,7 +46,7 @@ export { PolicyRun, checkPolicyRun, tryVerifyQuote, verifyPolicyRun } from './po
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
-export { viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
+export { AGENT_KEY_METHODS, keyScopeProblem, viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
