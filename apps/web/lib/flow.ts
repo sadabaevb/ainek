@@ -22,7 +22,7 @@ import {
   type VerifiedDeployment,
 } from './nearai-browser';
 import { getExchange, putExchange, type StoredExchange } from './store';
-import { DEPOSIT_NEAR, isAlreadyCommitted, isDialogClosed, isMethodNotFound, isNoDeposit, type Consent } from './wallet';
+import { DEPOSIT_NEAR, errorText, isAlreadyCommitted, isDialogClosed, isMethodNotFound, isNoDeposit, type Consent } from './wallet';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
@@ -237,7 +237,7 @@ export async function commitExchange(x: StoredExchange, resolveCommitter: () => 
         await committer.deposit();
       } catch (err) {
         if (!isDialogClosed(err)) throw err;
-        emit({ id: 'commit', status: 'skipped', detail: 'the deposit dialog was closed: nothing paid, commit kept locally' });
+        emit({ id: 'commit', status: 'skipped', detail: 'the deposit dialog was closed before it reported back: commit kept locally (a deposit you already approved may still land)' });
         return { commit: 'no-deposit', exchange: x };
       }
     } else if ((await committer.storageBalance()) === 0n) {
@@ -265,7 +265,7 @@ export async function commitExchange(x: StoredExchange, resolveCommitter: () => 
       return { commit: 'no-deposit', exchange: x };
     }
     const notDeployed = isMethodNotFound(err);
-    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? `this contract lacks the SPEC §4.2 methods (${describeError(err)}): commit kept locally` : `commit failed: ${describeError(err)}; commit kept locally` });
+    emit({ id: 'commit', status: 'skipped', detail: notDeployed ? `this contract lacks the SPEC §4.2 methods (${errorText(err)}): commit kept locally` : `commit failed: ${errorText(err)}; commit kept locally` });
     return { commit: notDeployed ? 'not-deployed' : 'failed', exchange: x };
   }
 }

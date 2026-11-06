@@ -43,6 +43,8 @@ const en = {
   chainCommitting: 'committing the salted hash on NEAR…',
   connectWallet: 'Connect wallet',
   disconnect: 'Disconnect',
+  walletFailed: (reason: string) => (reason ? `Wallet error: ${reason}` : 'The wallet refused and gave no reason'),
+  walletDismiss: 'Dismiss',
   refusedTitle: 'Key not in the public log. Message not sent.',
   refusedBody: 'The model reported a signing key that no trusted verifier has logged. Ainek refuses rather than trusts.',
   /** What the refusal protected against, where a counterfactual exists; the quorum and split-view bodies already say it all. */
@@ -206,6 +208,7 @@ const en = {
     commitOk: (commit: string) => `sha256(salt ‖ canonical proof) = ${commit}: the public hash is this exchange's`,
     bytesOk: (request: number, response: number) => `request ${request} B and response ${response} B hash to the values the model TEE signed`,
     signedOk: (algo: string, key: string) => `${algo} signature by model key ${key} over model:sha256(request):sha256(response)`,
+    enterAccount: 'enter the NEAR account that committed to look the commit up on-chain',
     senderTx: "sender's transaction:",
     vcSame: 'Same signature in NEAR AI Verification Center',
     disclosedTitle: 'What was disclosed',
@@ -273,6 +276,8 @@ const ru: typeof en = {
   chainCommitting: 'записываю солёный хеш в NEAR…',
   connectWallet: 'Подключить кошелёк',
   disconnect: 'Отключить',
+  walletFailed: (reason) => (reason ? `Ошибка кошелька: ${reason}` : 'Кошелёк отказал и не назвал причину'),
+  walletDismiss: 'Скрыть',
   refusedTitle: 'Ключ не в публичном логе. Сообщение не отправлено.',
   refusedBody: 'Модель назвала ключ подписи, которого нет у доверенных верификаторов. Ainek отказывает, а не доверяет.',
   refusedConsequence: {
@@ -435,6 +440,7 @@ const ru: typeof en = {
     commitOk: (commit) => `sha256(соль ‖ канонический proof) = ${commit}: публичный хеш принадлежит этому обмену`,
     bytesOk: (request, response) => `запрос ${request} Б и ответ ${response} Б хешируются в значения, которые подписала TEE модели`,
     signedOk: (algo, key) => `подпись ${algo} ключом модели ${key} над model:sha256(request):sha256(response)`,
+    enterAccount: 'укажи NEAR-аккаунт, который записал коммит, чтобы найти его в цепочке',
     senderTx: 'транзакция отправителя:',
     vcSame: 'Та же подпись в NEAR AI Verification Center',
     disclosedTitle: 'Что раскрыто',
