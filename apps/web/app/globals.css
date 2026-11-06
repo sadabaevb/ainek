@@ -84,7 +84,7 @@ h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
 
 /* Navigation: sticky, translucent, pill links with the current page highlighted (aria-current). */
 .nav { position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-.nav-inner { max-width: 960px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; align-items: center; padding: 0.55rem 1rem; }
+.nav-inner { position: relative; max-width: 960px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; align-items: center; padding: 0.55rem 1rem; }
 .nav .brand { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 800; font-size: 1.05rem; color: var(--fg); text-decoration: none; margin-right: 0.75rem; }
 .nav .link { padding: 0.35rem 0.75rem; border-radius: 999px; color: var(--muted); text-decoration: none; font-weight: 500; transition: background 0.15s, color 0.15s; }
 .nav .link:hover { color: var(--fg); background: var(--surface-2); }
@@ -93,7 +93,8 @@ h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
 .nav .btn { white-space: nowrap; }
 .wallet { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.4rem 0.3rem 0.75rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.85rem; }
 .wallet .dot { box-shadow: 0 0 0 3px var(--ok-bg); }
-.wallet-error { position: absolute; top: 100%; right: 1rem; max-width: min(24rem, calc(100vw - 2rem)); margin: 0.25rem 0 0; padding: 0.35rem 0.6rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--surface); color: var(--fail); font-size: 0.8rem; overflow-wrap: anywhere; }
+.wallet-error { position: absolute; top: 100%; right: 1rem; display: flex; align-items: flex-start; gap: 0.5rem; max-width: min(24rem, calc(100vw - 2rem)); margin-top: 0.25rem; padding: 0.35rem 0.6rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--surface); color: var(--fail); font-size: 0.8rem; overflow-wrap: anywhere; }
+.wallet-error button { flex: none; padding: 0 0.15rem; border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
 .dot { display: inline-block; width: 0.55rem; height: 0.55rem; border-radius: 999px; flex: none; }
 .dot.ok { background: var(--ok); }
 .dot.fail { background: var(--fail); }
