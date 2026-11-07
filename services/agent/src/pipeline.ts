@@ -102,7 +102,8 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   // 3. The model proof's commit, before any money can move. The contract refuses a proposal whose model proof this agent has not committed.
   let modelProof: ModelProof;
   try {
-    modelProof = { ...proven, commitTx: await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex) };
+    const commitTx = await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex);
+    modelProof = commitTx ? { ...proven, commitTx } : proven;
   } catch (err) {
     return { kind: 'failed', stage: 'commit', reason: errorText(err) };
   }
@@ -138,7 +139,8 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   let saveError: string | null = null;
   try {
     await deps.keep.action(proof);
-    proof = { ...proof, commitTx: await deps.chain.commitProof(proof.commit, 'action', proven.logIndex) };
+    const commitTx = await deps.chain.commitProof(proof.commit, 'action', proven.logIndex);
+    if (commitTx) proof = { ...proof, commitTx };
   } catch (err) {
     commitError = errorText(err);
   }

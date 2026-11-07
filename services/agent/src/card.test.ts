@@ -4,7 +4,7 @@ import type { Action, CommittedActionProof, Decision, ModelProof } from '@ainek/
 import { renderCard } from './card.ts';
 import type { Result } from './pipeline.ts';
 
-const cfg = { explorer: 'https://testnet.nearblocks.io', tokenDecimals: 6 };
+const cfg = { explorer: 'https://testnet.nearblocks.io', tokenDecimals: 6, tokenSymbol: 'AINEK' };
 const action: Action = { kind: 'ft_transfer', token_id: 'token.ainek.testnet', receiver_id: 'vendor1.testnet', amount: '300000000', memo: '' };
 const modelProof = { model: 'z-ai/glm-5.3-flash', logIndex: 3, commitTx: 'MTX' } as unknown as ModelProof;
 const proofOf = (verdict: Decision['verdict'], over: Partial<CommittedActionProof> = {}) => ({ actionId: 7, action, decision: { verdict, policy_version: 3, policy_hash: 'ef'.repeat(32) }, commit: 'ab'.repeat(32), teePubkey: '12'.repeat(32), wasmHash: '34'.repeat(32), attestationUrl: 'https://api.test/attestations/c1', proposeTx: 'PTX', executeTx: verdict === 'Allow' ? 'PTX' : null, commitTx: 'CTX', ...over }) as unknown as CommittedActionProof;
@@ -13,7 +13,7 @@ const proposed = (proof: CommittedActionProof, commitError: string | null = null
 test('Allow and executed: the payment in the owner\'s units with the purpose, the model line, both commits, the contract transaction', () => {
   const { text, approval } = renderCard(proposed(proofOf('Allow')), cfg);
   assert.match(text, /^✓ Allowed by policy v3 and executed/);
-  assert.match(text, /300 token\.ainek\.testnet to vendor1\.testnet\n/);
+  assert.match(text, /300 AINEK to vendor1\.testnet\n/);
   assert.match(text, /Purpose, in the model's words: "October"/);
   assert.match(text, /key #3 in the public log/);
   assert.match(text, /nearblocks\.io\/txns\/PTX/);
@@ -57,6 +57,12 @@ test('a commit that landed but could not be recorded says exactly that', () => {
   assert.match(text, /action proof https/);
   assert.match(text, /could not be updated with it: disk full\. The salt is saved/);
   assert.doesNotMatch(text, /not committed/);
+});
+
+test('a commit whose hash was lost says it is on-chain; a failed one is not listed as committed', () => {
+  const { commitTx: _tx, ...noHash } = proofOf('Allow');
+  assert.match(renderCard(proposed(noHash as CommittedActionProof), cfg).text, /action proof \(on-chain, its transaction hash was lost in a network failure\), model proof https/);
+  assert.doesNotMatch(renderCard(proposed(noHash as CommittedActionProof, 'fetch failed'), cfg).text, /action proof \(on-chain/);
 });
 
 test('a failed action commit is shown with its reason; no card calls a proof a receipt', () => {

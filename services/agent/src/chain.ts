@@ -4,7 +4,7 @@
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
 import { withDeadline } from '@ainek/tier1-node';
 import { ContractRefused, errorText } from './errors.ts';
-import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, type Action, type Decision } from '@ainek/proof';
+import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, withRetry, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
   /** Null when the transaction landed but named no action: never a reason to lose the hash. */
@@ -22,8 +22,8 @@ export interface AgentState {
 }
 export interface ActionChain {
   proposeAction(args: { action: Action; modelProofCommit: string; decision: Decision; teeSignature: string }): Promise<Proposed>;
-  /** `commit_proof(commit, kind, log_index)` (SPEC §4.2); returns the transaction hash. */
-  commitProof(commit: string, kind: 'model' | 'action', logIndex: number): Promise<string>;
+  /** `commit_proof(commit, kind, log_index)` (SPEC §4.2); returns the transaction hash, or null when the commit is on-chain but its hash was lost with a failed attempt (`commitWithRetry`). */
+  commitProof(commit: string, kind: 'model' | 'action', logIndex: number): Promise<string | null>;
   agentState(): Promise<AgentState>;
   /** Whether the agent's prepaid storage covers everything one action charges it: both commits and the action record (SPEC §4.2, §4.3). */
   roomForAction(): Promise<boolean>;
@@ -83,6 +83,12 @@ export function agentStateOf(info: unknown, tokenId: string): AgentState {
   return { spentToday: i.spent_today, teePubkey: i.tee_pubkey, paused: i.paused };
 }
 
+/** The token's short name for the card. It only labels an amount, so anything unusable falls back to the account id instead of failing, and it cannot carry a forged line into the card. */
+export function tokenSymbolOf(metadata: unknown, tokenId: string): string {
+  const symbol = (metadata as { symbol?: unknown } | null | undefined)?.symbol;
+  return typeof symbol === 'string' && /^[\p{L}\p{N}._-]{1,16}$/u.test(symbol) ? symbol : tokenId;
+}
+
 /** `decimals` from the token's NEP-148 `ft_metadata`. */
 export function tokenDecimalsOf(metadata: unknown): number {
   const decimals = (metadata as { decimals?: unknown } | null | undefined)?.decimals;
@@ -110,12 +116,39 @@ export function actionCost(account: string): bigint {
 }
 /** No chain call may stall the one-at-a-time queue; a timed-out propose_action reads as "may have landed" on the card. */
 const CHAIN_TIMEOUT_MS = 120_000;
+/** A commit normally lands in about 2 s; one attempt that hangs must not use up the whole budget. */
+const COMMIT_ATTEMPT_MS = 30_000;
+const COMMIT_ATTEMPTS = 3;
 
-export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId: string; agentKey: string; tokenId: string }): ActionChain & { assertKeyScope(): Promise<void>; tokenDecimals(): Promise<number> } {
+/**
+ * near-api-js retries only the browser's wording of a network failure, so Node's "fetch failed" reaches us on the first hiccup (Nov 7: one hung
+ * request lost action #3's commit). Unlike propose_action, a commit moves no money and the contract refuses a duplicate, so anything but a refusal
+ * is safe to send again. A duplicate after a failed attempt means that attempt landed after all: the commit is on-chain and only its hash is gone.
+ */
+export async function commitWithRetry(send: () => Promise<{ transaction: { hash: string } }>, pauseMs = 2000): Promise<string | null> {
+  let failedBefore = false;
+  const attempt = async (): Promise<{ transaction: { hash: string } }> => {
+    try {
+      return await send();
+    } catch (err) {
+      const refused = refusalOf(err);
+      if (!(refused instanceof ContractRefused)) failedBefore = true;
+      throw refused;
+    }
+  };
+  try {
+    return (await withRetry(attempt, { retryable: (err) => !(err instanceof ContractRefused), attempts: COMMIT_ATTEMPTS, pauseMs })).transaction.hash;
+  } catch (err) {
+    if (failedBefore && err instanceof ContractRefused && /already committed/.test(err.message)) return null;
+    throw err;
+  }
+}
+
+export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId: string; agentKey: string; tokenId: string }): ActionChain & { assertKeyScope(): Promise<void>; tokenInfo(): Promise<{ decimals: number; symbol: string }> } {
   const provider = new JsonRpcProvider({ url: cfg.rpcUrl });
   const signer = KeyPairSigner.fromSecretKey(cfg.agentKey as KeyPairString);
   const account = new Account(cfg.agentId, provider, signer);
-  const call = (method: string, args: Record<string, unknown>, tgas: number) => withDeadline(account.signAndSendTransaction({ receiverId: cfg.contract, actions: [actions.functionCall(method, args, teraToGas(tgas), 0n)] }), CHAIN_TIMEOUT_MS, method);
+  const call = (method: string, args: Record<string, unknown>, tgas: number, timeoutMs = CHAIN_TIMEOUT_MS) => withDeadline(account.signAndSendTransaction({ receiverId: cfg.contract, actions: [actions.functionCall(method, args, teraToGas(tgas), 0n)] }), timeoutMs, method);
   return {
     assertKeyScope: async () => {
       const key = await provider.viewAccessKey({ accountId: cfg.agentId, publicKey: await signer.getPublicKey(), finalityQuery: { finality: 'final' } });
@@ -130,10 +163,13 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
       }
     },
     // Measured 2.19 TGas (DEV-NOTES); attached gas ties up allowance until the refund, so it stays small.
-    commitProof: async (commit, kind, logIndex) => (await call('commit_proof', { commit, kind, log_index: logIndex }, 10)).transaction.hash,
+    commitProof: (commit, kind, logIndex) => commitWithRetry(() => call('commit_proof', { commit, kind, log_index: logIndex }, 10, COMMIT_ATTEMPT_MS)),
     agentState: async () => agentStateOf(await viewFunction(cfg.rpcUrl, cfg.contract, 'agent', { agent_id: cfg.agentId }), cfg.tokenId),
     roomForAction: async () => (await readStorageBalance(cfg.rpcUrl, cfg.contract, cfg.agentId)) >= actionCost(cfg.agentId),
     // The chain's own answer, not a config value: on a wrong scale the card would still read "300" while the transfer and the policy caps were off by orders of magnitude.
-    tokenDecimals: async () => tokenDecimalsOf(await viewFunction(cfg.rpcUrl, cfg.tokenId, 'ft_metadata', {})),
+    tokenInfo: async () => {
+      const metadata = await viewFunction(cfg.rpcUrl, cfg.tokenId, 'ft_metadata', {});
+      return { decimals: tokenDecimalsOf(metadata), symbol: tokenSymbolOf(metadata, cfg.tokenId) };
+    },
   };
 }

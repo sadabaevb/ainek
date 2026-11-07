@@ -21,7 +21,7 @@ const oneLine = (text: string, max = 300): string => {
 const modelLine = (m: ModelProof): string => `Model: ${m.model}, attested deployment, E2EE, signed in its TEE; key #${m.logIndex} in the public log`;
 const failedChecks = (checks: Check[]): string => checks.filter((c) => c.status === 'fail').map((c) => `- ${oneLine(c.detail)}`).join('\n');
 
-export function renderCard(r: Result, cfg: { explorer: string; tokenDecimals: number }): Card {
+export function renderCard(r: Result, cfg: { explorer: string; tokenDecimals: number; tokenSymbol: string }): Card {
   const plain = (text: string): Card => ({ text, approval: null });
   const txUrl = (tx: string): string => explorerTxUrl(cfg.explorer, tx);
   switch (r.kind) {
@@ -44,11 +44,12 @@ export function renderCard(r: Result, cfg: { explorer: string; tokenDecimals: nu
         NeedsApproval: `? Needs your approval (policy v${v}). Nothing moved yet.`,
         Allow: r.transfer === 'executed' ? `✓ Allowed by policy v${v} and executed.` : r.transfer === 'refused' ? `✗ Allowed by policy v${v}, but the token refused the transfer. Nothing moved, and the amount no longer counts toward today's total.` : `? Allowed by policy v${v}, but the contract reported no execution in this transaction. Check the link below.`,
       };
-      const commits = [proof.commitTx ? `action proof ${txUrl(proof.commitTx)}` : null, r.modelProof.commitTx ? `model proof ${txUrl(r.modelProof.commitTx)}` : null].filter(Boolean).join(', ');
+      const commitLine = (name: string, tx: string | undefined): string => (tx ? `${name} ${txUrl(tx)}` : `${name} (on-chain, its transaction hash was lost in a network failure)`);
+      const commits = [r.commitError ? null : commitLine('action proof', proof.commitTx), commitLine('model proof', r.modelProof.commitTx)].filter(Boolean).join(', ');
       return {
         text: [
           heads[decision.verdict],
-          `Payment: ${fromMinimalUnits(action.amount, cfg.tokenDecimals)} ${action.token_id} to ${action.receiver_id}`,
+          `Payment: ${fromMinimalUnits(action.amount, cfg.tokenDecimals)} ${cfg.tokenSymbol} to ${action.receiver_id}`,
           ...(r.purpose ? [`Purpose, in the model's words: "${oneLine(r.purpose, 200)}"`] : []),
           modelLine(r.modelProof),
           `Decision: signature verifies under the registered policy key ${short(proof.teePubkey)}, policy hash ${short(decision.policy_hash)}; the run was checked: published build, quote signed by Intel: ${proof.attestationUrl}`,

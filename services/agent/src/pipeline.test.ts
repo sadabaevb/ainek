@@ -165,6 +165,12 @@ test('after the money: a commit or a save that fails is reported on the proposed
   assert.deepEqual(c.commits.map(([, kind]) => kind), ['model']); // an action proof whose salt is not saved is not committed
 });
 
+test('a commit whose hash was lost still counts: the payment goes on, and nothing reports it as uncommitted', async () => {
+  const c = chain({ executed: true });
+  const r = await handleOwnerText(deps({ chain: { ...c, commitProof: async () => null } }), 'pay');
+  assert.ok(r.kind === 'proposed' && r.proof.commitTx === undefined && r.modelProof.commitTx === undefined && r.commitError === null && r.transfer === 'executed');
+});
+
 test('after the money: a commit that landed but could not be recorded in its file is not reported as uncommitted', async () => {
   let saves = 0;
   const r = await handleOwnerText(deps({ keep: keeper({ action: async () => { if (++saves === 2) throw new Error('disk full'); } }) }), 'pay');
