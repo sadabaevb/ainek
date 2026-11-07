@@ -140,7 +140,8 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
   const provider = new JsonRpcProvider({ url: cfg.rpcUrl });
   const signer = KeyPairSigner.fromSecretKey(cfg.agentKey as KeyPairString);
   const account = new Account(cfg.agentId, provider, signer);
-  const call = (method: string, args: Record<string, unknown>, tgas: number, timeoutMs = CHAIN_TIMEOUT_MS) => withDeadline(account.signAndSendTransaction({ receiverId: cfg.contract, actions: [actions.functionCall(method, args, teraToGas(tgas), 0n)] }), timeoutMs, method);
+  // retries: 0, because after InvalidNonce the library would sign a second transaction. If the first had landed, the contract's refusal of the copy would read as "nothing was proposed" about a payment that went through; this way the error reads as "may have landed".
+  const call = (method: string, args: Record<string, unknown>, tgas: number, timeoutMs = CHAIN_TIMEOUT_MS) => withDeadline(account.signAndSendTransaction({ receiverId: cfg.contract, actions: [actions.functionCall(method, args, teraToGas(tgas), 0n)], retries: 0 }), timeoutMs, method);
   return {
     assertKeyScope: async () => {
       const key = await provider.viewAccessKey({ accountId: cfg.agentId, publicKey: await signer.getPublicKey(), finalityQuery: { finality: 'final' } });
