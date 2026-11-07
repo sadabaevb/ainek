@@ -49,13 +49,13 @@ export function renderCard(r: Result, cfg: { explorer: string; tokenDecimals: nu
       return {
         text: [
           heads[decision.verdict],
-          `Payment: ${fromMinimalUnits(action.amount, cfg.tokenDecimals)} ${cfg.tokenSymbol} to ${action.receiver_id}`,
+          `Payment: ${fromMinimalUnits(action.amount, cfg.tokenDecimals)} ${cfg.tokenSymbol === action.token_id ? action.token_id : `${cfg.tokenSymbol} (${action.token_id})`} to ${action.receiver_id}`,
           ...(r.purpose ? [`Purpose, in the model's words: "${oneLine(r.purpose, 200)}"`] : []),
           modelLine(r.modelProof),
           `Decision: signature verifies under the registered policy key ${short(proof.teePubkey)}, policy hash ${short(decision.policy_hash)}; the run was checked: published build, quote signed by Intel: ${proof.attestationUrl}`,
           `Contract: action #${proof.actionId}, ${txUrl(proof.proposeTx)}`,
           `Salted commits on NEAR: ${commits}`,
-          ...(r.commitError ? [`Action proof not committed: ${oneLine(r.commitError)}. The action itself is on-chain, see above`] : []),
+          ...(r.commitError ? [`Action proof commit not confirmed: ${oneLine(r.commitError)}. The action itself is on-chain, see above`] : []),
           ...(r.saveError ? [`The commit landed, but the proof file could not be updated with it: ${oneLine(r.saveError)}. The salt is saved`] : []),
         ].join('\n'),
         approval: decision.verdict === 'NeedsApproval' ? proof.actionId : null,

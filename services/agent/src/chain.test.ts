@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionCost, agentStateOf, commitCost, commitWithRetry, parseProposed, refusalOf, tokenDecimalsOf, tokenSymbolOf } from './chain.ts';
+import { actionCost, agentStateOf, commitCost, commitWithRetry, isTransient, parseProposed, refusalOf, tokenDecimalsOf, tokenSymbolOf } from './chain.ts';
 import { ContractRefused } from './errors.ts';
 
 const b64 = (s: string) => Buffer.from(s).toString('base64');
@@ -103,4 +103,17 @@ test('commitWithRetry: a refusal is final and is not sent again', async () => {
 test('commitWithRetry: a duplicate means an earlier send landed, whichever attempt hears it: on-chain, hash lost', async () => {
   assert.equal(await commitWithRetry(attempts(new Error('fetch failed'), new Error(PANIC)).send, 0), undefined);
   assert.equal(await commitWithRetry(attempts(new Error(PANIC)).send, 0), undefined); // one send can post more than once
+});
+
+test('commitWithRetry: a landed failure or a rejected key is not sent again', async () => {
+  for (const reason of ['Exceeded the prepaid gas', 'Access key ed25519:x does not exist at block height 7', 'Access Key does not have enough allowance', 'Contract method is not found']) {
+    const a = attempts(new Error(reason), landed);
+    await assert.rejects(commitWithRetry(a.send, 0));
+    assert.equal(a.left.length, 1, reason);
+    assert.equal(isTransient(new Error(reason)), false, reason);
+  }
+});
+
+test('isTransient: no answer from the network, or a stale nonce', () => {
+  for (const reason of ['fetch failed', 'commit_proof did not finish within 30 s', 'https://rpc Bad Gateway', 'https://rpc unavailable', 'Internal server error', 'Timeout error', 'Exceeded 12 attempts for https://rpc.', 'Invalid nonce (ak: 9, tx: 7)']) assert.ok(isTransient(new Error(reason)), reason);
 });

@@ -32,7 +32,7 @@ const deps: Deps = {
 /** Anything a crash left between the intent and the action proof: a transaction may have landed that nobody recorded, and a resend would pay twice. Each is reported once. */
 async function reportUnsettled(say: (text: string) => Promise<unknown>): Promise<void> {
   for (const intent of await keep.unsettled()) {
-    await say(`⚠ I stopped in the middle of a payment on ${intent.at}: ${fromMinimalUnits(intent.action.amount, tokenDecimals)} ${tokenSymbol} to ${intent.action.receiver_id}, policy verdict ${intent.decision.verdict}. It may have gone through. Check ${cfg.agentId} on the explorer (${cfg.explorer}) before you send it again.`);
+    await say(`⚠ I stopped in the middle of a payment on ${intent.at}: ${fromMinimalUnits(intent.action.amount, tokenDecimals)} ${intent.action.token_id} to ${intent.action.receiver_id}, policy verdict ${intent.decision.verdict}. It may have gone through. Check ${cfg.agentId} on the explorer (${cfg.explorer}) before you send it again.`);
     await keep.settled(intent.modelProofCommit);
   }
 }

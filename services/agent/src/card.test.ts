@@ -13,7 +13,7 @@ const proposed = (proof: CommittedActionProof, commitError: string | null = null
 test('Allow and executed: the payment in the owner\'s units with the purpose, the model line, both commits, the contract transaction', () => {
   const { text, approval } = renderCard(proposed(proofOf('Allow')), cfg);
   assert.match(text, /^✓ Allowed by policy v3 and executed/);
-  assert.match(text, /300 AINEK to vendor1\.testnet\n/);
+  assert.match(text, /300 AINEK \(token\.ainek\.testnet\) to vendor1\.testnet\n/);
   assert.match(text, /Purpose, in the model's words: "October"/);
   assert.match(text, /key #3 in the public log/);
   assert.match(text, /nearblocks\.io\/txns\/PTX/);
@@ -68,7 +68,7 @@ test('a commit whose hash was lost says it is on-chain; a failed one is not list
 test('a failed action commit is shown with its reason; no card calls a proof a receipt', () => {
   const { commitTx: _gone, ...uncommitted } = proofOf('Allow');
   const { text } = renderCard(proposed(uncommitted as CommittedActionProof, 'not enough prepaid storage'), cfg);
-  assert.match(text, /Action proof not committed: not enough prepaid storage\./);
+  assert.match(text, /Action proof commit not confirmed: not enough prepaid storage\./);
   assert.doesNotMatch(text, /action proof https/);
   assert.doesNotMatch(text, /receipt/i);
 });

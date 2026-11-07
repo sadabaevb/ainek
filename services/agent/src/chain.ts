@@ -120,15 +120,18 @@ const CHAIN_TIMEOUT_MS = 120_000;
 const COMMIT_ATTEMPT_MS = 30_000;
 const COMMIT_ATTEMPTS = 3;
 
+/** No answer, or a stale nonce: nothing about the transaction itself. A landed failure or a rejected key would only fail again, spending gas and allowance. */
+export const isTransient = (err: unknown): boolean => /fetch failed|timeout|did not finish within|Bad Gateway|unavailable|Internal server error|Exceeded \d+ attempts|nonce/i.test(errorText(err));
+
 /**
  * near-api-js retries only the browser's wording of a network failure, so Node's "fetch failed" reaches us on the first hiccup (Nov 7: one hung
- * request lost action #3's commit). A commit's only output is its hash and the contract refuses a duplicate, so anything but a refusal is sent
- * again. A duplicate means an earlier send landed, since the salt makes the commit unique: it is on-chain and only its hash is gone. propose_action
+ * request lost action #3's commit). A commit's only output is its hash and the contract refuses a duplicate, so a failure that says nothing
+ * about the transaction is sent again. A duplicate means an earlier send landed, since the salt makes the commit unique: it is on-chain and only its hash is gone. propose_action
  * is not retried like this: its action id and transfer outcome exist only in the outcome of the transaction that landed.
  */
 export async function commitWithRetry(send: () => Promise<{ transaction: { hash: string } }>, pauseMs = 2000): Promise<string | undefined> {
   try {
-    const sent = await withRetry(() => send().catch((err: unknown) => { throw refusalOf(err); }), { retryable: (err) => !(err instanceof ContractRefused), attempts: COMMIT_ATTEMPTS, pauseMs });
+    const sent = await withRetry(() => send().catch((err: unknown) => { throw refusalOf(err); }), { retryable: isTransient, attempts: COMMIT_ATTEMPTS, pauseMs });
     return sent.transaction.hash;
   } catch (err) {
     if (err instanceof ContractRefused && isAlreadyCommitted(err.message)) return undefined;
