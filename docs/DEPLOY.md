@@ -332,9 +332,21 @@ Later on Nov 7, from a script with a placeholder model proof, not through the bo
 - back in service: `unpause_agent` in tx `HFRqhNq5Vzi8tCHYum5MC88nBSAUsUmwjeCR4ij8gdzb`, a new function-call key (table above), action
   7, `Allow`, 1 AINEK, `Executed` in tx `C7VEhjW6UZggM5Pq6JLKhY6AMASscBEZ8HxUvFR7bvUx`.
 
-The agent's storage credit after these was 0.0189 NEAR. The service wants 0.0153 NEAR free before each action and an action
-takes about 0.013, so that is 1 more action. Top it up with `deposit_storage` (full-access key) before recording. Not run live
-yet: an approval or a rejection through the bot, a token refusal (`Failed`).
+The agent's storage credit after these was 0.0189 NEAR, so `deposit_storage` added 0.1 NEAR (full-access key) in tx
+`Dyi1aCVvoCbNKvSscRW1vNce4ZFVFXbxUtFUzAAvPZTj`. Then through the bot again:
+
+- action 8, `Allow`, 2 AINEK to `vendor1.ainek-dev-dastan.testnet` (whitelisted, not registered on the token), `Failed` in tx
+  `4CcpGMfA1eiifo4xrdYSb72a6LKFieX26sJfaHPt94XG`: events `action_proposed`, `action_failed`, the token panicked with "is not
+  registered", nothing moved and the day's total gave the 2 AINEK back. Action proof committed in tx
+  `6M4kfPfov6B1xvF6G6mCqj3sWaQ6rGTrgXdiCjEsTnop`;
+- action 9, `NeedsApproval`, 400 AINEK, proposed in tx `AsaFxVazAnE4MWuRYQ6hhTbEwhYhfsKNwVfe4YokAVdJ`, action proof committed in tx
+  `6bTVZuznQdUqw1PRiqPU3kfuVsgqG5bTeLL8NTMEDoe1`. The card's "How to approve" button gave the commands, and the owner signed
+  `approve` with their own key in tx `HBdadwY6J9bndBq79oXfxDELsCsDZQnPcZ9jgahNJV44`: events `action_approved`, `ft_transfer`,
+  `action_executed`.
+
+The agent's storage credit is now 0.0966 NEAR. The service wants 0.0153 NEAR free before each action and an action takes 0.011 to
+0.013, so that is about 7 more actions; top it up with `deposit_storage` before recording if retakes will use them up. Not run live
+yet: a rejection through the bot, a forwarded injection message (Catch 3), a commit failure recovered by the retry.
 
 ## Locking the contract (Dastan; not done yet)
 

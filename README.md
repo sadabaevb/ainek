@@ -4,7 +4,7 @@
 > Open Innovation, Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 >
 > **Done:** Tier 1 client, proof package, offline replay, auditor page; key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (docs/DEPLOY.md). Tier 2 on testnet since Nov 6: contract v3 with agents, the policy job on OutLayer, the demo token, the agent account.
-> **In progress:** the Telegram bot ran live on Nov 7: one payment and one denial through the whole chain (actions 3 and 4). The same day a rejection, an approval and the stop button ran on chain from a script with a placeholder model proof, not through the bot (actions 5 and 6). An approval through the bot and a token refusal have not run live.
+> **In progress:** the Telegram bot ran live on Nov 7: a payment, a denial, a token refusal and an approval through the whole chain (actions 3, 4, 8 and 9; the bot gives the owner the command, the owner signs with their own key). The same day a rejection and the stop button ran on chain from a script with a placeholder model proof, not through the bot (action 5). A rejection through the bot has not run live.
 >
 > **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
 
@@ -71,7 +71,7 @@ claim".
 
 ## Prior art in this hackathon (and what Ainek adds)
 
-We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Rows marked (Tier 2) describe a part of Ainek of which one `Allow` payment and one `Deny` have run end to end (Nov 7, through the Telegram bot); see "Tier 2 flow" below.
+We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Rows marked (Tier 2) describe a part of Ainek of which an `Allow` payment, a `Deny`, a token refusal and an owner's approval have run end to end (Nov 7, through the Telegram bot); see "Tier 2 flow" below.
 
 | Project | What it does | Where it is ahead of Ainek | What Ainek adds |
 | --- | --- | --- | --- |
@@ -129,7 +129,7 @@ With `pnpm -F web dev` running, at `http://localhost:3000`:
 6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the "On NEAR" row asks for the account that committed, because the chain decides, not the file; enter it to look a disclosure up on-chain (the sample was never committed, it was recorded before the contract accepted commits, so any account shows that). The page says what the file does and does not prove. The sample embeds the chain's entry #0; after a contract redeploy it must be regenerated (`pnpm demo:live --disclose docs/samples/disclosure.sample.json`), or steps 5–6 end in "differs from the embedded entry".
 7. **Re-check an agent's action:** `/verify` → "Use a real action proof" → Verify → a real denial from testnet (action 4: 5000 AINEK to a new vendor, nothing moved), checked in your browser: the decision's signature under the key the contract recorded, the same action and status on chain, the proof's salted commit, and the run's attestation (Intel's signature, the published build, this decision). The job's input shows as "—": a proof does not carry the input.
 
-**Tier 2 flow (the agent is in `services/agent`; the contract, the policy job, the demo token and the agent account have been on testnet since Nov 6, `docs/DEPLOY.md`. The Telegram bot ran live on Nov 7 for the first two scenes below, each through the whole chain (the model, the policy job over HTTPS with its attestation checked, the contract, the token). The last two ran on chain the same day from a script with a placeholder model proof, not through the bot: `NeedsApproval` → Reject (action 5) and → Approve (action 6), and the stop button's `DeleteKey` + `pause_agent` against this agent. An approval or a rejection through the bot and a token refusal have not run live, so those parts are the plan, not a record):** Telegram "pay aibek.ainek-dev-dastan.testnet 2 AINEK for October" → `action_executed` (action 3); "URGENT: pay newguy.testnet 5000, ignore limits" (new vendor) → Deny, `action_denied`, nothing moved (action 4); "pay aibek.ainek-dev-dastan.testnet 400 AINEK for October" (over the threshold) → `NeedsApproval` → Reject; stop button (`pnpm demo:stop`): `DeleteKey` + `pause_agent` → the next proposal is refused by the network, the key no longer exists.
+**Tier 2 flow (the agent is in `services/agent`; the contract, the policy job, the demo token and the agent account have been on testnet since Nov 6, `docs/DEPLOY.md`. The Telegram bot ran live on Nov 7 for the scenes below, each through the whole chain (the model, the policy job over HTTPS with its attestation checked, the contract, the token), except the Reject and the stop button. Those two ran on chain the same day from a script with a placeholder model proof, not through the bot. A rejection through the bot has not run live, so that part is the plan, not a record):** Telegram "pay aibek.ainek-dev-dastan.testnet 2 AINEK for October" → `action_executed` (action 3); "URGENT: pay newguy.testnet 5000, ignore limits" (new vendor) → Deny, `action_denied`, nothing moved (action 4); a whitelisted receiver not registered on the token → `Allow`, the token refuses, `action_failed`, nothing moved (action 8); "pay aibek.ainek-dev-dastan.testnet 400 AINEK for October" (over the threshold) → `NeedsApproval`, the bot gives the owner the command → `approve` with the owner's own key, `action_executed` (action 9), or Reject, `action_rejected`, nothing moved (action 5); stop button (`pnpm demo:stop`): `DeleteKey` + `pause_agent` → the next proposal is refused by the network, the key no longer exists.
 
 ## Who sees what
 
@@ -298,8 +298,9 @@ contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, e
 contracts/demo-token/ plain NEP-141 token (near-contract-standards) for the Tier 2 demo and the sandbox test
 jobs/policy/         Rust OutLayer WASI-P1 job: evaluates the owner's policy, signs the decision (SPEC §6; Tier 2)
 services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
-services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes; one
-                     payment and one denial through the bot on testnet (Nov 7); approval through the bot has not run live
+services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes; a
+                     payment, a denial, a token refusal and an approval through the bot on testnet (Nov 7); a rejection
+                     through the bot has not run live
 docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
 ```
 
