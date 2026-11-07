@@ -365,11 +365,10 @@ Before starting:
   commit is written into the wasm (`contract_source_metadata`), so every commit has its own hash: the hash to publish
   is the one of the exact commit that gets deployed.
 - Everything that changes the contract is decided and merged. After the lock nothing can be revoked or re-allowed:
-  not a verifier, not a compose. Open before the lock:
-  - open verifier registration (yes or no);
+  not a verifier, not a compose. Decided on Nov 7 (`docs/DECISIONS.md`): verifier registration stays with the owner, also
+  after the lock, and `set_owner` stays one-step. Open before the lock:
   - reading the log per verifier (`latest_keys` returns the newest 100 entries of all verifiers together, see below);
   - size limits on `log_key`'s input;
-  - whether `set_owner` stays one-step;
   - a live run of the final build on testnet before the keys go.
 
 Then, with every command ending in `network-config testnet sign-with-keychain send`:

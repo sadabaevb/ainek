@@ -117,7 +117,7 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 
 ### 4.1 Лог ключей
 ```
-register_verifier(account_id: AccountId)                         // owner, 1 yocto (§4.3) — ИЛИ открытая регистрация, см. ниже
+register_verifier(account_id: AccountId)                         // owner, 1 yocto (§4.3)
 set_owner(new_owner: AccountId)                                  // owner, 1 yocto; не сам контракт; событие owner_changed {old_owner, new_owner}
 view owner() -> AccountId
 log_key(entry: KeyEntryInput) -> u64                             // verifier; returns index
@@ -158,14 +158,11 @@ entry_hash = sha256(prev_hash || canonical_json(KeyEntryInput) || verifier)   //
 SDK (он не отдаёт JWT), и обязателен, если верификатор сам ходил в NRAS; `observed_at` — целые unix-миллисекунды.
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
 
-**Предложение к синку 3.11 — открытая регистрация.** Owner-регистрация делает лог «реестром владельца» — ровно то, что мы
-ставим в минус TEE Receipts. Вариант: `register_verifier()` вызывает сам кандидат, `#[payable]`, storage deposit
-(~0.1 NEAR) как анти-спам; owner может только `pause_verifier` при явном мусоре (событие `verifier_paused` с причиной).
-Доверие переносится на клиента: `TRUSTED_VERIFIERS` (по умолчанию `v1`, `v2`, `v3`) и кворум — запись считается
-подтверждённой, если тот же `signing_address` + `compose_hash` залогирован хотя бы `QUORUM=1` (демо) / `2` (prod)
-доверенными верификаторами в окне. Это модель Certificate Transparency: лог открыт, политика доверия — у клиента.
-Если Дастан против (сложность, время) — оставляем owner, но в README честно пишем «registration is owner-gated in this
-demo; the log format and the client policy do not depend on it».
+**Регистрация остаётся у владельца (решено 7 ноября, `docs/DECISIONS.md`).** Открытую регистрацию (кандидат сам вызывает
+`register_verifier` со storage deposit) не делаем: внешнего верификатора владелец регистрирует вручную, в том числе после
+замка (`docs/DEPLOY.md`). Кому доверять и сколько подтверждений нужно, решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`
+и выбор посетителя на `/log`. Цена решения: пока в лог пишем только мы, он отличается от реестра владельца лишь замыслом, и
+README говорит об этом прямо («registration is owner-gated»).
 
 ### 4.2 Коммиты proof-ов
 ```
