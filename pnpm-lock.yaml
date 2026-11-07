@@ -44,6 +44,9 @@ importers:
       '@nearai/inference-sdk':
         specifier: 0.2.1
         version: 0.2.1(typescript@5.9.3)(ws@8.21.0)(zod@4.6.7)
+      '@phala/dcap-qvl':
+        specifier: 0.7.0
+        version: 0.7.0
       near-api-js:
         specifier: 7.4.0
         version: 7.4.0

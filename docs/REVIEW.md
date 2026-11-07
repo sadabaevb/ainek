@@ -1,0 +1,66 @@
+# Check every claim
+
+Each claim Ainek makes, the code behind it and a command that shows it. The claims come from [CLAIMS.md](CLAIMS.md), which also lists what we do **not** claim; no command here changes that list. Run everything from the repo root after `pnpm i` (Node 24+).
+
+The short path, seconds on a machine with `pnpm i` done, no keys:
+
+```bash
+pnpm demo && pnpm demo:tamper && pnpm demo:policy && pnpm test     # offline
+pnpm -F demo check-contract && pnpm -F demo check-agent            # read-only, from testnet
+```
+
+What each tag needs:
+
+| Tag | Needs |
+| --- | --- |
+| offline | nothing: no key, no network |
+| network | internet, no key. Reads testnet or NEAR AI's public attestation endpoint; sends no transaction |
+| page | `pnpm -F web dev`, then `http://localhost:3000`; internet for the log, no API key |
+| API key | `NEARAI_API_KEY` in `.env` (cloud.near.ai → API Keys) |
+| Rust | Rust and `cargo-near`; run in the folder named by the command |
+| Docker | Docker; pulls a pinned Rust image |
+
+## Is this key real?
+
+| Claim | Code | Run | You should see |
+| --- | --- | --- | --- |
+| The client verifies the Intel TDX quote and the NVIDIA GPU evidence itself | [`apps/web/lib/flow.ts`](../apps/web/lib/flow.ts) (browser), [`packages/tier1-node/src/tier1.ts`](../packages/tier1-node/src/tier1.ts) (Node), [`apps/demo/src/evidence.ts`](../apps/demo/src/evidence.ts) (replay) | offline: `pnpm demo` | `✓ Hardware: Intel TDX UpToDate, NVIDIA GH100 ×8 verified via NRAS. Re-verified offline from the recording.` |
+| A verifier builds a log entry only from evidence it checked, with a fresh nonce | [`services/verifier/src/attest.ts`](../services/verifier/src/attest.ts) | network: `pnpm -F verifier dry-run` | `key … verified: TCB UpToDate, GPU verified`, then the entry a registered verifier would log. Nothing is sent |
+| The key log is public and hash-chained, and `log_key` only appends | [`contracts/ainek/src/lib.rs`](../contracts/ainek/src/lib.rs) (`log_key`, `entry_hash_of`), [`packages/proof/src/key-entry.test.ts`](../packages/proof/src/key-entry.test.ts) | network: `pnpm -F demo check-contract`<br>offline: `pnpm test` | `Result: ABI OK` and the live head; the test reproduces the hash of on-chain entry #0. **Limit:** the contract account still has a full-access key, so whoever holds it can replace the code (`check-agent` prints the count) |
+| If the key is not in the log, nothing is sent | [`packages/proof/src/key-log.ts`](../packages/proof/src/key-log.ts), [`apps/web/lib/flow.ts`](../apps/web/lib/flow.ts) | offline: `pnpm demo:tamper`<br>API key: `/?tamper=1`, send a message | `Result: REFUSED`; the red card `Key not in the public log. Message not sent.` |
+| Who counts as a verifier is the viewer's choice; the site only sets the default | [`packages/proof/src/trust-set.ts`](../packages/proof/src/trust-set.ts), [`apps/web/components/trust-panel.tsx`](../apps/web/components/trust-panel.tsx) | page: `/log#trust`, untick the verifier | `Nobody is selected, so the chat refuses every message.` The log rows now read `(not in trust set)` |
+| Two trusted verifiers that disagree give a refusal, not an average | [`packages/proof/src/key-log.ts`](../packages/proof/src/key-log.ts) | offline: `pnpm test` (`split view` in `key-log.test.ts`) | The test passes. **Limit:** only a unit test; one verifier writes to the log today, so no real disagreement has happened |
+
+## Did this answer come from there?
+
+| Claim | Code | Run | You should see |
+| --- | --- | --- | --- |
+| Requests are encrypted to the attested model key, tool definitions and tool calls included | [`apps/web/lib/nearai-browser.ts`](../apps/web/lib/nearai-browser.ts), the relay's header list in [`apps/web/app/api/nearai/[...path]/route.ts`](../apps/web/app/api/nearai/%5B...path%5D/route.ts); the SDK sets `x-encrypt-all-fields` itself | API key: `pnpm demo:live`<br>offline: `pnpm demo` (recorded exchange) | `✓ End-to-end encryption: yes, encrypted to the attested model key`. **Limit:** the reply key travels unsigned, see "Known issues we inherited" in [CLAIMS.md](CLAIMS.md) |
+| The enclave signs both hashes, and we recompute them from the bytes | [`packages/proof/src/verify.ts`](../packages/proof/src/verify.ts), [`packages/proof/src/signature.ts`](../packages/proof/src/signature.ts) | offline: `pnpm demo`, `pnpm test` (`one flipped byte` in `verify.test.ts`)<br>page: `/verify`, load [`docs/samples/disclosure.sample.json`](samples/disclosure.sample.json), Verify | `✓ Request and response: hashes match the signature made inside the model TEE` in the demo; `✓ Proof verified` and `✓ response-hash: sha256(raw response) matches the signed hash` on the page |
+| Only a salted hash goes on chain, and a disclosure can be checked against it | [`packages/proof/src/commit.ts`](../packages/proof/src/commit.ts), `commit_proof` in [`contracts/ainek/src/lib.rs`](../contracts/ainek/src/lib.rs) | page: `/auditor`, "Use the sample file", Check | `✓ This disclosure checks out`: the commit recomputed from salt and proof, the log entry re-read from the chain. **Limit:** the sample was never committed, so the `On NEAR` line stays open; looking up a commit takes one made from your own wallet |
+| A reply signed only by the gateway is shown red, not green | [`packages/proof/src/verify.ts`](../packages/proof/src/verify.ts), [`apps/web/components/proof-card.tsx`](../apps/web/components/proof-card.tsx) | offline: `pnpm test` (`non-TEE route` in `verify.test.ts`)<br>API key: pick the Incognito model in the chat | The test passes; the red card `This answer went through a non-attested model` |
+
+## Did the agent do only what it was allowed to?
+
+**Status (Tier 2):** the contract, the policy job, the token and the agent account are on testnet. One real payment went through the whole chain with `pnpm -F agent once` on Nov 6 (action #2 in `check-agent`). Not run live: the Telegram bot, an approval or a denial through the service, a token refusal, the stop button against this agent.
+
+| Claim | Code | Run | You should see |
+| --- | --- | --- | --- |
+| The agent's key is a function-call key for two methods, and the service refuses any other | `keyScopeProblem` in [`packages/proof/src/near-view.ts`](../packages/proof/src/near-view.ts), `assertKeyScope` in [`services/agent/src/chain.ts`](../services/agent/src/chain.ts) | network: `pnpm -F demo check-agent` | `✓ function-call key …: commit_proof, propose_action on ainek-log-dastan.testnet`. **Limit:** the account also has a full-access key for the stop button; the chain cannot show who holds it |
+| The funds sit in the contract | `propose_action` in [`contracts/ainek/src/agent.rs`](../contracts/ainek/src/agent.rs) | network: `pnpm -F demo check-agent` | `✓ funds: … in the contract, 0 AINEK on the agent account` |
+| The contract pays only after checking the decision's signature | `propose_action` in [`contracts/ainek/src/agent.rs`](../contracts/ainek/src/agent.rs) | Rust (`contracts/ainek`): `cargo test a_decision`<br>network: `pnpm -F demo check-agent` | Refusals for another key, an edited decision, another action or model proof, a replaced policy, an understated daily total. `check-agent` re-verifies every recorded signature outside the contract and that each verdict ended in a status it allows. **Limit:** neither the contract nor `check-agent` opens the model proof, and the first test actions used placeholders |
+| A denied action is recorded and moves nothing | [`contracts/ainek/tests/test_agent.rs`](../contracts/ainek/tests/test_agent.rs) | Rust (`contracts/ainek`): `cargo test` | The sandbox test passes. **Limit:** it signs with a published test key, and no Deny has gone through testnet yet |
+| The job applies the whitelist, the caps and the approval threshold, then signs | [`jobs/policy/src/main.rs`](../jobs/policy/src/main.rs), [`docs/test-vectors/policy-decision.json`](test-vectors/policy-decision.json) | Rust (`jobs/policy`): `cargo test` | The tests pass, and the job reproduces every output in the vectors byte for byte |
+| An Intel-signed quote commits to the build, the input and the decision of a real run | [`packages/proof/src/policy-run.ts`](../packages/proof/src/policy-run.ts), [`packages/tier1-node/src/dcap.ts`](../packages/tier1-node/src/dcap.ts) | offline: `pnpm demo:policy`, then `pnpm demo:policy --tamper`<br>network: `pnpm demo:policy --live` | `Result: VERIFIED` with six checks; `Result: REFUSED` for an edited decision and another build. **Limit:** the contract does not check attestation; the agent service does before it proposes (`outLayerRunCheck` in [`services/agent/src/policy.ts`](../services/agent/src/policy.ts)) |
+| The key on chain is the key in that run | [`docs/samples/policy-run.sample.json`](samples/policy-run.sample.json), [`apps/demo/scripts/check-agent.mjs`](../apps/demo/scripts/check-agent.mjs) | network: `pnpm -F demo check-agent` | `✓ the same decision key is in the attested run`. **Limit:** the key is not tied to one build; see "We do not claim" in [CLAIMS.md](CLAIMS.md) |
+| Anyone can rebuild the job and get the same hash | [`scripts/wasm-hash.sh`](../scripts/wasm-hash.sh), [`jobs/policy/rust-toolchain.toml`](../jobs/policy/rust-toolchain.toml) | Docker: `scripts/wasm-hash.sh` | The hash on the last line of `pnpm demo:policy` |
+| The job has no network or file interfaces | [`jobs/policy/src/main.rs`](../jobs/policy/src/main.rs) | after the build above:<br>`node -e 'const m=new WebAssembly.Module(require("fs").readFileSync("jobs/policy/target/repro/wasm32-wasip1/release/ainek-policy.wasm"));console.log(WebAssembly.Module.imports(m).map(i=>i.name).join(" "))'` | `fd_read fd_write environ_get environ_sizes_get proc_exit`: nothing opens a file or a socket. **Limit:** this covers the job, not the OutLayer worker around it or the model enclave |
+| An action proof can be re-checked in a browser against the contract and Intel | [`packages/proof/src/action-on-chain.ts`](../packages/proof/src/action-on-chain.ts), [`apps/web/components/action-proof-card.tsx`](../apps/web/components/action-proof-card.tsx), [`docs/samples/action-proof.sample.json`](samples/action-proof.sample.json) | page: `/verify`, "Use a real action proof", Verify | `✓ Action proof verified`, including `✓ run-quote: Intel signature chain verifies`. **Limit:** this copy of action #2 has no salt, so its own commit shows as `—`; the job's input is not in a proof, so that line shows as `—` too |
+| The policy's contents are not on chain | `register_agent` in [`contracts/ainek/src/agent.rs`](../contracts/ainek/src/agent.rs) | network: `pnpm -F demo check-agent` | Only the policy hash. **Limit:** public actions and verdicts show over time who is on the whitelist |
+| Deleting the key and pausing stops the agent at the chain level | [`services/agent/src/stop.ts`](../services/agent/src/stop.ts), `pause_agent` in [`contracts/ainek/src/agent.rs`](../contracts/ainek/src/agent.rs) | Rust (`contracts/ainek`): `cargo test a_paused`<br>offline: `pnpm test` | The tests pass. **Limit:** `pnpm demo:stop` needs the owner's keys and has not run on the deployed agent |
+
+## What no command here shows
+
+- The agent paths that have not run live: see the status above and "Tier 2 flow" in the [README](../README.md).
+- What the model enclave does with data after inference, the model's weights, or anything about Intel's and NVIDIA's hardware: "We do not claim" in [CLAIMS.md](CLAIMS.md).
+- The comparison with other hackathon entries: it rests on reading their code on Nov 6, 2026. The list and the method are in [FIELD.md](FIELD.md).

@@ -6,12 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --test 'lib/**/*.test.ts'",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@ainek/proof": "workspace:*",
     "@hot-labs/near-connect": "0.11.4",
     "@nearai/inference-sdk": "0.2.1",
+    "@phala/dcap-qvl": "0.7.0",
     "near-api-js": "7.4.0",
     "near-connect-hooks": "1.1.6",
     "next": "16.4.4",

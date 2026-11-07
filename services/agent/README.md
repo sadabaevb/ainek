@@ -6,7 +6,7 @@ proposed action leaves two salted commits and the files to open them; a message 
 
 **Status:** tested against fakes (`pnpm -F agent test`), with the model step, the key-scope check and the stop command also run
 live. The contract, the policy job, the demo token and the agent account are on testnet since Nov 6 (`docs/DEPLOY.md`, "Deployed Tier 2
-accounts"), but the service has not run against them (no `OUTLAYER_PAYMENT_KEY` yet), so it has not run end to end. Open questions are in `docs/DEV-NOTES.md`.
+accounts"), and one real payment went through the whole chain on Nov 6 with `pnpm -F agent once` (the model, the policy job over HTTPS with its attestation checked, the contract, the token); the Telegram bot, an approval or a denial through the service, a token refusal, and the stop button against this agent (it ran against a throwaway account on Nov 5) have not run live. Open questions are in `docs/DEV-NOTES.md`.
 
 ```bash
 pnpm -F agent start              # the Telegram bot; variables in .env.example, setup in docs/DEPLOY.md
