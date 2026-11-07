@@ -20,3 +20,8 @@ export async function withRetry<T>(fn: () => Promise<T>, { retryable, attempts =
     }
   }
 }
+
+/** No usable answer from the network, in Node's and the browser's wordings: a timeout, an abort, a connection or a body cut off. It says nothing about what the other side did. */
+export function isNetworkFailure(err: unknown): boolean {
+  return err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|terminated|network/i.test(err.message));
+}

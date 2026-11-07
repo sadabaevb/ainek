@@ -6,11 +6,11 @@ proposed action leaves two salted commits and the files to open them; a message 
 
 **Status:** tested against fakes (`pnpm -F agent test`), with the model step, the key-scope check and the stop command also run
 live. The contract, the policy job, the demo token and the agent account are on testnet since Nov 6 (`docs/DEPLOY.md`, "Deployed Tier 2
-accounts"), and one real payment went through the whole chain on Nov 6 with `pnpm -F agent once` (the model, the policy job over HTTPS with its attestation checked, the contract, the token); the Telegram bot, an approval or a denial through the service, a token refusal, and the stop button against this agent (it ran against a throwaway account on Nov 5) have not run live. Open questions are in `docs/DEV-NOTES.md`.
+accounts"), and on Nov 7 one payment and one denial went through the Telegram bot and the whole chain (the model, the policy job over HTTPS with its attestation checked, the contract, the token); a rejection, an approval and the stop button ran on chain the same day from a script with a placeholder model proof, not through the bot; an approval or a rejection through the bot and a token refusal have not run live. Open questions are in `docs/DEV-NOTES.md`.
 
 ```bash
 pnpm -F agent start              # the Telegram bot; variables in .env.example, setup in docs/DEPLOY.md
-pnpm -F agent once "pay vendor1.testnet 300 for hosting"   # one message without Telegram, the card goes to the terminal
+pnpm -F agent once "pay aibek.ainek-dev-dastan.testnet 2 AINEK for October"   # one message without Telegram, the card goes to the terminal
 pnpm demo:stop                   # the stop button: DeleteKey + pause_agent, on the owner's machine, keys from .env.owner
 ```
 

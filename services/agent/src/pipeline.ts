@@ -31,7 +31,7 @@ export type Result =
       settle: () => Promise<void>;
       /** What the payment is for, for the card only: never on-chain. */
       purpose: string;
-      /** Carries `commitTx`: its commit landed before the action was proposed. */
+      /** Its commit landed before the action was proposed; `commitTx` is absent only when that hash was lost to a network failure. */
       modelProof: ModelProof;
       /** Why the action proof has no commit; the action itself already happened. */
       commitError: string | null;

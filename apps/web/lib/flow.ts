@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -22,7 +22,7 @@ import {
   type VerifiedDeployment,
 } from './nearai-browser';
 import { getExchange, putExchange, type StoredExchange } from './store';
-import { DEPOSIT_NEAR, errorText, isAlreadyCommitted, isDialogClosed, isMethodNotFound, isNoDeposit, type Consent } from './wallet';
+import { DEPOSIT_NEAR, errorText, isDialogClosed, isMethodNotFound, isNoDeposit, type Consent } from './wallet';
 import { seconds, short } from './format';
 
 export type { ChatMessage } from './nearai-browser';
@@ -253,7 +253,7 @@ export async function commitExchange(x: StoredExchange, resolveCommitter: () => 
       return { commit: 'committed', exchange: committed };
     } catch (err) {
       // The chain may already hold this commit (the row never got its transaction, or the store was cleared): the view decides.
-      if (!isAlreadyCommitted(err)) throw err;
+      if (!isAlreadyCommitted(errorText(err))) throw err; // this browser's row just never recorded the transaction
       const found = await committer.lookup(commit);
       if (found.status !== 'found') throw err;
       emit({ id: 'commit', status: 'ok', detail: `commit ${short(commit)} was already on NEAR for ${committer.account} (block ${found.record.block_height}; the transaction is not known to this browser)` });

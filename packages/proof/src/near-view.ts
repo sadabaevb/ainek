@@ -1,7 +1,7 @@
 // Read-only NEAR view calls over plain JSON-RPC (global fetch, no SDK), enough for the key log (SPEC §4.1 views) and the
 // proof commits (SPEC §4.2). Shared by the web client, the demo and the verifier so the ABI call shapes live in one place.
 import { z } from 'zod';
-import { withRetry } from './retry.ts';
+import { isNetworkFailure, withRetry } from './retry.ts';
 import { bytesToBase64 } from './disclosure.ts';
 import { KeyEntry, ProofCommitRecord, hex64, u128String } from './schema.ts';
 import type { Check } from './verify.ts';
@@ -46,7 +46,7 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
     return /\bMethodNotFound\b/.test(text) ? new ContractMethodNotFound(message) : new Error(message);
   };
   // Network failures, timeouts and 429/5xx are retried a bounded number of times; contract errors are not.
-  const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|network/i.test(err.message))));
+  const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || isNetworkFailure(err));
   return withRetry(
     async () => {
       const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
@@ -113,6 +113,9 @@ export async function readProofCommit(rpcUrl: string, contractId: string, accoun
     throw err;
   }
 }
+
+/** The contract's refusal of a commit this account already holds (SPEC §4.2). */
+export const isAlreadyCommitted = (message: string): boolean => /already committed/i.test(message);
 
 /** The on-chain record against the proof it should describe: the kind and the log index must be the proof's. */
 export function checkProofCommit(proof: { kind: 'model' | 'action'; logIndex?: number }, lookup: ProofCommitLookup, account: string): Check {

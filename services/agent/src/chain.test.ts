@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionCost, agentStateOf, commitCost, parseProposed, refusalOf, tokenDecimalsOf } from './chain.ts';
+import { actionCost, agentStateOf, commitCost, commitWithRetry, isTransient, parseProposed, refusalOf, tokenDecimalsOf, tokenSymbolOf } from './chain.ts';
 import { ContractRefused } from './errors.ts';
 
 const b64 = (s: string) => Buffer.from(s).toString('base64');
@@ -63,4 +63,63 @@ test('refusalOf: a panic means the transaction landed and failed; a timeout says
   assert.ok(refusalOf(new Error('Contract panicked: decision was made for a different time')) instanceof ContractRefused);
   const timeout = new Error('propose_action did not finish within 120 s');
   assert.equal(refusalOf(timeout), timeout);
+});
+
+test('tokenSymbolOf: the short name, and the account id when the token offers nothing a card can show', () => {
+  assert.equal(tokenSymbolOf({ symbol: 'AINEK' }, 't.testnet'), 'AINEK');
+  for (const m of [null, {}, { symbol: 7 }, { symbol: '' }, { symbol: 'A\nApproved' }, { symbol: 'x'.repeat(17) }]) assert.equal(tokenSymbolOf(m, 't.testnet'), 't.testnet');
+});
+
+const landed = { transaction: { hash: 'TX' } };
+const attempts = (...left: Array<Error | typeof landed>) => {
+  const send = async () => {
+    const next = left.shift();
+    if (!next) throw new Error('one attempt too many');
+    if (next instanceof Error) throw next;
+    return next;
+  };
+  return { send, left };
+};
+const PANIC = 'Smart contract panicked: this proof is already committed';
+
+test('commitWithRetry: a network failure is sent again, and the hash comes back', async () => {
+  const a = attempts(new Error('fetch failed'), landed);
+  assert.equal(await commitWithRetry(a.send, 0), 'TX');
+  assert.equal(a.left.length, 0);
+});
+
+test('commitWithRetry: it gives up after three attempts with the last failure', async () => {
+  const a = attempts(new Error('fetch failed'), new Error('fetch failed'), new Error('commit_proof did not finish within 30 s'), landed);
+  await assert.rejects(commitWithRetry(a.send, 0), /did not finish/);
+  assert.equal(a.left.length, 1);
+});
+
+test('commitWithRetry: a refusal is final and is not sent again', async () => {
+  const a = attempts(new Error('Smart contract panicked: not enough prepaid storage'), landed);
+  await assert.rejects(commitWithRetry(a.send, 0), (err: unknown) => err instanceof ContractRefused);
+  assert.equal(a.left.length, 1);
+});
+
+test('commitWithRetry: a duplicate means an earlier send landed, whichever attempt hears it: on-chain, hash lost', async () => {
+  assert.equal(await commitWithRetry(attempts(new Error('fetch failed'), new Error(PANIC)).send, 0), undefined);
+  assert.equal(await commitWithRetry(attempts(new Error(PANIC)).send, 0), undefined); // one send can post more than once
+});
+
+test('commitWithRetry: a landed failure or a rejected key is not sent again', async () => {
+  for (const reason of ['Exceeded the prepaid gas', 'Access key ed25519:x does not exist at block height 7', 'Access Key does not have enough allowance', 'Contract method is not found']) {
+    const a = attempts(new Error(reason), landed);
+    await assert.rejects(commitWithRetry(a.send, 0));
+    assert.equal(a.left.length, 1, reason);
+    assert.equal(isTransient(new Error(reason)), false, reason);
+  }
+});
+
+test('isTransient: no answer from the network, or a stale nonce', () => {
+  for (const reason of ['fetch failed', 'terminated', 'commit_proof did not finish within 30 s', 'https://rpc Bad Gateway', 'https://rpc unavailable', 'Internal server error', 'Timeout error', 'Exceeded 12 attempts for https://rpc.', 'Invalid nonce (ak: 9, tx: 7)']) assert.ok(isTransient(new Error(reason)), reason);
+});
+
+test('isTransient: a rate limit and a gateway page count, and a refusal never does, whatever its text says', () => {
+  assert.ok(isTransient(new Error('Too Many Requests', { cause: 429 })));
+  assert.ok(isTransient(new SyntaxError('Unexpected token < in JSON')));
+  assert.equal(isTransient(new ContractRefused('Smart contract panicked: bad nonce, timeout')), false);
 });

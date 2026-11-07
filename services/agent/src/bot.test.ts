@@ -50,6 +50,7 @@ test('the owner gets the card; a verdict without a decision to make has no butto
   assert.deepEqual(h.texts, ['pay vendor1 300']);
   assert.equal(h.sent()[0]?.['text'], 'the card');
   assert.equal(h.sent()[0]?.['reply_markup'], undefined);
+  assert.deepEqual(h.sent()[0]?.['link_preview_options'], { is_disabled: true }, 'a preview would attach the attestation JSON to the card as a file');
 });
 
 test('the card is delivered first, and only then does the service forget the unfinished payment', async () => {

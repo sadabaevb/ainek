@@ -126,6 +126,17 @@ test('viewFunction: an aborted signal ends the call at once, with no retry', asy
   assert.equal(calls, 1);
 });
 
+test('viewFunction: a response cut off while its body is read is retried (seen live: "terminated", read ETIMEDOUT)', async () => {
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls += 1;
+    if (calls === 1) return { status: 200, ok: true, json: async () => { throw new TypeError('terminated'); } } as unknown as Response;
+    return new Response(JSON.stringify(viewResult(7)), { status: 200 });
+  }) as typeof fetch;
+  assert.equal(await viewFunction('http://rpc.test', 'c.testnet', 'm', {}), 7);
+  assert.equal(calls, 2);
+});
+
 test('keyScopeProblem: only a function-call key for this contract and exactly these two methods passes', () => {
   const key = (receiver_id: string, method_names: string[]) => ({ FunctionCall: { allowance: '1', receiver_id, method_names } });
   assert.equal(keyScopeProblem(key('c.testnet', ['propose_action', 'commit_proof']), 'c.testnet'), null);

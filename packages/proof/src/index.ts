@@ -28,7 +28,7 @@ export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
 export { buildModelProof, buildCheckedModelProof, buildActionProof } from './build.ts';
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
-export { withRetry } from './retry.ts';
+export { withRetry, isNetworkFailure } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
 export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
@@ -49,7 +49,7 @@ export { PolicyRun, checkPolicyRun, policySecretsRef, quoteVerifierOf, tryVerify
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
-export { AGENT_KEY_METHODS, keyScopeProblem, viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
+export { AGENT_KEY_METHODS, keyScopeProblem, viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';

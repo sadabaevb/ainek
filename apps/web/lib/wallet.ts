@@ -62,11 +62,6 @@ export function isNoDeposit(err: unknown): boolean {
   return /not enough prepaid storage/i.test(errorText(err));
 }
 
-/** The contract already holds this commit for this account (SPEC §4.2): the browser's row just never recorded the transaction. */
-export function isAlreadyCommitted(err: unknown): boolean {
-  return /already committed/i.test(errorText(err));
-}
-
 /** The contract is deployed but the method is not there yet (SPEC §4.2 lands after §4.1). Typed error on the FC-key path; text match for the wallet-popup path. */
 export function isMethodNotFound(err: unknown): boolean {
   return err instanceof ContractMethodNotFoundError || /MethodNotFound|MethodResolveError|method is not found/i.test(errorText(err));
