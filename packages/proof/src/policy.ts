@@ -50,7 +50,7 @@ function decisionChecks(x: { decision: Decision; sig: string; pubkey: string; ac
   return [
     check('decision-signature', verifyDecisionSignature(x.decision, x.sig, x.pubkey), `ed25519 signature verifies under ${short(x.pubkey)} over canonical_bytes(decision)`, 'the decision signature does not verify under the key the proof names'),
     against('decision-key', x.pubkey, x.teePubkey, 'the policy key'),
-    against('wasm-hash', x.wasmHash, x.expectedWasmHash, 'the build the job reports'),
+    check('wasm-hash', x.wasmHash === x.expectedWasmHash, 'the build the job reports is the published one', `the build the job reports ${short(x.wasmHash)} is not the published ${short(x.expectedWasmHash)}`),
     check('action-commit', x.coveredCommits.every((c) => c === recomputed), 'sha256(canonical_json(action)) is what the decision covers', 'the decision does not cover this action'),
     check('model-proof-commit', x.decision.model_proof_commit === x.modelProofCommit, 'the decision binds this model proof', 'the decision binds a different model proof'),
   ];
@@ -68,13 +68,19 @@ export function checkPolicyOutput(out: PolicyOutput, x: { action: Action; modelP
   ];
 }
 
+export interface ActionReport {
+  ok: boolean;
+  checks: Check[];
+  proof: ActionProof | null;
+}
+
 /**
  * Re-checks an action proof from the proof alone (SPEC §5.2), for an auditor: the action hashes to what the decision covers, the decision
  * is signed by the key the proof names, and the salted commit reproduces. `expected` is what `register_agent` put on-chain, and it is required:
  * a proof cannot vouch for its own signer, and anyone can sign a decision with a key of their own. Expiry is not re-checked: a decision has
  * expired by the time anyone audits it, and the contract checked it when it mattered.
  */
-export function verifyActionProof(value: unknown, expected: { teePubkey: string; wasmHash: string }): { ok: boolean; checks: Check[]; proof: ActionProof | null } {
+export function verifyActionProof(value: unknown, expected: { teePubkey: string; wasmHash: string }): ActionReport {
   const parsed = ActionProof.safeParse(value);
   if (!parsed.success) return { ok: false, checks: [{ id: 'schema', status: 'fail', detail: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') }], proof: null };
   const proof = parsed.data;

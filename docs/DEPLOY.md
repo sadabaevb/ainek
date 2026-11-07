@@ -90,6 +90,7 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
 2. The account prepaid its storage: `deposit_storage` with a full-access key. One action takes about 0.013 NEAR (two commits, SPEC §4.2, and the action record, SPEC §4.3), so 0.1 NEAR covers about 7 actions; the service stops before the model call when less than one action is left.
 3. `register_agent` ran with the policy hash, the job's public key and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
+5. `OUTLAYER_PAYMENT_KEY` is funded ("Payment key for the job" below).
 
 Give the agent its own env file. The owner's keys never go on this server: `pnpm demo:stop` runs on the owner's machine from
 `.env.owner`, and the service refuses to start if `OWNER_PRIVATE_KEY` or `AGENT_ADMIN_PRIVATE_KEY` is in its environment. Other
@@ -97,6 +98,27 @@ Give the agent its own env file. The owner's keys never go on this server: `pnpm
 handled one at a time, and pending ones are dropped at start, so a message sent while it is down has to be sent again. If the
 service stopped in the middle of a payment, it tells the owner when it is back. The token's decimals are read from its
 `ft_metadata` at start, so the token must exist first.
+
+### Payment key for the job (testnet)
+
+The service pays for each call of the job with an OutLayer payment key (`OUTLAYER_PAYMENT_KEY`, `owner:nonce:secret`). Use a key of the project's owner: the attestation check accepts only runs called by the owner. In our one such record the caller is the key's owner.
+Ours belongs to the OutLayer project owner (`<owner>` below), who may read the job's secrets; a key of another account
+was not tried. The `outlayer` CLI is the one from the next section. On testnet the key is
+funded with a test token anyone can mint (which token: `get_payment_token_contract` on `outlayer.testnet`; on Nov 6 it
+was `usdc.fakes.testnet`, 6 decimals):
+
+```
+outlayer keys create                                   # prints the nonce
+near contract call-function as-transaction usdc.fakes.testnet storage_deposit json-args '{"account_id":"<owner>"}' \
+  prepaid-gas '30 Tgas' attached-deposit '0.00125 NEAR' sign-as <owner> network-config testnet sign-with-keychain send
+near contract call-function as-transaction usdc.fakes.testnet mint json-args '{"account_id":"<owner>","amount":"20000000"}' \
+  prepaid-gas '30 Tgas' attached-deposit '0 NEAR' sign-as <owner> network-config testnet sign-with-keychain send
+outlayer keys topup <nonce> --usd 5
+printf 'OUTLAYER_PAYMENT_KEY=%s\n' "$(outlayer keys show <nonce>)" >> .env   # the key is a secret: straight into .env, not onto the screen
+```
+
+One call of the job costs about a tenth of a cent (`compute_cost` 1005, in millionths of a dollar as far as we can
+tell), so 5 test dollars is thousands of calls. `outlayer keys list` shows what is left.
 
 ## Policy job on OutLayer (Tier 2, Dastan)
 
@@ -161,7 +183,9 @@ outlayer run <owner>/policy '<input of SPEC §6.2 as JSON>' --target wasm32-wasi
 `output_hash` is the sha256 of the job's output, and its `input_hash` is the sha256 of the input as OutLayer passes it
 to the job, which is the JSON with sorted keys and no spaces, not the bytes you typed. That address is for runs made
 through the contract, like this one; a call through the HTTPS API returns its own `attestation_url`
-(`/attestations/by-call/<call_id>`, SPEC §5.2).
+(`/attestations/by-call/<call_id>`, SPEC §5.2). That record differs in two ways: its `input_hash` covers the input
+exactly as it was sent, key order included (so the agent sends canonical JSON), and it has no `block_height`, which is
+then left out of the hash the quote commits to.
 
 ### Deployed values
 
@@ -280,5 +304,10 @@ the secret was never printed.
 The two first actions were sent by a script standing in for the agent service: it signed with the agent's function-call
 key through `services/agent/src/chain.ts` and ran the policy job with `outlayer run`, but the model proof commit behind
 each action is a random placeholder, not a model answer (three such `model` commits by the agent are on the contract,
-one of them unused). The service itself (Telegram, the model, the job over HTTPS)
-has not run against these accounts yet; it still needs `OUTLAYER_PAYMENT_KEY`.
+one of them unused).
+
+The service itself then made one real payment with `pnpm -F agent once` (no Telegram): action 2, `Allow`, 2 AINEK,
+`Executed` in tx `DfLBYkaTW6FZEViWXd1KM79279ikGJR3XM33gyLpWb4X`, with a real model answer, both proofs committed and the
+run's attestation checked (`https://testnet-api.outlayer.ai/attestations/by-call/48c62234-033e-4441-b684-0dae271d7375`).
+Not run live yet: the Telegram bot, an approval or a denial through the service, a token refusal (`Failed`), the stop
+button against this agent.

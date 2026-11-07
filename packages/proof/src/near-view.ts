@@ -14,6 +14,19 @@ export async function readStorageBalance(rpcUrl: string, contractId: string, acc
   return u128String.transform(BigInt).parse(await viewFunction(rpcUrl, contractId, 'storage_balance_of', { account }));
 }
 
+/** The only methods the agent's function-call key may call (SPEC §4.3). */
+export const AGENT_KEY_METHODS = ['commit_proof', 'propose_action'];
+
+/** The claim "the agent holds only a function-call key" rests on the key's on-chain scope, not on what the variable is called. An empty method list means every method. */
+export function keyScopeProblem(permission: unknown, contract: string): string | null {
+  const scope = (permission as { FunctionCall?: { receiver_id: string; method_names: string[] } }).FunctionCall;
+  if (!scope) return `it is not a function-call key (${JSON.stringify(permission).slice(0, 40)})`;
+  if (scope.receiver_id !== contract) return `it is scoped to ${scope.receiver_id}, not to ${contract}`;
+  const methods = [...scope.method_names].sort();
+  if (methods.join() !== AGENT_KEY_METHODS.join()) return `its methods are [${methods.join(', ') || 'any'}], not [${AGENT_KEY_METHODS.join(', ')}]`;
+  return null;
+}
+
 /** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
 export class ContractMethodNotFound extends Error {}
 

@@ -1,6 +1,6 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ContractMethodNotFound, checkProofCommit, readProofCommit, viewFunction, type ProofCommitLookup, readStorageBalance } from './near-view.ts';
+import { ContractMethodNotFound, checkProofCommit, keyScopeProblem, readProofCommit, viewFunction, type ProofCommitLookup, readStorageBalance } from './near-view.ts';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -124,4 +124,13 @@ test('viewFunction: an aborted signal ends the call at once, with no retry', asy
   }) as typeof fetch;
   await assert.rejects(viewFunction('http://rpc.test', 'ainek.testnet', 'latest_keys', {}, AbortSignal.abort()), (err: unknown) => err instanceof Error && err.name === 'AbortError');
   assert.equal(calls, 1);
+});
+
+test('keyScopeProblem: only a function-call key for this contract and exactly these two methods passes', () => {
+  const key = (receiver_id: string, method_names: string[]) => ({ FunctionCall: { allowance: '1', receiver_id, method_names } });
+  assert.equal(keyScopeProblem(key('c.testnet', ['propose_action', 'commit_proof']), 'c.testnet'), null);
+  assert.match(keyScopeProblem('FullAccess', 'c.testnet') ?? '', /not a function-call key/);
+  assert.match(keyScopeProblem(key('other.testnet', ['propose_action', 'commit_proof']), 'c.testnet') ?? '', /scoped to other\.testnet/);
+  assert.match(keyScopeProblem(key('c.testnet', []), 'c.testnet') ?? '', /\[any\]/);
+  assert.match(keyScopeProblem(key('c.testnet', ['propose_action', 'commit_proof', 'approve']), 'c.testnet') ?? '', /approve/);
 });

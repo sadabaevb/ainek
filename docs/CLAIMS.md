@@ -28,7 +28,7 @@ Honest limitations won prizes at previous NEAR hackathons.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer); the contract
   verifies this signature before executing. The signature shows which key signed, not which code ran: that is in the
   run's attestation (`wasm_hash`). The contract does not check it. `pnpm demo:policy` shows the whole check on a recorded run: the quote is signed by Intel and commits to
-  the published build, the input and the decision. The agent service is written to run the same check before it proposes anything; that has not run against a live HTTPS call yet.
+  the published build, the input and the decision. The agent service runs the same check before it proposes anything; that has run on one live payment (Nov 6, `pnpm -F agent once`). `/verify` runs it in the browser for an action proof, without the job's input, which a proof does not carry.
 - (Tier 2) The policy job **cannot retain or exfiltrate its input by construction**: it is a WASI-P1 binary with no
   network and no storage interfaces, its build is reproducible (`Cargo.lock`, pinned toolchain), and the `wasm_hash`
   you get from building the repo equals the hash in the attestation. This is a proof of *inability to retain*, not a
@@ -63,6 +63,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   key, because attestation is checked locally. The endpoint also sees the browser's IP and the timing of every message's
   log read, and the signed commit transaction, which the wallet connector broadcasts through its own FastNear endpoint
   (README "Who sees what").
+- **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
+  previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
+  rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the
+  account has.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
   the log has no revoke entry yet.
 - **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants. Meteor allowed

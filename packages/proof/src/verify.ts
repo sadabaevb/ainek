@@ -38,7 +38,11 @@ export type CheckId =
   | 'wasm-hash'
   | 'action-commit'
   | 'model-proof-commit'
-  | 'decision-expiry';
+  | 'decision-expiry'
+  // an action proof against the contract's record (action-on-chain.ts)
+  | 'action-record'
+  | 'action-status'
+  | 'model-commit-on-chain';
 
 export interface VerifyReport {
   /** True only when no check failed. Skipped checks (no raw bytes given) do not make it false. */
@@ -141,7 +145,7 @@ export function verifyModelProof(
 }
 
 /** A report with checks made outside verifyModelProof folded in (the chain re-read, the on-chain commit); `ok` is recomputed. */
-export function withChecks(report: VerifyReport, ...extra: Check[]): VerifyReport {
+export function withChecks<R extends { ok: boolean; checks: Check[] }>(report: R, ...extra: Check[]): R {
   const checks = [...report.checks, ...extra];
-  return { ...report, checks, ok: checks.every((c) => c.status !== 'fail') };
+  return { ...report, checks, ok: !checks.some((c) => c.status === 'fail') };
 }

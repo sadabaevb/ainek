@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { parseEnv } from 'node:util';
 import { ainekConfigFromEnv } from './config.ts';
+import { readRepoFile } from './fixtures.ts';
 
 test('defaults point at the deployed testnet log and the demo trust policy', () => {
   const c = ainekConfigFromEnv({});
@@ -36,3 +38,12 @@ test('quorum and TCB policy can never be weakened by a bad value', () => {
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: 'UptoDate,bogus' }).acceptedTcbStatuses, ['UpToDate']);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: 'OutOfDate,bogus' }).acceptedTcbStatuses, ['OutOfDate']);
 });
+
+test('the policy job defaults are the published ones in .env.example, and a blank variable falls back to them', () => {
+  const example = parseEnv(new TextDecoder().decode(readRepoFile('.env.example')));
+  const cfg = ainekConfigFromEnv({ OUTLAYER_API_URL: '', OUTLAYER_PROJECT: '', OUTLAYER_WASM_HASH: '' });
+  assert.equal(cfg.outlayerApiUrl, example['OUTLAYER_API_URL']);
+  assert.equal(cfg.policyProject, example['OUTLAYER_PROJECT']);
+  assert.equal(cfg.policyWasmHash, example['OUTLAYER_WASM_HASH']);
+});
+
