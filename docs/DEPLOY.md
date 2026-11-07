@@ -87,7 +87,7 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
 1. The agent account exists, with a function-call key scoped to the contract and to exactly `propose_action` and
    `commit_proof`. The service reads the key's scope from the chain at start and refuses anything else. The allowance cannot be raised later
    without a new key: the deployed key has 0.25 NEAR, and five calls used 0.0018 NEAR (DEV-NOTES), so that covers hundreds of actions.
-2. The account prepaid its storage: `deposit_storage` with a full-access key. One action takes about 0.013 NEAR (two commits, SPEC §4.2, and the action record, SPEC §4.3), so 0.1 NEAR covers about 7 actions; the service stops before the model call when less than one action is left.
+2. The account prepaid its storage: `deposit_storage` with a full-access key. One action takes 0.011 to 0.013 NEAR (two commits, SPEC §4.2, and the action record, SPEC §4.3), so 0.1 NEAR covers about 7 actions; the service stops before the model call when less than its estimate for one action is free (0.0153 NEAR for this account).
 3. `register_agent` ran with the policy hash, the job's public key and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
 5. `OUTLAYER_PAYMENT_KEY` is funded ("Payment key for the job" below).
@@ -367,7 +367,8 @@ Before starting:
   is the one of the exact commit that gets deployed.
 - Everything that changes the contract is decided and merged. After the lock nothing can be revoked or re-allowed:
   not a verifier, not a compose. Decided on Nov 7 (`docs/DECISIONS.md`): the owner keeps verifier registration, and
-  `set_owner` stays one-step. Open before the lock:
+  `set_owner` stays one-step. Not planned as of Nov 7, to confirm with the lock decision: removing or pausing a verifier, charging
+  log storage to the verifier, a method to withdraw the contract's NEAR (DEV-NOTES). Open before the lock:
   - reading the log per verifier (`latest_keys` returns the newest 100 entries of all verifiers together, see below);
   - size limits on `log_key`'s input;
   - a live run of the final build on testnet before the keys go.

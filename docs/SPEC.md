@@ -89,7 +89,7 @@ Telegram-бот (grammY) и/или HTTP: текст владельца → NEAR 
 из Node, напрямую к шлюзу с TLS-пином; E2EE; structured output через function tool `tools` + `tool_choice`, не через
 `response_format` — его SDK не шифрует) →
 `ActionRequest` → OutLayer job (HTTPS API, не через контракт) → `commit_proof(kind: "model")`, затем `propose_action` FC-ключом агента →
-при `NeedsApproval` кнопка владельцу в Telegram → `approve`. Пишет action proof и коммит.
+при `NeedsApproval` кнопка в Telegram выдаёт команду, и владелец подписывает `approve` своим ключом. Пишет action proof и коммит.
 
 ### 3.8 Replay-режим (`pnpm demo`) — Бектур
 Первый судья — Claude Code без нашего API-ключа. Поэтому `pnpm demo` по умолчанию работает офлайн на записанных данных:
@@ -159,7 +159,8 @@ SDK (он не отдаёт JWT), и обязателен, если верифи
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
 
 **Регистрация у владельца (решено 7 ноября, причины в `docs/DECISIONS.md`).** Кому доверять и сколько подтверждений нужно,
-решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM` и выбор посетителя на `/log`.
+решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM` и выбор посетителя на `/log`. Пока `latest_keys` отдаёт 100 последних
+записей всех верификаторов вместе, поток записей может вытеснить записи доверенных (`docs/DEPLOY.md`).
 
 ### 4.2 Коммиты proof-ов
 ```

@@ -6,7 +6,7 @@ proposed action leaves two salted commits and the files to open them; a message 
 
 **Status:** tested against fakes (`pnpm -F agent test`), with the model step, the key-scope check and the stop command also run
 live. The contract, the policy job, the demo token and the agent account are on testnet since Nov 6 (`docs/DEPLOY.md`, "Deployed Tier 2
-accounts"), and on Nov 7 a payment, a denial, a token refusal and an approval went through the Telegram bot and the whole chain (the model, the policy job over HTTPS with its attestation checked, the contract, the token). The owner signed the approval with their own key. A rejection and the stop button ran on chain the same day from a script with a placeholder model proof; a rejection through the bot has not run live. Open questions are in `docs/DEV-NOTES.md`.
+accounts"), and on Nov 7 a payment, a denial, a token refusal and an approval went through the Telegram bot and the whole chain (the model, the policy job over HTTPS with its attestation checked, the contract, the token). The owner signed the approval with their own key. A rejection, an approval and the stop button ran on chain the same day from a script with a placeholder model proof. What has not run live is in the root README, "Tier 2 flow". Open questions are in `docs/DEV-NOTES.md`.
 
 ```bash
 pnpm -F agent start              # the Telegram bot; variables in .env.example, setup in docs/DEPLOY.md
