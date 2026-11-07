@@ -41,7 +41,8 @@ export function createBot(o: BotOptions): Bot {
     await ctx.replyWithChatAction('typing').catch(() => undefined); // cosmetic: it must not stop the message
     const card = await o.handle(ctx.message.text);
     const text = card.text.slice(0, TELEGRAM_LIMIT);
-    const options = card.approval === null ? {} : { reply_markup: new InlineKeyboard().text('How to approve', `how:approve:${card.approval}`).text('How to reject', `how:reject:${card.approval}`) };
+    // No preview: Telegram would attach the attestation JSON to the card as a file.
+    const options = { link_preview_options: { is_disabled: true }, ...(card.approval === null ? {} : { reply_markup: new InlineKeyboard().text('How to approve', `how:approve:${card.approval}`).text('How to reject', `how:reject:${card.approval}`) }) };
     // The money may have moved by now, and this card may hold the only approval buttons: a Telegram hiccup is retried.
     await withRetry(() => ctx.reply(text, options), { retryable: () => true, attempts: 3, pauseMs: SEND_RETRY_PAUSE_MS });
     await card.delivered?.().catch((err: unknown) => console.error(`after the card: ${errorText(err)}`)); // the owner has it; the worst left is a warning at the next start
