@@ -1,4 +1,4 @@
-// `pnpm demo:metrics [--runs N] [--out <file>]`: N live Tier-1 runs for the README metrics table (ROADMAP: the Nov 10–11 run).
+// `pnpm demo:metrics [--runs N] [--out <file>]`: N live Tier-1 runs for the README metrics table.
 // Each run is @ainek/tier1-node, what the chat does, from Node, direct to NEAR AI, nothing cached: a cold first message. On top, the
 // public-log rule is checked with a swapped key against the same log read, as the chat's tamper switch does. Per-run timings
 // and outcomes go to a JSON file; a markdown table is printed for the README. The on-chain commit is not part of a run (it
@@ -85,18 +85,18 @@ const laterMessage = (r: Run) => (r.outcome === 'verified' ? WARM.reduce((sum, i
 
 console.log(`\nFrom Node ${process.version}, direct to NEAR AI (no relay), attestation cold on every run; the browser caches it for 60 minutes after the first message.\n`);
 console.log(`| Metric | Value (${results.length} runs) |\n| --- | --- |`);
-console.log(`| Verified end to end | ${count((r) => r.outcome === 'verified')} |`);
-console.log(`| Swapped key refused before sending (the chat's switch, against each run's log read) | ${count((r) => r.swappedRefused === true)} |`);
+console.log(`| Verified, attestation to proof (the on-chain commit is measured once, below) | ${count((r) => r.outcome === 'verified')} |`);
+console.log(`| Log check refuses a swapped key (the rule behind the chat's switch, on each run's log read; nothing is sent for it) | ${count((r) => r.swappedRefused === true)} |`);
 console.log(`| Honest key refused (log window empty or key unlogged) | ${count((r) => r.outcome === 'refused')} |`);
 console.log(`| Runs that needed an SDK retry | ${count((r) => r.retries > 0)} |`);
-console.log(`| Attestation (gateway + model, cold, in Node) | ${spread(of((r) => r.timings.attestation))} |`);
+console.log(`| Attestation (gateway + model, re-fetched, in Node) | ${spread(of((r) => r.timings.attestation))} |`);
 console.log(`| Public log read (latest_keys view on ${rpcHost}) | ${spread(of((r) => r.timings['key-log']))} |`);
 console.log(`| E2EE round trip to the model | ${spread(of((r) => r.timings.send, verified))} |`);
 console.log(`| Signature fetch | ${spread(of((r) => r.timings.signature, verified))} |`);
-console.log(`| First message of the hour, whole run | ${spread(of((r) => r.totalMs, verified))} |`);
+console.log(`| Whole run, evidence re-fetched (a real first message can be slower, see above) | ${spread(of((r) => r.totalMs, verified))} |`);
 console.log(`| Later message, attestation cached (derived from the same runs) | ${spread(of(laterMessage, verified))} |`);
-console.log(`| Ciphertext per exchange | ${quantile(of((r) => r.bytesSent, verified), 0.5) ?? '?'} B sent, ${quantile(of((r) => r.bytesReceived, verified), 0.5) ?? '?'} B received |`);
-writeFileSync(outFile, `${JSON.stringify({ meta: { model: cfg.model, baseUrl: cfg.nearaiBaseUrl, contract: cfg.contract, rpcUrl: cfg.rpcUrl, node: process.version, measuredAt: new Date().toISOString(), note: 'from Node, direct to NEAR AI (no relay), nothing cached between runs; times in ms' }, runs: results }, null, 2)}\n`);
+console.log(`| Request and response body (encrypted fields plus plain metadata) | median ${quantile(of((r) => r.bytesSent, verified), 0.5) ?? '?'} B sent, ${quantile(of((r) => r.bytesReceived, verified), 0.5) ?? '?'} B received |`);
+writeFileSync(outFile, `${JSON.stringify({ meta: { model: cfg.model, baseUrl: cfg.nearaiBaseUrl, contract: cfg.contract, rpcUrl: cfg.rpcUrl, node: process.version, measuredAt: new Date().toISOString(), prompt: PROMPT, note: 'from Node, direct to NEAR AI (no relay), evidence re-fetched on every run; connections and proxy caches may be warm; times in ms' }, runs: results }, null, 2)}\n`);
 console.log(`\nwritten: ${outFile}`);
 // Non-zero when any run did not verify or the swapped key got through: the two things the table must never show silently.
 await exitFlushed(verified.length === results.length && results.every((r) => r.swappedRefused === true) ? 0 : 1);

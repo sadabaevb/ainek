@@ -247,16 +247,37 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-<!-- TODO Nov 10–11: paste the table printed by `pnpm demo:metrics --runs 50` (it also writes docs/metrics.json); add the policy-block and time-to-execute rows from the Tier 2 run if it ships; the same day re-time the browser (3 runs, Ainek's IndexedDB cache cleared, runs > 30 s apart because of the collateral proxy's cache header) and update the browser sentence below, keeping it next to the table -->
+<!-- TODO by Nov 12: add the policy-block and time-to-execute rows from the Tier 2 run if it ships; re-time the browser (3 runs, Ainek's IndexedDB cache cleared, runs > 30 s apart because of the collateral proxy's cache header), ideally the same day as the table because service timings drift, and update the browser sentence below, keeping it next to the table; re-run `pnpm demo:metrics --runs 50` if the Tier 1 sequence changes before submission -->
 
-Measured by `pnpm demo:metrics --runs N`: N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
+50 runs one after another on Nov 6, 20:08–20:17 UTC, from one Mac at commit `6c596e4`, with `z-ai/glm-5.3-flash` and the
+one-line prompt `Reply with the single word: ok.`, so a long answer takes longer. Every run's timings are in
+[`docs/metrics.json`](docs/metrics.json); medians and p90 are nearest rank (the 25th and 45th of 50). This shows the
+sequence holds, not how the services behave over days. With runs this close, connections and NEAR AI's proxy caches may
+be warm, so a real first message can be slower: run 1 took 22.7 s, 18.5 s of it attestation.
+
+| Metric | Value (50 runs) |
+| --- | --- |
+| Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
+| Log check refuses a swapped key (the rule behind the chat's switch, on each run's log read; nothing is sent for it) | 50 of 50 |
+| Honest key refused (log window empty or key unlogged) | 0 of 50 |
+| Runs that needed an SDK retry | 0 of 50 |
+| Attestation (gateway + model, re-fetched, in Node) | median 5.0 s, p90 9.1 s |
+| Public log read (latest_keys view on rpc.testnet.fastnear.com) | median 0.3 s, p90 0.3 s |
+| E2EE round trip to the model | median 2.5 s, p90 6.3 s |
+| Signature fetch | median 0.6 s, p90 1.6 s |
+| Whole run, evidence re-fetched (a real first message can be slower, see above) | median 9.9 s, p90 15.0 s |
+| Later message, attestation cached (derived from the same runs) | median 3.7 s, p90 7.9 s |
+| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1103 B received |
+
+Measured by `pnpm demo:metrics --runs N` (it overwrites `docs/metrics.json`; `--out` writes elsewhere): N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
 the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
 and the proof. The browser is not measured by the script. In two runs on Nov 5 with nothing cached in this browser
 (Ainek's IndexedDB cache cleared, page reloaded, runs more than 30 s apart because NEAR AI's collateral proxy lets the
 browser cache for 29 s; the proxies' own caches may have been warm) its attestation took 3.4–3.6 s (13 s on Nov 3 with
 the same cold path) and the whole first message about 9 s; a slow or retried collateral or NVIDIA verdict fetch, both
 through NEAR AI's proxies in the browser, makes it longer. The browser then keeps the attestation for 60 minutes, so its
-usual case is the "later message" row. The on-chain commit is measured once, not per run: `commit_proof` burnt 2.41 TGas
+usual case is closest to the "later message" row, which is derived from the Node runs: no later message was timed in a
+browser. The on-chain commit is measured once, not per run: `commit_proof` burnt 2.41 TGas
 (0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR; 130 + account + kind bytes per SPEC §4.2, here a
 26-character account) in
 [8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM). On Nov 5 the page signed
