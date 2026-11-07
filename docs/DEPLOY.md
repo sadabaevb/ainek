@@ -91,6 +91,10 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
 3. `register_agent` ran with the policy hash, the job's public key and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
 5. `OUTLAYER_PAYMENT_KEY` is funded ("Payment key for the job" below).
+6. The bot exists. Create it with @BotFather (`/newbot`) and put its token in `TELEGRAM_BOT_TOKEN`. Send it `/start`, open
+   `https://api.telegram.org/bot<token>/getUpdates` in a browser while the service is not running, and put `message.chat.id`
+   in `TELEGRAM_OWNER_CHAT_ID`: the service answers only in that private chat. Once it runs, `/start` checks the setup and spends
+   nothing; any other text runs the model and can move money.
 
 Give the agent its own env file. The owner's keys never go on this server: `pnpm demo:stop` runs on the owner's machine from
 `.env.owner`, and the service refuses to start if `OWNER_PRIVATE_KEY` or `AGENT_ADMIN_PRIVATE_KEY` is in its environment. Other
@@ -309,5 +313,13 @@ one of them unused).
 The service itself then made one real payment with `pnpm -F agent once` (no Telegram): action 2, `Allow`, 2 AINEK,
 `Executed` in tx `DfLBYkaTW6FZEViWXd1KM79279ikGJR3XM33gyLpWb4X`, with a real model answer, both proofs committed and the
 run's attestation checked (`https://testnet-api.outlayer.ai/attestations/by-call/48c62234-033e-4441-b684-0dae271d7375`).
-Not run live yet: the Telegram bot, an approval or a denial through the service, a token refusal (`Failed`), the stop
+On Nov 7 the Telegram bot ran live from a laptop:
+
+- action 3, `Allow`, 2 AINEK, `Executed` in tx `4AbtQwRPU3MNUEjP8G5DWQSsZkyqmFD6x9qtuViM82t3`. Its action proof was not
+  committed: that call hung for a minute or two and ended in `fetch failed` (DEV-NOTES), and the commit has not been re-sent;
+- action 4, `Deny`, 5000 AINEK to `newguy.testnet`, in tx `5DEx9kHKEDJMuaeVzwZ32CujcoXnaQ3nHEQywszLqYYn`: event
+  `action_denied`, nothing moved, action proof committed in tx `G8zhBT3whKitL2Smx47xBdVrN3jy8pAfvAVgfkxqewM4`.
+
+The agent's storage credit after these was 0.0478 NEAR, about 4 more actions. Top it up with `deposit_storage` (full-access
+key) before recording. Not run live yet: an approval or a rejection through the service, a token refusal (`Failed`), the stop
 button against this agent.
