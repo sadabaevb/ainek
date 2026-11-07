@@ -320,6 +320,7 @@ On Nov 7 the Telegram bot ran live from a laptop:
 - action 4, `Deny`, 5000 AINEK to `newguy.testnet`, in tx `5DEx9kHKEDJMuaeVzwZ32CujcoXnaQ3nHEQywszLqYYn`: event
   `action_denied`, nothing moved, action proof committed in tx `G8zhBT3whKitL2Smx47xBdVrN3jy8pAfvAVgfkxqewM4`.
 
-The agent's storage credit after these was 0.0478 NEAR, about 4 more actions. Top it up with `deposit_storage` (full-access
+The agent's storage credit after these was 0.0478 NEAR. The service wants 0.0153 NEAR free before each action and an action
+takes about 0.013, so that is 3 more actions. Top it up with `deposit_storage` (full-access
 key) before recording. Not run live yet: an approval or a rejection through the service, a token refusal (`Failed`), the stop
 button against this agent.
