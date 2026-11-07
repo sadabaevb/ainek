@@ -121,7 +121,7 @@ const COMMIT_ATTEMPT_MS = 30_000;
 const COMMIT_ATTEMPTS = 3;
 
 /** No answer, or a stale nonce: nothing about the transaction itself. A landed failure or a rejected key would only fail again, spending gas and allowance. */
-export const isTransient = (err: unknown): boolean => /fetch failed|timeout|did not finish within|Bad Gateway|unavailable|Internal server error|Exceeded \d+ attempts|nonce/i.test(errorText(err));
+export const isTransient = (err: unknown): boolean => /fetch failed|terminated|timeout|did not finish within|Bad Gateway|unavailable|Internal server error|Exceeded \d+ attempts|nonce/i.test(errorText(err));
 
 /**
  * near-api-js retries only the browser's wording of a network failure, so Node's "fetch failed" reaches us on the first hiccup (Nov 7: one hung

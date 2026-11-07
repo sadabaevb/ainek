@@ -46,7 +46,7 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
     return /\bMethodNotFound\b/.test(text) ? new ContractMethodNotFound(message) : new Error(message);
   };
   // Network failures, timeouts and 429/5xx are retried a bounded number of times; contract errors are not.
-  const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|network/i.test(err.message))));
+  const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError' || /fetch failed|terminated|network/i.test(err.message))));
   return withRetry(
     async () => {
       const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
