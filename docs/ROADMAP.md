@@ -59,8 +59,8 @@ OutLayer-политика (в контракт) → агент целиком. �
   **воспроизводимая сборка policy job** (`rust-toolchain.toml`, `Cargo.lock`, CI печатает `wasm_hash`; совпадает с
   аттестацией) — основа строки «ретеншн невозможен по конструкции» (SPEC §3.5)
 - Дастан (в той же сессии, до policy job): верификатор упакован для чужих рук — `docker run ghcr.io/sadabaevb/ainek-verifier`
-  и/или `npx ainek-verify --account v3.ainek.testnet`, раздел README «Run a verifier in 5 minutes»; если на синке 3.11
-  приняли открытую регистрацию — `register_verifier` со storage deposit (SPEC §4.1)
+  и/или `npx ainek-verify --account v3.ainek.testnet`, раздел README «Run a verifier in 5 minutes»; открытую регистрацию
+  не делаем (DECISIONS, 7 ноября)
 - Оба: найти человека не из команды, который запустит `v3` (знакомый разработчик, участник Discord хакатона); цель —
   к 10.11 в логе есть его записи (docs/FIELD.md п.1)
 - Бектур: карточка proof для не-технаря, `/verify` с локальным пересчётом + ссылка на Verification Center, `/log`

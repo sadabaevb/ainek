@@ -87,7 +87,7 @@ Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i &&
 1. The agent account exists, with a function-call key scoped to the contract and to exactly `propose_action` and
    `commit_proof`. The service reads the key's scope from the chain at start and refuses anything else. The allowance cannot be raised later
    without a new key: the deployed key has 0.25 NEAR, and five calls used 0.0018 NEAR (DEV-NOTES), so that covers hundreds of actions.
-2. The account prepaid its storage: `deposit_storage` with a full-access key. One action takes about 0.013 NEAR (two commits, SPEC §4.2, and the action record, SPEC §4.3), so 0.1 NEAR covers about 7 actions; the service stops before the model call when less than one action is left.
+2. The account prepaid its storage: `deposit_storage` with a full-access key. One action takes 0.011 to 0.013 NEAR (two commits, SPEC §4.2, and the action record, SPEC §4.3), so 0.1 NEAR covers about 7 actions; the service stops before the model call when less than its estimate for one action is free (0.0153 NEAR for this account).
 3. `register_agent` ran with the policy hash, the job's public key and the token.
 4. `AGENT_DATA_DIR` is on a disk that is backed up: without its salt a commit can never be opened, and this is the only copy.
 5. `OUTLAYER_PAYMENT_KEY` is funded ("Payment key for the job" below).
@@ -332,9 +332,22 @@ Later on Nov 7, from a script with a placeholder model proof, not through the bo
 - back in service: `unpause_agent` in tx `HFRqhNq5Vzi8tCHYum5MC88nBSAUsUmwjeCR4ij8gdzb`, a new function-call key (table above), action
   7, `Allow`, 1 AINEK, `Executed` in tx `C7VEhjW6UZggM5Pq6JLKhY6AMASscBEZ8HxUvFR7bvUx`.
 
-The agent's storage credit after these was 0.0189 NEAR. The service wants 0.0153 NEAR free before each action and an action
-takes about 0.013, so that is 1 more action. Top it up with `deposit_storage` (full-access key) before recording. Not run live
-yet: an approval or a rejection through the bot, a token refusal (`Failed`).
+The agent's storage credit after these was 0.0189 NEAR, so `deposit_storage` added 0.1 NEAR (full-access key) in tx
+`Dyi1aCVvoCbNKvSscRW1vNce4ZFVFXbxUtFUzAAvPZTj`. Then through the bot again:
+
+- action 8, `Allow`, 2 AINEK to `vendor1.ainek-dev-dastan.testnet` (whitelisted, not registered on the token), `Failed` in tx
+  `4CcpGMfA1eiifo4xrdYSb72a6LKFieX26sJfaHPt94XG`: events `action_proposed` and `action_failed`; the token panicked with "is not
+  registered"; nothing moved, and the day's total got the 2 AINEK back. Action proof committed in tx
+  `6M4kfPfov6B1xvF6G6mCqj3sWaQ6rGTrgXdiCjEsTnop`;
+- action 9, `NeedsApproval`, 400 AINEK, proposed in tx `AsaFxVazAnE4MWuRYQ6hhTbEwhYhfsKNwVfe4YokAVdJ`, action proof committed in tx
+  `6bTVZuznQdUqw1PRiqPU3kfuVsgqG5bTeLL8NTMEDoe1`. The card's "How to approve" button gave the commands, and the owner signed
+  `approve` with their own key in tx `HBdadwY6J9bndBq79oXfxDELsCsDZQnPcZ9jgahNJV44`: events `action_approved`, `ft_transfer`,
+  `action_executed`.
+
+After these the agent's storage credit was 0.0966 NEAR, about 7 more actions (the service wants 0.0153 NEAR free before each, and an
+action takes 0.011 to 0.013). The `storage_balance_of` view shows the current figure; top it up with `deposit_storage` before
+recording if retakes may use it up. Not run live yet: a rejection through the bot, a forwarded injection message (Catch 3), a commit
+failure recovered by the retry.
 
 ## Locking the contract (Dastan; not done yet)
 
@@ -353,11 +366,11 @@ Before starting:
   commit is written into the wasm (`contract_source_metadata`), so every commit has its own hash: the hash to publish
   is the one of the exact commit that gets deployed.
 - Everything that changes the contract is decided and merged. After the lock nothing can be revoked or re-allowed:
-  not a verifier, not a compose. Open before the lock:
-  - open verifier registration (yes or no);
+  not a verifier, not a compose. Decided on Nov 7 (`docs/DECISIONS.md`): the owner keeps verifier registration, and
+  `set_owner` stays one-step. Not planned as of Nov 7, to confirm with the lock decision: removing or pausing a verifier, charging
+  log storage to the verifier, a method to withdraw the contract's NEAR (DEV-NOTES). Open before the lock:
   - reading the log per verifier (`latest_keys` returns the newest 100 entries of all verifiers together, see below);
   - size limits on `log_key`'s input;
-  - whether `set_owner` stays one-step;
   - a live run of the final build on testnet before the keys go.
 
 Then, with every command ending in `network-config testnet sign-with-keychain send`:

@@ -89,7 +89,7 @@ Telegram-бот (grammY) и/или HTTP: текст владельца → NEAR 
 из Node, напрямую к шлюзу с TLS-пином; E2EE; structured output через function tool `tools` + `tool_choice`, не через
 `response_format` — его SDK не шифрует) →
 `ActionRequest` → OutLayer job (HTTPS API, не через контракт) → `commit_proof(kind: "model")`, затем `propose_action` FC-ключом агента →
-при `NeedsApproval` кнопка владельцу в Telegram → `approve`. Пишет action proof и коммит.
+при `NeedsApproval` кнопка в Telegram выдаёт команду, и владелец подписывает `approve` своим ключом. Пишет action proof и коммит.
 
 ### 3.8 Replay-режим (`pnpm demo`) — Бектур
 Первый судья — Claude Code без нашего API-ключа. Поэтому `pnpm demo` по умолчанию работает офлайн на записанных данных:
@@ -117,7 +117,7 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 
 ### 4.1 Лог ключей
 ```
-register_verifier(account_id: AccountId)                         // owner, 1 yocto (§4.3) — ИЛИ открытая регистрация, см. ниже
+register_verifier(account_id: AccountId)                         // owner, 1 yocto (§4.3)
 set_owner(new_owner: AccountId)                                  // owner, 1 yocto; не сам контракт; событие owner_changed {old_owner, new_owner}
 view owner() -> AccountId
 log_key(entry: KeyEntryInput) -> u64                             // verifier; returns index
@@ -158,14 +158,9 @@ entry_hash = sha256(prev_hash || canonical_json(KeyEntryInput) || verifier)   //
 SDK (он не отдаёт JWT), и обязателен, если верификатор сам ходил в NRAS; `observed_at` — целые unix-миллисекунды.
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
 
-**Предложение к синку 3.11 — открытая регистрация.** Owner-регистрация делает лог «реестром владельца» — ровно то, что мы
-ставим в минус TEE Receipts. Вариант: `register_verifier()` вызывает сам кандидат, `#[payable]`, storage deposit
-(~0.1 NEAR) как анти-спам; owner может только `pause_verifier` при явном мусоре (событие `verifier_paused` с причиной).
-Доверие переносится на клиента: `TRUSTED_VERIFIERS` (по умолчанию `v1`, `v2`, `v3`) и кворум — запись считается
-подтверждённой, если тот же `signing_address` + `compose_hash` залогирован хотя бы `QUORUM=1` (демо) / `2` (prod)
-доверенными верификаторами в окне. Это модель Certificate Transparency: лог открыт, политика доверия — у клиента.
-Если Дастан против (сложность, время) — оставляем owner, но в README честно пишем «registration is owner-gated in this
-demo; the log format and the client policy do not depend on it».
+**Регистрация у владельца (решено 7 ноября, причины в `docs/DECISIONS.md`).** Кому доверять и сколько подтверждений нужно,
+решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM` и выбор посетителя на `/log`. Пока `latest_keys` отдаёт 100 последних
+записей всех верификаторов вместе, поток записей может вытеснить записи доверенных (`docs/DEPLOY.md`).
 
 ### 4.2 Коммиты proof-ов
 ```

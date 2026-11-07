@@ -27,7 +27,7 @@ No NEAR account, no API key: it shows exactly what a registered verifier would a
 ## Run a verifier in 5 minutes
 
 You need a NEAR testnet account, and the contract owner must have called `register_verifier(<your account>)` once,
-with 1 yoctoNEAR attached (it must be signed with the owner's full-access key; open registration is pending, see
+with 1 yoctoNEAR attached (it must be signed with the owner's full-access key; registration stays with the owner, see
 DECISIONS). Tell us the account name and we register it.
 
 Do not give the verifier your account's full-access key. It only ever calls `log_key`, so make it a key that can do
