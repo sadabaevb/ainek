@@ -27,7 +27,7 @@ async fn key_log_end_to_end_on_sandbox() -> testresult::TestResult<()> {
 
     // Deploy and initialize in one transaction, as `cargo near deploy ... with-init-call` does.
     near_api::Contract::deploy(contract.account_id().clone())
-        .use_code(wasm)
+        .use_code(wasm.clone())
         .with_init_call("new", json!({ "owner": owner.account_id() }))?
         .with_signer(signer.clone())
         .send_to(&network)
@@ -203,6 +203,74 @@ async fn key_log_end_to_end_on_sandbox() -> testresult::TestResult<()> {
     let credit: u128 = credit.parse()?;
     let deposited = NearToken::from_millinear(100).as_yoctonear();
     assert!(credit < deposited && credit > deposited * 9 / 10, "one commit costs a sliver of 0.1 NEAR");
+
+    // ---- locking the contract ------------------------------------------------------------------
+    // The owner role goes to another account, then the contract account loses its only key. After that
+    // nobody can replace the code or the state, and the log and the owner's methods keep working. (On testnet
+    // the contract owns itself and signs `set_owner` itself; here the owner is a separate account from the start.)
+    let owner2 = create_subaccount(&sandbox, "owner2.sandbox").await?;
+    contract
+        .call_function("set_owner", json!({ "new_owner": owner2.account_id() }))
+        .transaction()
+        .deposit(NearToken::from_yoctonear(1))
+        .with_signer(owner.account_id().clone(), signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+    let now_owner: String = contract.call_function("owner", ()).read_only().fetch_from(&network).await?.data;
+    assert_eq!(now_owner, owner2.account_id().to_string());
+    // Checked before the key is deleted, as the hand-over must be: the new owner can act, the old one cannot.
+    for (who, allowed) in [(&owner, false), (&owner2, true)] {
+        let outcome = contract
+            .call_function("register_verifier", json!({ "account_id": alice.account_id() }))
+            .transaction()
+            .deposit(NearToken::from_yoctonear(1))
+            .with_signer(who.account_id().clone(), signer.clone())
+            .send_to(&network)
+            .await?;
+        if allowed {
+            outcome.assert_success();
+        } else {
+            outcome.assert_failure();
+        }
+    }
+
+    let genesis_key: near_api::types::SecretKey = near_sandbox::config::DEFAULT_GENESIS_ACCOUNT_PRIVATE_KEY.parse().unwrap();
+    near_api::Account(contract.account_id().clone())
+        .delete_key(genesis_key.public_key())
+        .with_signer(signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+    // No key is left to sign for the contract account, so a new deploy cannot even be sent.
+    let redeploy = near_api::Contract::deploy(contract.account_id().clone())
+        .use_code(wasm)
+        .without_init_call()
+        .with_signer(signer.clone())
+        .send_to(&network)
+        .await;
+    assert!(redeploy.is_err(), "the contract account can still be signed for after its key was deleted");
+    let keys = near_api::Account(contract.account_id().clone()).list_keys().fetch_from(&network).await?;
+    assert!(keys.data.is_empty(), "the contract account still has a key");
+    // The owner can still act, with a method that needs the full-access proof.
+    contract
+        .call_function("register_verifier", json!({ "account_id": owner2.account_id() }))
+        .transaction()
+        .deposit(NearToken::from_yoctonear(1))
+        .with_signer(owner2.account_id().clone(), signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+    // The log is still open to its verifiers.
+    contract
+        .call_function("log_key", json!({ "entry": input }))
+        .transaction()
+        .with_signer(v1.account_id().clone(), signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_success();
+    let head: Value = contract.call_function("head", ()).read_only().fetch_from(&network).await?.data;
+    assert_eq!(head["index"], 2);
 
     Ok(())
 }

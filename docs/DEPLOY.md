@@ -335,3 +335,66 @@ Later on Nov 7, from a script with a placeholder model proof, not through the bo
 The agent's storage credit after these was 0.0189 NEAR. The service wants 0.0153 NEAR free before each action and an action
 takes about 0.013, so that is 1 more action. Top it up with `deposit_storage` (full-access key) before recording. Not run live
 yet: an approval or a rejection through the bot, a token refusal (`Failed`).
+
+## Locking the contract (Dastan; not done yet)
+
+Today `ainek-log-dastan.testnet` owns itself and has one full-access key, so "append-only" rests on trusting whoever
+holds that key: they could deploy other code or rewrite the state. The lock removes that. It is the last step before
+submission, because after it nobody can fix a bug in the contract either.
+
+Before starting:
+
+- The repository is public. A reproducible build is only "rebuildable by anyone" then. The build itself already works
+  with the private repo; whether the deploy step insists on a public remote has not been tried.
+- `cargo near build reproducible-wasm` in `contracts/ainek` gives the same sha256 on a second machine. Tried on Nov 6
+  on one machine (an Apple-silicon Mac, the amd64 image under emulation): two builds of commit `c4a7752` both gave
+  `dbb7c5c041c2549d788e81ccfaba9975a824f2e0452eb8796b170077ffa99cc9`. The container compiles with Rust 1.96.0, the
+  version in the image tag, and ignores `rust-toolchain.toml` (1.93), which only governs local builds and tests. The
+  commit is written into the wasm (`contract_source_metadata`), so every commit has its own hash: the hash to publish
+  is the one of the exact commit that gets deployed.
+- Everything that changes the contract is decided and merged. After the lock nothing can be revoked or re-allowed:
+  not a verifier, not a compose. Open before the lock:
+  - open verifier registration (yes or no);
+  - reading the log per verifier (`latest_keys` returns the newest 100 entries of all verifiers together, see below);
+  - size limits on `log_key`'s input;
+  - whether `set_owner` stays one-step;
+  - a live run of the final build on testnet before the keys go.
+
+Then, with every command ending in `network-config testnet sign-with-keychain send`:
+
+1. Deploy the final code as a reproducible build:
+   `cargo near deploy build-reproducible-wasm <contract> without-init-call …` from a clean, pushed commit (needs
+   Docker). No `migrate`: `set_owner` did not change the stored layout.
+2. Check the deploy before anything irreversible: the account's `code_hash` equals the hash of the local reproducible
+   wasm, and `contract_source_metadata` names the commit.
+3. Hand the owner role to a fresh account that keeps a full-access key (the owner still registers verifiers and
+   agents and approves actions). Not `ainek-dev-dastan.testnet`: its full-access key sat on the server for three
+   hours on Nov 6 and was not rotated. `set_owner` with `{"new_owner":"<owner>"}`, 1 yoctoNEAR, signed as the contract.
+   Update `OWNER_ACCOUNT_ID` wherever it is set (`.env`, `.env.owner`, the agent's env: the bot prints
+   `sign-as <owner>` in its approve commands) and the "contract with agents" row above.
+4. Check the hand-over: `owner` returns `<owner>`, and `<owner>` can call a method that needs the full-access proof,
+   for example `unpause_agent` on the registered agent with 1 yoctoNEAR (`pause_agent` proves nothing, it takes no
+   deposit). A mistyped account can still be repaired here, by deploying code with a one-off method that rewrites
+   `owner`. After step 5 it cannot.
+5. Delete every key of the contract account: `near account list-keys <contract> network-config testnet now`, then
+   `near account delete-keys <contract> public-keys <key>,<key> …`.
+6. Publish in the README: the code hash, the commit it was built from, and the fact that `list-keys` is empty.
+
+What the lock makes final: the code, the existing log entries and the existing proof commits (the code has no way to
+change or remove them). What it does not change:
+
+- The owner still adds verifiers and agents, approves actions, and can hand the role on with `set_owner`, which is
+  then irreversible: a wrong account loses the role for good. Whoever owns the contract can also move every token it
+  holds, by registering an agent with a decision key of their own.
+- A registered verifier can still write entries, and there is no way to remove a verifier: a leaked verifier key can
+  append forever. Clients choose which verifiers they trust, but that does not contain it: `latest_keys` returns the
+  newest 100 entries for a model from all verifiers together, so a flood of entries pushes the trusted verifiers' entries
+  out of what the client sees (read in the code, not tried).
+- The contract account pays for the storage of log entries. If its balance runs low, every write fails, `log_key`,
+  `commit_proof` and `propose_action` alike, until someone sends the account NEAR; a plain transfer works and needs
+  no key. NEAR on the account cannot be taken out again.
+
+The hand-over, the key deletion and the owner's and verifiers' calls after it run against a local node in
+`contracts/ainek/tests/test_basics.rs` (there the owner is a separate account from the start, and the build is not
+the reproducible one). `tests/test_agent.rs` runs the whole agent flow, transfers and callbacks included, on a
+contract account that has no key.
