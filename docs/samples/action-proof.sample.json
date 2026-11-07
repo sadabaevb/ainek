@@ -1,28 +1,31 @@
 {
   "v": 1,
   "kind": "action",
-  "actionId": 2,
+  "actionId": 4,
   "action": {
     "kind": "ft_transfer",
     "token_id": "token.ainek-dev-dastan.testnet",
-    "receiver_id": "aibek.ainek-dev-dastan.testnet",
-    "amount": "2000000",
+    "receiver_id": "newguy.testnet",
+    "amount": "5000000000",
     "memo": ""
   },
-  "actionCommit": "0e7e6cfc2ec86fb871489d26a8ee849cbde056092811673fe1fc74afdf19ff4f",
-  "modelProofCommit": "c15d24c5a230be8a1ab08a8d3ad8ef4756d4e726dae904af450f4039674eabdf",
+  "actionCommit": "2e5f20e5c56c930970cf6fa5a301d52cf4351ac6f1f8146177bd3ec8e9f27821",
+  "modelProofCommit": "62bea0642993cab2420bbdf5f100999fbd1d8a8b507c6ccaa7c0eee293a87efe",
   "decision": {
-    "verdict": "Allow",
+    "verdict": "Deny",
     "policy_hash": "ae503840a7a1c05eb3950e315a9cc6c4ad8b154194451194fabb21326a6c2051",
     "policy_version": 1,
-    "action_commit": "0e7e6cfc2ec86fb871489d26a8ee849cbde056092811673fe1fc74afdf19ff4f",
-    "model_proof_commit": "c15d24c5a230be8a1ab08a8d3ad8ef4756d4e726dae904af450f4039674eabdf",
-    "nonce": "6d3a378c4548fdc9dee36fd2c788a15336d5b5ce736f4e7ead8c31989f05a00f",
-    "expires_at": "1793965400220"
+    "action_commit": "2e5f20e5c56c930970cf6fa5a301d52cf4351ac6f1f8146177bd3ec8e9f27821",
+    "model_proof_commit": "62bea0642993cab2420bbdf5f100999fbd1d8a8b507c6ccaa7c0eee293a87efe",
+    "nonce": "10c078ea8b82f250f2a28b54ffbc02f5002c610b895b0f9fd77279adefdab598",
+    "expires_at": "1794055393785"
   },
-  "teeSignature": "h9nUjr/VBd4C0YDmWUmkTnDiZ9cU+Fh5McafApHva6wyAKNNVRC6/NgIp1wFOD7lcOzuVjkmZeLSY2UN9f89AQ==",
+  "teeSignature": "neS1EX4pffjYkErkKeEUxU/vSZpMwLyqtyfIQddR8KQAiyhpNycQDIz8nCw9z2CI6tdEqlbvLLq9tEfyEMsNCQ==",
   "teePubkey": "4c0761e240ee9d6837327f7dfc73728a8b62e7941f1c5457f6cd15e552f44740",
   "wasmHash": "8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb",
-  "attestationUrl": "https://testnet-api.outlayer.ai/attestations/by-call/48c62234-033e-4441-b684-0dae271d7375",
-  "proposeTx": "DfLBYkaTW6FZEViWXd1KM79279ikGJR3XM33gyLpWb4X"
+  "attestationUrl": "https://testnet-api.outlayer.ai/attestations/by-call/f64a4ac3-8df7-4cff-a851-e7fcef7102bc",
+  "proposeTx": "5DEx9kHKEDJMuaeVzwZ32CujcoXnaQ3nHEQywszLqYYn",
+  "salt": "06f969bbb3531e60b46435d8f70a49139a8df380191f2c45baa365c8d0dac4bf",
+  "commit": "753e94ecfc6fcd22d0ee7855dcc7fe42f1f7ed421ede8786116ef74c38ad17f6",
+  "commitTx": "G8zhBT3whKitL2Smx47xBdVrN3jy8pAfvAVgfkxqewM4"
 }
