@@ -4,7 +4,7 @@
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
 import { withDeadline } from '@ainek/tier1-node';
 import { ContractRefused, errorText } from './errors.ts';
-import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, withRetry, isAlreadyCommitted, type Action, type Decision } from '@ainek/proof';
+import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, withRetry, isAlreadyCommitted, isNetworkFailure, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
   /** Null when the transaction landed but named no action: never a reason to lose the hash. */
@@ -120,8 +120,13 @@ const CHAIN_TIMEOUT_MS = 120_000;
 const COMMIT_ATTEMPT_MS = 30_000;
 const COMMIT_ATTEMPTS = 3;
 
-/** No answer, or a stale nonce: nothing about the transaction itself. A landed failure or a rejected key would only fail again, spending gas and allowance. */
-export const isTransient = (err: unknown): boolean => /fetch failed|terminated|timeout|did not finish within|Bad Gateway|unavailable|Internal server error|Exceeded \d+ attempts|nonce/i.test(errorText(err));
+/**
+ * No usable answer, or a stale nonce: nothing about the transaction itself. A refusal, a landed failure or a rejected key would only fail again,
+ * spending gas and allowance. near-api-js throws a 429's body as the message, and a gateway's HTML page surfaces as a SyntaxError from res.json().
+ */
+export const isTransient = (err: unknown): boolean =>
+  !(err instanceof ContractRefused) &&
+  (isNetworkFailure(err) || err instanceof SyntaxError || (err as { cause?: unknown } | null)?.cause === 429 || /timeout|did not finish within|Bad Gateway|unavailable|Internal server error|Exceeded \d+ attempts|nonce/i.test(errorText(err)));
 
 /**
  * near-api-js retries only the browser's wording of a network failure, so Node's "fetch failed" reaches us on the first hiccup (Nov 7: one hung

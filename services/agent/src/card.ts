@@ -55,7 +55,7 @@ export function renderCard(r: Result, cfg: { explorer: string; tokenDecimals: nu
           `Decision: signature verifies under the registered policy key ${short(proof.teePubkey)}, policy hash ${short(decision.policy_hash)}; the run was checked: published build, quote signed by Intel: ${proof.attestationUrl}`,
           `Contract: action #${proof.actionId}, ${txUrl(proof.proposeTx)}`,
           `Salted commits on NEAR: ${commits}`,
-          ...(r.commitError ? [`Action proof commit not confirmed: ${oneLine(r.commitError)}. The action itself is on-chain, see above`] : []),
+          ...(r.commitError ? [`Action proof commit failed or not confirmed: ${oneLine(r.commitError)}. The action itself is on-chain, see above`] : []),
           ...(r.saveError ? [`The commit landed, but the proof file could not be updated with it: ${oneLine(r.saveError)}. The salt is saved`] : []),
         ].join('\n'),
         approval: decision.verdict === 'NeedsApproval' ? proof.actionId : null,

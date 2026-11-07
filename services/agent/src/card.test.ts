@@ -68,7 +68,7 @@ test('a commit whose hash was lost says it is on-chain; a failed one is not list
 test('a failed action commit is shown with its reason; no card calls a proof a receipt', () => {
   const { commitTx: _gone, ...uncommitted } = proofOf('Allow');
   const { text } = renderCard(proposed(uncommitted as CommittedActionProof, 'not enough prepaid storage'), cfg);
-  assert.match(text, /Action proof commit not confirmed: not enough prepaid storage\./);
+  assert.match(text, /Action proof commit failed or not confirmed: not enough prepaid storage\./);
   assert.doesNotMatch(text, /action proof https/);
   assert.doesNotMatch(text, /receipt/i);
 });

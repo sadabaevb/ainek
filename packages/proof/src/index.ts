@@ -28,7 +28,7 @@ export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
 export { buildModelProof, buildCheckedModelProof, buildActionProof } from './build.ts';
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
-export { withRetry } from './retry.ts';
+export { withRetry, isNetworkFailure } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
 export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';

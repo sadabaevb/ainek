@@ -117,3 +117,9 @@ test('commitWithRetry: a landed failure or a rejected key is not sent again', as
 test('isTransient: no answer from the network, or a stale nonce', () => {
   for (const reason of ['fetch failed', 'terminated', 'commit_proof did not finish within 30 s', 'https://rpc Bad Gateway', 'https://rpc unavailable', 'Internal server error', 'Timeout error', 'Exceeded 12 attempts for https://rpc.', 'Invalid nonce (ak: 9, tx: 7)']) assert.ok(isTransient(new Error(reason)), reason);
 });
+
+test('isTransient: a rate limit and a gateway page count, and a refusal never does, whatever its text says', () => {
+  assert.ok(isTransient(new Error('Too Many Requests', { cause: 429 })));
+  assert.ok(isTransient(new SyntaxError('Unexpected token < in JSON')));
+  assert.equal(isTransient(new ContractRefused('Smart contract panicked: bad nonce, timeout')), false);
+});
