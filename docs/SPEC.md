@@ -158,11 +158,8 @@ entry_hash = sha256(prev_hash || canonical_json(KeyEntryInput) || verifier)   //
 SDK (он не отдаёт JWT), и обязателен, если верификатор сам ходил в NRAS; `observed_at` — целые unix-миллисекунды.
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
 
-**Регистрация остаётся у владельца (решено 7 ноября, `docs/DECISIONS.md`).** Открытую регистрацию (кандидат сам вызывает
-`register_verifier` со storage deposit) не делаем: внешнего верификатора владелец регистрирует вручную, в том числе после
-замка (`docs/DEPLOY.md`). Кому доверять и сколько подтверждений нужно, решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`
-и выбор посетителя на `/log`. Цена решения: пока в лог пишем только мы, он отличается от реестра владельца лишь замыслом, и
-README говорит об этом прямо («registration is owner-gated»).
+**Регистрация у владельца (решено 7 ноября, причины в `docs/DECISIONS.md`).** Кому доверять и сколько подтверждений нужно,
+решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM` и выбор посетителя на `/log`.
 
 ### 4.2 Коммиты proof-ов
 ```

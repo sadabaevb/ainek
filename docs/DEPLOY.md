@@ -336,17 +336,18 @@ The agent's storage credit after these was 0.0189 NEAR, so `deposit_storage` add
 `Dyi1aCVvoCbNKvSscRW1vNce4ZFVFXbxUtFUzAAvPZTj`. Then through the bot again:
 
 - action 8, `Allow`, 2 AINEK to `vendor1.ainek-dev-dastan.testnet` (whitelisted, not registered on the token), `Failed` in tx
-  `4CcpGMfA1eiifo4xrdYSb72a6LKFieX26sJfaHPt94XG`: events `action_proposed`, `action_failed`, the token panicked with "is not
-  registered", nothing moved and the day's total gave the 2 AINEK back. Action proof committed in tx
+  `4CcpGMfA1eiifo4xrdYSb72a6LKFieX26sJfaHPt94XG`: events `action_proposed` and `action_failed`; the token panicked with "is not
+  registered"; nothing moved, and the day's total got the 2 AINEK back. Action proof committed in tx
   `6M4kfPfov6B1xvF6G6mCqj3sWaQ6rGTrgXdiCjEsTnop`;
 - action 9, `NeedsApproval`, 400 AINEK, proposed in tx `AsaFxVazAnE4MWuRYQ6hhTbEwhYhfsKNwVfe4YokAVdJ`, action proof committed in tx
   `6bTVZuznQdUqw1PRiqPU3kfuVsgqG5bTeLL8NTMEDoe1`. The card's "How to approve" button gave the commands, and the owner signed
   `approve` with their own key in tx `HBdadwY6J9bndBq79oXfxDELsCsDZQnPcZ9jgahNJV44`: events `action_approved`, `ft_transfer`,
   `action_executed`.
 
-The agent's storage credit is now 0.0966 NEAR. The service wants 0.0153 NEAR free before each action and an action takes 0.011 to
-0.013, so that is about 7 more actions; top it up with `deposit_storage` before recording if retakes will use them up. Not run live
-yet: a rejection through the bot, a forwarded injection message (Catch 3), a commit failure recovered by the retry.
+After these the agent's storage credit was 0.0966 NEAR, about 7 more actions (the service wants 0.0153 NEAR free before each, and an
+action takes 0.011 to 0.013). The `storage_balance_of` view shows the current figure; top it up with `deposit_storage` before
+recording if retakes may use it up. Not run live yet: a rejection through the bot, a forwarded injection message (Catch 3), a commit
+failure recovered by the retry.
 
 ## Locking the contract (Dastan; not done yet)
 
@@ -365,8 +366,8 @@ Before starting:
   commit is written into the wasm (`contract_source_metadata`), so every commit has its own hash: the hash to publish
   is the one of the exact commit that gets deployed.
 - Everything that changes the contract is decided and merged. After the lock nothing can be revoked or re-allowed:
-  not a verifier, not a compose. Decided on Nov 7 (`docs/DECISIONS.md`): verifier registration stays with the owner, also
-  after the lock, and `set_owner` stays one-step. Open before the lock:
+  not a verifier, not a compose. Decided on Nov 7 (`docs/DECISIONS.md`): the owner keeps verifier registration, and
+  `set_owner` stays one-step. Open before the lock:
   - reading the log per verifier (`latest_keys` returns the newest 100 entries of all verifiers together, see below);
   - size limits on `log_key`'s input;
   - a live run of the final build on testnet before the keys go.
