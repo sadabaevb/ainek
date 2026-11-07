@@ -4,7 +4,7 @@
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
 import { withDeadline } from '@ainek/tier1-node';
 import { ContractRefused, errorText } from './errors.ts';
-import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, withRetry, type Action, type Decision } from '@ainek/proof';
+import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, withRetry, isAlreadyCommitted, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
   /** Null when the transaction landed but named no action: never a reason to lose the hash. */
@@ -22,8 +22,8 @@ export interface AgentState {
 }
 export interface ActionChain {
   proposeAction(args: { action: Action; modelProofCommit: string; decision: Decision; teeSignature: string }): Promise<Proposed>;
-  /** `commit_proof(commit, kind, log_index)` (SPEC §4.2); returns the transaction hash, or null when the commit is on-chain but its hash was lost with a failed attempt (`commitWithRetry`). */
-  commitProof(commit: string, kind: 'model' | 'action', logIndex: number): Promise<string | null>;
+  /** `commit_proof(commit, kind, log_index)` (SPEC §4.2); returns the transaction hash, or undefined when the commit is on-chain but its hash was lost with a failed attempt (`commitWithRetry`). */
+  commitProof(commit: string, kind: 'model' | 'action', logIndex: number): Promise<string | undefined>;
   agentState(): Promise<AgentState>;
   /** Whether the agent's prepaid storage covers everything one action charges it: both commits and the action record (SPEC §4.2, §4.3). */
   roomForAction(): Promise<boolean>;
@@ -122,29 +122,21 @@ const COMMIT_ATTEMPTS = 3;
 
 /**
  * near-api-js retries only the browser's wording of a network failure, so Node's "fetch failed" reaches us on the first hiccup (Nov 7: one hung
- * request lost action #3's commit). Unlike propose_action, a commit moves no money and the contract refuses a duplicate, so anything but a refusal
- * is safe to send again. A duplicate after a failed attempt means that attempt landed after all: the commit is on-chain and only its hash is gone.
+ * request lost action #3's commit). A commit's only output is its hash and the contract refuses a duplicate, so anything but a refusal is sent
+ * again. A duplicate means an earlier send landed, since the salt makes the commit unique: it is on-chain and only its hash is gone. propose_action
+ * is not retried like this: its action id and transfer outcome exist only in the outcome of the transaction that landed.
  */
-export async function commitWithRetry(send: () => Promise<{ transaction: { hash: string } }>, pauseMs = 2000): Promise<string | null> {
-  let failedBefore = false;
-  const attempt = async (): Promise<{ transaction: { hash: string } }> => {
-    try {
-      return await send();
-    } catch (err) {
-      const refused = refusalOf(err);
-      if (!(refused instanceof ContractRefused)) failedBefore = true;
-      throw refused;
-    }
-  };
+export async function commitWithRetry(send: () => Promise<{ transaction: { hash: string } }>, pauseMs = 2000): Promise<string | undefined> {
   try {
-    return (await withRetry(attempt, { retryable: (err) => !(err instanceof ContractRefused), attempts: COMMIT_ATTEMPTS, pauseMs })).transaction.hash;
+    const sent = await withRetry(() => send().catch((err: unknown) => { throw refusalOf(err); }), { retryable: (err) => !(err instanceof ContractRefused), attempts: COMMIT_ATTEMPTS, pauseMs });
+    return sent.transaction.hash;
   } catch (err) {
-    if (failedBefore && err instanceof ContractRefused && /already committed/.test(err.message)) return null;
+    if (err instanceof ContractRefused && isAlreadyCommitted(err.message)) return undefined;
     throw err;
   }
 }
 
-export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId: string; agentKey: string; tokenId: string }): ActionChain & { assertKeyScope(): Promise<void>; tokenInfo(): Promise<{ decimals: number; symbol: string }> } {
+export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId: string; agentKey: string; tokenId: string }): ActionChain & { assertKeyScope(): Promise<void>; tokenInfo(): Promise<{ tokenDecimals: number; tokenSymbol: string }> } {
   const provider = new JsonRpcProvider({ url: cfg.rpcUrl });
   const signer = KeyPairSigner.fromSecretKey(cfg.agentKey as KeyPairString);
   const account = new Account(cfg.agentId, provider, signer);
@@ -169,7 +161,7 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
     // The chain's own answer, not a config value: on a wrong scale the card would still read "300" while the transfer and the policy caps were off by orders of magnitude.
     tokenInfo: async () => {
       const metadata = await viewFunction(cfg.rpcUrl, cfg.tokenId, 'ft_metadata', {});
-      return { decimals: tokenDecimalsOf(metadata), symbol: tokenSymbolOf(metadata, cfg.tokenId) };
+      return { tokenDecimals: tokenDecimalsOf(metadata), tokenSymbol: tokenSymbolOf(metadata, cfg.tokenId) };
     },
   };
 }

@@ -114,6 +114,9 @@ export async function readProofCommit(rpcUrl: string, contractId: string, accoun
   }
 }
 
+/** The contract's refusal of a commit this account already holds (SPEC §4.2). */
+export const isAlreadyCommitted = (message: string): boolean => /already committed/i.test(message);
+
 /** The on-chain record against the proof it should describe: the kind and the log index must be the proof's. */
 export function checkProofCommit(proof: { kind: 'model' | 'action'; logIndex?: number }, lookup: ProofCommitLookup, account: string): Check {
   const id = 'on-chain-commit';

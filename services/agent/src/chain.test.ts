@@ -71,8 +71,7 @@ test('tokenSymbolOf: the short name, and the account id when the token offers no
 });
 
 const landed = { transaction: { hash: 'TX' } };
-const attempts = (...script: Array<Error | typeof landed>) => {
-  const left = [...script];
+const attempts = (...left: Array<Error | typeof landed>) => {
   const send = async () => {
     const next = left.shift();
     if (!next) throw new Error('one attempt too many');
@@ -101,10 +100,7 @@ test('commitWithRetry: a refusal is final and is not sent again', async () => {
   assert.equal(a.left.length, 1);
 });
 
-test('commitWithRetry: a duplicate after a failed attempt means that attempt landed: on-chain, hash lost', async () => {
-  assert.equal(await commitWithRetry(attempts(new Error('fetch failed'), new Error(PANIC)).send, 0), null);
-});
-
-test('commitWithRetry: a duplicate on the first attempt stays an error, this call did not land it', async () => {
-  await assert.rejects(commitWithRetry(attempts(new Error(PANIC)).send, 0), /already committed/);
+test('commitWithRetry: a duplicate means an earlier send landed, whichever attempt hears it: on-chain, hash lost', async () => {
+  assert.equal(await commitWithRetry(attempts(new Error('fetch failed'), new Error(PANIC)).send, 0), undefined);
+  assert.equal(await commitWithRetry(attempts(new Error(PANIC)).send, 0), undefined); // one send can post more than once
 });

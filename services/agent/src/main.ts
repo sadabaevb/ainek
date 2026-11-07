@@ -18,7 +18,7 @@ const cfg = loadConfig();
 const readLog = contractLog(cfg);
 const chain = nearActionChain(cfg);
 await chain.assertKeyScope();
-const { decimals: tokenDecimals, symbol: tokenSymbol } = await chain.tokenInfo();
+const { tokenDecimals, tokenSymbol } = await chain.tokenInfo();
 const keep = fileKeeper(cfg.dataDir);
 const cardCfg = { explorer: cfg.explorer, tokenDecimals, tokenSymbol };
 const deps: Deps = {

@@ -31,7 +31,7 @@ export type Result =
       settle: () => Promise<void>;
       /** What the payment is for, for the card only: never on-chain. */
       purpose: string;
-      /** Carries `commitTx`: its commit landed before the action was proposed. */
+      /** Its commit landed before the action was proposed; `commitTx` is absent only when that hash was lost to a network failure. */
       modelProof: ModelProof;
       /** Why the action proof has no commit; the action itself already happened. */
       commitError: string | null;
@@ -102,8 +102,7 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   // 3. The model proof's commit, before any money can move. The contract refuses a proposal whose model proof this agent has not committed.
   let modelProof: ModelProof;
   try {
-    const commitTx = await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex);
-    modelProof = commitTx ? { ...proven, commitTx } : proven;
+    modelProof = { ...proven, commitTx: await deps.chain.commitProof(modelProofCommit, 'model', proven.logIndex) };
   } catch (err) {
     return { kind: 'failed', stage: 'commit', reason: errorText(err) };
   }
@@ -139,8 +138,7 @@ export async function handleOwnerText(deps: Deps, text: string): Promise<Result>
   let saveError: string | null = null;
   try {
     await deps.keep.action(proof);
-    const commitTx = await deps.chain.commitProof(proof.commit, 'action', proven.logIndex);
-    if (commitTx) proof = { ...proof, commitTx };
+    proof = { ...proof, commitTx: await deps.chain.commitProof(proof.commit, 'action', proven.logIndex) };
   } catch (err) {
     commitError = errorText(err);
   }

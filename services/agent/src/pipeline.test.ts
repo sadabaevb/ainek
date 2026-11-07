@@ -167,7 +167,7 @@ test('after the money: a commit or a save that fails is reported on the proposed
 
 test('a commit whose hash was lost still counts: the payment goes on, and nothing reports it as uncommitted', async () => {
   const c = chain({ executed: true });
-  const r = await handleOwnerText(deps({ chain: { ...c, commitProof: async () => null } }), 'pay');
+  const r = await handleOwnerText(deps({ chain: { ...c, commitProof: async () => undefined } }), 'pay');
   assert.ok(r.kind === 'proposed' && r.proof.commitTx === undefined && r.modelProof.commitTx === undefined && r.commitError === null && r.transfer === 'executed');
 });
 
