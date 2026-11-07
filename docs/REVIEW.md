@@ -42,7 +42,7 @@ What each tag needs:
 
 ## Did the agent do only what it was allowed to?
 
-**Status (Tier 2):** the contract, the policy job, the token and the agent account are on testnet. One payment and one denial went through the Telegram bot and the whole chain on Nov 7 (actions #3 and #4 in `check-agent`). Not run live: an approval or a rejection through the service, a token refusal, the stop button against this agent.
+**Status (Tier 2):** the contract, the policy job, the token and the agent account are on testnet. One payment and one denial went through the Telegram bot and the whole chain on Nov 7 (actions #3 and #4 in `check-agent`). A rejection, an approval and the stop button ran on chain the same day from a script with a placeholder model proof, not through the bot (actions #5 and #6). Not run live: an approval or a rejection through the bot, a token refusal.
 
 | Claim | Code | Run | You should see |
 | --- | --- | --- | --- |

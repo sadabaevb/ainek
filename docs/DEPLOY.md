@@ -296,7 +296,7 @@ function-call key from the agent account.
 | contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash on chain `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The contract is its own owner, so owner calls are signed as `ainek-log-dastan.testnet` |
 | demo token | `token.ainek-dev-dastan.testnet` (deploy tx `6PjJPBANBCQqhUy2uYcgvnvUdy7ejBpz6RkaeLER2zG7`); 1,000,000 AINEK minted to `ainek-dev-dastan.testnet`, 10,000 of them sent to the contract |
 | agent | `agent.ainek-dev-dastan.testnet`, created with 0.5 NEAR, of which 0.1 NEAR is prepaid as storage on the contract |
-| agent's function-call key | `ed25519:72shb8mCbainyssgWPbzWmz8htdi96omzM2U4s7QWcM5`: `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (less than the 1 NEAR that "Agent service" above asks for; five calls used 0.0018 NEAR, the two texts are not reconciled yet). The account also has the full-access key it was created with (in Dastan's keychain) |
+| agent's function-call key | `ed25519:CeUWgrZ9N4CQe7NG6S9oJJYgWEx4xky1fzUB2tMmGx1E` since Nov 7 (the first was deleted when the stop button ran; to replace it, generate the pair where the bot runs and add only the public key, so the secret never travels): `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (less than the 1 NEAR that "Agent service" above asks for; five calls used 0.0018 NEAR, the two texts are not reconciled yet). The account also has the full-access key it was created with (in Dastan's keychain) |
 | receivers registered on the token | the contract and one of the policy's two whitelisted receivers; the other is left unregistered on purpose (the `Failed` demo) |
 | first actions | action 0: `Allow`, 1 AINEK, `Executed` in the proposing tx `2Hpjzuq3BXdb1zGsPc1fpBcS4azoxDEH3ymLLS3kdMBd`. Action 1: `NeedsApproval`, 400 AINEK, proposed in `5LXLQQob287RaTkDph5RyTZfEvsuMSSwArTB2L9Gi8mc`, approved by the owner in `J68M3NSGuxTB4uR1ZSFauian46nftUAR9Gch9rVPtQaP`, `Executed` |
 
@@ -320,7 +320,18 @@ On Nov 7 the Telegram bot ran live from a laptop:
 - action 4, `Deny`, 5000 AINEK to `newguy.testnet`, in tx `5DEx9kHKEDJMuaeVzwZ32CujcoXnaQ3nHEQywszLqYYn`: event
   `action_denied`, nothing moved, action proof committed in tx `G8zhBT3whKitL2Smx47xBdVrN3jy8pAfvAVgfkxqewM4`.
 
-The agent's storage credit after these was 0.0478 NEAR. The service wants 0.0153 NEAR free before each action and an action
-takes about 0.013, so that is 3 more actions. Top it up with `deposit_storage` (full-access
-key) before recording. Not run live yet: an approval or a rejection through the service, a token refusal (`Failed`), the stop
-button against this agent.
+Later on Nov 7, from a script with a placeholder model proof, not through the bot:
+
+- action 5, `NeedsApproval`, 400 AINEK, `reject` in tx `HX2AqnVwmwZf9HTtQB54dT14rrbhrvv8DpLQdGqMKTei`: event `action_rejected`,
+  nothing moved;
+- action 6, `NeedsApproval`, 400 AINEK, `approve` in tx `92NADxX1DkGVuJLyFHKYCQQJw7yj7rfh6YA5oEREMbAS`: events `action_approved`,
+  `action_executed`;
+- the stop button's two transactions against this agent: `DeleteKey` in tx `HSHmRTjdYVaJNzf2Mpypoo4u5J9ow9KjJJHjCujQU2J8`, `pause_agent`
+  in tx `EcCyCzpWBucGYJey6Kucr87SKPk6m6mBrpczd3zdZzt1`. A proposal with the deleted key failed with "Access key … does not exist": a
+  rejected transaction leaves nothing on chain, so that part is as reported by whoever ran it;
+- back in service: `unpause_agent` in tx `HFRqhNq5Vzi8tCHYum5MC88nBSAUsUmwjeCR4ij8gdzb`, a new function-call key (table above), action
+  7, `Allow`, 1 AINEK, `Executed` in tx `C7VEhjW6UZggM5Pq6JLKhY6AMASscBEZ8HxUvFR7bvUx`.
+
+The agent's storage credit after these was 0.0189 NEAR. The service wants 0.0153 NEAR free before each action and an action
+takes about 0.013, so that is 1 more action. Top it up with `deposit_storage` (full-access key) before recording. Not run live
+yet: an approval or a rejection through the bot, a token refusal (`Failed`).
