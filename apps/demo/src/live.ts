@@ -24,8 +24,8 @@ if (discloseFile && !existsSync(path.dirname(discloseFile))) usage(`--disclose: 
 const env = loadLiveEnv();
 const apiKey: string = env.apiKey ?? usage('NEARAI_API_KEY is not set (root .env). The offline replay needs no key: pnpm demo');
 const { cfg } = env;
-// A disclosure binds the proof to the log entry it embeds; the recorded sample entry is one no auditor can confirm on-chain.
-if (discloseFile && cfg.logSource === 'sample') usage('--disclose needs the contract log (AINEK_LOG_SOURCE=contract): a proof bound to the sample entry cannot be audited');
+// A disclosure embeds the log entry as the chain returns it at that moment; sample mode never reads the chain.
+if (discloseFile && cfg.logSource === 'sample') usage('--disclose needs the contract log (AINEK_LOG_SOURCE=contract): the disclosure embeds the entry read from the chain');
 const { model, nearaiBaseUrl: baseUrl } = cfg;
 
 console.log(`Ainek live: ${model} via ${baseUrl}${record ? ' (recording to docs/samples)' : ''}`);

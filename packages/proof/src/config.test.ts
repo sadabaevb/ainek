@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseEnv } from 'node:util';
 import { ainekConfigFromEnv } from './config.ts';
-import { readRepoFile } from './fixtures.ts';
+import { readRepoFile, readRepoJson } from './fixtures.ts';
 
 test('defaults point at the deployed testnet log and the demo trust policy', () => {
   const c = ainekConfigFromEnv({});
@@ -15,9 +15,9 @@ test('defaults point at the deployed testnet log and the demo trust policy', () 
   assert.equal(c.nearaiBaseUrl, 'https://cloud-api.near.ai/v1');
 });
 
-test('sample mode trusts the verifier of the recorded entry #0 by default, so web, live and replay agree', () => {
-  assert.deepEqual(ainekConfigFromEnv({ AINEK_LOG_SOURCE: 'sample' }).trustedVerifiers, ['ainek-dev-dastan.testnet']);
-  assert.deepEqual(ainekConfigFromEnv({ AINEK_LOG_SOURCE: 'sample', AINEK_TRUSTED_VERIFIERS: 'x.testnet' }).trustedVerifiers, ['x.testnet']);
+test('the default trust set includes the verifier of the replay\'s recorded entry #0, in both log modes', () => {
+  const { entry } = readRepoJson<{ entry: { verifier: string } }>('docs/samples/key-entry.sample.json');
+  for (const env of [{}, { AINEK_LOG_SOURCE: 'sample' }]) assert.ok(ainekConfigFromEnv(env).trustedVerifiers.includes(entry.verifier));
 });
 
 test('env overrides, lists and mainnet defaults', () => {

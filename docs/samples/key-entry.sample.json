@@ -1,5 +1,6 @@
 {
-  "_note": "Entry #0 of ainek-log-dastan.testnet on testnet, read with the view `entry({\"index\": 0})` on 2026-11-08 and stored as returned: logged by ainek-dev-dastan.testnet at block 276064869 from attestation-report.json (model, signing keys, compose_hash, image_digests, nonce and report_hash come from that report). ita_jwt_hash and nras_result_hash are empty because those tokens were not recorded on Nov 2. The offline replay uses it as the public log, so it does not age out; pnpm test re-derives its entry_hash.",
+  "_note": "Entry #0 of the public log, stored as the view `entry({\"index\": 0})` on `contract` returned it on 2026-11-08; see docs/samples/README.md.",
+  "contract": "ainek-log-dastan.testnet",
   "entry": {
     "model": "z-ai/glm-5.3-flash",
     "signing_address": "5a0210f2442c79355784f9de021985429561da5bacc3a4424b01ac52b7e0caff",

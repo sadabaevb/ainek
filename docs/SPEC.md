@@ -36,7 +36,7 @@ testnet, верификатор пишет ключи, клиент верифи
 `@nearai/inference-sdk/node` (TDX-quote через dcap-qvl, GPU через NRAS, политика
 `acceptedTcbStatuses: ['UpToDate']`) → строит `KeyEntry` → `log_key` под своим аккаунтом верификатора →
 сохраняет полный отчёт аттестации в локальное хранилище (JSON-файл или SQLite) под `sha256(report)`.
-Два инстанса на двух машинах с разными аккаунтами (на testnet зарегистрированы `ainek-dev-dastan.testnet` и `ainek-v2-dastan.testnet`; пишет пока только первый, docs/DEPLOY.md).
+Два инстанса на двух машинах с разными аккаунтами (§4).
 
 **Чужими руками за 5 минут.** Верификатор — не наш внутренний сервис, а то, что отличает *лог* от *реестра владельца*
 (docs/FIELD.md: у TEE Receipts ключи регистрирует owner). Поэтому он пакуется как `docker run ghcr.io/sadabaevb/ainek-verifier`
@@ -112,8 +112,7 @@ view-вызовами и сверяет ключи, печатает ✓/✗ п�
 
 ## 4. ABI контракта (черновик — финализировать 1 ноября)
 
-Аккаунты на testnet (docs/DEPLOY.md): контракт `ainek-log-dastan.testnet` (owner — сам аккаунт контракта), верификаторы
-`ainek-dev-dastan.testnet` и `ainek-v2-dastan.testnet`, агент `agent.ainek-dev-dastan.testnet` (FC-ключ только на `commit_proof` и `propose_action`; сервис проверяет это на цепочке при старте и иначе не запускается), демо-токен `token.ainek-dev-dastan.testnet` (NEP-141).
+Аккаунты на testnet перечислены в docs/DEPLOY.md: контракт, верификаторы, агент (FC-ключ только на `commit_proof` и `propose_action`; сервис проверяет это на цепочке при старте и иначе не запускается), демо-токен (NEP-141).
 
 ### 4.1 Лог ключей
 ```

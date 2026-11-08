@@ -30,7 +30,7 @@ export interface AinekConfig {
 
 export type EnvLike = Record<string, string | undefined>;
 
-// The verifier that logged entry #0, which the offline replay also uses as its log (docs/samples/key-entry.sample.json).
+// The demo's trust policy for the live log; the replay's recorded entry #0 is by the same verifier (config.test.ts checks).
 const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
 function list(value: string | undefined, fallback: string): string[] {

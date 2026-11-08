@@ -75,7 +75,7 @@ const entries: KeyEntry[] = [rec.logEntry];
 const attestedKey = verifiedModel?.signer.signingAddress ?? model.signing_address;
 const seenKey = tamper ? DEMO_SWAPPED_KEY : attestedKey;
 if (tamper) line(NA, `tamper mode: the client is shown key ${short(seenKey)} instead of the attested ${short(attestedKey)}`);
-line(NA, `log source: docs/samples/key-entry.sample.json (entry #0 as recorded from ${cfg.contract}; the live demo reads latest_keys there)`);
+line(NA, `log source: docs/samples/key-entry.sample.json (entry #0 recorded from the chain; the live demo reads latest_keys on ${cfg.contract})`);
 const verdict = evaluateKeyLog(entries, {
   model: model.model_name,
   signingAddress: seenKey,

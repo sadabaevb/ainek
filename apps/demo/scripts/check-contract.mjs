@@ -1,6 +1,7 @@
 // Does a deployed contract speak the SPEC §4.1 ABI the client relies on? Read-only view calls over RPC, no keys.
 //   pnpm -F demo check-contract [account] [rpcUrl] [model]   (defaults: AINEK_CONTRACT / NEAR_RPC_URL / NEARAI_MODEL from .env or the shared defaults)
 // Prints ✓/✗ per method and validates every returned entry against the KeyEntry schema from @ainek/proof.
+import { readFileSync } from 'node:fs';
 import { ainekConfigFromEnv, keyLogReader } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
@@ -28,6 +29,14 @@ if (head === null) console.log('  — the log is empty (head = null)');
 const latest = await check(`latest_keys(${model}, 24h)`, () => log.latestKeys(model));
 await check('entries_since(0, 10)', () => log.entriesSince(0, 10));
 if (head != null) await check(`entry(${head.index})`, async () => { const e = await log.entry(head.index); if (e === null) throw new Error('returned nothing for the head index'); return e; });
+// The offline replay's log is entry #0 recorded from this contract; a redeploy or reset makes that recording stale.
+const recorded = JSON.parse(readFileSync(new URL('../../../docs/samples/key-entry.sample.json', import.meta.url), 'utf8'));
+if (account !== recorded.contract) console.log(`  — the replay's entry #0 was recorded from ${recorded.contract}, not checked here`);
+else await check('entry(0) equals the replay\'s recording (docs/samples/key-entry.sample.json)', async () => {
+  const e = await log.entry(0);
+  if (!e || Object.keys(recorded.entry).some((k) => JSON.stringify(e[k]) !== JSON.stringify(recorded.entry[k]))) throw new Error('differs: re-record docs/samples/key-entry.sample.json from this contract');
+  return e.entry_hash;
+});
 if (Array.isArray(latest) && latest.length === 0) console.log(`  — latest_keys is empty for ${model} in the last 24 h: the client would refuse to send (fail-closed)`);
 console.log(failures === 0 ? 'Result: ABI OK, the client can switch to AINEK_LOG_SOURCE=contract' : `Result: ${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
