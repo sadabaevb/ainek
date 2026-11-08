@@ -116,7 +116,7 @@ test('attestModel retries a verification Intel let down and does not retry a ver
   const opts = { baseUrl: 'https://recorded', acceptedTcbStatuses: ['UpToDate'], fetchImpl };
 
   // Nov 7, Bektur's clean-clone run: two of three dry runs failed on `quote.collateral_unavailable` and the third went
-  // through. One such failure must not cost the round: the daemon then logs nothing for 6 hours.
+  // through. One such failure must not cost the round: dry-run and --once failed, the daemon waited a minute (RETRY_AFTER_FAILURE_MS).
   let calls = 0;
   const flaky: typeof verifyModelAttestation = async ({ clientBinding }) => {
     calls++;
