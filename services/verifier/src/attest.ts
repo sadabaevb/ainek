@@ -9,8 +9,8 @@
 // A report may hold several attestations for one model (replicas, or two deployments during a rollout). Every one
 // of them is a key the client may be talking to, so every one that verifies is logged; one failing replica does
 // not hide the others, and is itself reported as failed.
-import { verifyModelAttestation, type ModelAttestation, type TcbStatus, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
-import { buildKeyEntryInput, randomHex32, sha256Hex, toModelAttestation, type KeyEntryInput, type RawReport } from '@ainek/proof';
+import { getSdkError, verifyModelAttestation, type ModelAttestation, type TcbStatus, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
+import { buildKeyEntryInput, randomHex32, sha256Hex, toModelAttestation, withRetry, type KeyEntryInput, type RawReport } from '@ainek/proof';
 
 type RawModelAttestation = RawReport['model_attestations'][number];
 
@@ -29,14 +29,21 @@ export interface AttestOptions {
   acceptedTcbStatuses: readonly string[];
   fetchImpl?: typeof fetch;
   now?: () => number;
+  /** The SDK's verifier; tests pass one that fails on purpose. */
+  verify?: typeof verifyModelAttestation;
 }
 
+/** Whatever the SDK marks `retryable` (Intel's collateral service rejecting, NRAS or transport 5xx, 429, ...). Twin of
+ *  `sdkRetryable` in packages/tier1-node, which the verifier does not depend on. */
+const sdkRetryable = (err: unknown): boolean => getSdkError(err)?.retryable === true;
+
 /** One attestation normally verifies in 5–60 s. The SDK's collateral and NRAS requests carry no deadline of their
- *  own and can hang on a socket that died while the host was asleep; past this the replica counts as failed. */
+ *  own and can hang on a socket that died while the host was asleep; past this the replica counts as failed. The budget
+ *  covers all retries of a replica (below), so a slow third attempt can be cut off: the round is not held up for it. */
 export const VERIFY_TIMEOUT_MS = 180_000;
 
-/** A promise that gives up. The work itself is not cancelled (the SDK takes no AbortSignal), it only stops blocking
- *  the caller. Twin of `withDeadline` in packages/tier1-node, which the verifier does not depend on. */
+/** A promise that gives up. The work itself is not cancelled (the SDK takes no AbortSignal; a retry loop inside it goes
+ *  on with its remaining attempts), it only stops blocking the caller. Twin of `withDeadline` in packages/tier1-node, which the verifier does not depend on. */
 export function withDeadline<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -70,12 +77,16 @@ export async function attestModel(model: string, opts: AttestOptions): Promise<A
   const raw = JSON.parse(new TextDecoder().decode(reportBytes)) as RawReport;
   const policy = { acceptedTcbStatuses: [...opts.acceptedTcbStatuses] as TcbStatus[], gpuEvidence: 'required' as const };
   const observedAtMs = (opts.now ?? Date.now)();
+  const verify = opts.verify ?? verifyModelAttestation;
   const keys = await Promise.all(
     selectModelAttestations(raw, model).map(async (selected): Promise<AttestedKey> => {
       try {
         // The SDK checks that this nonce is what the TEE signed over; a replayed report fails here.
+        // Intel's collateral service sometimes rejects the request (`quote.collateral_unavailable`, 2 of 3 dry runs on Nov 7):
+        // the SDK marks such failures retryable and the next try went through, so a round is not lost over one.
         // The deadline is per replica: a hung one is reported as failed and does not hide the ones that verified.
-        const verifying = verifyModelAttestation({ attestation: toModelAttestation(selected) as ModelAttestation, clientBinding: { nonce }, policy });
+        const attestation = toModelAttestation(selected) as ModelAttestation;
+        const verifying = withRetry(() => verify({ attestation, clientBinding: { nonce }, policy }), { retryable: sdkRetryable });
         const verified = await withDeadline(verifying, VERIFY_TIMEOUT_MS, 'verification of the attestation');
         return { ok: true, verified, entry: buildKeyEntryInput({ model, verified, reportBytes, observedAtMs }) };
       } catch (err) {

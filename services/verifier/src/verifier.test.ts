@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { VerificationError, type VerificationFailure, type verifyModelAttestation } from '@nearai/inference-sdk/node';
 import { buildKeyEntryInput, type KeyEntry, type RawReport } from '@ainek/proof';
-import { selectModelAttestations, withDeadline } from './attest.ts';
+import { attestModel, selectModelAttestations, withDeadline } from './attest.ts';
 import { MAX_INTERVAL_MIN, loadConfig } from './config.ts';
 import { alreadyLogged, parseLoggedIndex } from './log.ts';
 import { RETRY_AFTER_FAILURE_MS, failureStreaks, nextDelayMs } from './main.ts';
@@ -96,4 +97,43 @@ test('withDeadline fails a hung call instead of blocking the loop forever, and l
   await assert.rejects(withDeadline(new Promise(() => {}), 20, 'attestation of a/b'), /attestation of a\/b did not finish within/);
   assert.equal(await withDeadline(new Promise((r) => setTimeout(() => r(7), 20)), 5_000, 'x'), 7);
   await assert.rejects(withDeadline(Promise.reject(new Error('own failure')), 5_000, 'x'), /own failure/);
+});
+
+/** The SDK's verdict for the recorded report, with the client's nonce: what `verifyModelAttestation` would resolve to. */
+function verifiedWithNonce(nonce: string) {
+  const m = selectModelAttestations(raw, model)[0]!;
+  return {
+    signer: { signingAlgo: m.signing_algo, signingAddress: m.signing_address },
+    tcbStatus: 'UpToDate',
+    deployment: { appCompose: m.info.tcb_info.app_compose, runtimeMeasurements: { composeHash: m.info.tcb_info.compose_hash } },
+    report: { nonce },
+  } as unknown as Awaited<ReturnType<typeof verifyModelAttestation>>;
+}
+
+test('attestModel retries a verification Intel let down and does not retry a verdict against the attestation', async () => {
+  const sdkFailure = (code: string, retryable: boolean) => new VerificationError({ code, retryable } as VerificationFailure);
+  const fetchImpl = (async () => new Response(reportBytes)) as unknown as typeof fetch;
+  const opts = { baseUrl: 'https://recorded', acceptedTcbStatuses: ['UpToDate'], fetchImpl };
+
+  // Nov 7, Bektur's clean-clone run: two of three dry runs failed on `quote.collateral_unavailable` and the third went
+  // through. One such failure must not cost the round: the daemon then logs nothing for 6 hours.
+  let calls = 0;
+  const flaky: typeof verifyModelAttestation = async ({ clientBinding }) => {
+    calls++;
+    if (calls === 1) throw sdkFailure('quote.collateral_unavailable', true);
+    return verifiedWithNonce(clientBinding!.nonce);
+  };
+  const round = await attestModel(model, { ...opts, verify: flaky });
+  assert.equal(calls, 2);
+  assert.equal(round.keys[0]?.ok, true, 'the retried verification counts');
+
+  // A quote that does not verify is a verdict, not a hiccup: retrying it would only repeat the answer and hide how fast it came.
+  calls = 0;
+  const refusing: typeof verifyModelAttestation = async () => {
+    calls++;
+    throw sdkFailure('quote.signature_invalid', false);
+  };
+  const refused = await attestModel(model, { ...opts, verify: refusing });
+  assert.equal(calls, 1);
+  assert.equal(refused.keys[0]?.ok, false);
 });
