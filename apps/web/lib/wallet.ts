@@ -8,10 +8,10 @@ import type { PublicConfig } from './config';
 import type { Committer } from './flow';
 
 /**
- * The wallet list the connector loads, at a fixed commit of hot-dao/near-selector. Left to itself, near-connect reads that repo's
- * main branch, with another repo on jsDelivr as fallback, so a push to either changes which wallet code the page runs. A commit URL
- * cannot change. The wallets' own code URLs inside the list are not pinned. To refresh, take a newer commit of
- * repository/manifest.json and read the diff first. The repo has no licence, so we link to the list instead of copying it.
+ * The wallet list at a fixed commit of hot-dao/near-selector. By default near-connect reads that repo's main branch (jsDelivr
+ * fallback), so a push there would change the wallet code we run. The code URLs inside the list stay unpinned (Nightly's is on that
+ * repo's main branch), and a wallet added by hand in the dialog's settings bypasses the list. Linked, not copied: the repo has no
+ * licence. To refresh: diff repository/manifest.json against a newer commit (check `executor` and `permissions`), then replace the hash.
  */
 export const WALLET_MANIFEST_URL = 'https://raw.githubusercontent.com/hot-dao/near-selector/b57880c29ab142f777c4a851e3c3c23752292be8/repository/manifest.json';
 

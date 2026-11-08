@@ -1594,5 +1594,5 @@ Task hash у OutLayer склеивает текстовые поля без ра
 - Почему ссылка, а не копия: у `hot-dao/near-selector` нет лицензии, копировать его файл в MIT-репо не стали. Поэтому один
   запрос к GitHub на загрузку страницы остаётся (production-сборка: ровно один, в простое ни одного).
 - Не закреплено: код самих кошельков (адреса `executor` в списке ведут на ветки или на сайты кошельков) и иконки в диалоге.
-- Обновить: взять новый коммит `repository/manifest.json`, прочитать diff (особенно `executor` и `permissions`), заменить
-  хеш в `WALLET_MANIFEST_URL`. Проверено 8 ноября: в диалоге те же Meteor, Intear, Ledger, Nightly и NEAR CLI.
+- Как обновить — в комментарии к `WALLET_MANIFEST_URL`. Проверено 8 ноября: в диалоге те же Meteor, Intear, Ledger,
+  Nightly и NEAR CLI. Исключение: код Nightly по-прежнему лежит в ветке `main` того же `hot-dao/near-selector`.

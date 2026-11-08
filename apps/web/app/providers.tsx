@@ -1,6 +1,6 @@
 'use client';
-// Client-side context: NearProvider (near-connect-hooks owns one NearConnector; wallets load from a commit-pinned
-// manifest, WALLET_MANIFEST_URL, into sandboxed iframes, testnet only), the public config read on the server, and the UI language.
+// Client-side context: NearProvider (near-connect-hooks owns one NearConnector; wallets load from
+// WALLET_MANIFEST_URL into sandboxed iframes, testnet only), the public config read on the server, and the UI language.
 import { NearProvider } from 'near-connect-hooks';
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
