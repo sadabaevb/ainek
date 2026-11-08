@@ -159,7 +159,7 @@ export interface Tier1Params {
   apiKey: string;
   cfg: AinekConfig;
   chat: ChatInput;
-  /** Where the log comes from: `contractLog(cfg)` for everything real; the demo passes the recorded sample entry when AINEK_LOG_SOURCE=sample. Required, so no caller can trust a sample by default. */
+  /** Where the log comes from: `contractLog(cfg)` for everything real; the demo passes the recorded entry #0 when AINEK_LOG_SOURCE=sample. Required, so no caller can trust a recording by default. */
   readLog: ReadLog;
   onStep?: (event: StepEvent) => void;
 }

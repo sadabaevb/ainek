@@ -34,3 +34,5 @@ left as received.
 
 Attested facts observed at capture time: gateway `tcb_status=UpToDate`, model `tcb_status=UpToDate`, GPU
 evidence verified via NRAS (`nvidia_payload.arch=HOPPER`, 8 GPUs; NRAS reports GH100, `secboot=true`, `dbgstat=disabled`), `tlsBinding=attested`.
+
+The vectors in `docs/test-vectors/canonical.json` are hash inputs shared with the Rust tests. Their proof and entry still name the made-up `v1.ainek.testnet`, with commit `f415f768…`; the samples above are bound to the real entry #0 instead.

@@ -1,5 +1,5 @@
 // The public key log as the browser reads it (SPEC §4.1 views). The source is chosen once from config:
-// live view calls to the contract (shared reader in @ainek/proof), or the recorded sample entry (offline).
+// live view calls to the contract (shared reader in @ainek/proof), or entry #0 as recorded in docs/samples (offline).
 import { KeyEntry, keyLogReader, resolveLogEntry as resolveFromLog, verifiersOf, type KeyLogReader, type ResolvedEntry } from '@ainek/proof';
 import sample from '../../../docs/samples/key-entry.sample.json';
 import type { PublicConfig } from './config';

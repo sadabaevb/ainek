@@ -34,7 +34,7 @@ const outcome = await runTier1({
   apiKey,
   cfg,
   chat: { messages: [{ role: 'user', content: message }] },
-  // The recorded sample entry only when AINEK_LOG_SOURCE=sample asks for it explicitly; the trust set comes from the shared config either way.
+  // The recorded entry #0 only when AINEK_LOG_SOURCE=sample asks for it explicitly; the trust set comes from the shared config either way.
   readLog: cfg.logSource === 'sample' ? async () => ({ entries: [loadSampleLogEntry()], source: 'sample (docs/samples/key-entry.sample.json, AINEK_LOG_SOURCE=sample)' }) : contractLog(cfg),
   onStep: (e) => {
     const title = HEADS[e.id];

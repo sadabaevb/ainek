@@ -1,5 +1,5 @@
 {
-  "_note": "SAMPLE model proof assembled from signature.json + chat-*.raw.json (captured 2026-11-02, no E2EE). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value, commitTx is a placeholder (nothing was committed on-chain).",
+  "_note": "SAMPLE model proof assembled from signature.json + chat-*.raw.json (captured 2026-11-02, no E2EE). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value, commitTx is a placeholder (nothing was committed on-chain). On 2026-11-08 it was re-pointed at entry #0 (logged 2026-11-03 for the same key) and its commit recomputed, so verifiedAt, the capture time, predates the entry.",
   "proof": {
     "v": 1,
     "kind": "model",
