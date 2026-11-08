@@ -1,11 +1,12 @@
 'use client';
-// Client-side context: NearProvider (near-connect-hooks owns one NearConnector; wallets load from a public
-// manifest into sandboxed iframes, testnet only), the public config read on the server, and the UI language.
+// Client-side context: NearProvider (near-connect-hooks owns one NearConnector; wallets load from
+// WALLET_MANIFEST_URL into sandboxed iframes, testnet only), the public config read on the server, and the UI language.
 import { NearProvider } from 'near-connect-hooks';
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { TrustSet } from '@ainek/proof';
 import type { PublicConfig } from '@/lib/config';
+import { WALLET_MANIFEST_URL } from '@/lib/wallet';
 import { LANG_COOKIE, dict, type Dict, type Lang } from '@/lib/i18n';
 import { useCustomTrust } from '@/lib/trust-set';
 
@@ -30,7 +31,7 @@ export function Providers({ config, lang, children }: { config: PublicConfig; la
     <ConfigContext.Provider value={stableConfig}>
       <TrustContext.Provider value={trust}>
         <LangContext.Provider value={{ lang, t: dict[lang], toggle }}>
-          <NearProvider config={{ network: stableConfig.network }}>{children}</NearProvider>
+          <NearProvider config={{ network: stableConfig.network, manifest: WALLET_MANIFEST_URL }}>{children}</NearProvider>
         </LangContext.Provider>
       </TrustContext.Provider>
     </ConfigContext.Provider>

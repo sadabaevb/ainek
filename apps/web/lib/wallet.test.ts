@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { errorText, isDialogClosed } from './wallet.ts';
+import { WALLET_MANIFEST_URL, errorText, isDialogClosed } from './wallet.ts';
+
+test('the wallet list is pinned to a commit, not a branch', () => {
+  assert.match(WALLET_MANIFEST_URL, /^https:\/\/raw\.githubusercontent\.com\/hot-dao\/near-selector\/[0-9a-f]{40}\/repository\/manifest\.json$/);
+});
 
 test('isDialogClosed: every way a wallet says it was closed, as an Error or as the plain value a sandbox hands over', () => {
   for (const text of ['User rejected', 'Wallet closed', 'User closed the window before completing the action']) {

@@ -7,6 +7,14 @@ import { readProofCommit, readStorageBalance, type ModelProof } from '@ainek/pro
 import type { PublicConfig } from './config';
 import type { Committer } from './flow';
 
+/**
+ * The wallet list at a fixed commit of hot-dao/near-selector instead of its main branch; what this does and does not pin is in the
+ * README's "Who sees what". Linked, not copied: that repo has no licence. To refresh: diff repository/manifest.json against a newer
+ * commit (check `executor` and `permissions`), open the new URL to see that it serves the list (a wrong hash gives an empty wallet
+ * dialog, silently), then replace the hash.
+ */
+export const WALLET_MANIFEST_URL = 'https://raw.githubusercontent.com/hot-dao/near-selector/b57880c29ab142f777c4a851e3c3c23752292be8/repository/manifest.json';
+
 const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
 /**
  * Storage prepayment for commits (SPEC §4.2), topped up through the wallet dialog: a function-call key cannot carry a deposit.
