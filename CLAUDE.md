@@ -54,8 +54,8 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
 ## Stack and versions (check npm/crates before pinning; pin exact versions in lockfiles)
 
 - `@nearai/inference-sdk` 0.2.1 (published 2026-10-29). Server code uses `@nearai/inference-sdk/node`
-  on **Node 24+** and calls NVIDIA NRAS and Intel PCCS directly; the browser uses the root entry, which reaches them through
-  NEAR AI's own proxies. Our relay only forwards the four SDK paths.
+  on **Node 24+** and calls NVIDIA NRAS and Intel PCS (`api.trustedservices.intel.com`) directly; the browser uses the root
+  entry, which reaches them through NEAR AI's own proxies. Our relay only forwards the four SDK paths.
 - Model: `z-ai/glm-5.3-flash` (Private TEE tier). Always pass `signingAlgo: 'ed25519'` explicitly,
   header `x-no-aliasing: true`, `Accept-Encoding: identity` when hashing bytes yourself, `e2ee: true`
   and `X-Encrypt-All-Fields: true` (tool calls encrypted). Use `/v1/chat/completions`, never
@@ -68,7 +68,7 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
 
 ## Working rules
 
-1. **Clean-clone rule.** Every merged change keeps `pnpm i && pnpm demo` (and `cargo near build` for
+1. **Clean-clone rule.** Every merged change keeps `pnpm i && pnpm demo` (and `cargo near build non-reproducible-wasm` for
    the contract) working from a fresh clone. Judges' first reviewer is Claude Code running the README.
 2. **No secrets in git.** `.env.example` lists every variable; real values only in `.env`.
    NEAR AI API keys are workspace keys with a spend limit.
