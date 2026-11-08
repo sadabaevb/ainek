@@ -5,50 +5,74 @@ and the Tier 2 accounts on testnet (the sections after it, Dastan). ROADMAP and 
 
 ## Web demo on Vercel
 
-The web app is a plain Next.js 16 app; `pnpm -F web build` passes from a clean clone. The demo must stay up through
-Nov 25.
+Live at https://ainek.vercel.app since Nov 8, 2026: the Vercel project `ainek` in Bektur's Hobby account, production
+built from `main`. The web app is a plain Next.js 16 app; `pnpm -F web build` passes from a clean clone. The demo must
+stay up through Nov 25.
 
-**On the import form** (Vercel → Add New → Project):
+**Hobby plan and a private repository.** Vercel builds only commits whose author is the account owner (matched through
+the GitHub login). While the repository is private, a branch pushed by anyone else gets a failed Vercel check instead
+of a preview, and a PR merged by anyone else reaches production only with the owner's next merge. That is Vercel's rule,
+not a failure of the code; it ends when the repository is public. Hobby is for non-commercial use: no payments, ads or
+paid hosting on the site.
 
-1. Import `sadabaevb/ainek` from GitHub. Give Vercel's GitHub app access to this repository only ("Only select
-   repositories"). Never deploy with the `vercel` CLI from a working copy: it uploads local files (`.vercelignore`
-   keeps `.env` out of such an upload, as a backstop).
-2. **Root Directory:** `apps/web`. Keep "Include source files outside of the Root Directory" on: the app imports
-   `packages/proof` (workspace package) and `docs/samples/disclosure.sample.json`. Framework preset Next.js (detected);
-   the install command stays the default (`pnpm install` at the workspace root, from `pnpm-lock.yaml`).
-3. **Environment variables:**
-   - `NEARAI_API_KEY`: a separate workspace key made for this deployment in the team's cloud.near.ai account, with a
-     small spend limit (for example $5). Type Secret (formerly "Sensitive": write-only once saved), environment
-     Production only: every pushed branch gets a Preview deployment, and it should not carry the key. Never paste the
-     key into chat, git or an issue.
-   - Public settings, environments Production and Preview (so previews read the same log), values from `.env.example`: `NEARAI_BASE_URL`, `NEARAI_MODEL`, `NEARAI_INCOGNITO_MODEL`, `NEAR_NETWORK=testnet`, `AINEK_CONTRACT`, `AINEK_LOG_SOURCE=contract`, `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`, `AINEK_ACCEPTED_TCB`. `NEAR_RPC_URL` only to override the FastNear default.
+**On the import form** (Vercel → Add New → Project → `sadabaevb/ainek`):
+
+1. Give Vercel's GitHub app access to this repository only ("Only select repositories"). Never deploy with the `vercel`
+   CLI from a working copy: it uploads local files (`.vercelignore` keeps `.env` out of such an upload, as a backstop).
+2. Vercel finds three apps (`apps/web`, `jobs/policy`, `services/verifier`) and offers the "Services" preset, which
+   needs a `vercel.json`. Do not use it: press "Import single project" next to **web** (`apps/web`, Next.js). That sets
+   the Root Directory to `apps/web`. The app imports `packages/proof` and `docs/samples/*.json` from outside it, so a
+   build that passes shows "Include source files outside of the Root Directory" is on (the default). The install
+   command stays the default (`pnpm install` at the workspace root, from `pnpm-lock.yaml`).
+3. **Environment Variables:** the public settings only. Paste them as one block into the Key field (Vercel splits it
+   into rows), keep the environments at "Production and Preview" (so previews read the same log), and switch off each
+   row's lock: the values are public, and a locked value cannot be read back to check it. Values from `.env.example`:
+   ```
+   NEARAI_BASE_URL=https://cloud-api.near.ai/v1
+   NEARAI_MODEL=z-ai/glm-5.3-flash
+   NEARAI_INCOGNITO_MODEL=anthropic/claude-haiku-5-5
+   NEAR_NETWORK=testnet
+   AINEK_CONTRACT=ainek-log-dastan.testnet
+   AINEK_LOG_SOURCE=contract
+   AINEK_TRUSTED_VERIFIERS=ainek-dev-dastan.testnet
+   AINEK_QUORUM=1
+   AINEK_ACCEPTED_TCB=UpToDate
+   ```
+   - The key comes after the first deploy (step 5), where its environment is set on its own.
    - Nothing else: the web app never reads the verifier, agent, Telegram or OutLayer secrets.
    - The tamper switch is a client-side demo control (`?tamper=1` or the checkbox) and stays available on the hosted
      demo on purpose: it is the demo of the refusal.
-4. Deploy.
+4. Deploy. Without the key the chat answers 503; the other pages work.
 
 **In Project Settings afterwards:**
 
-5. General → Node.js Version: 24 (the root `package.json` asks for `>=24`); redeploy if it was different.
-6. Environment Variables: `NEARAI_API_KEY` shows Production only.
+5. **The key:** Settings → Environments → Production → Add Environment Variable (there is no separate "Environment
+   Variables" menu item: variables live under each environment). Type **Secret** (cannot be revealed after saving), Key
+   `NEARAI_API_KEY`, Environments **Production** only: every pushed branch gets a Preview deployment, and it should not
+   carry the key. Use a separate workspace key made for this deployment in the team's cloud.near.ai account, with a
+   small spend limit (for example $5). Never paste the key into chat, git or an issue.
+6. Build and Deployment → Node.js Version: 24.x (the root `package.json` asks for `>=24`).
 7. Deployment Protection → Vercel Authentication: "Standard Protection", so previews need a Vercel login; the
    production domain stays public.
-8. Firewall → Configure → New Rule: request path starts with `/api/nearai/v1/chat/completions` → rate limit, 10 requests
+8. Deployments → the latest deployment → ⋯ → Redeploy: the key and the Node version apply only to a new build.
+9. Firewall → Configure → New Rule: request path starts with `/api/nearai/v1/chat/completions` → rate limit, 10 requests
    per 60 s per IP → deny. The Hobby plan allows one such rule. The relay's own limit lives in each serverless
    instance's memory; this one is shared.
-9. Two-factor authentication on the GitHub and Vercel accounts of both of us.
+10. Two-factor authentication on the GitHub and Vercel accounts of both of us.
 
 **Check, then share:**
 
-10. `/log` shows the live log; the chat verifies (or refuses, if the 24-hour log window is empty: that is the
-    fail-closed rule, see `/log`); `/auditor` → "Use the sample file" → Check → "checks out";
-    `curl -sI <url>` shows `Content-Security-Policy: frame-ancestors 'none'`. The firewall rule, with nothing spent
+11. `/log` shows the live log; `/auditor` → "Use the sample file" → Check → "checks out"; `curl -sI <url>` shows
+    `Content-Security-Policy: frame-ancestors 'none'`. The key, with nothing spent: in the browser console on the site,
+    `fetch('/api/nearai/v1/model/' + encodeURIComponent('z-ai/glm-5.3-flash')).then((r) => r.status)` gives 200 (503
+    without the key; this reads the model's metadata, no completion). Then one chat message: it verifies (or refuses,
+    if the 24-hour log window is empty: that is the fail-closed rule, see `/log`). The firewall rule, with nothing spent
     (the relay refuses an empty body before it uses the key):
     `for i in $(seq 11); do curl -s -o /dev/null -w '%{http_code} ' -X POST -H "Origin: <url>" -H 'content-type: application/json' -d '{}' <url>/api/nearai/v1/chat/completions; done`
     prints ten `400` and then the firewall's refusal.
-11. Put the URL into the README (the "hosted demo link" TODO) and into the submission form.
+12. Put the URL into the README and into the submission form.
 
-Settings names and defaults above are Vercel's as of Nov 2026; confirm them in the dashboard when creating the project.
+Settings names and defaults above are Vercel's as of Nov 8, 2026, as seen while creating the project.
 
 ## What runs where
 
