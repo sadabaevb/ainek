@@ -24,7 +24,7 @@ test('the sample disclosure file (docs/samples) verifies offline against its emb
   const report = verifyModelProof(d.proof, d.requestBody, d.responseBody, d.logEntry);
   assert.ok(report.checks.every((c) => c.status === 'ok'), JSON.stringify(report.checks, null, 2));
   assert.equal(commitOf(d.proof.salt as string, d.proof), d.proof.commit);
-  assert.equal(d.proof.commitTx, undefined, 'the sample was produced by pnpm demo:live, which does not commit');
+  assert.match(d.proof.commitTx ?? '', /^[1-9A-HJ-NP-Za-km-z]{43,44}$/, 'the sample was committed from the web chat, so it names its transaction');
 });
 
 test('a bare proof is not a disclosure, and an unknown field or version is rejected', () => {
