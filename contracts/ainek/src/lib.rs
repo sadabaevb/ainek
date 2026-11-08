@@ -22,6 +22,11 @@ use near_sdk::{env, near, require, AccountId, PanicOnDefault};
 
 /// Upper bound for list views so a single RPC call stays within node limits.
 const MAX_PAGE: u32 = 100;
+/// Longest text field of a `KeyEntryInput`, bytes: real values are 18 (model id), 64 (hex keys) and 71 (`sha256:` digests).
+/// The contract pays for log storage, so without a bound one verifier key could write megabyte entries at its expense.
+const MAX_FIELD_BYTES: usize = 128;
+/// A compose names a handful of images; the live deployments have 4.
+const MAX_IMAGE_DIGESTS: usize = 16;
 
 /// What a verifier submits (SPEC §4.1 `KeyEntryInput`). Field names are the JSON field names; the
 /// same shape is `KeyEntryInput` in `packages/proof/src/schema.ts`.
@@ -172,8 +177,8 @@ impl Contract {
 
     // ---- verifiers ------------------------------------------------------------------------------
 
-    /// Owner-gated for now (SPEC §4.1; open registration is pending the Nov 3 sync decision). Needs 1 yoctoNEAR,
-    /// see `assert_owner_full_access`.
+    /// Owner-gated (decided Nov 7, docs/DECISIONS.md): the owner adds every verifier, also after the lock, and the
+    /// client decides which of them to trust (SPEC §4.1). Needs 1 yoctoNEAR, see `assert_owner_full_access`.
     #[payable]
     pub fn register_verifier(&mut self, account_id: AccountId) {
         self.assert_owner_full_access();
@@ -293,9 +298,11 @@ impl Contract {
     }
 
     /// Entries for `model` whose `observed_at` is within `max_age_ns` of the current block time,
-    /// newest first, at most 100. `observed_at` is the verifier's clock: the contract records it,
-    /// the client's trust policy decides which verifiers to believe (SPEC §4.1, §7.1).
-    pub fn latest_keys(&self, model: String, max_age_ns: U64) -> Vec<KeyEntry> {
+    /// newest first, at most 100; with `verifier`, only that verifier's. `observed_at` is the verifier's
+    /// clock: the contract records it, the client's trust policy decides which verifiers to believe
+    /// (SPEC §4.1, §7.1). The filter is what lets the client read a trusted verifier's entries even
+    /// when another verifier wrote the newest 100 of the model.
+    pub fn latest_keys(&self, model: String, max_age_ns: U64, verifier: Option<AccountId>) -> Vec<KeyEntry> {
         let cutoff_ns = env::block_timestamp().saturating_sub(max_age_ns.0);
         let Some(indices) = self.by_model.get(&model) else {
             return vec![];
@@ -304,6 +311,7 @@ impl Contract {
             .iter()
             .rev()
             .filter_map(|&i| self.entries.get(i as u32))
+            .filter(|e| verifier.as_ref().is_none_or(|v| &e.verifier == v))
             .filter(|e| e.observed_at.0.saturating_mul(1_000_000) >= cutoff_ns)
             .take(MAX_PAGE as usize)
             .cloned()
@@ -405,6 +413,22 @@ pub fn entry_hash_of(prev_hash: &str, input: &KeyEntryInput, verifier: &AccountI
 /// Mirror of the zod `KeyEntryInput` schema: reject what the client would refuse to parse anyway,
 /// so garbage never enters the chain.
 fn validate_input(e: &KeyEntryInput) {
+    for (name, value) in [
+        ("model", &e.model),
+        ("signing_address", &e.signing_address),
+        ("signing_public_key", &e.signing_public_key),
+        ("tcb_status", &e.tcb_status),
+    ] {
+        require!(value.len() <= MAX_FIELD_BYTES, format!("{name} is longer than {MAX_FIELD_BYTES} bytes"));
+    }
+    require!(
+        e.image_digests.len() <= MAX_IMAGE_DIGESTS,
+        format!("image_digests has more than {MAX_IMAGE_DIGESTS} entries")
+    );
+    require!(
+        e.image_digests.iter().all(|d| d.len() <= MAX_FIELD_BYTES),
+        format!("an image digest is longer than {MAX_FIELD_BYTES} bytes")
+    );
     require!(!e.model.is_empty(), "model is required");
     require!(!e.signing_address.is_empty(), "signing_address is required");
     require!(
@@ -608,13 +632,13 @@ mod tests {
         let day_ns = U64(24 * 3600 * 1_000_000_000);
         // One hour after the observation: inside a 24 h window.
         set_caller(&verifier, observed_ns + 3600 * 1_000_000_000);
-        assert_eq!(c.latest_keys(input.model.clone(), day_ns).len(), 1);
-        assert!(c.latest_keys("other/model".into(), day_ns).is_empty());
+        assert_eq!(c.latest_keys(input.model.clone(), day_ns, None).len(), 1);
+        assert!(c.latest_keys("other/model".into(), day_ns, None).is_empty());
         // Two days later: outside the window — a stale key must not count as current.
         set_caller(&verifier, observed_ns + 2 * day_ns.0);
-        assert!(c.latest_keys(input.model.clone(), day_ns).is_empty());
+        assert!(c.latest_keys(input.model.clone(), day_ns, None).is_empty());
         // "No limit" from the /log page: u64::MAX must not overflow the cutoff arithmetic.
-        assert_eq!(c.latest_keys(input.model, U64(u64::MAX)).len(), 1);
+        assert_eq!(c.latest_keys(input.model, U64(u64::MAX), None).len(), 1);
     }
 
     #[test]
@@ -630,6 +654,61 @@ mod tests {
         assert_eq!(event["event"], "key_logged");
         assert_eq!(event["data"][0]["entry_hash"], expected);
         assert_eq!(event["data"][0]["verifier"], verifier);
+    }
+
+    /// A busy or leaked verifier key can write the newest 100 entries of a model; the client's trusted
+    /// verifier must still be readable behind them, or the client would refuse to send for no reason.
+    #[test]
+    fn latest_keys_filters_by_verifier_past_the_page_limit() {
+        let (input, trusted, _) = vector_input();
+        let mut c = contract_with_verifier(&trusted);
+        set_caller_with_deposit("owner.testnet", 1);
+        c.register_verifier(acc("noisy.testnet"));
+        set_caller(&trusted, 0);
+        c.log_key(input.clone());
+        for _ in 0..MAX_PAGE {
+            set_caller("noisy.testnet", 0); // a fresh context per call: the mock keeps all event logs of one context, and 100 overflow it
+            c.log_key(input.clone());
+        }
+        let no_limit = U64(u64::MAX);
+        let all = c.latest_keys(input.model.clone(), no_limit, None);
+        assert_eq!(all.len(), MAX_PAGE as usize);
+        assert!(all.iter().all(|e| e.verifier == acc("noisy.testnet")), "the trusted entry is crowded out of the page");
+        let mine = c.latest_keys(input.model.clone(), no_limit, Some(acc(&trusted)));
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].index, 0);
+        assert!(c.latest_keys(input.model, no_limit, Some(acc("nobody.testnet"))).is_empty());
+    }
+
+    /// The contract pays for the log's storage; an entry's size must be bounded or one verifier key could spend its balance.
+    #[test]
+    #[should_panic(expected = "model is longer than 128 bytes")]
+    fn rejects_an_oversized_text_field() {
+        let (mut input, verifier, _) = vector_input();
+        input.model = "m".repeat(MAX_FIELD_BYTES + 1);
+        let mut c = contract_with_verifier(&verifier);
+        set_caller(&verifier, 0);
+        c.log_key(input);
+    }
+
+    #[test]
+    #[should_panic(expected = "image_digests has more than 16 entries")]
+    fn rejects_too_many_image_digests() {
+        let (mut input, verifier, _) = vector_input();
+        input.image_digests = vec![input.image_digests[0].clone(); MAX_IMAGE_DIGESTS + 1];
+        let mut c = contract_with_verifier(&verifier);
+        set_caller(&verifier, 0);
+        c.log_key(input);
+    }
+
+    #[test]
+    #[should_panic(expected = "an image digest is longer than 128 bytes")]
+    fn rejects_an_oversized_image_digest() {
+        let (mut input, verifier, _) = vector_input();
+        input.image_digests.push("d".repeat(MAX_FIELD_BYTES + 1));
+        let mut c = contract_with_verifier(&verifier);
+        set_caller(&verifier, 0);
+        c.log_key(input);
     }
 
     // ---- proof commits ------------------------------------------------------------------------

@@ -395,9 +395,9 @@ Before starting:
 - Everything that changes the contract is decided and merged. After the lock nothing can be revoked or re-allowed:
   not a verifier, not a compose. Decided on Nov 7 (`docs/DECISIONS.md`): the owner keeps verifier registration, and
   `set_owner` stays one-step. Not planned as of Nov 7, to confirm with the lock decision: removing or pausing a verifier, charging
-  log storage to the verifier, a method to withdraw the contract's NEAR (DEV-NOTES). Open before the lock:
-  - reading the log per verifier (`latest_keys` returns the newest 100 entries of all verifiers together, see below);
-  - size limits on `log_key`'s input;
+  log storage to the verifier, a method to withdraw the contract's NEAR (DEV-NOTES). Done on Nov 8: reading the log per
+  verifier (`latest_keys` takes an optional `verifier`) and size limits on `log_key`'s input (128 bytes per text field
+  and digest, 16 digests). Open before the lock:
   - a live run of the final build on testnet before the keys go.
 
 Then, with every command ending in `network-config testnet sign-with-keychain send`:
@@ -427,9 +427,10 @@ change or remove them). What it does not change:
   then irreversible: a wrong account loses the role for good. Whoever owns the contract can also move every token it
   holds, by registering an agent with a decision key of their own.
 - A registered verifier can still write entries, and there is no way to remove a verifier: a leaked verifier key can
-  append forever. Clients choose which verifiers they trust, but that does not contain it: `latest_keys` returns the
-  newest 100 entries for a model from all verifiers together, so a flood of entries pushes the trusted verifiers' entries
-  out of what the client sees (read in the code, not tried).
+  append forever, at the contract's expense (bounded per entry by the size limits above). Clients choose which verifiers
+  they trust, and since Nov 8 can read a trusted verifier's entries on their own (`latest_keys` with `verifier`): without
+  the argument the newest 100 entries of a model come from all verifiers together, so a flood from one key pushes the
+  others out of that page. The web client still reads without the argument (Bektur's side).
 - The contract account pays for the storage of log entries. If its balance runs low, every write fails, `log_key`,
   `commit_proof` and `propose_action` alike, until someone sends the account NEAR; a plain transfer works and needs
   no key. NEAR on the account cannot be taken out again.
