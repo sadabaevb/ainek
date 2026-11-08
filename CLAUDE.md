@@ -54,7 +54,8 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
 ## Stack and versions (check npm/crates before pinning; pin exact versions in lockfiles)
 
 - `@nearai/inference-sdk` 0.2.1 (published 2026-10-29). Server code uses `@nearai/inference-sdk/node`
-  on **Node 24+**; browser uses the root entry; the NVIDIA NRAS POST and the Intel PCCS collateral go through NEAR AI's own proxies; our relay only forwards the four SDK paths.
+  on **Node 24+** and calls NVIDIA NRAS and Intel PCS (`api.trustedservices.intel.com`) directly; the browser uses the root
+  entry, which reaches them through NEAR AI's own proxies. Our relay only forwards the four SDK paths.
 - Model: `z-ai/glm-5.3-flash` (Private TEE tier). Always pass `signingAlgo: 'ed25519'` explicitly,
   header `x-no-aliasing: true`, `Accept-Encoding: identity` when hashing bytes yourself, `e2ee: true`
   and `X-Encrypt-All-Fields: true` (tool calls encrypted). Use `/v1/chat/completions`, never
@@ -67,11 +68,11 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
 
 ## Working rules
 
-1. **Clean-clone rule.** Every merged change keeps `pnpm i && pnpm demo` (and `cargo near build` for
+1. **Clean-clone rule.** Every merged change keeps `pnpm i && pnpm demo` (and `cargo near build non-reproducible-wasm` for
    the contract) working from a fresh clone. Judges' first reviewer is Claude Code running the README.
 2. **No secrets in git.** `.env.example` lists every variable; real values only in `.env`.
    NEAR AI API keys are workspace keys with a spend limit.
-3. **Testnet first.** `ainek.testnet` contract, testnet NEP-141 demo token. Mainnet only for tiny
+3. **Testnet first.** The contract in `AINEK_CONTRACT` (`.env.example`, docs/DEPLOY.md), testnet NEP-141 demo token. Mainnet only for tiny
    optional Intents stretch, never required to run the demo.
 4. **Honest claims.** Read `docs/CLAIMS.md` before writing any user-facing text. Say "attested
    deployment of model X", not "verified weights"; "our server cannot read", not "nobody can";
@@ -108,13 +109,14 @@ Reference implementations to copy patterns from (not code wholesale; disclose an
 ## Commands (keep these working; wire them in root package.json)
 
 ```
-pnpm i                     install everything
-pnpm demo                  run Tier-1 demo end-to-end against testnet (web + verifier once)
-pnpm -F web dev            Next.js dev server
-pnpm -F verifier start     verifier daemon
-pnpm -F agent start        agent service
-cargo near build           build the contract (in contracts/ainek)
-cargo test                 contract tests (unit + near-sandbox)
+pnpm i                                   install everything
+pnpm demo                                offline replay of the Tier-1 checks on recorded evidence (no key, no network)
+pnpm demo:live                           the same checks live against NEAR AI and testnet (needs NEARAI_API_KEY)
+pnpm -F web dev                          Next.js dev server
+pnpm -F verifier start                   verifier daemon
+pnpm -F agent start                      agent service
+cargo near build non-reproducible-wasm   build the contract (in contracts/ainek)
+cargo test                               contract tests (unit + near-sandbox)
 ```
 
 ## Definition of done for the submission (Nov 14)
