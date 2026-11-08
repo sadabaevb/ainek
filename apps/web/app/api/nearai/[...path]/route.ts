@@ -22,6 +22,7 @@ const cfg = ainekConfigFromEnv(process.env);
 const upstreamOrigin = new URL(cfg.nearaiBaseUrl).origin;
 const allowedModels = new Set([cfg.model, cfg.incognitoModel]);
 const hits = new Map<string, number[]>(); // ip -> request timestamps inside the window, this instance only
+let lastSweep = 0;
 
 function rateLimited(ip: string): boolean {
   const now = Date.now();
@@ -32,8 +33,37 @@ function rateLimited(ip: string): boolean {
   }
   recent.push(now);
   hits.set(ip, recent);
-  if (hits.size > 1_000) for (const [other, times] of hits) if (times.every((t) => now - t >= RATE_LIMIT.windowMs)) hits.delete(other); // forget idle IPs
+  if (now - lastSweep >= RATE_LIMIT.windowMs) {
+    lastSweep = now; // forget idle IPs, at most once per window
+    for (const [other, times] of hits) if (times.every((t) => now - t >= RATE_LIMIT.windowMs)) hits.delete(other);
+  }
   return false;
+}
+
+/** The body, or null once it passes `max` bytes: a request without a Content-Length is not read in full either. */
+async function readLimited(req: Request, max: number): Promise<ArrayBuffer | null> {
+  if (Number(req.headers.get('content-length') ?? 0) > max) return null;
+  if (!req.body) return new ArrayBuffer(0);
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = req.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.byteLength;
+  }
+  return out.buffer;
 }
 
 function sameOrigin(req: Request, origin: string): boolean {
@@ -54,9 +84,8 @@ async function proxy(req: Request): Promise<Response> {
 
   let body: ArrayBuffer | null = null;
   if (req.method === 'POST') {
-    if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return NextResponse.json({ error: `body larger than ${MAX_BODY_BYTES} bytes` }, { status: 413 });
-    body = await req.arrayBuffer();
-    if (body.byteLength > MAX_BODY_BYTES) return NextResponse.json({ error: `body larger than ${MAX_BODY_BYTES} bytes` }, { status: 413 });
+    body = await readLimited(req, MAX_BODY_BYTES);
+    if (body === null) return NextResponse.json({ error: `body larger than ${MAX_BODY_BYTES} bytes` }, { status: 413 });
     const problem = completionProblem(body, allowedModels);
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
   }
@@ -70,7 +99,9 @@ async function proxy(req: Request): Promise<Response> {
     if (ALLOWED_REQUEST_HEADERS.has(name)) headers.set(name, value);
   });
 
-  const upstream = await fetch(`${upstreamOrigin}/${rest}${url.search}`, { method: req.method, headers, body, redirect: 'manual' });
+  // The query as the guard parsed and checked it, not the raw string, so upstream cannot read a parameter the guard did not see.
+  const query = url.searchParams.toString();
+  const upstream = await fetch(`${upstreamOrigin}/${rest}${query ? `?${query}` : ''}`, { method: req.method, headers, body, redirect: 'manual' });
 
   const out = new Headers();
   upstream.headers.forEach((value, name) => {

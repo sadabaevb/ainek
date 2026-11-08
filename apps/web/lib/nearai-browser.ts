@@ -2,8 +2,7 @@
 // encrypt to the verified model key, send through our byte-exact proxy, keep the exact bytes, verify the
 // signature later. Nothing here touches the API key: /api/nearai adds it server-side.
 import {
-  AttestationClient,
-  NO_ALIASING_HEADER,
+  type AttestationClient,
   findModelAttestationForSignature,
   getSdkError,
   prepareE2eeChatRequest,
@@ -18,15 +17,13 @@ import {
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
 import { parseChatCompletion, withRetry } from '@ainek/proof';
+import { chatRequest, relayAttestationClient, type ChatMessage } from './nearai-requests';
 import { getDeployment, putDeployment } from './store';
+
+export type { ChatMessage };
 
 const SIGNING_ALGO = 'ed25519' as const;
 const CACHE_TTL_MS = 60 * 60 * 1000;
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
 
 export interface AttestationPolicy {
   acceptedTcbStatuses: TcbStatus[];
@@ -56,7 +53,7 @@ function baseUrl(): string {
 
 let attestationClient: AttestationClient | null = null;
 function client(): AttestationClient {
-  attestationClient ??= new AttestationClient({ baseUrl: baseUrl(), headers: { [NO_ALIASING_HEADER]: 'true' } });
+  attestationClient ??= relayAttestationClient(baseUrl());
   return attestationClient;
 }
 
@@ -131,15 +128,6 @@ function policyKeyOf(policy: AttestationPolicy): string {
   return JSON.stringify({ tcb: [...policy.acceptedTcbStatuses].sort(), gpuEvidence: 'required' });
 }
 
-// No Accept-Encoding here: browsers drop it as a forbidden header; the proxy asks upstream for identity itself.
-function chatRequest(model: string, messages: ChatMessage[]): Request {
-  return new Request(`${baseUrl()}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', [NO_ALIASING_HEADER]: 'true' },
-    body: JSON.stringify({ model, messages, stream: false }),
-  });
-}
-
 async function toExchange(requestBody: Uint8Array, rawResponse: Response, decrypted: Response): Promise<Exchange> {
   const [responseBytes, plaintext] = await Promise.all([rawResponse.arrayBuffer(), decrypted.text()]);
   const completion = parseChatCompletion(plaintext);
@@ -159,7 +147,7 @@ export interface PreparedE2ee {
 export async function prepareE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation): Promise<PreparedE2ee> {
   if (modelAttestation.signingPublicKey === undefined) throw new Error('verified model report has no E2EE public key');
   const prepared = await prepareE2eeChatRequest({
-    request: chatRequest(model, messages),
+    request: chatRequest(baseUrl(), model, messages),
     modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelAttestation.signingPublicKey },
   });
   return { prepared, requestBody: new Uint8Array(await prepared.request.clone().arrayBuffer()) };
@@ -174,7 +162,7 @@ export async function transmitE2ee({ prepared, requestBody }: PreparedE2ee): Pro
 
 /** Plaintext request for the user-chosen Incognito model (no model attestation): no E2EE is possible, only a gateway signature. */
 export async function sendPlain(model: string, messages: ChatMessage[]): Promise<Exchange> {
-  const request = chatRequest(model, messages);
+  const request = chatRequest(baseUrl(), model, messages);
   const requestBody = new Uint8Array(await request.clone().arrayBuffer());
   const response = await fetch(request);
   if (!response.ok) throw await httpError(response);
