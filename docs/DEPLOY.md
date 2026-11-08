@@ -9,71 +9,58 @@ Live at https://ainek.vercel.app since Nov 8, 2026: the Vercel project `ainek` i
 built from `main`. The web app is a plain Next.js 16 app; `pnpm -F web build` passes from a clean clone. The demo must
 stay up through Nov 25.
 
-**Hobby plan and a private repository.** Vercel builds only commits whose author is the account owner (matched through
-the GitHub login). While the repository is private, a branch pushed by anyone else gets a failed Vercel check instead
-of a preview, and a PR merged by anyone else reaches production only with the owner's next merge. That is Vercel's rule,
-not a failure of the code; it ends when the repository is public. Hobby is for non-commercial use: no payments, ads or
-paid hosting on the site.
+**Hobby plan and a private repository.** While the repository is private, Hobby builds only the owner's commits
+(matched by GitHub login): anyone else's branch gets a failed Vercel check, which is not a code failure, and a PR merged
+by anyone else reaches production with the owner's next merge. Making the repository public ends this. Hobby is for
+non-commercial use: no payments, ads or paid hosting on the site.
 
 **On the import form** (Vercel → Add New → Project → `sadabaevb/ainek`):
 
 1. Give Vercel's GitHub app access to this repository only ("Only select repositories"). Never deploy with the `vercel`
    CLI from a working copy: it uploads local files (`.vercelignore` keeps `.env` out of such an upload, as a backstop).
 2. Vercel finds three apps (`apps/web`, `jobs/policy`, `services/verifier`) and offers the "Services" preset, which
-   needs a `vercel.json`. Do not use it: press "Import single project" next to **web** (`apps/web`, Next.js). That sets
-   the Root Directory to `apps/web`. The app imports `packages/proof` and `docs/samples/*.json` from outside it, so a
-   build that passes shows "Include source files outside of the Root Directory" is on (the default). The install
-   command stays the default (`pnpm install` at the workspace root, from `pnpm-lock.yaml`).
-3. **Environment Variables:** the public settings only. Paste them as one block into the Key field (Vercel splits it
-   into rows), keep the environments at "Production and Preview" (so previews read the same log), and switch off each
-   row's lock: the values are public, and a locked value cannot be read back to check it. Values from `.env.example`:
-   ```
-   NEARAI_BASE_URL=https://cloud-api.near.ai/v1
-   NEARAI_MODEL=z-ai/glm-5.3-flash
-   NEARAI_INCOGNITO_MODEL=anthropic/claude-haiku-5-5
-   NEAR_NETWORK=testnet
-   AINEK_CONTRACT=ainek-log-dastan.testnet
-   AINEK_LOG_SOURCE=contract
-   AINEK_TRUSTED_VERIFIERS=ainek-dev-dastan.testnet
-   AINEK_QUORUM=1
-   AINEK_ACCEPTED_TCB=UpToDate
-   ```
-   - The key comes after the first deploy (step 5), where its environment is set on its own.
-   - Nothing else: the web app never reads the verifier, agent, Telegram or OutLayer secrets.
+   needs a `vercel.json`. Do not use it: press "Import single project" next to **web** (`apps/web`, Next.js), which sets
+   the Root Directory to `apps/web`. "Include source files outside of the Root Directory" must stay on (the default):
+   the app imports `packages/proof` and `docs/samples/*.json`. The install command stays the default (`pnpm install` at
+   the workspace root, from `pnpm-lock.yaml`); Node 24 comes from `engines` in `apps/web/package.json`.
+3. **Environment Variables: none here.** The public settings in `.env.example` (`NEARAI_MODEL`, `AINEK_CONTRACT`, the
+   trust set and the rest) have the same values as defaults in `packages/proof/src/config.ts`, so the deployed site
+   follows the code. Set one in Vercel only to override it: from then on the dashboard wins over git until the variable
+   is removed. The key comes in step 5.
+   - The web app never reads the verifier, agent, Telegram or OutLayer secrets.
    - The tamper switch is a client-side demo control (`?tamper=1` or the checkbox) and stays available on the hosted
      demo on purpose: it is the demo of the refusal.
 4. Deploy. Without the key the chat answers 503; the other pages work.
 
 **In Project Settings afterwards:**
 
-5. **The key:** Settings → Environments → Production → Add Environment Variable (or "Environment Variables" in the
-   project's left menu). Type **Secret** (cannot be revealed after saving), Key
-   `NEARAI_API_KEY`, Environments **Production** only: every pushed branch gets a Preview deployment, and it should not
-   carry the key. Use a separate workspace key made for this deployment in the team's cloud.near.ai account, with a
-   small spend limit (for example $5). Never paste the key into chat, git or an issue.
-6. Build and Deployment → Node.js Version: 24.x (the root `package.json` asks for `>=24`).
-7. Deployment Protection → Vercel Authentication: "Standard Protection", so previews need a Vercel login; the
+5. **The key:** Settings → Environments → Production → Add Environment Variable: type **Secret** (cannot be revealed
+   after saving), Key `NEARAI_API_KEY`, Environments **Production** only, since every pushed branch gets a Preview
+   deployment and it should not carry the key. Use a separate workspace key made for this deployment in the team's
+   cloud.near.ai account, with a small spend limit (for example $5). Never paste the key into chat, git or an issue.
+6. Deployment Protection → Vercel Authentication: "Standard Protection", so previews need a Vercel login; the
    production domain stays public.
-8. Deployments → the latest deployment → ⋯ → Redeploy: the key and the Node version apply only to a new build.
-9. Firewall (project's left menu) → Rules → Project rules → Add Rule. Name `chat rate limit`; If `Request Path` `Starts
+7. Deployments → the latest deployment → ⋯ → Redeploy: the key applies only to a new build.
+8. Firewall (project's left menu) → Rules → Project rules → Add Rule. Name `chat rate limit`; If `Request Path` `Starts
    with` `/api/nearai/v1/chat/completions`; Rate Limit `Fixed Window`, 60 seconds, 10 requests, key IP Address; Then
-   `Too Many Requests (429)` → Add Rule. It applies without a redeploy. The Hobby plan allows one such rule. The relay's
-   own limit lives in each serverless instance's memory; this one is shared.
-10. Two-factor authentication on the GitHub and Vercel accounts of both of us.
+   `Too Many Requests (429)` → Add Rule. No redeploy needed; Hobby allows one such rule. Unlike the relay's in-memory
+   limit in each instance, this one is shared.
+9. Two-factor authentication on the GitHub and Vercel accounts of both of us.
 
-**Check, then share:**
+**Check** (`U=https://ainek.vercel.app`; everything except the chat message is free):
 
-11. `/log` shows the live log; `/auditor` → "Use the sample file" → Check → "checks out"; `curl -sI <url>` shows
-    `Content-Security-Policy: frame-ancestors 'none'`. The key, with nothing spent: in the browser console on the site,
-    `fetch('/api/nearai/v1/model/' + encodeURIComponent('z-ai/glm-5.3-flash')).then((r) => r.status)` gives 200 (503
-    without the key; this reads the model's metadata, no completion). Then one chat message: it verifies (or refuses,
-    if the 24-hour log window is empty: that is the fail-closed rule, see `/log`). The firewall rule, with nothing spent
-    (the relay refuses an empty body before it uses the key):
-    `for i in $(seq 11); do curl -s -o /dev/null -w '%{http_code} ' -X POST -H "Origin: <url>" -H 'content-type: application/json' -d '{}' <url>/api/nearai/v1/chat/completions; done`
-    prints ten `400` and then `429` (with `x-vercel-mitigated: deny`).
-12. Put the URL into the README and into the submission form.
+10. - Pages: `/log` shows the live log; `/auditor` → "Use the sample file" → Check → "checks out".
+    - Headers: `curl -sI $U` shows `Content-Security-Policy: frame-ancestors 'none'`.
+    - The key, model metadata only: `curl -s -o /dev/null -w '%{http_code}\n' -H "Origin: $U" "$U/api/nearai/v1/model/z-ai%2Fglm-5.3-flash"`
+      → 200, or 503 without the key (the model is `NEARAI_MODEL`, `/` written as `%2F`).
+    - One chat message, which spends the key: it verifies, or refuses if the 24-hour log window is empty (the
+      fail-closed rule, see `/log`).
+    - The firewall (the relay refuses an empty body before it uses the key):
+      `for i in $(seq 11); do curl -s -o /dev/null -w '%{http_code} ' -X POST -H "Origin: $U" -H 'content-type: application/json' -d '{}' "$U/api/nearai/v1/chat/completions"; done`
+      prints ten `400`, then `429` (`x-vercel-mitigated: deny`).
+11. The URL goes into the submission form; the README links it already.
 
-Settings names and defaults above are Vercel's as of Nov 8, 2026, as seen while creating the project.
+Settings names and defaults above are as the dashboard showed them on Nov 8, 2026.
 
 ## What runs where
 
@@ -133,8 +120,8 @@ been tried. Run one daemon per verifier account: two with the same key race and 
 
 ## Agent service (Tier 2)
 
-Meant to run next to the verifier (Hetzner); so far it has run from Bektur's laptop (Nov 7) and stays off between runs,
-since every message spends the NEAR AI key. One process, from a clean clone: `pnpm i && pnpm -F agent start`. Variables are in
+Runs only while demoing, on the owner's machine or next to the verifier (Hetzner): the bot answers only the owner, and
+every message spends the NEAR AI key. One process, from a clean clone: `pnpm i && pnpm -F agent start`. Variables are in
 `.env.example`, block "Agent service". Before the first message:
 
 1. The agent account exists, with a function-call key scoped to the contract and to exactly `propose_action` and
@@ -149,7 +136,7 @@ since every message spends the NEAR AI key. One process, from a clean clone: `pn
    in `TELEGRAM_OWNER_CHAT_ID`: the service answers only in that private chat. Once it runs, `/start` checks the setup and spends
    nothing; any other text runs the model and can move money.
 
-Give the agent its own env file. The owner's keys never go on this server: `pnpm demo:stop` runs on the owner's machine from
+Give the agent its own env file. The owner's keys never go into the agent's environment: `pnpm demo:stop` reads them from
 `.env.owner`, and the service refuses to start if `OWNER_PRIVATE_KEY` or `AGENT_ADMIN_PRIVATE_KEY` is in its environment. Other
 `*_PRIVATE_KEY` variables, such as the verifier's on a shared `.env`, only produce a warning. Run one instance: updates are
 handled one at a time, and pending ones are dropped at start, so a message sent while it is down has to be sent again. If the
