@@ -75,7 +75,7 @@ const entries: KeyEntry[] = [rec.logEntry];
 const attestedKey = verifiedModel?.signer.signingAddress ?? model.signing_address;
 const seenKey = tamper ? DEMO_SWAPPED_KEY : attestedKey;
 if (tamper) line(NA, `tamper mode: the client is shown key ${short(seenKey)} instead of the attested ${short(attestedKey)}`);
-line(NA, `log source: docs/samples/key-entry.sample.json (sample entry; the live demo reads latest_keys on ${cfg.contract})`);
+line(NA, `log source: docs/samples/key-entry.sample.json (entry #0 recorded from the chain; the live demo reads latest_keys on ${cfg.contract})`);
 const verdict = evaluateKeyLog(entries, {
   model: model.model_name,
   signingAddress: seenKey,
@@ -122,7 +122,7 @@ const g = gpu as RecordedGpuVerdict | null;
 console.log('\n┌─ Ainek proof card ─ replay ─────────────────────────────────────────');
 console.log(`│ ${verifiedModel ? OK : FAIL} Model: ${model.model_name}, attested deployment (compose ${short(composeHash)})`);
 console.log(`│ ${verifiedModel ? OK : FAIL} Hardware: Intel TDX ${verifiedModel?.tcbStatus ?? '?'}, NVIDIA ${g?.hwmodel ?? '?'} ×${g?.gpus ?? '?'} verified via NRAS. Re-verified offline from the recording.`);
-console.log(`│ ${OK} Key #${rec.logEntry.index} in the public log, logged by ${rec.logEntry.verifier} (sample entry)`);
+console.log(`│ ${OK} Key #${rec.logEntry.index} in the public log, logged by ${rec.logEntry.verifier} (recorded from the chain)`);
 console.log(`│ ${results.every((r) => r.report.ok) ? OK : FAIL} Request and response: hashes match the signature made inside the model TEE (${e2ee.proof.signatureKind}; ${rec.exchanges.length} exchanges checked)`);
 console.log(`│ ${e2ee.proof.e2ee ? OK : NA} End-to-end encryption: ${e2ee.proof.e2ee ? 'yes, encrypted to the attested model key (recorded exchange; plaintext not covered by the proof)' : 'not in this recording'}`);
 console.log(`│ ${NA} On NEAR: commit ${short(e2ee.proof.commit ?? '')} (sample salt, not committed yet)`);

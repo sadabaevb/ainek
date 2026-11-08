@@ -10,7 +10,7 @@ are the *public* signing keys of the gateway and model TEEs, which is the whole 
 | `chat-request.raw.json` | exact request body bytes of one `POST /v1/chat/completions` (no E2EE, `stream: false`) | `Accept-Encoding: identity` |
 | `chat-response.raw.json` | exact response body bytes (1038 B) | these bytes, not a re-serialised object, are what the model TEE hashed |
 | `signature.json` | `GET /v1/signature/7556638665c34ec6ac6cb69579bd8ef2?model=…&signing_algo=ed25519` | `signature_kind: provider_tee`, `text = model:sha256(req):sha256(resp)`, signature = 64 bytes hex |
-| `key-entry.sample.json` | **sample** `KeyEntry` (SPEC §4.1) as a verifier would log it from `attestation-report.json`; not read from the chain | real: model, signing keys, `compose_hash`, `image_digests`, nonce, `report_hash`; placeholders: index 0, `prev_hash ""`, `nras_result_hash ""`, `block_height 0`; `entry_hash` per `packages/proof` |
+| `key-entry.sample.json` | **real** `KeyEntry` (SPEC §4.1): entry #0 of `ainek-log-dastan.testnet`, read with the view `entry({"index": 0})` on Nov 8 and stored as returned; logged by `ainek-dev-dastan.testnet` from `attestation-report.json` | the offline replay's public log; `pnpm test` ties it to the on-chain record in `docs/test-vectors/canonical.json`, `pnpm -F demo check-contract` to the live entry #0; `ita_jwt_hash` and `nras_result_hash` are empty because those tokens were not recorded on Nov 2 |
 | `model-proof.sample.json` | **sample** `ModelProof` (SPEC §5.1) assembled from `signature.json` + the raw bytes, with a fixed test salt and its `commit` | `commitTx` is a placeholder: nothing was committed on-chain; `pnpm -F @ainek/proof test` verifies it end to end |
 | `e2ee-chat-request.raw.json`, `e2ee-chat-response.raw.json` | exact bytes of one **E2EE** exchange (2026-11-03, `pnpm demo:live --record`): request fields encrypted to the attested model key, response fields encrypted to the client's ephemeral key | these ciphertext bytes are what the model TEE hashed and signed; nobody but the recording client could read them |
 | `e2ee-signature.json` | `GET /v1/signature/8e20a4232d22466ebb01105193efd290`, `provider_tee` | same signer as the plaintext sample: one key per model |
@@ -34,3 +34,5 @@ left as received.
 
 Attested facts observed at capture time: gateway `tcb_status=UpToDate`, model `tcb_status=UpToDate`, GPU
 evidence verified via NRAS (`nvidia_payload.arch=HOPPER`, 8 GPUs; NRAS reports GH100, `secboot=true`, `dbgstat=disabled`), `tlsBinding=attested`.
+
+The vectors in `docs/test-vectors/canonical.json` are hash inputs shared with the Rust tests. Their proof and entry still name the made-up `v1.ainek.testnet`, with commit `f415f768…`; the samples above are bound to the real entry #0 instead.

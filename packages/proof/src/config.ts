@@ -30,8 +30,8 @@ export interface AinekConfig {
 
 export type EnvLike = Record<string, string | undefined>;
 
-const SAMPLE_VERIFIERS = 'v1.ainek.testnet,v2.ainek.testnet,v3.ainek.testnet';
-const CONTRACT_VERIFIERS = 'ainek-dev-dastan.testnet';
+// The demo's trust policy for the live log; the replay's recorded entry #0 is by the same verifier (config.test.ts checks).
+const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
 function list(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback).split(',').map((s) => s.trim()).filter(Boolean);
@@ -51,7 +51,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     rpcUrl: env['NEAR_RPC_URL'] ?? (network === 'mainnet' ? 'https://rpc.mainnet.fastnear.com' : 'https://rpc.testnet.fastnear.com'),
     contract: env['AINEK_CONTRACT'] ?? 'ainek-log-dastan.testnet',
     logSource,
-    trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], logSource === 'sample' ? SAMPLE_VERIFIERS : CONTRACT_VERIFIERS),
+    trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',

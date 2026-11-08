@@ -1,5 +1,5 @@
 {
-  "_note": "SAMPLE model proof assembled from signature.json + chat-*.raw.json (captured 2026-11-02, no E2EE). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value, commitTx is a placeholder (nothing was committed on-chain).",
+  "_note": "SAMPLE model proof assembled from signature.json + chat-*.raw.json (captured 2026-11-02, no E2EE). logIndex/verifier refer to key-entry.sample.json; salt is a fixed test value, commitTx is a placeholder (nothing was committed on-chain). On 2026-11-08 it was re-pointed at entry #0 (logged 2026-11-03 for the same key) and its commit recomputed, so verifiedAt, the capture time, predates the entry.",
   "proof": {
     "v": 1,
     "kind": "model",
@@ -15,10 +15,10 @@
     "e2ee": false,
     "toolNames": [],
     "logIndex": 0,
-    "verifier": "v1.ainek.testnet",
+    "verifier": "ainek-dev-dastan.testnet",
     "verifiedAt": "2026-11-02T16:14:00Z",
     "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "commit": "f415f768dc1fa81dfed5a6d1cf421f90b7fa70bba60f7815ea32f995b5810dbf",
+    "commit": "d0f79de3396508f347a1f6db3bc5bffa90b7e295d0473379f274c17aa15467c8",
     "commitTx": "SAMPLE-not-committed"
   }
 }

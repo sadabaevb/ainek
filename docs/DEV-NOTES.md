@@ -618,8 +618,9 @@ plaintext-маршрута только `send`. Фаза падения — чи
   the public log». Английская `detail`
   тоже называет чужого верификатора. Всплыло на тестовом сервере в режиме sample с `AINEK_TRUSTED_VERIFIERS` из `.env`:
   запись сэмпла подписана `v1.ainek.testnet`.
-- Зелёную карточку при пустом окне лога можно получить только в режиме sample: `AINEK_LOG_SOURCE=sample
-  AINEK_TRUSTED_VERIFIERS=v1.ainek.testnet pnpm -F web dev` (ключ сэмпла совпадает с живым ключом модели).
+- Зелёную карточку при пустом окне лога можно получить только в режиме sample: `AINEK_LOG_SOURCE=sample pnpm -F web dev`
+  (ключ сэмпла совпадает с живым ключом модели). С 8 ноября сэмпл — запись №0 с цепочки от `ainek-dev-dastan.testnet`,
+  которому доверяет набор по умолчанию; раньше нужен был `AINEK_TRUSTED_VERIFIERS=v1.ainek.testnet`.
 
 ## 2026-11-05 — редизайн интерфейса (Бектур)
 
