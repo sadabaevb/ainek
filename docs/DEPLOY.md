@@ -8,46 +8,56 @@ and the Tier 2 accounts on testnet (the sections after it, Dastan). ROADMAP and 
 The web app is a plain Next.js 16 app; `pnpm -F web build` passes from a clean clone. The demo must stay up through
 Nov 25.
 
-1. Vercel → Add New Project → import `sadabaevb/ainek` from GitHub. Give Vercel's GitHub app access to this repository
-   only ("Only select repositories"). Never deploy with the `vercel` CLI from a working copy: it uploads local files.
-   `.vercelignore` keeps `.env` out of such an upload, as a backstop.
+**On the import form** (Vercel → Add New → Project):
+
+1. Import `sadabaevb/ainek` from GitHub. Give Vercel's GitHub app access to this repository only ("Only select
+   repositories"). Never deploy with the `vercel` CLI from a working copy: it uploads local files (`.vercelignore`
+   keeps `.env` out of such an upload, as a backstop).
 2. **Root Directory:** `apps/web`. Keep "Include source files outside of the Root Directory" on: the app imports
-   `packages/proof` (workspace package) and `docs/samples/disclosure.sample.json`.
-3. **Node.js version:** 24 (Project Settings → General; check the dashboard offers it). Install command stays the
-   default (`pnpm install` at the workspace root, detected from `pnpm-lock.yaml`).
-4. **Environment variables, Production only.** Not Preview: every pushed branch gets a preview deployment, and it should
-   not carry the key.
-   `NEARAI_API_KEY`: a separate workspace key made for this deployment in the team's cloud.near.ai account, with a
-   small spend limit (for example $5), type Secret (formerly "Sensitive": write-only once saved). Never paste it
-   into chat, git or an issue.
-   The others are public settings, values from `.env.example`: `NEARAI_BASE_URL`, `NEARAI_MODEL`, `NEARAI_INCOGNITO_MODEL`,
-   `NEAR_NETWORK=testnet`, `AINEK_CONTRACT`, `AINEK_LOG_SOURCE=contract`, `AINEK_TRUSTED_VERIFIERS`,
-   `AINEK_QUORUM`, `AINEK_ACCEPTED_TCB`; `NEAR_RPC_URL` only to override the FastNear default (delete it from the project if an earlier `.env` put it there). Nothing else: the web app never reads the verifier, agent, Telegram or
-   OutLayer secrets. The tamper switch is a client-side demo control (`?tamper=1` or the checkbox) and stays
-   available on the hosted demo on purpose: it is the demo of the refusal.
-5. **Before sharing the link:**
-   - Deployment Protection: Settings → Deployment Protection → Vercel Authentication on "Standard Protection", so
-     previews need a Vercel login; the production domain stays public.
-   - Firewall: one rate-limit rule (the Hobby plan allows one per project): request path starts with
-     `/api/nearai/v1/chat/completions`, 10 requests per 60 s per IP, action deny. The relay's own limit lives in each
-     serverless instance's memory; this one is shared.
-   - Two-factor authentication on the GitHub and Vercel accounts of both of us.
-6. Deploy, then check: `/log` shows the live log; the chat verifies (or refuses, if the 24-hour log window is empty:
-   that is the fail-closed rule, see `/log`); `/auditor` → "Use the sample file" → Check → "checks out";
-   `curl -sI <url>` shows `Content-Security-Policy: frame-ancestors 'none'`.
-7. Put the URL into the README (the "hosted demo link" TODO) and into the submission form.
+   `packages/proof` (workspace package) and `docs/samples/disclosure.sample.json`. Framework preset Next.js (detected);
+   the install command stays the default (`pnpm install` at the workspace root, from `pnpm-lock.yaml`).
+3. **Environment variables:**
+   - `NEARAI_API_KEY`: a separate workspace key made for this deployment in the team's cloud.near.ai account, with a
+     small spend limit (for example $5). Type Secret (formerly "Sensitive": write-only once saved), environment
+     Production only: every pushed branch gets a Preview deployment, and it should not carry the key. Never paste the
+     key into chat, git or an issue.
+   - Public settings, values from `.env.example`: `NEARAI_BASE_URL`, `NEARAI_MODEL`, `NEARAI_INCOGNITO_MODEL`, `NEAR_NETWORK=testnet`, `AINEK_CONTRACT`, `AINEK_LOG_SOURCE=contract`, `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`, `AINEK_ACCEPTED_TCB`. `NEAR_RPC_URL` only to override the FastNear default.
+   - Nothing else: the web app never reads the verifier, agent, Telegram or OutLayer secrets.
+   - The tamper switch is a client-side demo control (`?tamper=1` or the checkbox) and stays available on the hosted
+     demo on purpose: it is the demo of the refusal.
+4. Deploy.
+
+**In Project Settings afterwards:**
+
+5. General → Node.js Version: 24 (the root `package.json` asks for `>=24`); redeploy if it was different.
+6. Environment Variables: `NEARAI_API_KEY` shows Production only.
+7. Deployment Protection → Vercel Authentication: "Standard Protection", so previews need a Vercel login; the
+   production domain stays public.
+8. Firewall → Configure → New Rule: request path starts with `/api/nearai/v1/chat/completions` → rate limit, 10 requests
+   per 60 s per IP → deny. The Hobby plan allows one such rule. The relay's own limit lives in each serverless
+   instance's memory; this one is shared.
+9. Two-factor authentication on the GitHub and Vercel accounts of both of us.
+
+**Check, then share:**
+
+10. `/log` shows the live log; the chat verifies (or refuses, if the 24-hour log window is empty: that is the
+    fail-closed rule, see `/log`); `/auditor` → "Use the sample file" → Check → "checks out";
+    `curl -sI <url>` shows `Content-Security-Policy: frame-ancestors 'none'`. The firewall rule, with nothing spent
+    (the relay refuses an empty body before it uses the key):
+    `for i in $(seq 11); do curl -s -o /dev/null -w '%{http_code} ' -X POST -H "Origin: <url>" -H 'content-type: application/json' -d '{}' <url>/api/nearai/v1/chat/completions; done`
+    prints ten `400` and then the firewall's refusal.
+11. Put the URL into the README (the "hosted demo link" TODO) and into the submission form.
 
 Settings names and defaults above are Vercel's as of Nov 2026; confirm them in the dashboard when creating the project.
 
 ## What runs where
 
-- The browser does the verification, the encryption and the hashing; the server only relays the four NEAR AI paths
-  (`apps/web/app/api/nearai/[...path]/route.ts`), as a serverless route handler. No database, no cron.
+- The browser does the verification, the encryption and the hashing; the server only relays the SDK's own requests for
+  the two configured models (`apps/web/app/api/nearai/[...path]/route.ts`, `apps/web/lib/relay-guard.ts`), as a
+  serverless route handler. No database, no cron.
 - `instrumentation-node.ts` loads the root `.env` only when the file exists; on Vercel the variables come from the
   dashboard and the loader does nothing.
-- Headers (`apps/web/next.config.ts`): `frame-ancestors 'none'` and `X-Frame-Options: DENY`, so no other site can frame
-  the app (the wallet connector would take that site for a wallet), and `nosniff`.
-- The relay forwards only the requests the SDK makes for the two configured models (`apps/web/lib/relay-guard.ts`).
+- Security headers, and why: `apps/web/next.config.ts`.
 - Spend: every chat message is one NEAR AI completion on the workspace key. Set the limit in the NEAR AI console
   before publishing the link.
 
