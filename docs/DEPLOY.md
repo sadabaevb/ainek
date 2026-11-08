@@ -21,7 +21,7 @@ Nov 25.
      small spend limit (for example $5). Type Secret (formerly "Sensitive": write-only once saved), environment
      Production only: every pushed branch gets a Preview deployment, and it should not carry the key. Never paste the
      key into chat, git or an issue.
-   - Public settings, values from `.env.example`: `NEARAI_BASE_URL`, `NEARAI_MODEL`, `NEARAI_INCOGNITO_MODEL`, `NEAR_NETWORK=testnet`, `AINEK_CONTRACT`, `AINEK_LOG_SOURCE=contract`, `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`, `AINEK_ACCEPTED_TCB`. `NEAR_RPC_URL` only to override the FastNear default.
+   - Public settings, environments Production and Preview (so previews read the same log), values from `.env.example`: `NEARAI_BASE_URL`, `NEARAI_MODEL`, `NEARAI_INCOGNITO_MODEL`, `NEAR_NETWORK=testnet`, `AINEK_CONTRACT`, `AINEK_LOG_SOURCE=contract`, `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM`, `AINEK_ACCEPTED_TCB`. `NEAR_RPC_URL` only to override the FastNear default.
    - Nothing else: the web app never reads the verifier, agent, Telegram or OutLayer secrets.
    - The tamper switch is a client-side demo control (`?tamper=1` or the checkbox) and stays available on the hosted
      demo on purpose: it is the demo of the refusal.
