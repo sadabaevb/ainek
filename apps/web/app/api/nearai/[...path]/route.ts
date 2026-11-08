@@ -2,20 +2,18 @@
 // encrypts to the model key and checks signatures. This route only adds the server-side API key and forwards
 // the allowed paths unchanged, so the server sees ciphertext, sizes and IPs. The one exception is the
 // user-chosen Incognito model (SPEC §3.9): no model key exists, so that request is plaintext and the card says so.
-// No body logging. Guards below keep a stranger from spending the key: same-origin callers only, the two
-// configured models, no streaming or n>1, small bodies, a per-IP rate limit; NEAR AI's spend limit is the backstop.
+// No body logging. What limits a stranger spending the key, from strongest: NEAR AI's spend limit on the key; only the
+// requests the SDK makes for the two configured models (lib/relay-guard.ts), no streaming or n>1, small bodies; a per-IP
+// limit kept in this process's memory (each serverless instance has its own; the Vercel firewall rule in docs/DEPLOY.md
+// is the shared one); and a same-origin check, which stops other sites' pages in a browser but not a script, since
+// any client can send those headers.
 import { ainekConfigFromEnv } from '@ainek/proof';
 import { NextResponse } from 'next/server';
+import { relayRequestProblem } from '@/lib/relay-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_PATHS: ReadonlyArray<readonly [method: string, pattern: RegExp]> = [
-  ['GET', /^v1\/model\/[^/]+$/],
-  ['GET', /^v1\/attestation\/report$/],
-  ['POST', /^v1\/chat\/completions$/],
-  ['GET', /^v1\/signature\/[^/]+$/],
-];
 // The closed set of request headers the pinned SDK (0.2.1) sends: content negotiation, model-key routing and
 // E2EE headers. Everything else (cookies, platform-injected forwarding headers, user agent) stays here.
 const ALLOWED_REQUEST_HEADERS = new Set(['accept', 'content-type', 'x-no-aliasing', 'x-model-pub-key', 'x-client-pub-key', 'x-signing-algo', 'x-encryption-version', 'x-encrypt-all-fields']);
@@ -59,15 +57,11 @@ function completionAllowed(body: ArrayBuffer): string | null {
 }
 
 async function proxy(req: Request): Promise<Response> {
-  const apiKey = process.env.NEARAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'NEARAI_API_KEY is not set on the server' }, { status: 503 });
-
   // Keep the raw (still URL-encoded) path so model ids like z-ai%2Fglm-5.3-flash reach upstream unchanged.
   const url = new URL(req.url);
   const rest = url.pathname.replace(/^\/api\/nearai\//, '');
-  if (!ALLOWED_PATHS.some(([method, pattern]) => method === req.method && pattern.test(rest))) {
-    return NextResponse.json({ error: `path not allowed: ${req.method} /${rest}` }, { status: 404 });
-  }
+  const refused = relayRequestProblem(req.method, rest, url.searchParams, allowedModels);
+  if (refused) return NextResponse.json({ error: `${refused}: ${req.method} /${rest}` }, { status: 404 });
   if (!sameOrigin(req, url.origin)) return NextResponse.json({ error: 'same-origin requests only' }, { status: 403 });
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
   if (rateLimited(ip)) return NextResponse.json({ error: 'rate limit: 30 requests per minute' }, { status: 429 });
@@ -79,6 +73,10 @@ async function proxy(req: Request): Promise<Response> {
     const problem = completionAllowed(body);
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
   }
+
+  // After the guards, so a request we would refuse is refused the same way with or without a key configured.
+  const apiKey = process.env.NEARAI_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: 'NEARAI_API_KEY is not set on the server' }, { status: 503 });
 
   const headers = new Headers({ authorization: `Bearer ${apiKey}`, 'accept-encoding': 'identity' }); // the browser hashes these exact bytes
   req.headers.forEach((value, name) => {
