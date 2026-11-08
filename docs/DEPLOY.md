@@ -46,8 +46,8 @@ paid hosting on the site.
 
 **In Project Settings afterwards:**
 
-5. **The key:** Settings → Environments → Production → Add Environment Variable (there is no separate "Environment
-   Variables" menu item: variables live under each environment). Type **Secret** (cannot be revealed after saving), Key
+5. **The key:** Settings → Environments → Production → Add Environment Variable (or "Environment Variables" in the
+   project's left menu). Type **Secret** (cannot be revealed after saving), Key
    `NEARAI_API_KEY`, Environments **Production** only: every pushed branch gets a Preview deployment, and it should not
    carry the key. Use a separate workspace key made for this deployment in the team's cloud.near.ai account, with a
    small spend limit (for example $5). Never paste the key into chat, git or an issue.
@@ -55,9 +55,10 @@ paid hosting on the site.
 7. Deployment Protection → Vercel Authentication: "Standard Protection", so previews need a Vercel login; the
    production domain stays public.
 8. Deployments → the latest deployment → ⋯ → Redeploy: the key and the Node version apply only to a new build.
-9. Firewall → Configure → New Rule: request path starts with `/api/nearai/v1/chat/completions` → rate limit, 10 requests
-   per 60 s per IP → deny. The Hobby plan allows one such rule. The relay's own limit lives in each serverless
-   instance's memory; this one is shared.
+9. Firewall (project's left menu) → Rules → Project rules → Add Rule. Name `chat rate limit`; If `Request Path` `Starts
+   with` `/api/nearai/v1/chat/completions`; Rate Limit `Fixed Window`, 60 seconds, 10 requests, key IP Address; Then
+   `Too Many Requests (429)` → Add Rule. It applies without a redeploy. The Hobby plan allows one such rule. The relay's
+   own limit lives in each serverless instance's memory; this one is shared.
 10. Two-factor authentication on the GitHub and Vercel accounts of both of us.
 
 **Check, then share:**
@@ -69,7 +70,7 @@ paid hosting on the site.
     if the 24-hour log window is empty: that is the fail-closed rule, see `/log`). The firewall rule, with nothing spent
     (the relay refuses an empty body before it uses the key):
     `for i in $(seq 11); do curl -s -o /dev/null -w '%{http_code} ' -X POST -H "Origin: <url>" -H 'content-type: application/json' -d '{}' <url>/api/nearai/v1/chat/completions; done`
-    prints ten `400` and then the firewall's refusal.
+    prints ten `400` and then `429` (with `x-vercel-mitigated: deny`).
 12. Put the URL into the README and into the submission form.
 
 Settings names and defaults above are Vercel's as of Nov 8, 2026, as seen while creating the project.
@@ -132,7 +133,8 @@ been tried. Run one daemon per verifier account: two with the same key race and 
 
 ## Agent service (Tier 2)
 
-Runs next to the verifier (Hetzner), one process, from a clean clone: `pnpm i && pnpm -F agent start`. Variables are in
+Meant to run next to the verifier (Hetzner); so far it has run from Bektur's laptop (Nov 7) and stays off between runs,
+since every message spends the NEAR AI key. One process, from a clean clone: `pnpm i && pnpm -F agent start`. Variables are in
 `.env.example`, block "Agent service". Before the first message:
 
 1. The agent account exists, with a function-call key scoped to the contract and to exactly `propose_action` and
