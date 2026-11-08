@@ -29,5 +29,5 @@ const latest = await check(`latest_keys(${model}, 24h)`, () => log.latestKeys(mo
 await check('entries_since(0, 10)', () => log.entriesSince(0, 10));
 if (head != null) await check(`entry(${head.index})`, async () => { const e = await log.entry(head.index); if (e === null) throw new Error('returned nothing for the head index'); return e; });
 if (Array.isArray(latest) && latest.length === 0) console.log(`  — latest_keys is empty for ${model} in the last 24 h: the client would refuse to send (fail-closed)`);
-console.log(failures === 0 ? 'Result: ABI OK, the methods the client calls are there (AINEK_LOG_SOURCE=contract is the default)' : `Result: ${failures} check(s) failed`);
+console.log(failures === 0 ? 'Result: ABI OK, the methods the client calls are there' : `Result: ${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);
