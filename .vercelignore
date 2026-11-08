@@ -1,0 +1,5 @@
+# Vercel deploys from GitHub (docs/DEPLOY.md), where .env never is. This only matters if someone runs the `vercel` CLI
+# from a working copy: keep local secrets out of the upload.
+.env
+.env.*
+!.env.example
