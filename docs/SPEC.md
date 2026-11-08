@@ -303,8 +303,7 @@ Action proof коммитится при предложении и описыв�
 `parseDisclosure` — в `packages/proof`; `/verify` и `/auditor` принимают этот файл и пересчитывают хеши и коммит.
 `/auditor` дополнительно сверяет вложенный `logEntry` с записью `logIndex` в контракте (целиком, канонический JSON записи; расхождение или отсутствие — ✗) и ищет коммит
 через `proof_commit(account, commit)`, аккаунт отправителя аудитор вводит сам. Пока view не задеплоен, строка «On NEAR» — «—», не «✗».
-Образец файла: `docs/samples/disclosure.sample.json` — обмен из веб-чата 8 ноября, закоммиченный `ainek-bektur.testnet`;
-`/auditor` по кнопке образца сам подставляет этот аккаунт.
+Образец файла: `docs/samples/disclosure.sample.json` (откуда он и когда его перезаписывать — `docs/samples/README.md`).
 
 ## 6. Политика и решение (jobs/policy)
 

@@ -1,0 +1,5 @@
+{
+  "_note": "Where disclosure.sample.json was committed. Kept apart because the disclosure file must stay exactly what a proof card downloads. /auditor's sample button fills in `committer`; pnpm -F demo check-contract checks both against the chain.",
+  "contract": "ainek-log-dastan.testnet",
+  "committer": "ainek-bektur.testnet"
+}

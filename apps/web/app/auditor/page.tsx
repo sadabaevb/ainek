@@ -7,10 +7,7 @@
 import { useState } from 'react';
 import { checkProofCommit, parseDisclosure, readProofCommit, verifyModelProof, withChecks, type Check, type CheckId, type ParsedDisclosure, type VerifyReport } from '@ainek/proof';
 import sampleFile from '../../../../docs/samples/disclosure.sample.json';
-
-/** The account that committed the sample on testnet (its proof's commitTx); the button fills it in so the "On NEAR" row can be
- *  checked without knowing it. Any other account gets "never committed this hash": the chain decides, not the file. */
-const SAMPLE_COMMITTER = 'ainek-bektur.testnet';
+import sampleChain from '../../../../docs/samples/disclosure.sample.chain.json';
 import { CardHead, CheckList, Row } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
@@ -182,7 +179,7 @@ export default function AuditorPage() {
           <LoadFileButton onText={setText} onError={setError} />
           <button type="button" className="btn" onClick={() => {
             setText(JSON.stringify(sampleFile, null, 2));
-            setAccount(SAMPLE_COMMITTER);
+            setAccount(sampleChain.committer); // the account that committed the sample (docs/samples/README.md)
           }}>{ta.useSample}</button>
         </div>
       </div>
