@@ -81,7 +81,7 @@ for (let action_id = 0; ; action_id += 1) {
   ].filter(Boolean);
   // update_policy can replace the key and the policy while old records stay as they were, so a difference is no failure.
   const earlier = tee_pubkey !== agent.tee_pubkey || decision.policy_hash !== agent.policy_hash ? ' (under an earlier key or policy)' : '';
-  report(failed.length === 0, `#${action_id} ${decision.verdict}, ${status}${earlier}: ${amount(action.amount)} to ${action.receiver_id}; ${failed.join('; ') || 'signature, action commit and status re-checked here, a model commit by the agent exists'}`);
+  report(failed.length === 0, `#${action_id} ${decision.verdict}, ${status}${earlier}: ${amount(action.amount)} to ${action.receiver_id}; ${failed.join('; ') || 'signature, the action hash in the decision and status re-checked here, a model proof commit by the agent exists'}`);
 }
 note('A commit is a salted hash: neither the chain nor this script opens it, so this does not show a model answer behind it. The test actions run from scripts used placeholders (docs/DEPLOY.md).');
 
