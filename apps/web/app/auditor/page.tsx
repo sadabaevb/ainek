@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { checkProofCommit, parseDisclosure, readProofCommit, verifyModelProof, withChecks, type Check, type CheckId, type ParsedDisclosure, type VerifyReport } from '@ainek/proof';
 import sampleFile from '../../../../docs/samples/disclosure.sample.json';
+import sampleChain from '../../../../docs/samples/disclosure.sample.chain.json';
 import { CardHead, CheckList, Row } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
@@ -149,6 +150,16 @@ export default function AuditorPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<Result | null>(null);
+  // The sample's committer, filled in by its button, belongs to the sample only: any other text clears it.
+  const loadText = (next: string) => {
+    setText(next);
+    setAccount((a) => (a === sampleChain.committer ? '' : a));
+  };
+  const loadSample = () => {
+    setText(JSON.stringify(sampleFile, null, 2));
+    // Committed on one contract only: on another deployment the account would only make the row red.
+    setAccount(cfg.contract === sampleChain.contract ? sampleChain.committer : '');
+  };
 
   async function run() {
     setError('');
@@ -171,12 +182,12 @@ export default function AuditorPage() {
       <p className="muted">{ta.intro}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} onError={setError} placeholder={ta.placeholder} />
+        <JsonTextarea value={text} onChange={loadText} onError={setError} placeholder={ta.placeholder} />
         <input type="text" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={ta.accountPlaceholder} />
         <div className="actions">
           <button type="button" className="btn primary" onClick={() => void run()} disabled={busy || !text.trim()}>{busy ? ta.checking : ta.check}</button>
-          <LoadFileButton onText={setText} onError={setError} />
-          <button type="button" className="btn" onClick={() => setText(JSON.stringify(sampleFile, null, 2))}>{ta.useSample}</button>
+          <LoadFileButton onText={loadText} onError={setError} />
+          <button type="button" className="btn" onClick={loadSample}>{ta.useSample}</button>
         </div>
       </div>
 
