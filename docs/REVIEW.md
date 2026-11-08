@@ -15,8 +15,8 @@ What each tag needs:
 | --- | --- |
 | offline | nothing: no key, no network |
 | network | internet, no key. Reads testnet or NEAR AI's public attestation endpoint; sends no transaction |
-| page | `pnpm -F web dev`, then `http://localhost:3000`; internet for the log, no API key |
-| API key | `NEARAI_API_KEY` in `.env` (cloud.near.ai → API Keys) |
+| page | https://ainek.vercel.app, or `pnpm -F web dev` and then `http://localhost:3000`; internet for the log, no API key |
+| API key | `NEARAI_API_KEY` in `.env` (cloud.near.ai → API Keys); the chat also runs on the hosted demo, on our key |
 | Rust | Rust and `cargo-near`; run in the folder named by the command |
 | Docker | Docker; pulls a pinned Rust image |
 

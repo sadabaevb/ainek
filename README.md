@@ -125,7 +125,7 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
                                  #   step 1); otherwise the red "Key not in the public log" card is the expected result
 ```
 
-With `pnpm -F web dev` running, at `http://localhost:3000`, or on the hosted demo at https://ainek.vercel.app:
+At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev` running:
 
 1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log (entry #3 was its first run); since Nov 6 it runs on a server (docs/DEPLOY.md).
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
