@@ -128,7 +128,7 @@ log_key(entry: KeyEntryInput) -> u64                             // verifier; re
 view head() -> Option<{ index: u64, entry_hash: String }>          // null while the log is empty
 view entry(index: u64) -> KeyEntry
 view entries_since(index: u64, limit: u32) -> Vec<KeyEntry>
-view latest_keys(model: String, max_age_ns: U64) -> Vec<KeyEntry>
+view latest_keys(model: String, max_age_ns: U64, verifier: Option<AccountId>) -> Vec<KeyEntry>  // 100 новейших; verifier — только его записи
 view verifiers() -> Vec<AccountId>                                  // registered writers; who counts is the client's choice
 ```
 ```
@@ -163,8 +163,10 @@ SDK (он не отдаёт JWT), и обязателен, если верифи
 Событие: `EVENT_JSON:{"standard":"ainek","version":"1.0.0","event":"key_logged","data":[{index, model, signing_address, verifier, entry_hash}]}`
 
 **Регистрация у владельца (решено 7 ноября, причины в `docs/DECISIONS.md`).** Кому доверять и сколько подтверждений нужно,
-решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM` и выбор посетителя на `/log`. Пока `latest_keys` отдаёт 100 последних
-записей всех верификаторов вместе, поток записей может вытеснить записи доверенных (`docs/DEPLOY.md`).
+решает клиент: `AINEK_TRUSTED_VERIFIERS`, `AINEK_QUORUM` и выбор посетителя на `/log`. `latest_keys` без `verifier` отдаёт 100
+последних записей всех верификаторов вместе, и поток записей одного ключа вытесняет остальные; с `verifier` клиент читает
+записи доверенного верификатора независимо от остальных. Поля `KeyEntryInput` ограничены: `model`, `signing_address`, `signing_public_key`,
+`tcb_status` и каждый digest не длиннее 128 байт, `image_digests` не больше 16 штук (за хранение лога платит контракт).
 
 ### 4.2 Коммиты proof-ов
 ```

@@ -132,6 +132,34 @@ async fn key_log_end_to_end_on_sandbox() -> testresult::TestResult<()> {
         .data;
     assert_eq!(unlimited.len(), 2, "u64::MAX window returns every entry for the model");
 
+    // `verifier` is optional in the JSON (the client above left it out); named, it keeps only that verifier's entries.
+    let by_v1: Vec<Value> = contract
+        .call_function("latest_keys", json!({ "model": model, "max_age_ns": "86400000000000", "verifier": v1.account_id() }))
+        .read_only()
+        .fetch_from(&network)
+        .await?
+        .data;
+    assert_eq!(by_v1.len(), 2, "both entries are v1's");
+    let by_mallory: Vec<Value> = contract
+        .call_function("latest_keys", json!({ "model": model, "max_age_ns": "86400000000000", "verifier": mallory.account_id() }))
+        .read_only()
+        .fetch_from(&network)
+        .await?
+        .data;
+    assert!(by_mallory.is_empty(), "an account that never logged has no entries");
+
+    // The contract pays for log storage, so an entry's fields are bounded (128 bytes each): the deployed verifier's
+    // 71-byte digests pass, an oversized one is refused before anything is written.
+    let mut oversized = input.clone();
+    oversized["image_digests"].as_array_mut().unwrap().push(Value::String("d".repeat(129)));
+    contract
+        .call_function("log_key", json!({ "entry": oversized }))
+        .transaction()
+        .with_signer(v1.account_id().clone(), signer.clone())
+        .send_to(&network)
+        .await?
+        .assert_failure();
+
     // ---- proof commits (SPEC §4.2), the way the web client does it ---------------------------
     // Wallet login adds a function-call key to alice's account that may only call `commit_proof`
     // on the contract; the chat then commits with that key, never asking the wallet again.
