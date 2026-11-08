@@ -7,6 +7,9 @@
 > **In progress:** the Telegram bot ran live on Nov 7: a payment, a denial, a token refusal and an approval through the whole chain (actions 3, 4, 8 and 9). For the approval the bot gives the owner the command and the owner signs with their own key. The same day a rejection, an approval and the stop button ran on chain from a script with a placeholder model proof (actions 5 to 7). What has not run live is listed under "Tier 2 flow".
 >
 > **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
+>
+> **Hosted demo:** https://ainek.vercel.app (testnet, nothing to install). The chat runs on our NEAR AI key, which has a
+> spend limit and a rate limit: if it stops answering, run it locally with your own key ("Try it").
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
@@ -14,7 +17,7 @@ request is end-to-end encrypted to that key; the signed answer is re-verified in
 the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 is built to let an agent act on the answer
 only within a policy evaluated inside Intel TDX (OutLayer); status under "Tier 2 flow".
 
-<!-- TODO before submission: 90-second video link, hosted demo link. -->
+<!-- TODO before submission: 90-second video link. -->
 
 **The problem.** Every "private AI" today says "we run in a TEE, trust us". Hardware attestation is now
 commodity; what is missing is proof a *user* can re-check, independently of the vendor, that *this*
@@ -122,13 +125,13 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
                                  #   step 1); otherwise the red "Key not in the public log" card is the expected result
 ```
 
-With `pnpm -F web dev` running, at `http://localhost:3000`:
+At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev` running:
 
 1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log (entry #3 was its first run); since Nov 6 it runs on a server (docs/DEPLOY.md).
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
 3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
-5. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste `docs/samples/disclosure.sample.json` (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
+5. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste [`docs/samples/disclosure.sample.json`](docs/samples/disclosure.sample.json) (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
 6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the commit found on NEAR under the account that committed it → "This disclosure checks out". The button fills in that account (`docs/samples/disclosure.sample.chain.json`); any other account gets "… never committed this hash": the chain decides, not the file. The page says what the file does and does not prove. Where the sample comes from and when to record it again: `docs/samples/README.md`.
 7. **Re-check an agent's action:** `/verify` → "Use a real action proof" → Verify → a real denial from testnet (action 4: 5000 AINEK to a new vendor, nothing moved), checked in your browser: the decision's signature under the key the contract recorded, the same action and status on chain, the proof's salted commit, and the run's attestation (Intel's signature, the published build, this decision). The job's input shows as "—": a proof does not carry the input.
 
