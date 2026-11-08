@@ -2,58 +2,44 @@
 // encrypts to the model key and checks signatures. This route only adds the server-side API key and forwards
 // the allowed paths unchanged, so the server sees ciphertext, sizes and IPs. The one exception is the
 // user-chosen Incognito model (SPEC §3.9): no model key exists, so that request is plaintext and the card says so.
-// No body logging. What limits a stranger spending the key, from strongest: NEAR AI's spend limit on the key; only the
-// requests the SDK makes for the two configured models (lib/relay-guard.ts), no streaming or n>1, small bodies; a per-IP
-// limit kept in this process's memory (each serverless instance has its own; the Vercel firewall rule in docs/DEPLOY.md
-// is the shared one); and a same-origin check, which stops other sites' pages in a browser but not a script, since
-// any client can send those headers.
+// No body logging. What limits a stranger spending the key, strongest first (SPEC §3.4): the key's spend limit; only the
+// SDK's own requests for the two configured models (lib/relay-guard.ts); a per-IP limit in this instance's memory (the
+// Vercel firewall rule in docs/DEPLOY.md is the shared one); a same-origin check, which stops other sites' pages in a
+// browser but not a script.
 import { ainekConfigFromEnv } from '@ainek/proof';
 import { NextResponse } from 'next/server';
-import { relayRequestProblem } from '@/lib/relay-guard';
+import { ALLOWED_REQUEST_HEADERS, completionProblem, relayRequestProblem } from '@/lib/relay-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// The closed set of request headers the pinned SDK (0.2.1) sends: content negotiation, model-key routing and
-// E2EE headers. Everything else (cookies, platform-injected forwarding headers, user agent) stays here.
-const ALLOWED_REQUEST_HEADERS = new Set(['accept', 'content-type', 'x-no-aliasing', 'x-model-pub-key', 'x-client-pub-key', 'x-signing-algo', 'x-encryption-version', 'x-encrypt-all-fields']);
-// Hop-by-hop headers that must not be copied from the upstream response.
-const DROPPED_RESPONSE_HEADERS = new Set(['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'set-cookie']);
+// Hop-by-hop headers, cookies, and caching: no upstream answer may tell Vercel's CDN to keep it.
+const DROPPED_RESPONSE_HEADERS = new Set(['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'set-cookie', 'cache-control', 'cdn-cache-control', 'vercel-cdn-cache-control']);
 const MAX_BODY_BYTES = 64 * 1024;
-const MAX_MESSAGES = 50;
 const RATE_LIMIT = { windowMs: 60_000, max: 30 };
 
 const cfg = ainekConfigFromEnv(process.env);
 const upstreamOrigin = new URL(cfg.nearaiBaseUrl).origin;
 const allowedModels = new Set([cfg.model, cfg.incognitoModel]);
-const hits = new Map<string, number[]>(); // ip -> request timestamps inside the window (one process; fine for the demo)
+const hits = new Map<string, number[]>(); // ip -> request timestamps inside the window, this instance only
 
 function rateLimited(ip: string): boolean {
   const now = Date.now();
   const recent = (hits.get(ip) ?? []).filter((t) => now - t < RATE_LIMIT.windowMs);
+  if (recent.length >= RATE_LIMIT.max) {
+    hits.set(ip, recent); // a refused request is not counted, so the list stays at most `max` long
+    return true;
+  }
   recent.push(now);
   hits.set(ip, recent);
-  return recent.length > RATE_LIMIT.max;
+  if (hits.size > 1_000) for (const [other, times] of hits) if (times.every((t) => now - t >= RATE_LIMIT.windowMs)) hits.delete(other); // forget idle IPs
+  return false;
 }
 
 function sameOrigin(req: Request, origin: string): boolean {
   const site = req.headers.get('sec-fetch-site');
   const from = req.headers.get('origin');
   return site === 'same-origin' || from === origin;
-}
-
-/** Only the two configured models, a single non-streamed completion, a bounded number of messages. Content stays opaque. */
-function completionAllowed(body: ArrayBuffer): string | null {
-  try {
-    const json = JSON.parse(new TextDecoder().decode(body)) as { model?: unknown; stream?: unknown; n?: unknown; messages?: unknown };
-    if (typeof json.model !== 'string' || !allowedModels.has(json.model)) return 'model not allowed';
-    if (json.stream === true) return 'streaming not allowed';
-    if (json.n !== undefined && json.n !== 1) return 'n must be 1';
-    if (!Array.isArray(json.messages) || json.messages.length === 0 || json.messages.length > MAX_MESSAGES) return `messages must be 1..${MAX_MESSAGES}`;
-    return null;
-  } catch {
-    return 'body is not JSON';
-  }
 }
 
 async function proxy(req: Request): Promise<Response> {
@@ -68,9 +54,10 @@ async function proxy(req: Request): Promise<Response> {
 
   let body: ArrayBuffer | null = null;
   if (req.method === 'POST') {
+    if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return NextResponse.json({ error: `body larger than ${MAX_BODY_BYTES} bytes` }, { status: 413 });
     body = await req.arrayBuffer();
     if (body.byteLength > MAX_BODY_BYTES) return NextResponse.json({ error: `body larger than ${MAX_BODY_BYTES} bytes` }, { status: 413 });
-    const problem = completionAllowed(body);
+    const problem = completionProblem(body, allowedModels);
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
   }
 
@@ -85,10 +72,11 @@ async function proxy(req: Request): Promise<Response> {
 
   const upstream = await fetch(`${upstreamOrigin}/${rest}${url.search}`, { method: req.method, headers, body, redirect: 'manual' });
 
-  const out = new Headers({ 'cache-control': 'no-store' });
+  const out = new Headers();
   upstream.headers.forEach((value, name) => {
     if (!DROPPED_RESPONSE_HEADERS.has(name)) out.set(name, value);
   });
+  out.set('cache-control', 'no-store');
   return new Response(upstream.body, { status: upstream.status, headers: out });
 }
 
