@@ -3,7 +3,7 @@
 // Prints ✓/✗ per method and validates every returned entry against the KeyEntry schema from @ainek/proof.
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { ainekConfigFromEnv, checkProofCommit, keyLogReader, parseDisclosure, readProofCommit } from '@ainek/proof';
+import { ainekConfigFromEnv, checkProofCommit, keyLogReader, parseDisclosure, readProofCommit, resolveLogEntry } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
 const [account = cfg.contract, rpc = cfg.rpcUrl, model = cfg.model] = process.argv.slice(2);
@@ -38,15 +38,24 @@ else if (head != null) {
   if (live && isDeepStrictEqual(live, recorded.entry)) ok('entry(0) equals the replay\'s recording (docs/samples/key-entry.sample.json)');
   else if (live !== undefined) console.log(`  — entry(0) ${live ? 'differs from' : 'is missing, unlike'} the replay's recording: re-record docs/samples/key-entry.sample.json`);
 }
-// The /auditor sample: committed on this contract, its log entry unchanged. A redeploy or reset makes it stale: a note, not an ABI failure.
-const sample = parseDisclosure(JSON.parse(readFileSync(new URL('../../../docs/samples/disclosure.sample.json', import.meta.url), 'utf8')));
-const sampleChain = JSON.parse(readFileSync(new URL('../../../docs/samples/disclosure.sample.chain.json', import.meta.url), 'utf8'));
-if (account !== sampleChain.contract) console.log(`  — the /auditor sample was committed on ${sampleChain.contract}, not checked here`);
-else if (head != null) {
-  const [entry, commit] = await Promise.all([log.entry(sample.proof.logIndex).catch(() => undefined), readProofCommit(rpc, account, sampleChain.committer, sample.proof.commit).catch(() => undefined)]);
-  const committed = commit !== undefined && checkProofCommit(sample.proof, commit, sampleChain.committer).status === 'ok';
-  if (entry && isDeepStrictEqual(entry, sample.logEntry) && committed) ok(`the /auditor sample: entry #${sample.proof.logIndex} unchanged, committed by ${sampleChain.committer}`);
-  else if (entry !== undefined && commit !== undefined) console.log(`  — the /auditor sample is stale (${!committed ? 'no commit by ' + sampleChain.committer : 'entry #' + sample.proof.logIndex + ' differs'}): record it again, see docs/samples/README.md`);
+// The /auditor sample: committed on this contract, its log entry unchanged. Same checks as the page; a stale or unreadable
+// sample is a note, not an ABI failure.
+try {
+  const sample = parseDisclosure(JSON.parse(readFileSync(new URL('../../../docs/samples/disclosure.sample.json', import.meta.url), 'utf8')));
+  const sampleChain = JSON.parse(readFileSync(new URL('../../../docs/samples/disclosure.sample.chain.json', import.meta.url), 'utf8'));
+  if (account !== sampleChain.contract) console.log(`  — the /auditor sample was committed on ${sampleChain.contract}, not checked here`);
+  else {
+    const [{ check: entry }, commit] = await Promise.all([
+      resolveLogEntry(log, sample.proof.logIndex, sample.logEntry, account),
+      readProofCommit(rpc, account, sampleChain.committer, sample.proof.commit).then((r) => checkProofCommit(sample.proof, r, sampleChain.committer)),
+    ]);
+    const open = [entry, commit].filter((c) => c.status !== 'ok');
+    if (open.length === 0) ok(`the /auditor sample: entry #${sample.proof.logIndex} unchanged, committed by ${sampleChain.committer}`);
+    else if (open.some((c) => c.status === 'fail')) console.log(`  — the /auditor sample is stale (${open.map((c) => c.detail).join('; ')}): record it again, see docs/samples/README.md`);
+    else console.log(`  — could not check the /auditor sample (${open.map((c) => c.detail).join('; ')})`);
+  }
+} catch (err) {
+  console.log(`  — could not check the /auditor sample: ${err instanceof Error ? err.message : String(err)}`);
 }
 if (Array.isArray(latest) && latest.length === 0) console.log(`  — latest_keys is empty for ${model} in the last 24 h: the client would refuse to send (fail-closed)`);
 console.log(failures === 0 ? 'Result: ABI OK, the methods the client calls are there' : `Result: ${failures} check(s) failed`);

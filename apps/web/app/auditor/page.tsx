@@ -150,6 +150,16 @@ export default function AuditorPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<Result | null>(null);
+  // The sample's committer, filled in by its button, belongs to the sample only: any other text clears it.
+  const loadText = (next: string) => {
+    setText(next);
+    setAccount((a) => (a === sampleChain.committer ? '' : a));
+  };
+  const loadSample = () => {
+    setText(JSON.stringify(sampleFile, null, 2));
+    // Committed on one contract only: on another deployment the account would only make the row red.
+    setAccount(cfg.contract === sampleChain.contract ? sampleChain.committer : '');
+  };
 
   async function run() {
     setError('');
@@ -172,15 +182,12 @@ export default function AuditorPage() {
       <p className="muted">{ta.intro}</p>
 
       <div className="controls">
-        <JsonTextarea value={text} onChange={setText} onError={setError} placeholder={ta.placeholder} />
+        <JsonTextarea value={text} onChange={loadText} onError={setError} placeholder={ta.placeholder} />
         <input type="text" value={account} onChange={(e) => setAccount(e.target.value)} placeholder={ta.accountPlaceholder} />
         <div className="actions">
           <button type="button" className="btn primary" onClick={() => void run()} disabled={busy || !text.trim()}>{busy ? ta.checking : ta.check}</button>
-          <LoadFileButton onText={setText} onError={setError} />
-          <button type="button" className="btn" onClick={() => {
-            setText(JSON.stringify(sampleFile, null, 2));
-            setAccount(sampleChain.committer); // the account that committed the sample (docs/samples/README.md)
-          }}>{ta.useSample}</button>
+          <LoadFileButton onText={loadText} onError={setError} />
+          <button type="button" className="btn" onClick={loadSample}>{ta.useSample}</button>
         </div>
       </div>
 
