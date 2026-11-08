@@ -7,6 +7,14 @@ import { readProofCommit, readStorageBalance, type ModelProof } from '@ainek/pro
 import type { PublicConfig } from './config';
 import type { Committer } from './flow';
 
+/**
+ * The wallet list the connector loads, at a fixed commit of hot-dao/near-selector. Left to itself, near-connect reads that repo's
+ * main branch, with another repo on jsDelivr as fallback, so a push to either changes which wallet code the page runs. A commit URL
+ * cannot change. The wallets' own code URLs inside the list are not pinned. To refresh, take a newer commit of
+ * repository/manifest.json and read the diff first. The repo has no licence, so we link to the list instead of copying it.
+ */
+export const WALLET_MANIFEST_URL = 'https://raw.githubusercontent.com/hot-dao/near-selector/b57880c29ab142f777c4a851e3c3c23752292be8/repository/manifest.json';
+
 const FC_KEY_ALLOWANCE = '250000000000000000000000'; // 0.25 NEAR of gas allowance for commit_proof calls
 /**
  * Storage prepayment for commits (SPEC §4.2), topped up through the wallet dialog: a function-call key cannot carry a deposit.
