@@ -127,7 +127,7 @@ const en = {
   log: {
     title: 'Public key log',
     intro: (network: string) => `Contract {contract} on ${network}.`,
-    sampleNote: 'Showing the recorded sample entry until the contract is deployed (AINEK_LOG_SOURCE=sample).',
+    sampleNote: 'Showing entry #0 as recorded from the chain, not the live log (AINEK_LOG_SOURCE=sample).',
     split: 'Split view',
     emptyTitle: (hours: number, model: string) => `No entry younger than ${hours} hours for ${model}`,
     emptyBody: 'The client trusts only entries in that window, so the chat refuses to send until a verifier logs a fresh one. That is the fail-closed rule working, not an outage.',
@@ -359,7 +359,7 @@ const ru: typeof en = {
   log: {
     title: 'Публичный лог ключей',
     intro: (network) => `Контракт {contract} в сети ${network}.`,
-    sampleNote: 'Показана записанная образцовая запись, пока контракт не задеплоен (AINEK_LOG_SOURCE=sample).',
+    sampleNote: 'Показана запись №0, сохранённая с цепочки, а не живой лог (AINEK_LOG_SOURCE=sample).',
     split: 'Верификаторы расходятся',
     emptyTitle: (hours, model) => `Нет записи моложе ${hours} ч для ${model}`,
     emptyBody: 'Клиент доверяет только записям в этом окне, поэтому чат откажется отправлять, пока верификатор не запишет свежую. Это работает правило fail-closed, а не сбой.',

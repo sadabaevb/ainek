@@ -15,10 +15,10 @@
     "e2ee": true,
     "toolNames": [],
     "logIndex": 0,
-    "verifier": "v1.ainek.testnet",
+    "verifier": "ainek-dev-dastan.testnet",
     "verifiedAt": "2026-11-03T16:54:15.261Z",
     "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-    "commit": "2d62962b05059dc441e603f718beeb12c1a0d1f9730baaa25d3e95f14b7addc8",
+    "commit": "be1e9b2687b7e3fadd7395201df4fbc7040476e7f63d325e44be983301d86efe",
     "commitTx": "SAMPLE-not-committed"
   }
 }

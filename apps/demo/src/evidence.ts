@@ -53,7 +53,7 @@ export interface RecordedExchange {
   plaintext?: { prompt: string; reply: string; recordedAt: string };
 }
 
-/** The recorded sample log entry (a fixture, not read from the chain). */
+/** Entry #0 of the public log, recorded from the chain (docs/samples/key-entry.sample.json). */
 export function loadSampleLogEntry(): KeyEntry {
   return readJson<{ entry: KeyEntry }>('key-entry.sample.json').entry;
 }

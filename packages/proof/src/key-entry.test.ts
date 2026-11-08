@@ -27,8 +27,13 @@ const verified = {
 };
 const build = (overrides: Partial<BuildKeyEntryInputParams> = {}) => buildKeyEntryInput({ model: m.model_name, verified, reportBytes, observedAtMs: 1, ...overrides });
 
-test('buildKeyEntryInput reproduces the recorded sample / test-vector input', () => {
-  assert.deepEqual(build({ observedAtMs: Number(sample.observed_at) }), expectedInput);
+test('buildKeyEntryInput reproduces the test-vector input', () => {
+  assert.deepEqual(build({ observedAtMs: Number(expectedInput.observed_at) }), expectedInput);
+});
+
+test('the replay\'s log entry is entry #0 as recorded on chain: same verifier, observed_at and entry_hash', () => {
+  assert.deepEqual([sample.verifier, sample.observed_at, sample.prev_hash, sample.entry_hash], [onChain.verifier, onChain.observed_at, onChain.prev_hash, onChain.entry_hash]);
+  assert.equal(entryHashOf(sample.prev_hash, build({ observedAtMs: Number(sample.observed_at) }), sample.verifier), sample.entry_hash);
 });
 
 test('with the recorded observed_at it hashes to the entry_hash logged on-chain for entry #0 (Rust and TS agree)', () => {

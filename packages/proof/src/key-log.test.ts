@@ -7,7 +7,7 @@ import { readRepoJson } from './fixtures.ts';
 const { entry } = readRepoJson<{ entry: KeyEntry }>('docs/samples/key-entry.sample.json');
 const KEY_A = entry.signing_address;
 const KEY_B = 'ab'.repeat(32);
-const base = { model: entry.model, signingAddress: KEY_A, trustedVerifiers: ['v1.ainek.testnet', 'v2.ainek.testnet'], quorum: 1 };
+const base = { model: entry.model, signingAddress: KEY_A, trustedVerifiers: [entry.verifier, 'ainek-v2-dastan.testnet'], quorum: 1 };
 const logged = (overrides: Partial<KeyEntry>): KeyEntry => ({ ...entry, ...overrides });
 
 test('proofEntryOf: the newest entry with the attested compose, else the newest for the key', () => {
@@ -25,7 +25,7 @@ test('one trusted confirmation satisfies quorum 1', () => {
   const v = evaluateKeyLog([entry], base);
   assert.equal(v.status, 'ok');
   assert.equal(v.reason, 'ok');
-  assert.deepEqual(v.confirmedBy, ['v1.ainek.testnet']);
+  assert.deepEqual(v.confirmedBy, [entry.verifier]);
 });
 
 test('swapped key is not logged → fail-closed', () => {
@@ -47,20 +47,20 @@ test('entries from verifiers outside the trust set are shown but never counted',
 test('quorum 2 needs two distinct trusted verifiers', () => {
   const q2 = { ...base, quorum: 2 };
   assert.equal(evaluateKeyLog([entry, logged({ index: 1 })], q2).status, 'not-logged', 'same verifier twice');
-  assert.equal(evaluateKeyLog([entry, logged({ index: 1, verifier: 'v2.ainek.testnet' })], q2).status, 'ok');
+  assert.equal(evaluateKeyLog([entry, logged({ index: 1, verifier: 'ainek-v2-dastan.testnet' })], q2).status, 'ok');
   // One trusted confirmation plus a stranger: short of quorum, and the stranger must not change the reason.
   const short = evaluateKeyLog([entry, logged({ index: 1, verifier: 'stranger.testnet' })], q2);
   assert.equal(short.reason, 'below-quorum');
-  assert.deepEqual(short.confirmedBy, ['v1.ainek.testnet']);
+  assert.deepEqual(short.confirmedBy, [entry.verifier]);
   assert.deepEqual(short.loggedByUntrusted, ['stranger.testnet']);
   assert.match(short.detail, /only 1 of 2/);
 });
 
 test('split view: two trusted verifiers with disjoint key sets → refuse even if our key is logged', () => {
-  const v = evaluateKeyLog([entry, logged({ index: 1, verifier: 'v2.ainek.testnet', signing_address: KEY_B, signing_public_key: KEY_B })], base);
+  const v = evaluateKeyLog([entry, logged({ index: 1, verifier: 'ainek-v2-dastan.testnet', signing_address: KEY_B, signing_public_key: KEY_B })], base);
   assert.equal(v.status, 'split-view');
   assert.equal(v.reason, 'split-view');
-  assert.equal(findSplitView([entry, logged({ index: 1, verifier: 'v2.ainek.testnet', signing_address: KEY_B, signing_public_key: KEY_B })], entry.model, base.trustedVerifiers)?.verifierB, 'v2.ainek.testnet');
+  assert.equal(findSplitView([entry, logged({ index: 1, verifier: 'ainek-v2-dastan.testnet', signing_address: KEY_B, signing_public_key: KEY_B })], entry.model, base.trustedVerifiers)?.verifierB, 'ainek-v2-dastan.testnet');
   assert.equal(findSplitView([entry], entry.model, base.trustedVerifiers), null);
 });
 
