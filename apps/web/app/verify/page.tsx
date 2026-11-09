@@ -53,7 +53,9 @@ function VerifyInner() {
   const { t } = useT();
   const tv = t.verify;
   const wallet = useNearWallet();
-  const id = useSearchParams().get('id');
+  const params = useSearchParams();
+  const id = params.get('id');
+  const sample = params.get('sample');
   const [text, setText] = useState('');
   const [input, setInput] = useState<Input | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -75,6 +77,13 @@ function VerifyInner() {
       })
       .catch((e: unknown) => setError(describeError(e)));
   }, [id]);
+
+  // /agent links here for the one action whose proof file is in the repository.
+  useEffect(() => {
+    if (sample !== 'action') return;
+    setText(JSON.stringify(sampleAction, null, 2));
+    setActionProof(sampleAction);
+  }, [sample]);
 
   useEffect(() => {
     if (!input) return;

@@ -17,4 +17,4 @@ export function verificationCenterUrl(proof: ModelProof): string {
   return `https://cloud.near.ai/verify?model=${encodeURIComponent(proof.model)}#receipt=${fragment}`;
 }
 
-export { explorerTxUrl } from '@ainek/proof';
+export { explorerAccountUrl, explorerTxUrl } from '@ainek/proof';
