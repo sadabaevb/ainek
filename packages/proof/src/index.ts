@@ -51,5 +51,7 @@ export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-
 export type { TrustPreview, TrustSet } from './trust-set.ts';
 export { AGENT_KEY_METHODS, keyScopeProblem, viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
+export { fromMinimalUnits, toMinimalUnits, tokenDecimalsOf, tokenSymbolOf, readTokenInfo } from './token.ts';
+export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';

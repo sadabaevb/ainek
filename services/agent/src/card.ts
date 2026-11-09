@@ -1,9 +1,8 @@
 // What the owner reads in Telegram (SPEC §5.3 in plain text, no parse mode). Text the model wrote is flattened to one line and labelled as
 // the model's: a forwarded injection must not be able to forge a line of the card above the approval buttons. The wording follows docs/CLAIMS.md: "attested deployment", "proof", and it says only what this service checked: before an action is
 // proposed, the decision's signature and the attestation of the run that made it.
-import { explorerTxUrl, shortHex as short, type Check, type ModelProof, type Verdict } from '@ainek/proof';
+import { explorerTxUrl, fromMinimalUnits, shortHex as short, type Check, type ModelProof, type Verdict } from '@ainek/proof';
 import type { Result } from './pipeline.ts';
-import { fromMinimalUnits } from './units.ts';
 
 export interface Card {
   /** Runs once the owner has received the card. */

@@ -4,7 +4,7 @@
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
 import { withDeadline } from '@ainek/tier1-node';
 import { ContractRefused, errorText } from './errors.ts';
-import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, viewFunction, withRetry, isAlreadyCommitted, isNetworkFailure, type Action, type Decision } from '@ainek/proof';
+import { AGENT_KEY_METHODS, isHex64, keyScopeProblem, readStorageBalance, readTokenInfo, viewFunction, withRetry, isAlreadyCommitted, isNetworkFailure, type Action, type Decision } from '@ainek/proof';
 
 export interface Proposed {
   /** Null when the transaction landed but named no action: never a reason to lose the hash. */
@@ -83,19 +83,6 @@ export function agentStateOf(info: unknown, tokenId: string): AgentState {
   return { spentToday: i.spent_today, teePubkey: i.tee_pubkey, paused: i.paused };
 }
 
-/** The token's short name for the card. It only labels an amount, so anything unusable falls back to the account id instead of failing, and it cannot carry a forged line into the card. */
-export function tokenSymbolOf(metadata: unknown, tokenId: string): string {
-  const symbol = (metadata as { symbol?: unknown } | null | undefined)?.symbol;
-  return typeof symbol === 'string' && /^[\p{L}\p{N}._-]{1,16}$/u.test(symbol) ? symbol : tokenId;
-}
-
-/** `decimals` from the token's NEP-148 `ft_metadata`. */
-export function tokenDecimalsOf(metadata: unknown): number {
-  const decimals = (metadata as { decimals?: unknown } | null | undefined)?.decimals;
-  if (typeof decimals !== 'number' || !Number.isInteger(decimals) || decimals < 0 || decimals > 24) throw new Error(`the token reports no usable decimals in ft_metadata (${String(decimals)})`);
-  return decimals;
-}
-
 /** NEAR's storage price, yoctoNEAR per byte. */
 const STORAGE_BYTE_COST = 10n ** 19n;
 /** What the contract charges for one commit (SPEC §4.2: 130 + account + kind bytes). */
@@ -169,8 +156,8 @@ export function nearActionChain(cfg: { rpcUrl: string; contract: string; agentId
     roomForAction: async () => (await readStorageBalance(cfg.rpcUrl, cfg.contract, cfg.agentId)) >= actionCost(cfg.agentId),
     // The chain's own answer, not a config value: on a wrong scale the card would still read "300" while the transfer and the policy caps were off by orders of magnitude.
     tokenInfo: async () => {
-      const metadata = await viewFunction(cfg.rpcUrl, cfg.tokenId, 'ft_metadata', {});
-      return { tokenDecimals: tokenDecimalsOf(metadata), tokenSymbol: tokenSymbolOf(metadata, cfg.tokenId) };
+      const { decimals, symbol } = await readTokenInfo(cfg.rpcUrl, cfg.tokenId);
+      return { tokenDecimals: decimals, tokenSymbol: symbol };
     },
   };
 }

@@ -2,6 +2,7 @@
 // Every message pays a fresh attestation on purpose (@ainek/tier1-node caches nothing): this path moves money, and some
 // seconds are cheap against acting on an hour-old verification (docs/DECISIONS.md).
 import { parseArgs } from 'node:util';
+import { fromMinimalUnits } from '@ainek/proof';
 import { contractLog } from '@ainek/tier1-node';
 import { createBot, startBot } from './bot.ts';
 import { renderCard } from './card.ts';
@@ -11,7 +12,6 @@ import { extractAction } from './llm.ts';
 import { handleOwnerText, type Deps } from './pipeline.ts';
 import { outLayerPolicy, outLayerRunCheck } from './policy.ts';
 import { fileKeeper } from './store.ts';
-import { fromMinimalUnits } from './units.ts';
 
 const { values: flags, positionals } = parseArgs({ options: { once: { type: 'boolean', default: false } }, allowPositionals: true, strict: true });
 const cfg = loadConfig();
