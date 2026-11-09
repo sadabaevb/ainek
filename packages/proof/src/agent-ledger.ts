@@ -2,7 +2,7 @@
 // proposed with the decision the contract accepted. Shared by `pnpm -F demo check-agent`, the /agent page and /verify, so each
 // reads and re-checks a record the same way. The contract checked every decision when it mattered; these checks repeat what an
 // outsider can repeat.
-import { checkProofCommit, keyScopeProblem, viewAccessKeys, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
+import { checkProofCommit, keyScopeProblem, readProofCommit, viewAccessKeys, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
 import { actionCommitCheck, check, decisionSignatureCheck } from './policy.ts';
 import { ActionRecord, AgentInfo } from './schema.ts';
 import { readTokenBalance } from './token.ts';
@@ -36,8 +36,8 @@ const MAX_ACTIONS = 512;
 
 /**
  * The actions the contract holds from id `from` on, oldest first. The contract has no count and no list view, only `action(id)`
- * with ids from 0 and no gaps, so the ids are asked a chunk at a time until one is missing. `more` is true when id `max` was
- * reached first: the list is then a prefix, and a caller must say so instead of showing it as the whole record.
+ * with ids from 0 and no gaps, so the ids are asked a chunk at a time until one is missing. Ids from `max` on are not read; `more`
+ * says whether id `max` exists: the list is then a prefix, and a caller must say so instead of showing it as the whole record.
  */
 export async function readActions(rpcUrl: string, contract: string, { from = 0, chunk = CHUNK, max = MAX_ACTIONS, signal }: { from?: number; chunk?: number; max?: number; signal?: AbortSignal } = {}): Promise<{ records: ActionRecord[]; more: boolean }> {
   const records: ActionRecord[] = [];
@@ -49,7 +49,12 @@ export async function readActions(rpcUrl: string, contract: string, { from = 0, 
     if (end !== -1) return { records, more: false };
     width = chunk;
   }
-  return { records, more: true };
+  return { records, more: (await readAction(rpcUrl, contract, max, signal)) !== null };
+}
+
+/** `pending_actions(agent_id)`: the ids that wait for the owner, oldest first, in one call (the contract keeps at most 20 per agent). */
+export async function readPendingIds(rpcUrl: string, contract: string, agentId: string, signal?: AbortSignal): Promise<number[]> {
+  return ActionRecord.array().parse((await viewFunction(rpcUrl, contract, 'pending_actions', { agent_id: agentId }, signal)) ?? []).map((r) => r.action_id);
 }
 
 export interface AgentKeys {
@@ -110,6 +115,28 @@ export function actionStatusCheck(verdict: string, status: string): Check {
 
 /** The `proof_commit` record of the model proof an action names, or why it could not be read: "could not check" is not a pass and not a forgery. */
 export type ModelCommitLookup = ProofCommitLookup | { status: 'failed'; detail: string };
+
+const LOOKUPS_AT_ONCE = 16;
+
+/**
+ * `proof_commit` for the model proof each record names, in the records' order, a few lookups at a time so that a long ledger does
+ * not open a hundred requests to a public endpoint at once. A read that fails is that record's answer, not an exception: one bad
+ * lookup must not hide the others. `onBatch` hands each batch over as it lands; `signal` ends the work between batches.
+ */
+export async function readModelCommits(rpcUrl: string, contract: string, records: ActionRecord[], { signal, onBatch }: { signal?: AbortSignal; onBatch?: (found: Array<[ActionRecord, ModelCommitLookup]>) => void } = {}): Promise<ModelCommitLookup[]> {
+  const lookups: ModelCommitLookup[] = [];
+  for (let i = 0; i < records.length && !signal?.aborted; i += LOOKUPS_AT_ONCE) {
+    const found = await Promise.all(
+      records.slice(i, i + LOOKUPS_AT_ONCE).map(async (record): Promise<[ActionRecord, ModelCommitLookup]> => [
+        record,
+        await readProofCommit(rpcUrl, contract, record.agent_id, record.decision.model_proof_commit, signal).catch((err: unknown): ModelCommitLookup => ({ status: 'failed', detail: err instanceof Error ? err.message : String(err) })),
+      ]),
+    );
+    lookups.push(...found.map(([, lookup]) => lookup));
+    onBatch?.(found);
+  }
+  return lookups;
+}
 
 /** The agent commits its model proof before it proposes, and the contract refuses the action otherwise: the record must be there, under the agent's name, as a model proof. */
 export function modelCommitCheck(lookup: ModelCommitLookup, agent: string): Check {

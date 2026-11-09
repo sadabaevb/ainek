@@ -3,7 +3,7 @@
 // Re-checks every recorded decision here instead of trusting the contract's own check, and compares the registered key
 // with the one in the attested run behind `pnpm demo:policy`.
 import { readFileSync } from 'node:fs';
-import { agentKeysOf, ainekConfigFromEnv, checkActionRecord, decidedUnderCurrentPolicy, readActions, readAgentState, readProofCommit, readTokenInfo, shortHex, tokenAmountText, viewAccessKeys } from '@ainek/proof';
+import { agentKeysOf, ainekConfigFromEnv, checkActionRecord, decidedUnderCurrentPolicy, readActions, readAgentState, readModelCommits, readTokenInfo, shortHex, tokenAmountText, viewAccessKeys } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
 const [agentId = cfg.agentAccount, rpc = cfg.rpcUrl] = process.argv.slice(2);
@@ -43,10 +43,9 @@ const token = await readTokenInfo(rpc, agent.token_id);
 const amount = (raw) => tokenAmountText(raw, token);
 report(funds.onAgent === '0', `funds: ${amount(funds.inContract)} in the contract, ${amount(funds.onAgent)} on the agent account`);
 
-// The same re-check the /agent page runs in the browser (checkActionRecord in @ainek/proof). The commit lookups go out sixteen at a time.
+// The same lookups and the same re-check the /agent page runs in the browser (readModelCommits, checkActionRecord in @ainek/proof).
 const mine = records.filter((r) => r.agent_id === agentId);
-const commits = [];
-for (let i = 0; i < mine.length; i += 16) commits.push(...(await Promise.all(mine.slice(i, i + 16).map((r) => readProofCommit(rpc, cfg.contract, agentId, r.decision.model_proof_commit)))));
+const commits = await readModelCommits(rpc, cfg.contract, mine);
 for (const [i, record] of mine.entries()) {
   const { action_id, action, decision, status } = record;
   const failed = checkActionRecord(record, commits[i]).filter((c) => c.status !== 'ok').map((c) => c.detail);

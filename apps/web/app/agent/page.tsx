@@ -1,12 +1,12 @@
 'use client';
-// The third question, "did the agent do only what it was allowed to?", as a page anyone can open (SPEC §4.3, §7.2). Everything
+// The third question, "did the agent do only what it was allowed to?", as a page anyone can open (SPEC §4.3, §7.2). The data
 // comes from the contract's views and the agent account's access keys over public RPC; each record is re-checked in this browser
 // with the code `pnpm -F demo check-agent` runs. The owner can approve or reject a waiting action here: the page only builds the
 // call, the wallet signs it with a full-access key. The page follows the chain while it is open, so an action the bot proposes appears by itself.
 import Link from 'next/link';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
-import { approveBlocker, checkActionRecord, decidedAtMs, decidedUnderCurrentPolicy, oneLine, readProofCommit, type ActionRecord, type AgentState, type Check, type ModelCommitLookup } from '@ainek/proof';
+import { approveBlocker, checkActionRecord, decidedAtMs, decidedUnderCurrentPolicy, oneLine, readModelCommits, type ActionRecord, type AgentState, type Check, type ModelCommitLookup } from '@ainek/proof';
 import sampleAction from '../../../../docs/samples/action-proof.sample.json';
 import { CheckList, Row, worstStatus, type Status } from '@/components/checks';
 import { RedCard } from '@/components/red-card';
@@ -20,8 +20,14 @@ import { errorText, isDialogClosed, ownerDecide } from '@/lib/wallet';
 import { useConfig, useT } from '../providers';
 
 const POLL_MS = 10_000;
-/** `proof_commit` lookups sent together: a long ledger must not open a hundred requests to a public endpoint at once. */
-const LOOKUPS_AT_ONCE = 16;
+/** After the owner signed, the chain shows the result within seconds: look often for a minute, so the card does not sit undecided. */
+const EAGER_MS = 2_000;
+const EAGER_FOR_MS = 60_000;
+/** Every sixth turn the ledger is read again whatever the look says: the balances, the owner and anything else the look does not watch. */
+const REFRESH_EVERY = 6;
+/** A commit lookup that failed, or that a node behind the chain answered with "none", is asked again this often, this many times. */
+const RETRY_MS = 10_000;
+const MAX_TRIES = 5;
 
 type Decided = { method: 'approve' | 'reject'; tx: string };
 /** The checks of each record by action id; an action is absent until its model proof commit has been looked up. */
@@ -30,78 +36,102 @@ type Checks = ReadonlyMap<number, Check[]>;
 const commitKey = (r: ActionRecord): string => `${r.agent_id}/${r.decision.model_proof_commit}`;
 
 /**
- * The ledger, kept in step with the chain by one loop: read, wait, look for news while the tab is visible, read again only if
- * something moved. One loop, so a slow read is never overtaken by the next look. A re-read keeps what cannot change (`loadLedger`).
- * With a ledger on screen a failed look or re-read is silent and repeated ten seconds later; `reload` starts the loop afresh.
+ * The ledger, kept in step with the chain by one loop: read, wait, look for news while the tab is visible, read again if something
+ * moved or a minute has passed. One loop, so a slow read is never overtaken by the next look. A re-read keeps what cannot change
+ * (`loadLedger`). With a ledger on screen a failed look or re-read is silent and repeated on the next turn. `follow` is for an
+ * action the owner has just signed for: the loop looks at once and often until the chain shows what became of it.
  */
 function useLedger() {
   const cfg = useConfig();
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [error, setError] = useState('');
-  const [version, setVersion] = useState(0);
+  const [kick, setKick] = useState(0);
+  // What the loop last read, kept across its restarts so that a restart re-reads from there, not from nothing. Per config.
+  const held = useRef<{ cfg: typeof cfg; ledger: Ledger } | null>(null);
+  const signedAt = useRef(new Map<number, number>());
 
   useEffect(() => {
     const ctl = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let known: Ledger | null = null;
+    let turns = 0;
+    const known = (): Ledger | null => (held.current?.cfg === cfg ? held.current.ledger : null);
     const turn = async () => {
+      const before = known();
+      turns += 1;
       try {
-        if (known === null || (document.visibilityState === 'visible' && (await ledgerMoved(cfg, known, ctl.signal)))) {
-          const next = await loadLedger(cfg, ctl.signal, known ?? undefined);
+        const due = before === null || (document.visibilityState === 'visible' && (turns % REFRESH_EVERY === 0 || (await ledgerMoved(cfg, before, ctl.signal))));
+        if (due) {
+          const next = await loadLedger(cfg, ctl.signal, before ?? undefined);
           if (ctl.signal.aborted) return;
-          known = next;
+          held.current = { cfg, ledger: next };
           setLedger(next);
           setError('');
         }
       } catch (e) {
         if (ctl.signal.aborted) return;
-        if (known === null) setError(describeError(e));
+        if (before === null) setError(describeError(e));
       }
-      timer = setTimeout(() => void turn(), POLL_MS);
+      const now = Date.now();
+      const awaited = (known()?.records ?? []).some((r) => r.status === 'Pending' && now - (signedAt.current.get(r.action_id) ?? -EAGER_FOR_MS) < EAGER_FOR_MS);
+      timer = setTimeout(() => void turn(), awaited ? EAGER_MS : POLL_MS);
     };
     void turn();
     return () => {
       ctl.abort();
       clearTimeout(timer);
     };
-  }, [cfg, version]);
+  }, [cfg, kick]);
 
-  return { ledger, error, reload: () => setVersion((v) => v + 1) };
+  const follow = (actionId: number) => {
+    signedAt.current.set(actionId, Date.now());
+    setKick((k) => k + 1);
+  };
+  return { ledger, error, follow };
 }
 
 /**
- * `proof_commit` for the model proof each record names, a few at a time. A commit that was found stays found, so it is asked once
- * per page; one that could not be read is shown as such and asked again when the ledger is next read.
+ * `proof_commit` for the model proof each record names (`readModelCommits`: a few at a time). A commit that was found stays found,
+ * so it is asked once per page. An answer that may still change, a failed read or a "none" from a node behind the chain, is shown
+ * as it is and asked again a few times. Lookups cut short by a new ledger are handed back and asked again by the next run.
  */
 function useModelCommits(ledger: Ledger | null): Record<string, ModelCommitLookup> {
   const cfg = useConfig();
   const [commits, setCommits] = useState<Record<string, ModelCommitLookup>>({});
+  const [retry, setRetry] = useState(0);
+  /** In flight, or answered for good. */
   const asked = useRef(new Set<string>());
-  const alive = useRef(true);
-  useEffect(() => {
-    alive.current = true; // an effect is run twice in development: the first cleanup must not end the lookups for good
-    return () => {
-      alive.current = false;
-    };
-  }, []);
+  const tries = useRef(new Map<string, number>());
   useEffect(() => {
     const todo = new Map<string, ActionRecord>();
-    for (const record of ledger?.records ?? []) if (!asked.current.has(commitKey(record))) todo.set(commitKey(record), record);
+    for (const record of ledger?.records ?? []) {
+      const key = commitKey(record);
+      if (!asked.current.has(key) && (tries.current.get(key) ?? 0) < MAX_TRIES) todo.set(key, record);
+    }
+    if (todo.size === 0) return;
     for (const key of todo.keys()) asked.current.add(key);
-    const entries = [...todo];
-    void (async () => {
-      for (let i = 0; i < entries.length && alive.current; i += LOOKUPS_AT_ONCE) {
-        const found = await Promise.all(
-          entries.slice(i, i + LOOKUPS_AT_ONCE).map(async ([key, record]) => {
-            const lookup = await readProofCommit(cfg.rpcUrl, cfg.contract, record.agent_id, record.decision.model_proof_commit).catch((e: unknown): ModelCommitLookup => ({ status: 'failed', detail: describeError(e) }));
-            if (lookup.status === 'failed') asked.current.delete(key);
-            return [key, lookup] as const;
-          }),
-        );
-        setCommits((prev) => ({ ...prev, ...Object.fromEntries(found) }));
-      }
-    })();
-  }, [cfg, ledger]);
+    const unanswered = new Set(todo.keys());
+    const ctl = new AbortController();
+    let again: ReturnType<typeof setTimeout> | undefined;
+    void readModelCommits(cfg.rpcUrl, cfg.contract, [...todo.values()], {
+      signal: ctl.signal,
+      onBatch: (found) => {
+        if (ctl.signal.aborted) return;
+        const answers = found.map(([record, lookup]) => [commitKey(record), lookup] as const);
+        for (const [key, lookup] of answers) {
+          unanswered.delete(key);
+          tries.current.set(key, (tries.current.get(key) ?? 0) + 1);
+          if (lookup.status === 'failed' || lookup.status === 'none') asked.current.delete(key);
+        }
+        setCommits((prev) => ({ ...prev, ...Object.fromEntries(answers) }));
+        if (answers.some(([key]) => !asked.current.has(key))) again ??= setTimeout(() => setRetry((n) => n + 1), RETRY_MS);
+      },
+    });
+    return () => {
+      ctl.abort();
+      clearTimeout(again);
+      for (const key of unanswered) asked.current.delete(key);
+    };
+  }, [cfg, ledger, retry]);
   return commits;
 }
 
@@ -130,6 +160,11 @@ function AccountLink({ account }: { account: string }) {
   return <a className="mono" href={explorerAccountUrl(cfg.explorer, account)} target="_blank" rel="noreferrer">{account}</a>;
 }
 
+function TxLink({ tx }: { tx: string }) {
+  const cfg = useConfig();
+  return <a href={explorerTxUrl(cfg.explorer, tx)} target="_blank" rel="noreferrer">{short(tx)}</a>;
+}
+
 function AgentCard({ agent, ledger }: { agent: AgentState; ledger: Ledger }) {
   const cfg = useConfig();
   const ta = useT().t.agent;
@@ -145,11 +180,14 @@ function AgentCard({ agent, ledger }: { agent: AgentState; ledger: Ledger }) {
   }
   const amount = (units: string) => amountText(units, info.token_id, ledger.tokens);
   const scoped = keys.functionCall;
-  const state = info.paused ? (scoped.length === 0 ? 'stopped' : 'paused') : scoped.length === 0 ? 'noKey' : 'running';
+  // A pause is the contract's own refusal, whatever keys exist. Without it, only a key scoped to the agent's two methods on this
+  // contract counts as "the agent's key"; a full-access key could still sign a proposal, and the page says so instead of "cannot".
+  const hasAgentKey = scoped.some((k) => k.problem === null);
+  const state = info.paused ? (hasAgentKey ? ta.state.paused : ta.state.stopped) : hasAgentKey ? ta.state.running : ta.stateNoKey(keys.fullAccess);
   return (
     <section className="card agent-card">
       {head}
-      <Row status={state === 'running' ? 'ok' : 'skipped'} label={ta.rowState}>{ta.state[state]}</Row>
+      <Row status={!info.paused && hasAgentKey ? 'ok' : 'skipped'} label={ta.rowState}>{state}</Row>
       <Row status={scoped.length === 0 ? 'skipped' : scoped.every((k) => k.problem === null) ? 'ok' : 'fail'} label={ta.rowKey} hint={keys.fullAccess > 0 ? ta.fullAccessNote(keys.fullAccess) : undefined}>
         {scoped.length === 0
           ? ta.keyNone
@@ -182,7 +220,7 @@ function ActionLine({ record, tokens, status, note }: { record: ActionRecord; to
   );
 }
 
-function Pending({ records, ledger, checks, onDecided }: { records: ActionRecord[]; ledger: Ledger; checks: Checks; onDecided: (actionId: number, decided: Decided) => void }) {
+function Pending({ records, ledger, checks, decided, onDecided }: { records: ActionRecord[]; ledger: Ledger; checks: Checks; decided: Record<number, Decided>; onDecided: (actionId: number, decided: Decided) => void }) {
   const cfg = useConfig();
   const ta = useT().t.agent;
   const { signedAccountId, signIn, callFunctionRaw } = useNearWallet();
@@ -223,18 +261,28 @@ function Pending({ records, ledger, checks, onDecided }: { records: ActionRecord
       {records.map((record) => {
         const agent = ledger.agents.find((a) => a.id === record.agent_id)?.info;
         const block = agent ? approveBlocker(record, agent, Date.now()) : null;
-        // `approve` names only an id, so what the owner signs for is what the contract holds, re-checked here before the wallet opens.
+        // `approve` names only an id, so what the owner signs for is what the contract holds: Approve stays off until that record
+        // has been re-checked here and every check passed. Reject moves nothing, so it needs no check.
         const status = worstStatus(checks.get(record.action_id));
+        const signed = decided[record.action_id];
         return (
           <div key={record.action_id} className="card">
             <ActionLine record={record} tokens={ledger.tokens} status={status} note={ta.checked[status]} />
-            {block && <p className="muted small">{ta.blocked[block]}</p>}
-            {isOwner && (
-              <div className="actions">
-                <button type="button" className="btn primary" disabled={busy !== null || block !== null} onClick={() => decide(record, 'approve')}>{ta.approve}</button>
-                <button type="button" className="btn" disabled={busy !== null} onClick={() => decide(record, 'reject')}>{ta.reject}</button>
-                {busy === record.action_id && <span className="muted small">{ta.deciding}</span>}
-              </div>
+            {signed ? (
+              // The wallet returned, the chain has not shown the result yet: no second click, the loop is looking every two seconds.
+              <p className="small">{ta.decided[signed.method]} <TxLink tx={signed.tx} />. <span className="muted">{ta.awaitingChain}</span></p>
+            ) : (
+              <>
+                {block && <p className="muted small">{ta.blocked[block]}</p>}
+                {isOwner && status !== 'ok' && <p className="muted small">{ta.approveNeedsCheck}</p>}
+                {isOwner && (
+                  <div className="actions">
+                    <button type="button" className="btn primary" disabled={busy !== null || block !== null || status !== 'ok'} onClick={() => decide(record, 'approve')}>{ta.approve}</button>
+                    <button type="button" className="btn" disabled={busy !== null} onClick={() => decide(record, 'reject')}>{ta.reject}</button>
+                    {busy === record.action_id && <span className="muted small">{ta.deciding}</span>}
+                  </div>
+                )}
+              </>
             )}
           </div>
         );
@@ -245,7 +293,6 @@ function Pending({ records, ledger, checks, onDecided }: { records: ActionRecord
 
 /** Memoized: the list re-renders on every answer from the chain, and a row changes only with its own record, checks or transaction. */
 const ActionItem = memo(function ActionItem({ record, agent, tokens, checks, commit, decided }: { record: ActionRecord; agent: AgentState | undefined; tokens: Ledger['tokens']; checks: Check[] | undefined; commit: ModelCommitLookup | undefined; decided: Decided | undefined }) {
-  const cfg = useConfig();
   const ta = useT().t.agent;
   const [tampered, setTampered] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
@@ -262,7 +309,7 @@ const ActionItem = memo(function ActionItem({ record, agent, tokens, checks, com
           <ActionLine record={record} tokens={tokens} status={status} note={[ta.checked[status], earlier].filter(Boolean).join(' · ')} />
         </summary>
         <div className="ledger-body">
-          {decided && <p className="small">{ta.decided[decided.method]} <a href={explorerTxUrl(cfg.explorer, decided.tx)} target="_blank" rel="noreferrer">{short(decided.tx)}</a></p>}
+          {decided && <p className="small">{ta.decided[decided.method]} <TxLink tx={decided.tx} /></p>}
           {checks && <CheckList items={edited ?? checks} />}
           {edited && <p className="muted small">{ta.tamperNote(record.decision.verdict, flipped)}</p>}
           {checks && (
@@ -294,7 +341,7 @@ export default function AgentPage() {
   const cfg = useConfig();
   const { t } = useT();
   const ta = t.agent;
-  const { ledger, error, reload } = useLedger();
+  const { ledger, error, follow } = useLedger();
   const commits = useModelCommits(ledger);
   const checks = useChecks(ledger, commits);
   // Transactions this browser sent, so the row can link to them; the outcome itself is always read from the chain.
@@ -315,9 +362,10 @@ export default function AgentPage() {
               records={pending}
               ledger={ledger}
               checks={checks}
+              decided={decided}
               onDecided={(actionId, d) => {
                 setDecided((prev) => ({ ...prev, [actionId]: d }));
-                reload();
+                follow(actionId);
               }}
             />
           )}

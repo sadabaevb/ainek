@@ -1,7 +1,7 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
-import { agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, modelCommitCheck, readActions, readAgent, readAgentState, readOwner, type ModelCommitLookup } from './agent-ledger.ts';
+import { agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, modelCommitCheck, readActions, readAgent, readAgentState, readModelCommits, readOwner, readPendingIds, type ModelCommitLookup } from './agent-ledger.ts';
 import { canonicalBytes } from './canonical.ts';
 import { actionCommitOf } from './commit.ts';
 import { bytesToBase64 } from './disclosure.ts';
@@ -48,11 +48,14 @@ test('readActions: a count that fills the last chunk exactly costs one more chun
   assert.deepEqual(await readActions('https://rpc.test', contract), { records: [], more: false });
 });
 
-test('readActions: at the cap the list is a prefix and says so', async () => {
+test('readActions: at the cap the list is a prefix and says so, and exactly that many actions are the whole record', async () => {
   ledgerOf(100);
   const { records, more } = await readActions('https://rpc.test', contract, { chunk: 4, max: 6 });
   assert.deepEqual(records.map((r) => r.action_id), [0, 1, 2, 3, 4, 5]);
   assert.equal(more, true);
+  const calls = ledgerOf(6);
+  assert.deepEqual(await readActions('https://rpc.test', contract, { chunk: 4, max: 6 }).then((r) => [r.records.length, r.more]), [6, false]);
+  assert.equal(calls.at(-1)?.args['action_id'], 6); // the one id past the cap, asked to tell the two apart
 });
 
 test('readActions: a re-read from a known id asks a narrow window first, and returns only what is new', async () => {
@@ -63,8 +66,32 @@ test('readActions: a re-read from a known id asks a narrow window first, and ret
   assert.deepEqual(calls.map((c) => c.args['action_id']), [10, 11, 12, 13]);
   ledgerOf(30);
   assert.deepEqual((await readActions('https://rpc.test', contract, { from: 10, chunk: 8 })).records.map((r) => r.action_id), Array.from({ length: 20 }, (_, i) => 10 + i)); // past the window it goes on in full chunks
-  ledgerOf(600);
-  assert.deepEqual(await readActions('https://rpc.test', contract, { from: 512 }), { records: [], more: true }); // already at the cap: nothing is asked
+  const atCap = ledgerOf(600);
+  assert.deepEqual(await readActions('https://rpc.test', contract, { from: 512 }), { records: [], more: true });
+  assert.deepEqual(atCap.map((c) => c.args['action_id']), [512]); // already at the cap: only whether there is more is asked
+});
+
+test('readPendingIds: the waiting queue of an agent in one call, and none for an agent the contract does not know', async () => {
+  const calls = fakeRpc(() => [recordOf(5, 'NeedsApproval', 'Pending'), recordOf(9, 'NeedsApproval', 'Pending')]);
+  assert.deepEqual(await readPendingIds('https://rpc.test', contract, agentId), [5, 9]);
+  assert.deepEqual(calls, [{ account: contract, method: 'pending_actions', args: { agent_id: agentId } }]);
+  fakeRpc(() => []);
+  assert.deepEqual(await readPendingIds('https://rpc.test', contract, 'nobody.testnet'), []);
+});
+
+test('readModelCommits: one answer per record in order, a failed read is that record\'s answer, and batches are handed over as they land', async () => {
+  const records = Array.from({ length: 20 }, (_, i) => ({ ...recordOf(i), decision: { ...recordOf(i).decision, model_proof_commit: i.toString(16).padStart(2, '0').repeat(32) } }));
+  const broken = records[3]?.decision.model_proof_commit;
+  const calls = fakeRpc(({ args }) => (args['commit'] === broken ? { kind: 'model', log_index: -1, block_height: 1 } : args['commit'] === records[4]?.decision.model_proof_commit ? null : { kind: 'model', log_index: 3, block_height: 9 }));
+  const batches: number[] = [];
+  const lookups = await readModelCommits('https://rpc.test', contract, records, { onBatch: (found) => batches.push(found.length) });
+  assert.deepEqual(batches, [16, 4]);
+  assert.equal(calls.length, 20);
+  assert.deepEqual(calls[0], { account: contract, method: 'proof_commit', args: { account: agentId, commit: records[0]?.decision.model_proof_commit } });
+  assert.deepEqual(lookups.map((l) => l.status), records.map((_, i) => (i === 3 ? 'failed' : i === 4 ? 'none' : 'found')));
+  const aborted = new AbortController();
+  aborted.abort();
+  assert.deepEqual(await readModelCommits('https://rpc.test', contract, records, { signal: aborted.signal }), []); // nothing is asked once the caller has gone
 });
 
 test('readActions: a record that is not what SPEC §4.3 describes is an error, not a row', async () => {

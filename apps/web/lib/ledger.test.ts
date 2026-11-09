@@ -33,6 +33,7 @@ function chain(w: World): RpcCall[] {
         owner: 'owner.testnet',
         action: w.actions[Number(args['action_id'])],
         agent: w.agents[String(args['agent_id'])],
+        pending_actions: w.actions.filter((r) => r.agent_id === args['agent_id'] && r.status === 'Pending'),
         ft_metadata: w.metadata,
         ft_balance_of: args['account_id'] === cfg.contract ? '8794000000' : '0',
       })[method],
@@ -105,16 +106,38 @@ test('ledgerMoved: nothing new is false, and the look costs a handful of calls, 
   const ledger = await load();
   calls.length = 0;
   assert.equal(await ledgerMoved(cfg, ledger, new AbortController().signal), false);
-  assert.deepEqual(names(calls).sort(), ['agent.testnet.view_access_key_list', 'ainek.testnet.action', 'ainek.testnet.agent']);
+  assert.deepEqual(names(calls).sort(), ['agent.testnet.view_access_key_list', 'ainek.testnet.action', 'ainek.testnet.agent', 'ainek.testnet.pending_actions']);
 });
 
-test('ledgerMoved: a new action, a waiting action that moved on, a pause, a deleted key', async () => {
+test('ledgerMoved: a new action, a waiting action that was decided, a transfer that reported back, a pause, a deleted key', async () => {
   assert.equal(await moved(world(), (w) => w.actions.push(record(2, 'Pending'))), true);
-  const waiting = world();
-  waiting.actions.push(record(2, 'Pending'));
-  assert.equal(await moved(waiting, (w) => { w.actions[2] = record(2, 'Rejected'); }), true);
+  const waiting = () => {
+    const w = world();
+    w.actions.push(record(2, 'Pending'), record(3, 'Pending'));
+    return w;
+  };
+  assert.equal(await moved(waiting(), () => undefined), false);
+  assert.equal(await moved(waiting(), (w) => { w.actions[2] = record(2, 'Rejected'); }), true);
+  const inFlight = world();
+  inFlight.actions.push(record(2, 'Executing'));
+  assert.equal(await moved(inFlight, (w) => { w.actions[2] = record(2, 'Executed'); }), true);
   assert.equal(await moved(world(), (w) => { w.agents[cfg.agentAccount] = info(cfg.agentAccount, true); }), true);
   assert.equal(await moved(world(), (w) => { w.keys[cfg.agentAccount] = [fullKey]; }), true); // the stop button
+});
+
+test('ledgerMoved: every agent on the page is watched, with one call for its whole waiting queue', async () => {
+  const w = world();
+  w.agents['other.testnet'] = info('other.testnet');
+  w.keys['other.testnet'] = [fcKey];
+  w.actions.push(record(2, 'Pending', 'other.testnet'), record(3, 'Pending', 'other.testnet'));
+  const calls = chain(w);
+  const ledger = await load();
+  calls.length = 0;
+  assert.equal(await ledgerMoved(cfg, ledger, new AbortController().signal), false);
+  assert.equal(calls.filter((c) => c.method === 'action').length, 1); // the next id only: two waiting actions cost one pending_actions call
+  assert.equal(calls.filter((c) => c.method === 'pending_actions').length, 2);
+  w.agents['other.testnet'] = info('other.testnet', true);
+  assert.equal(await ledgerMoved(cfg, ledger, new AbortController().signal), true); // the other agent was paused
 });
 
 test('isUnsettled: only an action that waits or whose transfer has not reported back', () => {
