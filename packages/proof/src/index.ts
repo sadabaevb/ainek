@@ -44,9 +44,9 @@ export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestati
 export { stripHexPrefix, normalizeHex } from './hash.ts';
 export { ainekConfigFromEnv, explorerAccountUrl, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
-export { actionRunChecks, actionStatusProblem, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
-export { agentKeysOf, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readOwner } from './agent-ledger.ts';
-export type { AgentKeys } from './agent-ledger.ts';
+export { actionRunChecks, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
+export { agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readAgentState, readOwner } from './agent-ledger.ts';
+export type { AgentKeys, AgentState, ModelCommitLookup } from './agent-ledger.ts';
 export type { ActionVerdict } from './action-on-chain.ts';
 export type { ActionReport } from './policy.ts';
 export { PolicyRun, checkPolicyRun, policySecretsRef, quoteVerifierOf, tryVerifyQuote, verifyPolicyRun } from './policy-run.ts';
@@ -54,8 +54,8 @@ export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-r
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
 export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
-export type { AccessKey, KeyLogReader, ProofCommitLookup } from './near-view.ts';
-export { fromMinimalUnits, toMinimalUnits, tokenDecimalsOf, tokenSymbolOf, readTokenBalance, readTokenInfo } from './token.ts';
+export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
+export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, tokenAmountText } from './token.ts';
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';

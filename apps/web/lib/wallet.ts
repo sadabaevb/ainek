@@ -1,7 +1,7 @@
 // Wallet helpers shared by the chat and /log pages. Sign-in asks the wallet for a function-call key limited to
 // `commit_proof` on the log contract (the wallet may widen it), so a commit does not pop the wallet up.
 import type { NearContextValue } from 'near-connect-hooks';
-import { nearToYocto } from 'near-api-js';
+import { nearToYocto, teraToGas } from 'near-api-js';
 import { ContractMethodNotFoundError } from 'near-api-js/rpc-errors';
 import { readProofCommit, readStorageBalance, type ModelProof } from '@ainek/proof';
 import type { PublicConfig } from './config';
@@ -33,16 +33,8 @@ export function fcKeyLogin(signIn: NearContextValue['signIn'], cfg: PublicConfig
   });
 }
 
-/**
- * Sign-in for the contract owner on /agent: no function-call key is asked for. Every owner call there needs a full-access signature
- * anyway (1 yoctoNEAR), and a key left in this browser on the owner's account is exactly what that rule guards against (SPEC §4.3).
- */
-export function plainLogin(signIn: NearContextValue['signIn']): Promise<void> {
-  return signIn();
-}
-
 /** `approve` moves tokens through a cross-contract call and its callback: SPEC §4.3 asks for at least 60 TGas, the bot's command uses 100. */
-const OWNER_CALL_GAS = '100000000000000';
+const OWNER_CALL_GAS = teraToGas(100).toString();
 
 /**
  * `approve(action_id)` or `reject(action_id)` with the 1 yoctoNEAR that makes the contract insist on a full-access key, so the wallet

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
+import { fakeRpc, type RpcCall } from '../../../packages/proof/src/fixtures.ts';
 import { amountText, isUnsettled, ledgerMoved, loadLedger } from './ledger.ts';
 
 const cfg = { rpcUrl: 'http://rpc.test', contract: 'ainek.testnet', agentAccount: 'agent.testnet' };
@@ -24,28 +25,21 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-/** Stands in for the NEAR JSON-RPC over `w`; returns the calls it saw as "account.method". */
-function chain(w: World): string[] {
-  const calls: string[] = [];
-  globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
-    const p = (JSON.parse(String(init.body)) as { params: { request_type: string; account_id: string; method_name?: string; args_base64?: string } }).params;
-    if (p.request_type === 'view_access_key_list') {
-      calls.push(`${p.account_id}.keys`);
-      return new Response(JSON.stringify({ result: { keys: w.keys[p.account_id] ?? [] } }), { status: 200 });
-    }
-    const args = JSON.parse(Buffer.from(p.args_base64 ?? '', 'base64').toString()) as { action_id?: number; agent_id?: string; account_id?: string };
-    calls.push(`${p.account_id}.${p.method_name}`);
-    const answers: Record<string, unknown> = {
-      owner: 'owner.testnet',
-      action: w.actions[args.action_id ?? -1] ?? null,
-      agent: w.agents[args.agent_id ?? ''] ?? null,
-      ft_metadata: w.metadata,
-      ft_balance_of: args.account_id === cfg.contract ? '8794000000' : '0',
-    };
-    return new Response(JSON.stringify({ result: { result: [...Buffer.from(JSON.stringify(answers[p.method_name ?? ''] ?? null))] } }), { status: 200 });
-  }) as typeof fetch;
-  return calls;
+/** The fake RPC over `w`; returns the calls it saw. */
+function chain(w: World): RpcCall[] {
+  return fakeRpc(
+    ({ method, args }) =>
+      ({
+        owner: 'owner.testnet',
+        action: w.actions[Number(args['action_id'])],
+        agent: w.agents[String(args['agent_id'])],
+        ft_metadata: w.metadata,
+        ft_balance_of: args['account_id'] === cfg.contract ? '8794000000' : '0',
+      })[method],
+    (account) => w.keys[account] ?? [],
+  );
 }
+const names = (calls: RpcCall[]): string[] => calls.map((c) => `${c.account}.${c.method}`);
 const load = () => loadLedger(cfg, new AbortController().signal);
 const moved = async (w: World, change: (w: World) => void): Promise<boolean> => {
   chain(w);
@@ -66,7 +60,7 @@ test('loadLedger: the owner, every action, the configured agent with its keys an
   assert.deepEqual(agent?.keys, { functionCall: [{ publicKey: 'ed25519:fc', methods: ['commit_proof', 'propose_action'], problem: null }], fullAccess: 1 });
   assert.deepEqual(agent?.funds, { inContract: '8794000000', onAgent: '0' });
   assert.deepEqual(ledger.tokens, { 'token.testnet': { decimals: 6, symbol: 'AINEK' } });
-  assert.ok(calls.includes('token.testnet.ft_metadata') && calls.includes('agent.testnet.keys'));
+  assert.ok(names(calls).includes('token.testnet.ft_metadata') && names(calls).includes('agent.testnet.view_access_key_list'));
 });
 
 test('loadLedger: an agent that is not registered is shown as such, and another agent appears once it has proposed', async () => {
@@ -88,13 +82,30 @@ test('loadLedger: a token that does not say how to scale its amounts is left out
   assert.equal(amountText('2000000', 'token.testnet', { 'token.testnet': { decimals: 6, symbol: 'AINEK' } }), '2 AINEK');
 });
 
+test('loadLedger after an earlier read: settled actions and known tokens are kept, and the chain is asked from the first action that could move', async () => {
+  const w = world();
+  w.actions.push(record(2, 'Pending'));
+  const calls = chain(w);
+  const first = await load();
+  calls.length = 0;
+  w.actions[2] = record(2, 'Executed');
+  w.actions.push(record(3));
+  const next = await loadLedger(cfg, new AbortController().signal, first);
+  assert.deepEqual(next.records.map((r) => [r.action_id, r.status]), [[0, 'Executed'], [1, 'Denied'], [2, 'Executed'], [3, 'Executed']]);
+  assert.equal(next.records[0], first.records[0]); // the same object: a settled record is not read again
+  assert.deepEqual(calls.filter((c) => c.method === 'action').map((c) => c.args['action_id']), [2, 3, 4, 5]);
+  assert.equal(calls.some((c) => c.method === 'ft_metadata'), false);
+  assert.deepEqual(next.tokens, first.tokens);
+  assert.equal(calls.filter((c) => c.method === 'ft_balance_of').length, 2); // where the tokens are is always read fresh
+});
+
 test('ledgerMoved: nothing new is false, and the look costs a handful of calls, not the whole ledger', async () => {
   const w = world();
   const calls = chain(w);
   const ledger = await load();
   calls.length = 0;
   assert.equal(await ledgerMoved(cfg, ledger, new AbortController().signal), false);
-  assert.deepEqual([...calls].sort(), ['agent.testnet.keys', 'ainek.testnet.action', 'ainek.testnet.agent']);
+  assert.deepEqual(names(calls).sort(), ['agent.testnet.view_access_key_list', 'ainek.testnet.action', 'ainek.testnet.agent']);
 });
 
 test('ledgerMoved: a new action, a waiting action that moved on, a pause, a deleted key', async () => {

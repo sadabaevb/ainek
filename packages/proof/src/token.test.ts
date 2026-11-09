@@ -1,6 +1,7 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fromMinimalUnits, readTokenBalance, readTokenInfo, toMinimalUnits, tokenDecimalsOf, tokenSymbolOf } from './token.ts';
+import { fakeRpc } from './fixtures.ts';
+import { fromMinimalUnits, readTokenBalance, readTokenInfo, toMinimalUnits, tokenAmountText, tokenDecimalsOf, tokenSymbolOf } from './token.ts';
 
 test('toMinimalUnits: whole and fractional amounts, no floats, no rounding, no zero', () => {
   assert.equal(toMinimalUnits('300', 6), '300000000');
@@ -37,17 +38,17 @@ afterEach(() => {
 });
 
 test('readTokenInfo and readTokenBalance: asked of the token itself, with the NEP-141 call shapes', async () => {
-  const calls: Array<{ account: string; method: string; args: unknown }> = [];
-  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
-    const { account_id, method_name, args_base64 } = (JSON.parse(String(init?.body)) as { params: { account_id: string; method_name: string; args_base64: string } }).params;
-    calls.push({ account: account_id, method: method_name, args: JSON.parse(Buffer.from(args_base64, 'base64').toString()) });
-    const answer = method_name === 'ft_metadata' ? { spec: 'ft-1.0.0', name: 'Ainek demo token', symbol: 'AINEK', decimals: 6 } : '9999000000';
-    return new Response(JSON.stringify({ result: { result: [...Buffer.from(JSON.stringify(answer))] } }), { status: 200 });
-  }) as typeof fetch;
+  const calls = fakeRpc(({ method }) => (method === 'ft_metadata' ? { spec: 'ft-1.0.0', name: 'Ainek demo token', symbol: 'AINEK', decimals: 6 } : '9999000000'));
   assert.deepEqual(await readTokenInfo('http://rpc.test', 'token.testnet'), { decimals: 6, symbol: 'AINEK' });
   assert.equal(await readTokenBalance('http://rpc.test', 'token.testnet', 'ainek.testnet'), '9999000000');
   assert.deepEqual(calls, [
     { account: 'token.testnet', method: 'ft_metadata', args: {} },
     { account: 'token.testnet', method: 'ft_balance_of', args: { account_id: 'ainek.testnet' } },
   ]);
+});
+
+test('tokenAmountText: minimal units at the scale and under the name the token gives', () => {
+  assert.equal(tokenAmountText('400000000', { decimals: 6, symbol: 'AINEK' }), '400 AINEK');
+  assert.equal(tokenAmountText('0', { decimals: 6, symbol: 'AINEK' }), '0 AINEK');
+  assert.equal(tokenAmountText('1500000', { decimals: 6, symbol: 'token.testnet' }), '1.5 token.testnet');
 });

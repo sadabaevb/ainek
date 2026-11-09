@@ -1,12 +1,12 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
-import { agentKeysOf, checkActionRecord, decidedUnderCurrentPolicy, readActions, readAgent, readOwner } from './agent-ledger.ts';
+import { agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, modelCommitCheck, readActions, readAgent, readAgentState, readOwner, type ModelCommitLookup } from './agent-ledger.ts';
 import { canonicalBytes } from './canonical.ts';
 import { actionCommitOf } from './commit.ts';
 import { bytesToBase64 } from './disclosure.ts';
+import { fakeRpc } from './fixtures.ts';
 import { bytesToHex } from './hash.ts';
-import type { ProofCommitLookup } from './near-view.ts';
 import type { Action, ActionRecord, AgentInfo, Decision } from './schema.ts';
 
 const contract = 'log.testnet';
@@ -20,26 +20,16 @@ const recordOf = (id: number, verdict: Decision['verdict'] = 'Allow', status = '
   const decision = decisionFor(verdict);
   return { action_id: id, agent_id: agentId, action, decision, tee_signature: sign(decision), tee_pubkey: pubkey, status, day: 20764, block_height: 100 + id };
 };
-const committed: ProofCommitLookup = { status: 'found', record: { kind: 'model', log_index: 3, block_height: 9 } };
-const failed = (record: ActionRecord, lookup: ProofCommitLookup = committed): string[] => checkActionRecord(record, lookup).filter((c) => c.status === 'fail').map((c) => c.id);
+const committed: ModelCommitLookup = { status: 'found', record: { kind: 'model', log_index: 3, block_height: 9 } };
+const failed = (record: ActionRecord, lookup: ModelCommitLookup = committed): string[] => checkActionRecord(record, lookup).filter((c) => c.status === 'fail').map((c) => c.id);
+const registered: AgentInfo = { agent_id: agentId, policy_hash: 'ef'.repeat(32), policy_version: 1, tee_pubkey: pubkey, token_id: 'token.testnet', paused: false, spent_today: '0' };
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-/** Stands in for the NEAR JSON-RPC: answers each view from `answer` and records the calls. */
-function chain(answer: (method: string, args: Record<string, unknown>) => unknown): Array<{ method: string; args: Record<string, unknown> }> {
-  const calls: Array<{ method: string; args: Record<string, unknown> }> = [];
-  globalThis.fetch = (async (_url: unknown, init: RequestInit) => {
-    const params = (JSON.parse(String(init.body)) as { params: { method_name: string; args_base64: string } }).params;
-    const args = JSON.parse(Buffer.from(params.args_base64, 'base64').toString()) as Record<string, unknown>;
-    calls.push({ method: params.method_name, args });
-    return new Response(JSON.stringify({ result: { result: [...Buffer.from(JSON.stringify(answer(params.method_name, args)))] } }), { status: 200 });
-  }) as typeof fetch;
-  return calls;
-}
-const ledgerOf = (count: number) => chain((_method, args) => (Number(args['action_id']) < count ? recordOf(Number(args['action_id'])) : null));
+const ledgerOf = (count: number) => fakeRpc(({ args }) => (Number(args['action_id']) < count ? recordOf(Number(args['action_id'])) : null));
 
 test('readActions: every action from 0, oldest first, and it stops at the first missing id', async () => {
   const calls = ledgerOf(10);
@@ -65,20 +55,46 @@ test('readActions: at the cap the list is a prefix and says so', async () => {
   assert.equal(more, true);
 });
 
+test('readActions: a re-read from a known id asks a narrow window first, and returns only what is new', async () => {
+  const calls = ledgerOf(11);
+  const { records, more } = await readActions('https://rpc.test', contract, { from: 10 });
+  assert.deepEqual(records.map((r) => r.action_id), [10]);
+  assert.equal(more, false);
+  assert.deepEqual(calls.map((c) => c.args['action_id']), [10, 11, 12, 13]);
+  ledgerOf(30);
+  assert.deepEqual((await readActions('https://rpc.test', contract, { from: 10, chunk: 8 })).records.map((r) => r.action_id), Array.from({ length: 20 }, (_, i) => 10 + i)); // past the window it goes on in full chunks
+  ledgerOf(600);
+  assert.deepEqual(await readActions('https://rpc.test', contract, { from: 512 }), { records: [], more: true }); // already at the cap: nothing is asked
+});
+
 test('readActions: a record that is not what SPEC §4.3 describes is an error, not a row', async () => {
-  chain(() => ({ ...recordOf(0), decision: { verdict: 'Maybe' } }));
+  fakeRpc(() => ({ ...recordOf(0), decision: { verdict: 'Maybe' } }));
   await assert.rejects(readActions('https://rpc.test', contract));
 });
 
 test('readAgent and readOwner: the registration, null for an unknown agent, and an owner must be named', async () => {
-  const info: AgentInfo = { agent_id: agentId, policy_hash: 'ef'.repeat(32), policy_version: 1, tee_pubkey: pubkey, token_id: 'token.testnet', paused: false, spent_today: '0' };
-  const calls = chain((method) => (method === 'agent' ? info : 'owner.testnet'));
-  assert.deepEqual(await readAgent('https://rpc.test', contract, agentId), info);
+  const calls = fakeRpc(({ method }) => (method === 'agent' ? registered : 'owner.testnet'));
+  assert.deepEqual(await readAgent('https://rpc.test', contract, agentId), registered);
   assert.equal(await readOwner('https://rpc.test', contract), 'owner.testnet');
-  assert.deepEqual(calls, [{ method: 'agent', args: { agent_id: agentId } }, { method: 'owner', args: {} }]);
-  chain(() => null);
+  assert.deepEqual(calls, [{ account: contract, method: 'agent', args: { agent_id: agentId } }, { account: contract, method: 'owner', args: {} }]);
+  fakeRpc(() => null);
   assert.equal(await readAgent('https://rpc.test', contract, 'nobody.testnet'), null);
   await assert.rejects(readOwner('https://rpc.test', contract), /no owner/);
+});
+
+test('readAgentState: the registration, the scope of the keys, and the token on both accounts', async () => {
+  const fc = { public_key: 'ed25519:fc', access_key: { permission: { FunctionCall: { receiver_id: contract, method_names: ['commit_proof', 'propose_action'], allowance: '1' } } } };
+  const calls = fakeRpc(({ method, args }) => (method === 'agent' ? registered : args['account_id'] === contract ? '8794000000' : '0'), () => [fc, { public_key: 'ed25519:full', access_key: { permission: 'FullAccess' } }]);
+  assert.deepEqual(await readAgentState('https://rpc.test', contract, agentId), {
+    id: agentId,
+    info: registered,
+    keys: { functionCall: [{ publicKey: 'ed25519:fc', methods: ['commit_proof', 'propose_action'], problem: null }], fullAccess: 1 },
+    funds: { inContract: '8794000000', onAgent: '0' },
+  });
+  assert.deepEqual(calls.filter((c) => c.method === 'ft_balance_of').map((c) => [c.account, c.args['account_id']]), [['token.testnet', contract], ['token.testnet', agentId]]);
+  const unknown = fakeRpc(() => null);
+  assert.deepEqual(await readAgentState('https://rpc.test', contract, 'nobody.testnet'), { id: 'nobody.testnet', info: null, keys: { functionCall: [], fullAccess: 0 }, funds: null });
+  assert.equal(unknown.some((c) => c.method === 'ft_balance_of'), false); // no registration, no token to ask
 });
 
 test('checkActionRecord: a record as the contract writes it passes all four checks', () => {
@@ -105,14 +121,30 @@ test('checkActionRecord: a verdict may end only in its own statuses, so a signed
 test('checkActionRecord: the model proof commit must be there under the agent, as a model proof', () => {
   assert.deepEqual(failed(recordOf(7), { status: 'none' }), ['model-commit-on-chain']);
   assert.deepEqual(failed(recordOf(7), { status: 'found', record: { kind: 'action', log_index: 3, block_height: 9 } }), ['model-commit-on-chain']);
-  assert.equal(checkActionRecord(recordOf(7), { status: 'not-deployed' }).at(-1)?.status, 'skipped');
+  assert.equal(modelCommitCheck({ status: 'not-deployed' }, agentId).status, 'skipped');
+});
+
+test('checkActionRecord: a lookup that failed is "could not check", neither a pass nor a failure, and the other checks stand', () => {
+  const checks = checkActionRecord(recordOf(7), { status: 'failed', detail: 'http://rpc.test: HTTP 503' });
+  assert.deepEqual(checks.map((c) => c.status), ['ok', 'ok', 'ok', 'skipped']);
+  assert.deepEqual(checks.find((c) => c.id === 'model-commit-on-chain'), { id: 'model-commit-on-chain', status: 'skipped', detail: 'the commit could not be looked up: http://rpc.test: HTTP 503' });
 });
 
 test('decidedUnderCurrentPolicy: update_policy leaves old records as they were', () => {
-  const now: AgentInfo = { agent_id: agentId, policy_hash: 'ef'.repeat(32), policy_version: 1, tee_pubkey: pubkey, token_id: 'token.testnet', paused: false, spent_today: '0' };
-  assert.equal(decidedUnderCurrentPolicy(recordOf(7), now), true);
-  assert.equal(decidedUnderCurrentPolicy(recordOf(7), { ...now, tee_pubkey: 'aa'.repeat(32) }), false);
-  assert.equal(decidedUnderCurrentPolicy(recordOf(7), { ...now, policy_version: 2 }), false);
+  assert.equal(decidedUnderCurrentPolicy(recordOf(7), registered), true);
+  assert.equal(decidedUnderCurrentPolicy(recordOf(7), { ...registered, tee_pubkey: 'aa'.repeat(32) }), false);
+  assert.equal(decidedUnderCurrentPolicy(recordOf(7), { ...registered, policy_version: 2 }), false);
+});
+
+test('approveBlocker: the three refusals of approve, in the order the contract checks them', () => {
+  const waiting = recordOf(7, 'NeedsApproval', 'Pending'); // proposed on UTC day 20764
+  const sameDay = 20764 * 86_400_000 + 3_600_000;
+  assert.equal(approveBlocker(waiting, registered, sameDay), null);
+  assert.equal(approveBlocker(waiting, registered, sameDay + 86_400_000), 'earlierDay');
+  assert.equal(approveBlocker(waiting, registered, 20765 * 86_400_000), 'earlierDay'); // 00:00 UTC is the next day
+  assert.equal(approveBlocker(waiting, { ...registered, policy_version: 2 }, sameDay), 'replaced');
+  assert.equal(approveBlocker(waiting, { ...registered, paused: true, policy_version: 2 }, sameDay + 86_400_000), 'paused');
+  assert.equal(approveBlocker(waiting, { ...registered, policy_version: 2 }, sameDay + 86_400_000), 'replaced');
 });
 
 test('agentKeysOf: the scope of each function-call key, and how many full-access keys', () => {

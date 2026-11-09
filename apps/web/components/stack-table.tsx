@@ -27,3 +27,16 @@ export function StackTable<Row>({ columns, rows, rowKey }: { columns: Column<Row
     </div>
   );
 }
+
+/** A two-column table of names and values (`table.kv`). */
+export function KvTable({ rows }: { rows: ReadonlyArray<readonly [string, ReactNode]> }) {
+  return (
+    <table className="kv">
+      <tbody>
+        {rows.map(([name, value]) => (
+          <tr key={name}><th>{name}</th><td>{value}</td></tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}

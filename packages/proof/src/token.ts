@@ -42,12 +42,17 @@ export interface TokenInfo {
 }
 
 /** The chain's own answer, not a config value: on a wrong scale an amount would still read "300" while the transfer was off by orders of magnitude. */
-export async function readTokenInfo(rpcUrl: string, tokenId: string): Promise<TokenInfo> {
-  const metadata = await viewFunction(rpcUrl, tokenId, 'ft_metadata', {});
+export async function readTokenInfo(rpcUrl: string, tokenId: string, signal?: AbortSignal): Promise<TokenInfo> {
+  const metadata = await viewFunction(rpcUrl, tokenId, 'ft_metadata', {}, signal);
   return { decimals: tokenDecimalsOf(metadata), symbol: tokenSymbolOf(metadata, tokenId) };
 }
 
+/** "400 AINEK": minimal units scaled by the token's own decimals, with its short name. */
+export function tokenAmountText(units: string, token: TokenInfo): string {
+  return `${fromMinimalUnits(units, token.decimals)} ${token.symbol}`;
+}
+
 /** `ft_balance_of(account_id)` in minimal units. An account the token has never seen holds "0". */
-export async function readTokenBalance(rpcUrl: string, tokenId: string, accountId: string): Promise<string> {
-  return u128String.parse(await viewFunction(rpcUrl, tokenId, 'ft_balance_of', { account_id: accountId }));
+export async function readTokenBalance(rpcUrl: string, tokenId: string, accountId: string, signal?: AbortSignal): Promise<string> {
+  return u128String.parse(await viewFunction(rpcUrl, tokenId, 'ft_balance_of', { account_id: accountId }, signal));
 }

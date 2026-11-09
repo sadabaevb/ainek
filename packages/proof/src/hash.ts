@@ -1,4 +1,4 @@
-// Hashing and byte helpers that work in Node and in the browser (ethers' sha256 is pure JS).
+// Hashing, byte and short-text helpers that work in Node and in the browser (ethers' sha256 is pure JS).
 import { sha256 as ethersSha256 } from 'ethers';
 
 const encoder = new TextEncoder();

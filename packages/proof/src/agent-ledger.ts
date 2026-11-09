@@ -1,11 +1,14 @@
-// The agent as the chain shows it to anyone (SPEC §4.3 views, no key): its registration, its keys, and every action it proposed with
-// the decision the contract accepted. Shared by `pnpm -F demo check-agent` and the /agent page, so the CLI and the page re-check a
-// record the same way. The contract checked each decision when it mattered; these checks repeat what an outsider can repeat.
-import { actionStatusCheck, modelCommitCheck } from './action-on-chain.ts';
-import { keyScopeProblem, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
-import { actionCommitCheck, decisionSignatureCheck } from './policy.ts';
+// The agent as the chain shows it to anyone (SPEC §4.3 views, no key): its registration, its keys, its funds, and every action it
+// proposed with the decision the contract accepted. Shared by `pnpm -F demo check-agent`, the /agent page and /verify, so each
+// reads and re-checks a record the same way. The contract checked every decision when it mattered; these checks repeat what an
+// outsider can repeat.
+import { checkProofCommit, keyScopeProblem, viewAccessKeys, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
+import { actionCommitCheck, check, decisionSignatureCheck } from './policy.ts';
 import { ActionRecord, AgentInfo } from './schema.ts';
+import { readTokenBalance } from './token.ts';
 import type { Check } from './verify.ts';
+
+// ---- reads ------------------------------------------------------------------------------------------
 
 /** `agent(agent_id)`; null when the contract has no such agent. */
 export async function readAgent(rpcUrl: string, contract: string, agentId: string, signal?: AbortSignal): Promise<AgentInfo | null> {
@@ -27,33 +30,101 @@ export async function readAction(rpcUrl: string, contract: string, actionId: num
 }
 
 const CHUNK = 16;
+/** A re-read from a known id usually finds one or two new actions: a narrow first window, then full chunks. */
+const FOLLOW_UP = 4;
 const MAX_ACTIONS = 512;
 
 /**
- * Every action the contract holds, oldest first. The contract has no count and no list view, only `action(id)` with ids from 0 with no
- * gaps, so the ids are asked `chunk` at a time until one is missing. `more` is true when `max` was reached first: the list is then a
- * prefix, and a caller must say so instead of showing it as the whole record.
+ * The actions the contract holds from id `from` on, oldest first. The contract has no count and no list view, only `action(id)`
+ * with ids from 0 and no gaps, so the ids are asked a chunk at a time until one is missing. `more` is true when id `max` was
+ * reached first: the list is then a prefix, and a caller must say so instead of showing it as the whole record.
  */
-export async function readActions(rpcUrl: string, contract: string, { chunk = CHUNK, max = MAX_ACTIONS, signal }: { chunk?: number; max?: number; signal?: AbortSignal } = {}): Promise<{ records: ActionRecord[]; more: boolean }> {
+export async function readActions(rpcUrl: string, contract: string, { from = 0, chunk = CHUNK, max = MAX_ACTIONS, signal }: { from?: number; chunk?: number; max?: number; signal?: AbortSignal } = {}): Promise<{ records: ActionRecord[]; more: boolean }> {
   const records: ActionRecord[] = [];
-  while (records.length < max) {
-    const from = records.length;
-    const size = Math.min(chunk, max - from);
-    const batch = await Promise.all(Array.from({ length: size }, (_, i) => readAction(rpcUrl, contract, from + i, signal)));
+  let width = from === 0 ? chunk : Math.min(chunk, FOLLOW_UP);
+  for (let next = from; next < max; next = from + records.length) {
+    const batch = await Promise.all(Array.from({ length: Math.min(width, max - next) }, (_, i) => readAction(rpcUrl, contract, next + i, signal)));
     const end = batch.indexOf(null);
-    records.push(...(batch.slice(0, end === -1 ? size : end) as ActionRecord[]));
+    records.push(...(end === -1 ? batch : batch.slice(0, end)).flatMap((r) => (r ? [r] : [])));
     if (end !== -1) return { records, more: false };
+    width = chunk;
   }
   return { records, more: true };
 }
 
+export interface AgentKeys {
+  /** The keys that are not full-access. `problem` is null when the key may call exactly the agent's two methods on this contract. */
+  functionCall: Array<{ publicKey: string; methods: string[]; problem: string | null }>;
+  /** The stop button needs one for DeleteKey; the chain cannot show who holds it. */
+  fullAccess: number;
+}
+
+/** What an account can sign, from its access keys. For the agent, no function-call key means it cannot propose anything: stopped, or never set up. */
+export function agentKeysOf(keys: AccessKey[], contract: string): AgentKeys {
+  const scoped = keys.filter((k) => k.access_key.permission !== 'FullAccess');
+  return {
+    functionCall: scoped.map((k) => ({
+      publicKey: k.public_key,
+      methods: (k.access_key.permission as { FunctionCall?: { method_names?: string[] } } | null)?.FunctionCall?.method_names ?? [],
+      problem: keyScopeProblem(k.access_key.permission, contract),
+    })),
+    fullAccess: keys.length - scoped.length,
+  };
+}
+
+export interface AgentState {
+  id: string;
+  /** Null: the contract has no agent under this name. */
+  info: AgentInfo | null;
+  keys: AgentKeys;
+  /** In the agent's token, minimal units: what the contract holds and what the agent account holds. Null when the agent is not registered: there is no token to ask. */
+  funds: { inContract: string; onAgent: string } | null;
+}
+
+/** Everything the chain says about one agent account: the registration, what its keys may do, and where its token sits. */
+export async function readAgentState(rpcUrl: string, contract: string, agentId: string, signal?: AbortSignal): Promise<AgentState> {
+  const [info, keys] = await Promise.all([readAgent(rpcUrl, contract, agentId, signal), viewAccessKeys(rpcUrl, agentId, signal)]);
+  const state = { id: agentId, info, keys: agentKeysOf(keys, contract) };
+  if (!info) return { ...state, funds: null };
+  const [inContract, onAgent] = await Promise.all([readTokenBalance(rpcUrl, info.token_id, contract, signal), readTokenBalance(rpcUrl, info.token_id, agentId, signal)]);
+  return { ...state, funds: { inContract, onAgent } };
+}
+
+// ---- checks -----------------------------------------------------------------------------------------
+
+/** What each verdict may end as (`ActionStatus` in contracts/ainek/src/agent.rs). A signed Deny that paid must not pass. */
+const STATUSES_OF: Record<string, readonly string[]> = {
+  Allow: ['Executing', 'Executed', 'Failed'],
+  NeedsApproval: ['Pending', 'Executing', 'Executed', 'Failed', 'Rejected'],
+  Deny: ['Denied'],
+};
+
+export function actionStatusProblem(verdict: string, status: string): string | null {
+  return STATUSES_OF[verdict]?.includes(status) ? null : `${verdict} cannot end as ${status}`;
+}
+
+export function actionStatusCheck(verdict: string, status: string): Check {
+  const problem = actionStatusProblem(verdict, status);
+  return check('action-status', problem === null, `${verdict}, and on chain the action is ${status}`, problem ?? '');
+}
+
+/** The `proof_commit` record of the model proof an action names, or why it could not be read: "could not check" is not a pass and not a forgery. */
+export type ModelCommitLookup = ProofCommitLookup | { status: 'failed'; detail: string };
+
+/** The agent commits its model proof before it proposes, and the contract refuses the action otherwise: the record must be there, under the agent's name, as a model proof. */
+export function modelCommitCheck(lookup: ModelCommitLookup, agent: string): Check {
+  const id = 'model-commit-on-chain';
+  if (lookup.status === 'failed') return { id, status: 'skipped', detail: `the commit could not be looked up: ${lookup.detail}` };
+  return { ...checkProofCommit({ kind: 'model' }, lookup, agent), id };
+}
+
 /**
  * What an outsider can re-check about one recorded action: the decision is signed by the key recorded with it, it covers exactly this
- * action, the status is one that verdict may end in (a signed Deny that paid must not pass), and the agent had committed a model proof
- * first. Not checked, because the chain does not hold it: which code holds that key (the run's attestation, /verify with the action
- * proof) and what is behind the model proof commit (a salted hash).
+ * action, the status is one that verdict may end in, and the agent had committed a model proof first. Not checked, because the chain
+ * does not hold it: which code holds that key (the run's attestation, /verify with the action proof) and what is behind the model
+ * proof commit (a salted hash).
  */
-export function checkActionRecord(record: ActionRecord, modelCommit: ProofCommitLookup): Check[] {
+export function checkActionRecord(record: ActionRecord, modelCommit: ModelCommitLookup): Check[] {
   return [
     decisionSignatureCheck(record.decision, record.tee_signature, record.tee_pubkey, 'the contract recorded with the action'),
     actionCommitCheck(record.action, [record.decision.action_commit]),
@@ -67,22 +138,17 @@ export function decidedUnderCurrentPolicy(record: ActionRecord, agent: AgentInfo
   return record.tee_pubkey === agent.tee_pubkey && record.decision.policy_hash === agent.policy_hash && record.decision.policy_version === agent.policy_version;
 }
 
-export interface AgentKeys {
-  /** The keys that are not full-access. `problem` is null when the key may call exactly the agent's two methods on this contract. */
-  functionCall: Array<{ publicKey: string; methods: string[]; problem: string | null }>;
-  /** The stop button needs one for DeleteKey; the chain cannot show who holds it. */
-  fullAccess: number;
-}
+const DAY_MS = 86_400_000;
 
-/** What the agent account can sign, from its access keys. No function-call key means it cannot propose anything: stopped, or never set up. */
-export function agentKeysOf(keys: AccessKey[], contract: string): AgentKeys {
-  const scoped = keys.filter((k) => k.access_key.permission !== 'FullAccess');
-  return {
-    functionCall: scoped.map((k) => ({
-      publicKey: k.public_key,
-      methods: (k.access_key.permission as { FunctionCall?: { method_names?: string[] } } | null)?.FunctionCall?.method_names ?? [],
-      problem: keyScopeProblem(k.access_key.permission, contract),
-    })),
-    fullAccess: keys.length - scoped.length,
-  };
+/**
+ * Why the contract would refuse `approve` for a waiting action, in the order `approve` checks (contracts/ainek/src/agent.rs): the agent
+ * is paused, the policy or key was replaced since the decision, or the action was proposed on an earlier UTC day (the daily cap is
+ * counted per day, so it can only be rejected and proposed again). Null when none applies. The contract decides; this saves the owner
+ * a refused transaction, and `nowMs` stands in for block time.
+ */
+export function approveBlocker(record: ActionRecord, agent: AgentInfo, nowMs: number): 'paused' | 'replaced' | 'earlierDay' | null {
+  if (agent.paused) return 'paused';
+  if (!decidedUnderCurrentPolicy(record, agent)) return 'replaced';
+  if (record.day !== Math.floor(nowMs / DAY_MS)) return 'earlierDay';
+  return null;
 }

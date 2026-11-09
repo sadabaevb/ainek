@@ -1,5 +1,6 @@
-// Read-only NEAR view calls over plain JSON-RPC (global fetch, no SDK), enough for the key log (SPEC §4.1 views) and the
-// proof commits (SPEC §4.2). Shared by the web client, the demo and the verifier so the ABI call shapes live in one place.
+// Reads from NEAR over plain JSON-RPC (global fetch, no SDK): contract views for the key log (SPEC §4.1), the proof commits
+// (§4.2) and whatever §4.3 needs, and an account's access keys. Shared by the web client, the demo, the verifier and the agent,
+// so the call shapes, the timeout and the retries live in one place.
 import { z } from 'zod';
 import { isNetworkFailure, withRetry } from './retry.ts';
 import { bytesToBase64 } from './disclosure.ts';
@@ -115,9 +116,9 @@ export type ProofCommitLookup = { status: 'found'; record: ProofCommitRecord } |
  * `proof_commit(account, commit)`: the on-chain record for a salted commit. `none` when that account never committed it,
  * `not-deployed` while the contract has no such view yet. Other failures (RPC down, malformed account id) throw.
  */
-export async function readProofCommit(rpcUrl: string, contractId: string, account: string, commit: string): Promise<ProofCommitLookup> {
+export async function readProofCommit(rpcUrl: string, contractId: string, account: string, commit: string, signal?: AbortSignal): Promise<ProofCommitLookup> {
   try {
-    const raw = await viewFunction(rpcUrl, contractId, 'proof_commit', { account, commit });
+    const raw = await viewFunction(rpcUrl, contractId, 'proof_commit', { account, commit }, signal);
     return raw == null ? { status: 'none' } : { status: 'found', record: ProofCommitRecord.parse(raw) };
   } catch (err) {
     if (err instanceof ContractMethodNotFound) return { status: 'not-deployed' };

@@ -1,40 +1,19 @@
 // An action proof against the chain and against the run's attestation: what /verify shows (SPEC §5.2). The proof alone cannot vouch
 // for itself, so the key it must verify under, and what happened to the action, come from the contract's own record.
 import { canonicalJson } from './canonical.ts';
-import { checkProofCommit, readProofCommit, viewFunction, type ProofCommitLookup } from './near-view.ts';
+import { actionStatusCheck, modelCommitCheck, readAction } from './agent-ledger.ts';
+import { checkProofCommit, readProofCommit } from './near-view.ts';
 import { check, verifyActionProof, type ActionReport } from './policy.ts';
 import { PolicyRun, verifyPolicyRun, type QuoteVerifier } from './policy-run.ts';
-import { ActionProof, ActionRecord } from './schema.ts';
+import { ActionProof } from './schema.ts';
 import { withChecks, type Check } from './verify.ts';
-
-/** What each verdict may end as (`ActionStatus` in contracts/ainek/src/agent.rs). A signed Deny that paid must not pass. */
-const STATUSES_OF: Record<string, readonly string[]> = {
-  Allow: ['Executing', 'Executed', 'Failed'],
-  NeedsApproval: ['Pending', 'Executing', 'Executed', 'Failed', 'Rejected'],
-  Deny: ['Denied'],
-};
-
-export function actionStatusProblem(verdict: string, status: string): string | null {
-  return STATUSES_OF[verdict]?.includes(status) ? null : `${verdict} cannot end as ${status}`;
-}
-
-export function actionStatusCheck(verdict: string, status: string): Check {
-  const problem = actionStatusProblem(verdict, status);
-  return check('action-status', problem === null, `${verdict}, and on chain the action is ${status}`, problem ?? '');
-}
-
-/** The agent commits its model proof before it proposes, and the contract refuses the action otherwise: the record must be there, under the agent's name, as a model proof. */
-export function modelCommitCheck(lookup: ProofCommitLookup, agent: string): Check {
-  return { ...checkProofCommit({ kind: 'model' }, lookup, agent), id: 'model-commit-on-chain' };
-}
 
 export async function verifyActionProofOnChain(value: unknown, x: { rpcUrl: string; contract: string; wasmHash: string }): Promise<ActionReport> {
   const parsed = ActionProof.safeParse(value);
   if (!parsed.success) return verifyActionProof(value, { teePubkey: '', wasmHash: x.wasmHash });
   const proof = parsed.data;
-  const raw: unknown = await viewFunction(x.rpcUrl, x.contract, 'action', { action_id: proof.actionId });
-  if (raw === undefined || raw === null) return withChecks({ ok: true, checks: [], proof }, { id: 'action-record', status: 'fail', detail: `${x.contract} has no action #${proof.actionId}` });
-  const record = ActionRecord.parse(raw);
+  const record = await readAction(x.rpcUrl, x.contract, proof.actionId);
+  if (record === null) return withChecks({ ok: true, checks: [], proof }, { id: 'action-record', status: 'fail', detail: `${x.contract} has no action #${proof.actionId}` });
   const agent = record.agent_id;
   const offChain = verifyActionProof(proof, { teePubkey: record.tee_pubkey, wasmHash: x.wasmHash });
   // Only a commit that reproduces from the salt is this proof's own: without that, a file could name any commit of this agent.

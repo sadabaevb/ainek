@@ -30,14 +30,23 @@ export function CardHead({ status, when, children }: { status: 'ok' | 'fail'; wh
   );
 }
 
-/** One guarantee line; `hint` is the plain-language explanation shown when the card's "What do these rows mean?" is open. */
-export function Row({ status, label, hint, children }: { status: Exclude<Status, 'running'>; label: string; hint?: string; children: ReactNode }) {
+/**
+ * One guarantee line; `hint` is the plain-language explanation shown when the card's "What do these rows mean?" is open. `as="span"`
+ * for a line inside a <summary>, which may hold phrasing content only. A line still being checked is drawn in the neutral tone.
+ */
+export function Row({ status, label, hint, as: Tag = 'div', children }: { status: Status; label: string; hint?: string; as?: 'div' | 'span'; children: ReactNode }) {
   return (
-    <div className={`row ${status}`}>
+    <Tag className={`row ${status === 'running' ? 'skipped' : status}`}>
       <span className="mark" aria-hidden>{mark(status)}</span>
       <span className="label">{label}</span>
       <span className="value">{children}</span>
       {hint && <span className="hint">{hint}</span>}
-    </div>
+    </Tag>
   );
+}
+
+/** The first of fail, skipped, ok that any line has; `running` while there are no lines yet. */
+export function worstStatus(lines: ReadonlyArray<{ status: Exclude<Status, 'running'> }> | undefined): Status {
+  if (!lines) return 'running';
+  return lines.some((l) => l.status === 'fail') ? 'fail' : lines.some((l) => l.status === 'skipped') ? 'skipped' : 'ok';
 }

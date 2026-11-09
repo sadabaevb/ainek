@@ -1,7 +1,8 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
-import { actionRunChecks, actionStatusProblem, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
+import { actionRunChecks, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
+import { actionStatusProblem } from './agent-ledger.ts';
 import { buildActionProof } from './build.ts';
 import { canonicalBytes } from './canonical.ts';
 import { actionCommitOf } from './commit.ts';
