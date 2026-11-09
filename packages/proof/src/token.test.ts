@@ -1,6 +1,6 @@
-import { test } from 'node:test';
+import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fromMinimalUnits, toMinimalUnits, tokenDecimalsOf, tokenSymbolOf } from './token.ts';
+import { fromMinimalUnits, readTokenBalance, readTokenInfo, toMinimalUnits, tokenDecimalsOf, tokenSymbolOf } from './token.ts';
 
 test('toMinimalUnits: whole and fractional amounts, no floats, no rounding, no zero', () => {
   assert.equal(toMinimalUnits('300', 6), '300000000');
@@ -29,4 +29,25 @@ test('tokenDecimalsOf: the token\'s own answer, and nothing else counts as one',
 test('tokenSymbolOf: the short name, and the account id when the token offers nothing a card can show', () => {
   assert.equal(tokenSymbolOf({ symbol: 'AINEK' }, 't.testnet'), 'AINEK');
   for (const m of [null, {}, { symbol: 7 }, { symbol: '' }, { symbol: 'A\nApproved' }, { symbol: 'x'.repeat(17) }]) assert.equal(tokenSymbolOf(m, 't.testnet'), 't.testnet');
+});
+
+const realFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+
+test('readTokenInfo and readTokenBalance: asked of the token itself, with the NEP-141 call shapes', async () => {
+  const calls: Array<{ account: string; method: string; args: unknown }> = [];
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    const { account_id, method_name, args_base64 } = (JSON.parse(String(init?.body)) as { params: { account_id: string; method_name: string; args_base64: string } }).params;
+    calls.push({ account: account_id, method: method_name, args: JSON.parse(Buffer.from(args_base64, 'base64').toString()) });
+    const answer = method_name === 'ft_metadata' ? { spec: 'ft-1.0.0', name: 'Ainek demo token', symbol: 'AINEK', decimals: 6 } : '9999000000';
+    return new Response(JSON.stringify({ result: { result: [...Buffer.from(JSON.stringify(answer))] } }), { status: 200 });
+  }) as typeof fetch;
+  assert.deepEqual(await readTokenInfo('http://rpc.test', 'token.testnet'), { decimals: 6, symbol: 'AINEK' });
+  assert.equal(await readTokenBalance('http://rpc.test', 'token.testnet', 'ainek.testnet'), '9999000000');
+  assert.deepEqual(calls, [
+    { account: 'token.testnet', method: 'ft_metadata', args: {} },
+    { account: 'token.testnet', method: 'ft_balance_of', args: { account_id: 'ainek.testnet' } },
+  ]);
 });

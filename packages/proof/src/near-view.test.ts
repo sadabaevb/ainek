@@ -145,3 +145,19 @@ test('keyScopeProblem: only a function-call key for this contract and exactly th
   assert.match(keyScopeProblem(key('c.testnet', []), 'c.testnet') ?? '', /\[any\]/);
   assert.match(keyScopeProblem(key('c.testnet', ['propose_action', 'commit_proof', 'approve']), 'c.testnet') ?? '', /approve/);
 });
+
+test('viewAccessKeys: the keys of an account as the RPC lists them, and an error the node reports names the account', async () => {
+  const { viewAccessKeys } = await import('./near-view.ts');
+  const sent: unknown[] = [];
+  const keys = [{ public_key: 'ed25519:abc', access_key: { nonce: 1, permission: 'FullAccess' } }, { public_key: 'ed25519:def', access_key: { nonce: 2, permission: { FunctionCall: { receiver_id: 'ainek.testnet', method_names: ['commit_proof'], allowance: '1' } } } }];
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    sent.push((JSON.parse(String(init?.body)) as { params: unknown }).params);
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: '1', result: { keys, block_height: 1, block_hash: 'x' } }), { status: 200 });
+  }) as typeof fetch;
+  const read = await viewAccessKeys('http://rpc.test', 'agent.testnet');
+  assert.deepEqual(read.map((k) => k.public_key), ['ed25519:abc', 'ed25519:def']);
+  assert.equal(read[0]?.access_key.permission, 'FullAccess');
+  assert.deepEqual(sent, [{ finality: 'final', request_type: 'view_access_key_list', account_id: 'agent.testnet' }]);
+  globalThis.fetch = (async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: '1', error: { message: 'Server error', data: 'invalid account id' } }), { status: 200 })) as typeof fetch;
+  await assert.rejects(viewAccessKeys('http://rpc.test', 'Agent'), /access keys of Agent: invalid account id/);
+});

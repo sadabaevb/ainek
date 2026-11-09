@@ -1,6 +1,7 @@
 // A NEP-141 token as the agent, the CLI and the pages read it. Amounts are digit strings: the owner writes "12.5", the chain wants
 // minimal units. No floats anywhere.
 import { viewFunction } from './near-view.ts';
+import { u128String } from './schema.ts';
 
 /** "12.5" with 6 decimals → "12500000". More fractional digits than the token has is an error, not a rounding, and zero is not a payment. */
 export function toMinimalUnits(amount: string, decimals: number): string {
@@ -44,4 +45,9 @@ export interface TokenInfo {
 export async function readTokenInfo(rpcUrl: string, tokenId: string): Promise<TokenInfo> {
   const metadata = await viewFunction(rpcUrl, tokenId, 'ft_metadata', {});
   return { decimals: tokenDecimalsOf(metadata), symbol: tokenSymbolOf(metadata, tokenId) };
+}
+
+/** `ft_balance_of(account_id)` in minimal units. An account the token has never seen holds "0". */
+export async function readTokenBalance(rpcUrl: string, tokenId: string, accountId: string): Promise<string> {
+  return u128String.parse(await viewFunction(rpcUrl, tokenId, 'ft_balance_of', { account_id: accountId }));
 }

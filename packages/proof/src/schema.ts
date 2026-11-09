@@ -73,6 +73,42 @@ export const Decision = z
   .strict();
 export type Decision = z.infer<typeof Decision>;
 
+/** `u64` in the contract: a non-negative integer on the wire, or its decimal string. */
+const u64 = z.union([z.number().int().nonnegative(), u64String.transform(Number)]);
+
+/**
+ * `action(id)`: what the contract keeps for one proposed action. Unknown fields are dropped and `status` stays a string, so a
+ * contract that grows a field or a status still reads; `action` and `decision` stay strict, because they are what was hashed and signed.
+ */
+export const ActionRecord = z.object({
+  action_id: u64,
+  agent_id: nonEmpty,
+  action: Action,
+  decision: Decision,
+  /** base64, as the policy job printed it. */
+  tee_signature: nonEmpty,
+  /** The key this action's signature was checked against; it outlives `update_policy`. */
+  tee_pubkey: hex64,
+  /** `ActionStatus` in contracts/ainek/src/agent.rs, as its bare name. */
+  status: nonEmpty,
+  /** The UTC day (block time / 24 h) the action was proposed and counted on. */
+  day: u64,
+  block_height: u64,
+});
+export type ActionRecord = z.infer<typeof ActionRecord>;
+
+/** `agent(agent_id)`. */
+export const AgentInfo = z.object({
+  agent_id: nonEmpty,
+  policy_hash: hex64,
+  policy_version: z.number().int().nonnegative(),
+  tee_pubkey: hex64,
+  token_id: nonEmpty,
+  paused: z.boolean(),
+  spent_today: u128String,
+});
+export type AgentInfo = z.infer<typeof AgentInfo>;
+
 // ---- SPEC §5.2 ----------------------------------------------------------------------------------
 export const ActionProof = z
   .object({
@@ -136,8 +172,6 @@ export const SignatureResponse = z.object({
 export type SignatureResponse = z.infer<typeof SignatureResponse>;
 
 // ---- SPEC §4.2 (what proof_commit returns) ---------------------------------------------------------
-/** `log_index` and `block_height` are u64 in the contract: a non-negative integer on the wire, or its decimal string. */
-const u64 = z.union([z.number().int().nonnegative(), u64String.transform(Number)]);
 export const ProofCommitRecord = z
   .object({ kind: z.enum(['model', 'action']), log_index: u64, block_height: u64 })
   .strict();

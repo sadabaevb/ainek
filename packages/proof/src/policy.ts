@@ -27,8 +27,19 @@ export const PolicyOutput = z
   .strict();
 export type PolicyOutput = z.infer<typeof PolicyOutput>;
 
-/** A decision lives ten minutes (§6.2). Much longer means a wrong unit (nanoseconds) or a job fed a far-future `now`. */
+/** A decision lives ten minutes (§6.2): the job signs `expires_at = now + 600 000`. */
+const DECISION_LIFETIME_MS = 600_000;
+/** Much longer than that means a wrong unit (nanoseconds) or a job fed a far-future `now`. */
 const MAX_DECISION_LIFETIME_MS = 3_600_000n;
+
+/**
+ * When a recorded decision was made, unix milliseconds. Not a field of the decision: the contract takes `expires_at` minus the lifetime
+ * as that moment, recomputes the nonce from it and accepts the decision only while block time is within the lifetime (plus two minutes
+ * of clock skew) of it (SPEC §4.3). So for an action the contract accepted, this is the block time of the proposal to within twelve minutes.
+ */
+export function decidedAtMs(decision: Decision): number {
+  return Number(decision.expires_at) - DECISION_LIFETIME_MS;
+}
 
 /** ed25519 over `canonical_bytes(decision)`, signature base64, public key hex (SPEC §6.2). */
 export function verifyDecisionSignature(decision: Decision, sigBase64: string, pubkeyHex: string): boolean {
@@ -42,16 +53,25 @@ export function verifyDecisionSignature(decision: Decision, sigBase64: string, p
 }
 
 export const check = (id: Check['id'], ok: boolean, okText: string, failText: string): Check => ({ id, status: ok ? 'ok' : 'fail', detail: ok ? okText : failText });
+
+/** `keySource` says where the key came from, for the failure: "the proof names", "the contract recorded with the action". */
+export const decisionSignatureCheck = (decision: Decision, sig: string, pubkey: string, keySource: string): Check =>
+  check('decision-signature', verifyDecisionSignature(decision, sig, pubkey), `ed25519 signature verifies under ${short(pubkey)} over canonical_bytes(decision)`, `the decision signature does not verify under the key ${keySource}`);
+
+/** `coveredCommits` is every place that claims to cover the action. */
+export const actionCommitCheck = (action: Action, coveredCommits: string[]): Check => {
+  const recomputed = actionCommitOf(action);
+  return check('action-commit', coveredCommits.every((c) => c === recomputed), 'sha256(canonical_json(action)) is what the decision covers', 'the decision does not cover this action');
+};
 const against = (id: Check['id'], actual: string, wanted: string, what: string): Check => check(id, actual === wanted, `${what} matches the registration`, `${what} ${short(actual)} differs from the registered ${short(wanted)}`);
 
-/** One wording and one rule for the agent's check and the auditor's, so they cannot drift. `coveredCommits` is every place that claims to cover the action. */
+/** One wording and one rule for the agent's check and the auditor's, so they cannot drift. */
 function decisionChecks(x: { decision: Decision; sig: string; pubkey: string; action: Action; coveredCommits: string[]; modelProofCommit: string; wasmHash: string; teePubkey: string; expectedWasmHash: string }): Check[] {
-  const recomputed = actionCommitOf(x.action);
   return [
-    check('decision-signature', verifyDecisionSignature(x.decision, x.sig, x.pubkey), `ed25519 signature verifies under ${short(x.pubkey)} over canonical_bytes(decision)`, 'the decision signature does not verify under the key the proof names'),
+    decisionSignatureCheck(x.decision, x.sig, x.pubkey, 'the proof names'),
     against('decision-key', x.pubkey, x.teePubkey, 'the policy key'),
     check('wasm-hash', x.wasmHash === x.expectedWasmHash, 'the build the job reports is the published one', `the build the job reports ${short(x.wasmHash)} is not the published ${short(x.expectedWasmHash)}`),
-    check('action-commit', x.coveredCommits.every((c) => c === recomputed), 'sha256(canonical_json(action)) is what the decision covers', 'the decision does not cover this action'),
+    actionCommitCheck(x.action, x.coveredCommits),
     check('model-proof-commit', x.decision.model_proof_commit === x.modelProofCommit, 'the decision binds this model proof', 'the decision binds a different model proof'),
   ];
 }

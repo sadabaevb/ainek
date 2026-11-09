@@ -13,6 +13,8 @@ export {
   ActionProof,
   Proof,
   Action,
+  ActionRecord,
+  AgentInfo,
   Decision,
   Verdict,
   KeyEntryInput,
@@ -30,7 +32,7 @@ export { buildModelProof, buildCheckedModelProof, buildActionProof } from './bui
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
 export { withRetry, isNetworkFailure } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
-export { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
+export { PolicyInput, PolicyOutput, checkPolicyOutput, decidedAtMs, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
@@ -43,15 +45,17 @@ export { stripHexPrefix, normalizeHex } from './hash.ts';
 export { ainekConfigFromEnv, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { actionRunChecks, actionStatusProblem, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
+export { agentKeysOf, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readOwner } from './agent-ledger.ts';
+export type { AgentKeys } from './agent-ledger.ts';
 export type { ActionVerdict } from './action-on-chain.ts';
 export type { ActionReport } from './policy.ts';
 export { PolicyRun, checkPolicyRun, policySecretsRef, quoteVerifierOf, tryVerifyQuote, verifyPolicyRun } from './policy-run.ts';
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
-export { AGENT_KEY_METHODS, keyScopeProblem, viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
-export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
-export { fromMinimalUnits, toMinimalUnits, tokenDecimalsOf, tokenSymbolOf, readTokenInfo } from './token.ts';
+export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
+export type { AccessKey, KeyLogReader, ProofCommitLookup } from './near-view.ts';
+export { fromMinimalUnits, toMinimalUnits, tokenDecimalsOf, tokenSymbolOf, readTokenBalance, readTokenInfo } from './token.ts';
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
