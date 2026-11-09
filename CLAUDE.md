@@ -39,7 +39,7 @@ Three questions the product answers: "Is this key real?", "Did this answer come 
 ## Repository layout (monorepo, pnpm workspaces)
 
 ```
-apps/web/            Next.js app: chat, proof card, /verify, /log, /auditor         (web)
+apps/web/            Next.js app: chat, proof card, /verify, /log, /auditor, /agent (web)
 apps/demo/           Node 24 CLI: `pnpm demo` replay / `demo:tamper` on docs/samples, offline  (web)
 services/verifier/   Node 24 daemon: attestation -> KeyEntry -> contract.log_key    (services)
 services/agent/      Node 24 service: NL -> NEAR AI -> OutLayer -> contract         (services)
