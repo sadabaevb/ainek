@@ -1,6 +1,6 @@
 export { canonicalJson, canonicalBytes, compareCodePoints, CanonicalError } from './canonical.ts';
 export type { JsonValue } from './canonical.ts';
-export { sha256Hex, utf8Bytes, bytesToHex, hexToBytes, concatBytes, isHex64, randomHex32, shortHex } from './hash.ts';
+export { sha256Hex, utf8Bytes, bytesToHex, hexToBytes, concatBytes, isHex64, oneLine, randomHex32, shortHex } from './hash.ts';
 export { parseSignedText } from './signed-text.ts';
 export type { SignedText } from './signed-text.ts';
 export { verifySignedText, decodeSignature } from './signature.ts';
@@ -42,7 +42,7 @@ export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entr
 export { toModelAttestation, toGatewayAttestation } from './report.ts';
 export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
 export { stripHexPrefix, normalizeHex } from './hash.ts';
-export { ainekConfigFromEnv, explorerTxUrl } from './config.ts';
+export { ainekConfigFromEnv, explorerAccountUrl, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { actionRunChecks, actionStatusProblem, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
 export { agentKeysOf, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readOwner } from './agent-ledger.ts';

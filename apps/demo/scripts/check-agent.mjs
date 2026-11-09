@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { agentKeysOf, ainekConfigFromEnv, checkActionRecord, decidedUnderCurrentPolicy, fromMinimalUnits, readActions, readAgent, readProofCommit, readTokenBalance, readTokenInfo, shortHex, viewAccessKeys } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
-const [agentId = process.env.AGENT_ACCOUNT_ID ?? 'agent.ainek-dev-dastan.testnet', rpc = cfg.rpcUrl] = process.argv.slice(2);
+const [agentId = cfg.agentAccount, rpc = cfg.rpcUrl] = process.argv.slice(2);
 
 // A read that still fails after its retries means "could not check": neither a pass nor a stack trace.
 process.on('uncaughtException', (err) => {

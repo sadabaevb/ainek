@@ -1,7 +1,7 @@
 // What the owner reads in Telegram (SPEC §5.3 in plain text, no parse mode). Text the model wrote is flattened to one line and labelled as
 // the model's: a forwarded injection must not be able to forge a line of the card above the approval buttons. The wording follows docs/CLAIMS.md: "attested deployment", "proof", and it says only what this service checked: before an action is
 // proposed, the decision's signature and the attestation of the run that made it.
-import { explorerTxUrl, fromMinimalUnits, shortHex as short, type Check, type ModelProof, type Verdict } from '@ainek/proof';
+import { explorerTxUrl, fromMinimalUnits, oneLine, shortHex as short, type Check, type ModelProof, type Verdict } from '@ainek/proof';
 import type { Result } from './pipeline.ts';
 
 export interface Card {
@@ -12,11 +12,6 @@ export interface Card {
   approval: number | null;
 }
 
-/** One line, bounded, no control characters: for anything the model or a remote service wrote. */
-const oneLine = (text: string, max = 300): string => {
-  const flat = text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
-};
 const modelLine = (m: ModelProof): string => `Model: ${m.model}, attested deployment, E2EE, signed in its TEE; key #${m.logIndex} in the public log`;
 const failedChecks = (checks: Check[]): string => checks.filter((c) => c.status === 'fail').map((c) => `- ${oneLine(c.detail)}`).join('\n');
 
