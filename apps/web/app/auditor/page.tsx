@@ -11,6 +11,7 @@ import sampleChain from '../../../../docs/samples/disclosure.sample.chain.json';
 import { CardHead, CheckList, Row } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
+import { KvTable } from '@/components/stack-table';
 import type { PublicConfig } from '@/lib/config';
 import { describeError } from '@/lib/errors';
 import { short, utcMinute } from '@/lib/format';
@@ -108,13 +109,7 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
     <section>
       <h2>{ta.disclosedTitle}</h2>
       <div className="table-wrap">
-        <table className="kv">
-          <tbody>
-            {rows.map(([k, v]) => (
-              <tr key={k}><th>{k}</th><td>{v}</td></tr>
-            ))}
-          </tbody>
-        </table>
+        <KvTable rows={rows} />
       </div>
     </section>
   );

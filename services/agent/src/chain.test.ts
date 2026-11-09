@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionCost, agentStateOf, commitCost, commitWithRetry, isTransient, parseProposed, refusalOf, tokenDecimalsOf, tokenSymbolOf } from './chain.ts';
+import { actionCost, agentStateOf, commitCost, commitWithRetry, isTransient, parseProposed, refusalOf } from './chain.ts';
 import { ContractRefused } from './errors.ts';
 
 const b64 = (s: string) => Buffer.from(s).toString('base64');
@@ -25,12 +25,6 @@ test('parseProposed: a log line that does not parse cannot lose a landed transac
 test('parseProposed: a failed receipt means not executed, even with the event in the log', () => {
   assert.equal(parseProposed(tx({ SuccessValue: b64('7') }, [[ev('action_executed')]], { Failure: { ActionError: {} } }), CONTRACT).transfer, 'none');
   assert.equal(parseProposed(tx({ SuccessValue: b64('7') }, [[ev('action_executed')]], { SuccessValue: '' }), CONTRACT).transfer, 'executed');
-});
-
-test('tokenDecimalsOf: the token\'s own answer, and nothing else counts as one', () => {
-  assert.equal(tokenDecimalsOf({ decimals: 6 }), 6);
-  assert.equal(tokenDecimalsOf({ decimals: 0 }), 0);
-  for (const m of [null, {}, { decimals: '6' }, { decimals: 25 }, { decimals: 1.5 }]) assert.throws(() => tokenDecimalsOf(m), /no usable decimals/);
 });
 
 test('commitCost: the SPEC §4.2 formula, which gives the 161 bytes measured for a 26-character account', () => {
@@ -63,11 +57,6 @@ test('refusalOf: a panic means the transaction landed and failed; a timeout says
   assert.ok(refusalOf(new Error('Contract panicked: decision was made for a different time')) instanceof ContractRefused);
   const timeout = new Error('propose_action did not finish within 120 s');
   assert.equal(refusalOf(timeout), timeout);
-});
-
-test('tokenSymbolOf: the short name, and the account id when the token offers nothing a card can show', () => {
-  assert.equal(tokenSymbolOf({ symbol: 'AINEK' }, 't.testnet'), 'AINEK');
-  for (const m of [null, {}, { symbol: 7 }, { symbol: '' }, { symbol: 'A\nApproved' }, { symbol: 'x'.repeat(17) }]) assert.equal(tokenSymbolOf(m, 't.testnet'), 't.testnet');
 });
 
 const landed = { transaction: { hash: 'TX' } };

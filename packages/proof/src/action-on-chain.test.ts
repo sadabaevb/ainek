@@ -1,7 +1,8 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import nacl from 'tweetnacl';
-import { actionRunChecks, actionStatusProblem, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
+import { actionRunChecks, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
+import { actionStatusProblem } from './agent-ledger.ts';
 import { buildActionProof } from './build.ts';
 import { canonicalBytes } from './canonical.ts';
 import { actionCommitOf } from './commit.ts';
@@ -20,7 +21,7 @@ const modelProofCommit = 'ab'.repeat(32);
 const decision: Decision = { verdict: 'Allow', policy_hash: 'ef'.repeat(32), policy_version: 1, action_commit: actionCommitOf(action), model_proof_commit: modelProofCommit, nonce: '12'.repeat(32), expires_at: '1000' };
 const sig = bytesToBase64(nacl.sign.detached(canonicalBytes(decision), keys.secretKey));
 const proof = buildActionProof({ actionId: 7, action, modelProofCommit, decision, teeSignature: sig, teePubkey: pubkey, wasmHash, attestationUrl: 'https://api.test/attestations/by-call/x', proposeTx: 'tx1' });
-const record = { action_id: 7, agent_id: agent, action, decision, tee_signature: sig, tee_pubkey: pubkey, status: 'Executed' };
+const record = { action_id: 7, agent_id: agent, action, decision, tee_signature: sig, tee_pubkey: pubkey, status: 'Executed', day: 20764, block_height: 9 };
 const runRecord = { task_type: 'execute', task_id: 1, tdx_quote: 'AA==', worker_measurement: '', build_target: 'wasm32-wasip1', wasm_hash: wasmHash, executed_wasm_sha256: wasmHash, input_hash: wasmHash, output_hash: wasmHash, timestamp: 1 };
 const commitFor = (kind: 'action' | 'model') => ({ kind, log_index: 3, block_height: 9 });
 

@@ -3,11 +3,10 @@
 // Re-checks every recorded decision here instead of trusting the contract's own check, and compares the registered key
 // with the one in the attested run behind `pnpm demo:policy`.
 import { readFileSync } from 'node:fs';
-import { actionCommitOf, actionStatusProblem, ainekConfigFromEnv, checkProofCommit, keyScopeProblem, readProofCommit, shortHex, verifyDecisionSignature, viewFunction, withRetry } from '@ainek/proof';
+import { agentKeysOf, ainekConfigFromEnv, checkActionRecord, decidedUnderCurrentPolicy, readActions, readAgentState, readModelCommits, readTokenInfo, shortHex, tokenAmountText, viewAccessKeys } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
-const [agentId = process.env.AGENT_ACCOUNT_ID ?? 'agent.ainek-dev-dastan.testnet', rpc = cfg.rpcUrl] = process.argv.slice(2);
-const view = (method, args = {}, account = cfg.contract) => viewFunction(rpc, account, method, args);
+const [agentId = cfg.agentAccount, rpc = cfg.rpcUrl] = process.argv.slice(2);
 
 // A read that still fails after its retries means "could not check": neither a pass nor a stack trace.
 process.on('uncaughtException', (err) => {
@@ -22,25 +21,9 @@ const report = (ok, line) => {
 };
 const note = (line) => console.log(`  — ${line}`);
 
-const accessKeys = (account) =>
-  withRetry(
-    async () => {
-      const res = await fetch(rpc, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        signal: AbortSignal.timeout(10_000),
-        body: JSON.stringify({ jsonrpc: '2.0', id: '1', method: 'query', params: { request_type: 'view_access_key_list', finality: 'final', account_id: account } }),
-      });
-      const { result, error } = await res.json();
-      if (!result?.keys) throw new Error(`access keys of ${account}: ${JSON.stringify(error ?? result)}`);
-      return result.keys;
-    },
-    { retryable: () => true, attempts: 3, pauseMs: 500 },
-  );
-const fullAccessCount = (keys) => keys.filter((k) => k.access_key.permission === 'FullAccess').length;
-
 console.log(`Agent ${agentId} on ${cfg.contract} via ${rpc}`);
-const agent = await view('agent', { agent_id: agentId });
+// Everything that does not depend on another answer is asked together; the lines below print in a fixed order.
+const [{ info: agent, keys, funds }, { records, more }, contractKeys] = await Promise.all([readAgentState(rpc, cfg.contract, agentId), readActions(rpc, cfg.contract), viewAccessKeys(rpc, cfg.contract)]);
 if (!agent) {
   report(false, 'not registered on this contract');
   process.exit(1);
@@ -52,40 +35,27 @@ const run = JSON.parse(JSON.parse(readFileSync(new URL('../../../docs/samples/po
 report(run.pubkey === agent.tee_pubkey, 'the same decision key is in the attested run (pnpm demo:policy)');
 report(run.decision.policy_hash === agent.policy_hash, 'the same policy hash is in the attested run');
 
-const keys = await accessKeys(agentId);
-const functionCallKeys = keys.filter((k) => k.access_key.permission !== 'FullAccess');
-for (const { public_key, access_key: { permission } } of functionCallKeys) {
-  const problem = keyScopeProblem(permission, cfg.contract);
-  report(!problem, `function-call key ${public_key.slice(0, 16)}…: ${problem ?? `${permission.FunctionCall.method_names.join(', ')} on ${cfg.contract}`}`);
-}
-if (functionCallKeys.length === 0) report(false, 'no function-call key on the account: the agent was stopped or never set up');
-note(`${fullAccessCount(keys)} full-access key(s) on the agent account: the stop button needs one for DeleteKey. The chain cannot show who holds it; the service refuses to start with one.`);
+for (const { publicKey, methods, problem } of keys.functionCall) report(!problem, `function-call key ${publicKey.slice(0, 16)}…: ${problem ?? `${methods.join(', ')} on ${cfg.contract}`}`);
+if (keys.functionCall.length === 0) report(false, 'no function-call key on the account: the agent was stopped or never set up');
+note(`${keys.fullAccess} full-access key(s) on the agent account: the stop button needs one for DeleteKey. The chain cannot show who holds it; the service refuses to start with one.`);
 
-const { token_id: token } = agent;
-const { symbol, decimals } = await view('ft_metadata', {}, token);
-const amount = (raw) => `${Number(raw) / 10 ** decimals} ${symbol}`;
-const [inContract, inAgent] = await Promise.all([cfg.contract, agentId].map((account_id) => view('ft_balance_of', { account_id }, token)));
-report(inAgent === '0', `funds: ${amount(inContract)} in the contract, ${amount(inAgent)} on the agent account`);
+const token = await readTokenInfo(rpc, agent.token_id);
+const amount = (raw) => tokenAmountText(raw, token);
+report(funds.onAgent === '0', `funds: ${amount(funds.inContract)} in the contract, ${amount(funds.onAgent)} on the agent account`);
 
-for (let action_id = 0; ; action_id += 1) {
-  const record = await view('action', { action_id });
-  if (!record) break;
-  if (record.agent_id !== agentId) continue;
-  const { action, decision, tee_signature, tee_pubkey, status } = record;
-  const commit = checkProofCommit({ kind: 'model' }, await readProofCommit(rpc, cfg.contract, agentId, decision.model_proof_commit), agentId);
-  const failed = [
-    !verifyDecisionSignature(decision, tee_signature, tee_pubkey) && 'the signature does not verify',
-    decision.action_commit !== actionCommitOf(action) && 'the decision is for another action',
-    actionStatusProblem(decision.verdict, status),
-    commit.status !== 'ok' && commit.detail,
-  ].filter(Boolean);
-  // update_policy can replace the key and the policy while old records stay as they were, so a difference is no failure.
-  const earlier = tee_pubkey !== agent.tee_pubkey || decision.policy_hash !== agent.policy_hash ? ' (under an earlier key or policy)' : '';
+// The same lookups and the same re-check the /agent page runs in the browser (readModelCommits, checkActionRecord in @ainek/proof).
+const mine = records.filter((r) => r.agent_id === agentId);
+const commits = await readModelCommits(rpc, cfg.contract, mine);
+for (const [i, record] of mine.entries()) {
+  const { action_id, action, decision, status } = record;
+  const failed = checkActionRecord(record, commits[i]).filter((c) => c.status !== 'ok').map((c) => c.detail);
+  const earlier = decidedUnderCurrentPolicy(record, agent) ? '' : ' (under an earlier key or policy)';
   report(failed.length === 0, `#${action_id} ${decision.verdict}, ${status}${earlier}: ${amount(action.amount)} to ${action.receiver_id}; ${failed.join('; ') || 're-checked here: signature, the action hash in the decision, status; a model proof commit by the agent exists'}`);
 }
+if (more) report(false, `the contract holds more than ${records.length} actions: the later ones were not read`);
 note('A commit is a salted hash: neither the chain nor this script opens it, so this does not show a model answer behind it. The test actions run from scripts used placeholders (docs/DEPLOY.md).');
 
-const contractFullAccess = fullAccessCount(await accessKeys(cfg.contract));
+const contractFullAccess = agentKeysOf(contractKeys, cfg.contract).fullAccess;
 if (contractFullAccess > 0) note(`${contractFullAccess} full-access key(s) on the contract account: whoever holds one can replace the code.`);
 console.log(failures === 0 ? 'Result: OK' : `Result: ${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

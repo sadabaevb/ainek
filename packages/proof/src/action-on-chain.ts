@@ -1,34 +1,19 @@
 // An action proof against the chain and against the run's attestation: what /verify shows (SPEC §5.2). The proof alone cannot vouch
 // for itself, so the key it must verify under, and what happened to the action, come from the contract's own record.
-import { z } from 'zod';
 import { canonicalJson } from './canonical.ts';
-import { checkProofCommit, readProofCommit, viewFunction } from './near-view.ts';
+import { actionStatusCheck, modelCommitCheck, readAction } from './agent-ledger.ts';
+import { checkProofCommit, readProofCommit } from './near-view.ts';
 import { check, verifyActionProof, type ActionReport } from './policy.ts';
 import { PolicyRun, verifyPolicyRun, type QuoteVerifier } from './policy-run.ts';
-import { Action, ActionProof, Decision } from './schema.ts';
+import { ActionProof } from './schema.ts';
 import { withChecks, type Check } from './verify.ts';
-
-/** `action(id)` on the contract (SPEC §4.3). */
-const ActionRecord = z.looseObject({ agent_id: z.string(), action: Action, decision: Decision, tee_signature: z.string(), tee_pubkey: z.string(), status: z.string() });
-
-/** What each verdict may end as (`ActionStatus` in contracts/ainek/src/agent.rs). A signed Deny that paid must not pass. */
-const STATUSES_OF: Record<string, readonly string[]> = {
-  Allow: ['Executing', 'Executed', 'Failed'],
-  NeedsApproval: ['Pending', 'Executing', 'Executed', 'Failed', 'Rejected'],
-  Deny: ['Denied'],
-};
-
-export function actionStatusProblem(verdict: string, status: string): string | null {
-  return STATUSES_OF[verdict]?.includes(status) ? null : `${verdict} cannot end as ${status}`;
-}
 
 export async function verifyActionProofOnChain(value: unknown, x: { rpcUrl: string; contract: string; wasmHash: string }): Promise<ActionReport> {
   const parsed = ActionProof.safeParse(value);
   if (!parsed.success) return verifyActionProof(value, { teePubkey: '', wasmHash: x.wasmHash });
   const proof = parsed.data;
-  const raw: unknown = await viewFunction(x.rpcUrl, x.contract, 'action', { action_id: proof.actionId });
-  if (raw === undefined || raw === null) return withChecks({ ok: true, checks: [], proof }, { id: 'action-record', status: 'fail', detail: `${x.contract} has no action #${proof.actionId}` });
-  const record = ActionRecord.parse(raw);
+  const record = await readAction(x.rpcUrl, x.contract, proof.actionId);
+  if (record === null) return withChecks({ ok: true, checks: [], proof }, { id: 'action-record', status: 'fail', detail: `${x.contract} has no action #${proof.actionId}` });
   const agent = record.agent_id;
   const offChain = verifyActionProof(proof, { teePubkey: record.tee_pubkey, wasmHash: x.wasmHash });
   // Only a commit that reproduces from the salt is this proof's own: without that, a file could name any commit of this agent.
@@ -38,16 +23,15 @@ export async function verifyActionProofOnChain(value: unknown, x: { rpcUrl: stri
     readProofCommit(x.rpcUrl, x.contract, agent, proof.modelProofCommit),
   ]);
   const sameAsChain = canonicalJson({ a: proof.action, d: proof.decision, s: proof.teeSignature }) === canonicalJson({ a: record.action, d: record.decision, s: record.tee_signature });
-  const problem = actionStatusProblem(proof.decision.verdict, record.status);
   return withChecks(
     offChain,
     check('action-record', sameAsChain, `action #${proof.actionId} of ${agent} on ${x.contract} says the same: ${proof.action.amount} of ${proof.action.token_id} to ${proof.action.receiver_id}`, `action #${proof.actionId} on ${x.contract} differs from this proof`),
-    check('action-status', problem === null, `${proof.decision.verdict}, and on chain the action is ${record.status}`, problem ?? ''),
+    actionStatusCheck(proof.decision.verdict, record.status),
     // The agent commits after the payment and tolerates a failure there, so a missing commit is not a forgery. A wrong kind is.
     own === null || own.status === 'none'
       ? { id: 'on-chain-commit', status: 'skipped', detail: own ? `${agent} has not committed this proof` : 'no salted commit in this copy of the proof' }
       : checkProofCommit({ kind: 'action' }, own, agent),
-    { ...checkProofCommit({ kind: 'model' }, model, agent), id: 'model-commit-on-chain' },
+    modelCommitCheck(model, agent),
   );
 }
 

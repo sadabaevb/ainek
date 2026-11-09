@@ -1,5 +1,6 @@
-// Read-only NEAR view calls over plain JSON-RPC (global fetch, no SDK), enough for the key log (SPEC §4.1 views) and the
-// proof commits (SPEC §4.2). Shared by the web client, the demo and the verifier so the ABI call shapes live in one place.
+// Reads from NEAR over plain JSON-RPC (global fetch, no SDK): contract views for the key log (SPEC §4.1), the proof commits
+// (§4.2) and whatever §4.3 needs, and an account's access keys. Shared by the web client, the demo, the verifier and the agent,
+// so the call shapes, the timeout and the retries live in one place.
 import { z } from 'zod';
 import { isNetworkFailure, withRetry } from './retry.ts';
 import { bytesToBase64 } from './disclosure.ts';
@@ -30,14 +31,29 @@ export function keyScopeProblem(permission: unknown, contract: string): string |
 /** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
 export class ContractMethodNotFound extends Error {}
 
-/** `signal` lets a caller abandon the read (the Node runner aborts the log read when attestation fails); an aborted call is not retried. */
+/**
+ * One `query` to the RPC with the timeout and the bounded retries every read shares: network failures, timeouts and 429/5xx are retried,
+ * an answer from the node is not. `fail` words an error the node itself reported. `signal` lets a caller abandon the read (the Node
+ * runner aborts the log read when attestation fails); an aborted call is not retried.
+ */
+async function rpcQuery(rpcUrl: string, params: Record<string, unknown>, fail: (text: string) => Error, signal?: AbortSignal): Promise<Record<string, unknown>> {
+  const body = JSON.stringify({ jsonrpc: '2.0', id: '1', method: 'query', params: { finality: 'final', ...params } });
+  const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || isNetworkFailure(err));
+  return withRetry(
+    async () => {
+      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
+      if (res.status === 429 || res.status >= 500) throw new Transient(`${rpcUrl}: HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`${rpcUrl}: HTTP ${res.status}`);
+      const json = (await res.json()) as { result?: Record<string, unknown> & { error?: string }; error?: { message?: string; data?: unknown } };
+      if (json.error) throw fail(typeof json.error.data === 'string' ? json.error.data : json.error.message ?? JSON.stringify(json.error));
+      if (typeof json.result?.error === 'string') throw fail(json.result.error);
+      return json.result ?? {};
+    },
+    { retryable: transient, attempts: ATTEMPTS, pauseMs: 500 },
+  );
+}
+
 export async function viewFunction(rpcUrl: string, contractId: string, method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
-  const body = JSON.stringify({
-    jsonrpc: '2.0',
-    id: '1',
-    method: 'query',
-    params: { request_type: 'call_function', finality: 'final', account_id: contractId, method_name: method, args_base64: bytesToBase64(new TextEncoder().encode(JSON.stringify(args))) },
-  });
   // A failing view answers HTTP 200 with a text error (the typed cause exists only on the EXPERIMENTAL RPC), so the
   // method-not-found case is classified here once, for every view that lands later. Only MethodNotFound itself: a
   // MethodResolveError for a bad export signature is a broken deploy and must surface, not read as "not deployed yet".
@@ -45,21 +61,17 @@ export async function viewFunction(rpcUrl: string, contractId: string, method: s
     const message = `${contractId}.${method}: ${text}`;
     return /\bMethodNotFound\b/.test(text) ? new ContractMethodNotFound(message) : new Error(message);
   };
-  // Network failures, timeouts and 429/5xx are retried a bounded number of times; contract errors are not.
-  const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || isNetworkFailure(err));
-  return withRetry(
-    async () => {
-      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
-      if (res.status === 429 || res.status >= 500) throw new Transient(`${rpcUrl}: HTTP ${res.status}`);
-      if (!res.ok) throw new Error(`${rpcUrl}: HTTP ${res.status}`);
-      const json = (await res.json()) as { result?: { result?: number[]; error?: string }; error?: { message?: string; data?: unknown } };
-      if (json.error) throw contractError(typeof json.error.data === 'string' ? json.error.data : json.error.message ?? JSON.stringify(json.error));
-      if (json.result?.error) throw contractError(json.result.error);
-      const bytes = json.result?.result ?? [];
-      return bytes.length === 0 ? undefined : JSON.parse(new TextDecoder().decode(Uint8Array.from(bytes)));
-    },
-    { retryable: transient, attempts: ATTEMPTS, pauseMs: 500 },
-  );
+  const result = await rpcQuery(rpcUrl, { request_type: 'call_function', account_id: contractId, method_name: method, args_base64: bytesToBase64(new TextEncoder().encode(JSON.stringify(args))) }, contractError, signal);
+  const bytes = (result['result'] as number[] | undefined) ?? [];
+  return bytes.length === 0 ? undefined : JSON.parse(new TextDecoder().decode(Uint8Array.from(bytes)));
+}
+
+const AccessKeys = z.object({ keys: z.array(z.object({ public_key: z.string(), access_key: z.object({ permission: z.unknown() }) })) });
+export type AccessKey = z.infer<typeof AccessKeys>['keys'][number];
+
+/** Every access key of an account, with what each may do: the chain's own answer to "what can this account sign?". An account that does not exist has none. */
+export async function viewAccessKeys(rpcUrl: string, account: string, signal?: AbortSignal): Promise<AccessKey[]> {
+  return AccessKeys.parse(await rpcQuery(rpcUrl, { request_type: 'view_access_key_list', account_id: account }, (text) => new Error(`access keys of ${account}: ${text}`), signal)).keys;
 }
 
 class Transient extends Error {}
@@ -104,9 +116,9 @@ export type ProofCommitLookup = { status: 'found'; record: ProofCommitRecord } |
  * `proof_commit(account, commit)`: the on-chain record for a salted commit. `none` when that account never committed it,
  * `not-deployed` while the contract has no such view yet. Other failures (RPC down, malformed account id) throw.
  */
-export async function readProofCommit(rpcUrl: string, contractId: string, account: string, commit: string): Promise<ProofCommitLookup> {
+export async function readProofCommit(rpcUrl: string, contractId: string, account: string, commit: string, signal?: AbortSignal): Promise<ProofCommitLookup> {
   try {
-    const raw = await viewFunction(rpcUrl, contractId, 'proof_commit', { account, commit });
+    const raw = await viewFunction(rpcUrl, contractId, 'proof_commit', { account, commit }, signal);
     return raw == null ? { status: 'none' } : { status: 'found', record: ProofCommitRecord.parse(raw) };
   } catch (err) {
     if (err instanceof ContractMethodNotFound) return { status: 'not-deployed' };

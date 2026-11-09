@@ -2,10 +2,9 @@
 // model answers by calling one of them, and the call's arguments become an Action. It is the same Tier-1 sequence as the
 // chat, so the conversation gets a model proof that the decision and the contract bind to (`model_proof_commit`).
 import { z } from 'zod';
-import { NEAR_ACCOUNT, type Action } from '@ainek/proof';
+import { NEAR_ACCOUNT, toMinimalUnits, type Action } from '@ainek/proof';
 import { functionCallsOf, nothingSent, runTier1, type ChatTool, type ReadLog, type RunStats, type Verified } from '@ainek/tier1-node';
 import type { AgentConfig } from './config.ts';
-import { toMinimalUnits } from './units.ts';
 
 export const PROPOSE_TRANSFER = 'propose_transfer';
 export const DECLINE = 'decline';

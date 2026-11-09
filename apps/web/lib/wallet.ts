@@ -1,7 +1,7 @@
 // Wallet helpers shared by the chat and /log pages. Sign-in asks the wallet for a function-call key limited to
 // `commit_proof` on the log contract (the wallet may widen it), so a commit does not pop the wallet up.
 import type { NearContextValue } from 'near-connect-hooks';
-import { nearToYocto } from 'near-api-js';
+import { nearToYocto, teraToGas } from 'near-api-js';
 import { ContractMethodNotFoundError } from 'near-api-js/rpc-errors';
 import { readProofCommit, readStorageBalance, type ModelProof } from '@ainek/proof';
 import type { PublicConfig } from './config';
@@ -33,10 +33,30 @@ export function fcKeyLogin(signIn: NearContextValue['signIn'], cfg: PublicConfig
   });
 }
 
+/** `approve` moves tokens through a cross-contract call and its callback: SPEC §4.3 asks for at least 60 TGas, the bot's command uses 100. */
+const OWNER_CALL_GAS = teraToGas(100).toString();
+
+/**
+ * `approve(action_id)` or `reject(action_id)` with the 1 yoctoNEAR that makes the contract insist on a full-access key, so the wallet
+ * always asks. Returns the transaction hash. The outcome only says the call was accepted: whether the token then paid is in `action(id).status`.
+ */
+export async function ownerDecide(callFunctionRaw: NearContextValue['callFunctionRaw'], cfg: Pick<PublicConfig, 'contract'>, method: 'approve' | 'reject', actionId: number): Promise<string> {
+  const outcome = await callFunctionRaw({ contractId: cfg.contract, method, args: { action_id: actionId }, gas: OWNER_CALL_GAS, deposit: '1' });
+  return txHashOf(outcome, method);
+}
+
 /** The local FC-key path throws on failure; the wallet-popup path resolves with the outcome and leaves the status to us. */
 function assertSucceeded(outcome: { status: unknown }, method: string): void {
   const status = outcome.status;
   if (typeof status === 'object' && status !== null && 'Failure' in status) throw new Error(`${method} failed: ${safeString((status as { Failure: unknown }).Failure)}`);
+}
+
+/** The hash of a transaction that succeeded. */
+function txHashOf(outcome: { status: unknown; transaction_outcome?: { id?: unknown } }, method: string): string {
+  assertSucceeded(outcome, method);
+  const hash = outcome.transaction_outcome?.id;
+  if (typeof hash !== 'string') throw new Error(`${method}: no transaction hash in the outcome`);
+  return hash;
 }
 
 /** Text of whatever a wallet threw: an Error, a plain string, or a structured-cloned object from its sandbox. */
@@ -49,10 +69,7 @@ export async function commitProofOnChain(callFunctionRaw: NearContextValue['call
   for (let attempt = 1; ; attempt++) {
     try {
       const outcome = await callFunctionRaw({ contractId: cfg.contract, method: 'commit_proof', args: { commit: proof.commit, kind: 'model', log_index: proof.logIndex } });
-      assertSucceeded(outcome, 'commit_proof');
-      const hash = outcome.transaction_outcome?.id;
-      if (typeof hash !== 'string') throw new Error('commit_proof: no transaction hash in the outcome');
-      return hash;
+      return txHashOf(outcome, 'commit_proof');
     } catch (err) {
       if (attempt >= 4 || !/AccessKeyDoesNotExist|access key .{0,80}does not exist/i.test(errorText(err))) throw err;
       await new Promise((r) => setTimeout(r, 1500 * attempt));

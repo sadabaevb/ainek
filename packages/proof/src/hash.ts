@@ -1,4 +1,4 @@
-// Hashing and byte helpers that work in Node and in the browser (ethers' sha256 is pure JS).
+// Hashing, byte and short-text helpers that work in Node and in the browser (ethers' sha256 is pure JS).
 import { sha256 as ethersSha256 } from 'ethers';
 
 const encoder = new TextEncoder();
@@ -65,4 +65,10 @@ export function randomHex32(): string {
 /** `5a0210f2…caff` for anything longer than 16 chars; shorter strings are returned as is. One format for card, CLI and verdicts. */
 export function shortHex(hex: string): string {
   return hex.length > 16 ? `${hex.slice(0, 8)}…${hex.slice(-4)}` : hex;
+}
+
+/** One line, bounded, no control characters: for text a model, a contract caller or a remote service wrote, before it is shown next to our own words. */
+export function oneLine(text: string, max = 300): string {
+  const flat = text.replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }

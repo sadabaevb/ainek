@@ -7,7 +7,7 @@ import { actionCommitOf, commitOf, proofPayload } from './commit.ts';
 import { bytesToBase64 } from './disclosure.ts';
 import { bytesToHex, sha256Hex } from './hash.ts';
 import { readRepoJson } from './fixtures.ts';
-import { PolicyInput, PolicyOutput, checkPolicyOutput, verifyActionProof, verifyDecisionSignature } from './policy.ts';
+import { PolicyInput, PolicyOutput, checkPolicyOutput, decidedAtMs, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 import type { JsonValue } from './canonical.ts';
 import type { Action, ActionProof, Decision } from './schema.ts';
 
@@ -103,4 +103,9 @@ test('the real policy job: every recorded output (docs/test-vectors/policy-decis
     const edited = { ...out, decision: { ...out.decision, verdict: out.decision.verdict === 'Allow' ? 'Deny' as const : 'Allow' as const } };
     assert.ok(checkPolicyOutput(edited, expect).some((x) => x.id === 'decision-signature' && x.status === 'fail'), c.name);
   }
+});
+
+test('decidedAtMs: the moment the contract took as the time of the decision is expires_at minus the ten minutes the job adds', () => {
+  assert.equal(decidedAtMs(signed('Allow', { expires_at: String(now + 600_000) }).decision), now);
+  assert.equal(new Date(decidedAtMs(signed('Deny', { expires_at: '1794055393785' }).decision)).toISOString(), '2026-11-07T12:33:13.785Z'); // action #4 on testnet, recorded on UTC day 20764 = 2026-11-07
 });

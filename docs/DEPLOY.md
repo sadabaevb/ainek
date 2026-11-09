@@ -334,6 +334,14 @@ near contract call-function as-transaction <contract> approve json-args '{"actio
   prepaid-gas '100 Tgas' attached-deposit '1 yoctoNEAR' sign-as <owner> …
 ```
 
+The same two calls can be signed in a browser: `/agent` lists what waits, re-checks each record, and gives the owner
+"Approve" and "Reject" (100 TGas, 1 yoctoNEAR, the wallet signs). Use its own "Connect as the owner" button: it signs
+in without asking for a function-call key. Do not connect an owner account through "Connect wallet" in the navigation,
+which asks the wallet to add a function-call key for `commit_proof`: on the owner's account such a key can call
+`pause_agent`, and while the owner is the contract account itself (today) any key of that account can also call the
+`#[private]` methods. So the browser path is meant for after the owner role has moved to an account of its own (step 3
+of the lock below). It has unit tests and has not run on chain yet.
+
 The stop button is the owner's `pause_agent` (the contract refuses the agent from then on) plus deleting the
 function-call key from the agent account.
 

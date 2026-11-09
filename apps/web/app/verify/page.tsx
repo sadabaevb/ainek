@@ -53,7 +53,9 @@ function VerifyInner() {
   const { t } = useT();
   const tv = t.verify;
   const wallet = useNearWallet();
-  const id = useSearchParams().get('id');
+  const params = useSearchParams();
+  const id = params.get('id');
+  const sample = params.get('sample');
   const [text, setText] = useState('');
   const [input, setInput] = useState<Input | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -93,7 +95,7 @@ function VerifyInner() {
     };
   }, [input, cfg]);
 
-  function parsePasted() {
+  function check(source: string) {
     setError('');
     setMissingId(null);
     // Nothing from the previous click may stay on screen as if it were this one's verdict, and a check still running must not land later.
@@ -101,7 +103,7 @@ function VerifyInner() {
     setInput(null);
     setResult(null);
     try {
-      const parsed = JSON.parse(text) as unknown;
+      const parsed = JSON.parse(source) as unknown;
       const isAction = (parsed as { kind?: unknown } | null)?.kind === 'action';
       if (isAction) {
         setActionProof(parsed);
@@ -113,6 +115,16 @@ function VerifyInner() {
       setError(tv.notProof(describeError(e)));
     }
   }
+
+  // /agent links here for the one action whose proof file is in the repository: the same text the button below pastes, checked at once.
+  useEffect(() => {
+    if (sample !== 'action') return;
+    const source = JSON.stringify(sampleAction, null, 2);
+    setText(source);
+    check(source);
+    // `check` only sets state; the query parameter is the one thing this depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sample]);
 
   // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
   const proof = result?.stored?.proof ?? result?.report.proof;
@@ -140,7 +152,7 @@ function VerifyInner() {
       <div className="controls">
         <JsonTextarea value={text} onChange={setText} onError={setError} placeholder={tv.placeholder} />
         <div className="actions">
-          <button type="button" className="btn primary" onClick={parsePasted} disabled={!text.trim()}>{tv.verify}</button>
+          <button type="button" className="btn primary" onClick={() => check(text)} disabled={!text.trim()}>{tv.verify}</button>
           <LoadFileButton onText={setText} onError={setError} />
           <button type="button" className="btn" onClick={() => setText(JSON.stringify(sampleAction, null, 2))}>{tv.useActionSample}</button>
         </div>

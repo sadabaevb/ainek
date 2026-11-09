@@ -224,3 +224,24 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
 .trust-quorum { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
 .trust-quorum select { width: auto; min-width: 4.5rem; }
 .trust-verdict { padding: 0.55rem 0.8rem; border-radius: 8px; font-weight: 500; background: var(--tone-bg); color: var(--tone); }
+
+/* Agent ledger (/agent) */
+.agent-card { margin: 1.25rem 0; }
+.agent-card h3 { margin: 0 0 0.25rem; }
+.row .value .line { display: block; }
+.pending { display: grid; gap: 0.75rem; }
+.pending h2, .pending p { margin: 0; }
+.pending .card .row { padding-top: 0; }
+.ledger { list-style: none; margin: 0; padding: 0; }
+.ledger > li { border-top: 1px solid var(--line); }
+.ledger > li:first-child { border-top: 0; }
+.ledger > li > details > summary { list-style: none; padding: 0 var(--card-pad); color: var(--fg); font-weight: 400; }
+.ledger > li > details > summary::-webkit-details-marker { display: none; }
+.ledger > li > details > summary .label::after { content: " ▸"; color: var(--muted); font-weight: 400; }
+.ledger > li > details[open] > summary .label::after { content: " ▾"; }
+.ledger-body { display: grid; gap: 0.6rem; padding: 0 var(--card-pad) 1rem calc(var(--card-pad) + 2.35rem); }
+.ledger-body > * { margin: 0; min-width: 0; }
+.ledger-body .checks { padding-top: 0; }
+@media (max-width: 640px) {
+  .ledger-body { padding-left: var(--card-pad); }
+}

@@ -9,9 +9,14 @@ export function utcMinute(iso: string): string {
   return `${iso.slice(0, 16).replace('T', ' ')} UTC`;
 }
 
+/** Milliseconds since epoch at minute precision, UTC. */
+export function utcMinuteOf(ms: number): string {
+  return utcMinute(new Date(ms).toISOString());
+}
+
 /** A log entry's `observed_at` (ms since epoch, as a U64 string) at minute precision, UTC. */
 export function observedUtc(observedAtMs: string): string {
-  return utcMinute(new Date(Number(observedAtMs)).toISOString());
+  return utcMinuteOf(Number(observedAtMs));
 }
 
 /** Clamped at zero: the verifier's clock may run slightly ahead of this browser's. */
