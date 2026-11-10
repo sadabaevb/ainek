@@ -360,8 +360,8 @@ or retried collateral or NVIDIA verdict fetch, both through NEAR AI's proxies in
 the same call in a browser connected through Meteor, with the function-call key added at sign-in and without a popup:
 [FLHbBzAv…](https://testnet.nearblocks.io/txns/FLHbBzAvaBN6jkmAQ1fnuAXAaViPZkgLi1XoWnhSiDnR).
 
-**Tier 2.** Not a benchmark: the ten actions the agent has on testnet, all proposed by us by Nov 7 (three of them from a
-script with a placeholder model proof, see "Tier 2 flow"), as `pnpm -F demo check-agent` re-read them from the chain on
+**Tier 2.** Not a benchmark: the ten actions the agent has on testnet, all proposed by us by Nov 7 (some of them from
+scripts with a placeholder model proof, see "Tier 2 flow" and `docs/DEPLOY.md`), as `pnpm -F demo check-agent` re-read them from the chain on
 Nov 10. Times from message to transfer were not measured.
 
 | Decision signed in the enclave | Actions | Outcome on chain |
