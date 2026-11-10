@@ -1,15 +1,15 @@
 'use client';
 // The public key log as the client sees it: who logged which key for which model, and whether two trusted
 // verifiers disagree (split view). Wallet login here asks for the function-call key later used for commit_proof.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
-import { ANY_AGE_NS, LOG_WINDOW_NS, findSplitView, type KeyEntry } from '@ainek/proof';
+import { ANY_AGE_NS, LOG_WINDOW_NS, deploymentStanding, deploymentsSeen, findSplitView, type KeyEntry, type SeenDeployment } from '@ainek/proof';
 import { RedCard } from '@/components/red-card';
 import { StackTable, type Column } from '@/components/stack-table';
 import { TrustPanel } from '@/components/trust-panel';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
-import { hoursSince, observedUtc, short } from '@/lib/format';
+import { hoursSince, observedUtc, short, utcMinuteOf } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
 import { useConfig, useT, useTrust } from '../providers';
 
@@ -19,8 +19,8 @@ const WINDOW_HOURS = Number(LOG_WINDOW_NS) / 3_600_000_000_000;
 
 interface LogWindow {
   entries: KeyEntry[];
-  /** The newest entry for the model regardless of age, looked up only when the window is empty to say how stale the log is: undefined while that lookup is in flight or failed, null when the log has none. */
-  newest?: KeyEntry | null;
+  /** The latest entries for the model regardless of age (the contract returns at most 100), for the deployments list and to say how stale an empty window is: undefined while that read is in flight, null when it failed. */
+  all?: KeyEntry[] | null;
 }
 
 export default function LogPage() {
@@ -37,16 +37,13 @@ export default function LogPage() {
 
   useEffect(() => {
     const reader = keyLogFor(cfg);
+    // Both reads start together. The window (and the explanation card) shows as soon as it answers; the wider read only adds to it.
+    const wider = reader.latestKeys(cfg.model, ANY_AGE_NS).catch(() => null);
     reader
       .latestKeys(cfg.model)
       .then((entries) => {
-        setLog({ entries }); // the window (and the explanation card) first; the staleness lookup must not delay or hide it
-        if (entries.length === 0) {
-          reader
-            .latestKeys(cfg.model, ANY_AGE_NS)
-            .then((all) => setLog({ entries, newest: all[0] ?? null }))
-            .catch(() => undefined);
-        }
+        setLog({ entries });
+        void wider.then((all) => setLog({ entries, all }));
       })
       .catch((e: unknown) => setError(describeError(e)));
     reader.verifiers().then(setRegistered).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
@@ -63,6 +60,20 @@ export default function LogPage() {
   }, [signedAccountId]);
 
   const split = log ? findSplitView(log.entries, cfg.model, trust.verifiers) : null;
+  const newest = log?.all?.[0];
+  const td = tl.deployments;
+  const deployments = useMemo(() => deploymentsSeen(log?.all ?? [], cfg.model), [log?.all, cfg.model]);
+  // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.
+  const standing = useMemo(() => new Map(deployments.map((d) => [d.composeHash, deploymentStanding(log?.entries ?? [], d, { model: cfg.model, trustedVerifiers: trust.verifiers, quorum: trust.quorum })])), [deployments, log?.entries, cfg.model, trust]);
+  const deploymentColumns: Column<SeenDeployment>[] = [
+    { label: td.columns.compose, cell: (d) => short(d.composeHash), className: 'mono' },
+    { label: td.columns.keys, cell: (d) => d.keys.map(short).join(', '), className: 'mono' },
+    { label: td.columns.verifiers, cell: (d) => d.verifiers.join(', '), className: 'mono' },
+    { label: td.columns.entries, cell: (d) => d.entries },
+    { label: td.columns.first, cell: (d) => utcMinuteOf(d.firstSeenMs) },
+    { label: td.columns.last, cell: (d) => utcMinuteOf(d.lastSeenMs) },
+    { label: td.columns.counts, cell: (d) => td.counts[standing.get(d.composeHash) ?? 'untrusted'] },
+  ];
   const c = tl.columns;
   const columns: Column<KeyEntry>[] = [
     { label: c.index, cell: (e) => e.index },
@@ -88,12 +99,22 @@ export default function LogPage() {
           <h3>{tl.emptyTitle(WINDOW_HOURS, cfg.model)}</h3>
           <p>
             {tl.emptyBody}
-            {log.newest !== undefined && ` ${log.newest ? tl.newest(log.newest.index, log.newest.verifier, observedUtc(log.newest.observed_at), hoursSince(log.newest.observed_at)) : tl.none}`}
+            {log.all != null && ` ${newest ? tl.newest(newest.index, newest.verifier, observedUtc(newest.observed_at), hoursSince(newest.observed_at)) : tl.none}`}
           </p>
         </section>
       ) : (
         <StackTable columns={columns} rows={log.entries} rowKey={(e) => String(e.index)} />
       ))}
+
+      {log?.all === null && <p className="muted small">{td.unavailable}</p>}
+      {log?.all && deployments.length > 0 && (
+        <section>
+          <h2>{td.title}</h2>
+          <p className="muted small">{td.intro} {cfg.requireLoggedDeployment ? td.enforced.on : td.enforced.off}</p>
+          <StackTable columns={deploymentColumns} rows={deployments} rowKey={(d) => d.composeHash} />
+          <p className="muted small">{td.scope(log.all.length)}</p>
+        </section>
+      )}
 
       <TrustPanel entries={log?.entries ?? null} registered={registered} />
 

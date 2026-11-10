@@ -72,3 +72,14 @@ test('evaluateKeyLog: an empty trust set or a quorum below 1 lets nothing throug
   assert.equal(evaluateKeyLog([], { ...query, trustedVerifiers: ['a.testnet'], quorum: 3 }).quorum, 3);
   assert.equal(evaluateKeyLog([], { ...query, trustedVerifiers: ['a.testnet'], quorum: 0 }).quorum, 1);
 });
+
+test('previewTrust with the deployment check on: two verifiers that know the key but saw different deployments do not make a quorum of 2', () => {
+  const log = [{ ...entry('a.testnet'), compose_hash: 'a0'.repeat(32) }, { ...entry('b.testnet'), compose_hash: '5f'.repeat(32) }];
+  const both = { verifiers: ['a.testnet', 'b.testnet'], quorum: 2 };
+  const reason = (requireDeployment: boolean) => {
+    const p = previewTrust(log, 'm', both, requireDeployment);
+    return p.kind === 'checked' ? p.verdict.reason : p.kind;
+  };
+  assert.equal(reason(false), 'ok');
+  assert.equal(reason(true), 'below-quorum');
+});

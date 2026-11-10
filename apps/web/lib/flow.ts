@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -61,7 +61,7 @@ export interface VerifiedOutcome {
 
 export type ChatOutcome =
   | VerifiedOutcome
-  | { kind: 'refused'; model: string; /** The demo switch swapped the key: the card can offer the honest retry. */ tampered: boolean; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string }
+  | { kind: 'refused'; model: string; /** A demo switch swapped something: the card can offer the honest retry. */ tampered: Tamper; /** With a demo switch on: would the same message pass the log check without it? Only then is the retry worth offering. */ honestWouldPass: boolean; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string; /** The compose hash the log was asked about; undefined when the deployment check did not run. */ seenCompose: string | undefined }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
   /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
   | { kind: 'failed'; step: StepId; reason: string; reply?: string };
@@ -96,10 +96,14 @@ interface Progress {
   reply?: string;
 }
 
+/** The demo switches for the private model: what the client is shown instead of what was attested, before the log check. With one on, that route sends nothing, whatever the log says (`teeRoute`). */
+export type Tamper = false | 'key' | 'deployment';
+
+
 export interface ChatParams {
   model: string;
   messages: ChatMessage[];
-  tamper: boolean;
+  tamper: Tamper;
   /** Who counts for the key-log check: the viewer's choice or the site default (useTrust). */
   trust: TrustSet;
   onStep: Emit;
@@ -141,15 +145,22 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const modelAttestation = deployment.models.find((m) => m.signingPublicKey !== undefined) ?? deployment.models[0];
   if (!modelAttestation) fail(emit, 'attestation', 'no model attestation returned');
 
-  // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
+  // 2. Fail-closed: the attested signing key must be in the public log; with the deployment check on (config, or the demo switch),
+  // it must be logged together with the attested compose hash.
   const entries = await runStep(emit, 'key-log', `reading the public key log (${log.source})`, () => keyLogPromise, (e) => `${e.length} entr${e.length === 1 ? 'y' : 'ies'} in window (source: ${log.source})`);
-  const seenKey = tamper ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
-  const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: trust.verifiers, quorum: trust.quorum });
+  const seenKey = tamper === 'key' ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
+  const attestedCompose = composeHashOf(modelAttestation.deployment);
+  const seenCompose = tamper === 'deployment' ? DEMO_UNKNOWN_COMPOSE : cfg.requireLoggedDeployment ? attestedCompose : undefined;
+  const logPolicy = { model, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
+  const keyVerdict = evaluateKeyLog(entries, { ...logPolicy, signingAddress: seenKey, composeHash: seenCompose });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey };
+    const honestWouldPass = tamper !== false && evaluateKeyLog(entries, { ...logPolicy, signingAddress: modelAttestation.signer.signingAddress, composeHash: cfg.requireLoggedDeployment ? attestedCompose : undefined }).status === 'ok';
+    return { kind: 'refused', model, tampered: tamper, honestWouldPass, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, seenCompose };
   }
-  const logEntry = proofEntryOf(keyVerdict, composeHashOf(modelAttestation.deployment));
+  // A demo value passed the check, so somebody logged it: the real key and deployment were never checked, and a demo must not send.
+  if (tamper) fail(emit, 'key-log', `the demo ${tamper} is in the log of a verifier this client trusts: nothing is sent while a demo switch is on`);
+  const logEntry = proofEntryOf(keyVerdict, attestedCompose);
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });
 
   // 3. Encrypt to the verified key (nothing leaves the browser yet), then send through the proxy and decrypt the reply.

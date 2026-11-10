@@ -42,12 +42,13 @@ export type TrustPreview = { kind: 'nobody' } | { kind: 'no-entries' } | { kind:
 
 /**
  * What a trust set means right now, before any message: the chat's own check, run on the newest key from a verifier the viewer
- * counts (or from anyone, when nobody on the list wrote), because the model's key is known only after attestation.
+ * counts (or from anyone, when nobody on the list wrote), because the model's key is known only after attestation. With the
+ * deployment check on, the same goes for the deployment: the preview asks about the one that newest entry names.
  */
-export function previewTrust(entries: readonly KeyEntry[], model: string, trust: TrustSet): TrustPreview {
+export function previewTrust(entries: readonly KeyEntry[], model: string, trust: TrustSet, requireDeployment = false): TrustPreview {
   if (trust.verifiers.length === 0) return { kind: 'nobody' };
   const forModel = entries.filter((e) => e.model === model); // the contract answers newest first
   const newest = forModel.find((e) => trust.verifiers.includes(e.verifier)) ?? forModel[0];
   if (!newest) return { kind: 'no-entries' };
-  return { kind: 'checked', key: newest.signing_address, verdict: evaluateKeyLog(entries, { model, signingAddress: newest.signing_address, trustedVerifiers: trust.verifiers, quorum: trust.quorum }) };
+  return { kind: 'checked', key: newest.signing_address, verdict: evaluateKeyLog(entries, { model, signingAddress: newest.signing_address, composeHash: requireDeployment ? newest.compose_hash : undefined, trustedVerifiers: trust.verifiers, quorum: trust.quorum }) };
 }

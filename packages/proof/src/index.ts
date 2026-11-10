@@ -24,10 +24,10 @@ export {
   SigningAlgo,
   hex64,
 } from './schema.ts';
-export { DEMO_SWAPPED_KEY, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry, verifiersOf } from './key-log.ts';
+export { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, deploymentStanding, deploymentsSeen, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry, verifiersOf } from './key-log.ts';
 export { TIER1_STEPS, failurePhase } from './steps.ts';
 export type { Tier1StepId, FailurePhase } from './steps.ts';
-export type { KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SplitView, ResolvedEntry } from './key-log.ts';
+export type { DeploymentStanding, KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SeenDeployment, SplitView, ResolvedEntry } from './key-log.ts';
 export { buildModelProof, buildCheckedModelProof, buildActionProof } from './build.ts';
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
 export { withRetry, isNetworkFailure } from './retry.ts';

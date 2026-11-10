@@ -47,7 +47,7 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
     return registered === null || writers.has(account) ? undefined : tt.tag.added; // until the contract answers, "added by you" is not known
   };
 
-  const preview = entries && previewTrust(entries, cfg.model, trust);
+  const preview = entries && previewTrust(entries, cfg.model, trust, cfg.requireLoggedDeployment);
   const previewText = (): string | null => {
     if (!preview) return null;
     if (preview.kind === 'nobody') return tt.verdict.nobody;
@@ -100,7 +100,7 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
       </div>
       {notSaved && <p className="small trust-bad" role="alert">{tt.notSaved}</p>}
       {preview && <p className={`trust-verdict ${willSend ? 'ok' : 'fail'}`} role="status">{previewText()}</p>}
-      <p className="muted small">{tt.verdictNote}</p>
+      <p className="muted small">{tt.verdictNote}{cfg.requireLoggedDeployment && ` ${tt.verdictNoteDeployment}`}</p>
       {hiddenSplit && <p className="small" role="status">{tt.hiddenSplit(hiddenSplit.verifierA, hiddenSplit.verifierB)}</p>}
       {onlyWriter && <p className="muted small">{tt.oneWriter(onlyWriter)}</p>}
       <p className="muted small">{tt.hostNote}</p>

@@ -232,19 +232,20 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
     );
     const verifiedAt = new Date().toISOString();
 
-    // 2. Fail-closed: the attested signing key must be in the public log (compose hash shown, not enforced: DEV-NOTES 2026-11-02).
+    // 2. Fail-closed: the attested signing key must be in the public log, and with the deployment check on, logged with the attested compose.
     running = 'key-log';
     const log = await logPromise;
     stepStart = performance.now() - log.ms; // the read was timed by its own promise; it overlapped attestation
     if (!log.ok) throw new Error(`public log unavailable (${describeSdkError(log.err)})`);
     const { entries, source: logSource, ms: logMs } = log;
     timings['key-log'] = logMs;
-    const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
+    const attestedCompose = composeHashOf(modelAttestation.deployment);
+    const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum, composeHash: cfg.requireLoggedDeployment ? attestedCompose : undefined });
     if (verdict.status !== 'ok') {
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });
     }
-    const logEntry = proofEntryOf(verdict, composeHashOf(modelAttestation.deployment));
+    const logEntry = proofEntryOf(verdict, attestedCompose);
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')} (source: ${logSource})`, ms: logMs });
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.

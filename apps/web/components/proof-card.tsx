@@ -36,14 +36,15 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
       <RedCard
         title={title}
         body={body}
-        note={t.refusedConsequence[reason]}
+        note={[t.refusedConsequence[reason], outcome.tampered === 'deployment' && !cfg.requireLoggedDeployment ? t.deploymentDemoNote : null].filter(Boolean).join(' ')}
         action={
-          outcome.tampered ? onRetry && <button type="button" className="btn primary" onClick={onRetry}>{t.retryHonest}</button>
+          outcome.tampered && onRetry ? <button type="button" className="btn primary" onClick={onRetry}>{outcome.tampered === 'deployment' ? t.retryRealDeployment : t.retryHonest}</button>
           // A new tab, because the thread lives in this page; the choice reaches it through storage. Not on a split view: a disagreement is an alarm to read, not a list to edit.
           : reason !== 'split-view' && <Link className="btn" href="/log#trust" target="_blank" rel="noopener">{t.refusedChangeTrust}</Link>
         }
         lines={[
           `key seen by the client: ${outcome.seenKey}`,
+          ...(outcome.seenCompose ? [`deployment (compose hash) seen by the client: ${outcome.seenCompose}`] : []),
           `verdict: ${outcome.keyVerdict.status}: ${outcome.keyVerdict.detail}`,
           `log source: ${outcome.logSource}, entries in window: ${outcome.entriesInWindow}`,
           `attested model key (for comparison): ${outcome.deployment.models.map((m) => m.signer.signingAddress).join(', ')}`,

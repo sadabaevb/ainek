@@ -1,5 +1,5 @@
-// SPEC §7.1 step 2: is the attested key confirmed by the public log? The contract's `latest_keys(model, max_age)`
-// returns the window; this function applies the client-side trust policy (TRUSTED_VERIFIERS + QUORUM) to it.
+// SPEC §7.1 step 2: is the attested key, and the deployment behind it, confirmed by the public log? The contract's
+// `latest_keys(model, max_age)` returns the window; this file applies the client-side trust policy (TRUSTED_VERIFIERS + QUORUM) to it.
 import { canonicalJson } from './canonical.ts';
 import { normalizeHex, shortHex } from './hash.ts';
 import { ZodError } from 'zod';
@@ -10,8 +10,13 @@ import type { KeyEntry } from './schema.ts';
 export interface KeyLogQuery {
   model: string;
   signingAddress: string;
-  /** When given, an entry must also carry this compose hash to count (decision pending, DEV-NOTES 2026-11-02). */
-  composeHash?: string;
+  /**
+   * The compose hash of the deployment this client attested. When given, only an entry with this key AND this compose counts. Callers
+   * pass it when the deployment check is on (`requireLoggedDeployment` in the config, or the demo switch), and undefined otherwise.
+   * What it does not settle: instances of a model share one signing key and the gateway picks the instance per request, so the
+   * instance that answers the message may be another one than the instance that answered the attestation.
+   */
+  composeHash?: string | undefined;
   trustedVerifiers: readonly string[];
   /** Confirmations from distinct trusted verifiers required; 1 in the demo, 2 in production. */
   quorum: number;
@@ -19,17 +24,19 @@ export interface KeyLogQuery {
 
 export type KeyLogStatus = 'ok' | 'not-logged' | 'split-view';
 /** Why the status is what it is. The UI words it; `detail` is the English technical line. */
-export type KeyLogReason = 'ok' | 'split-view' | 'below-quorum' | 'untrusted-only' | 'absent';
+export type KeyLogReason = 'ok' | 'split-view' | 'below-quorum' | 'unknown-deployment' | 'untrusted-only' | 'absent';
 
 /** The key the demo shows the client instead of the attested one (the chat's "Swap the key" switch, `pnpm demo:tamper`, `demo:metrics`): a well-formed 32-byte hex no verifier ever logged. */
 export const DEMO_SWAPPED_KEY = 'ab'.repeat(32);
+/** The compose hash the demo shows the client instead of the attested one (the chat's "unknown deployment" switch): a deployment no verifier ever logged, behind the real key. */
+export const DEMO_UNKNOWN_COMPOSE = 'cd'.repeat(32);
 
 export interface KeyLogVerdict {
   status: KeyLogStatus;
   reason: KeyLogReason;
   /** The confirmations this verdict required: a card shown later must not read today's setting. */
   quorum: number;
-  /** Distinct trusted verifiers that logged this exact key. */
+  /** Distinct trusted verifiers that logged this exact key (with the queried deployment, when the query named one). */
   confirmedBy: string[];
   /** Entries that matched the query, trusted verifiers only. */
   matching: KeyEntry[];
@@ -37,6 +44,8 @@ export interface KeyLogVerdict {
   untrusted: KeyEntry[];
   /** Distinct verifiers outside the trust set that logged this exact key: the card names them instead of saying "not in the log". */
   loggedByUntrusted: string[];
+  /** Set when the query named a deployment: its compose hash, and the distinct composes trusted verifiers logged with this key in the window (newest first). */
+  deployment?: { composeHash: string; loggedComposes: string[] } | undefined;
   detail: string;
 }
 
@@ -76,26 +85,85 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   const untrusted = forModel.filter((e) => !trustedSet.has(e.verifier));
 
   const wanted = normalizeHex(query.signingAddress);
-  const hasKey = (e: KeyEntry) => normalizeHex(e.signing_address) === wanted && (query.composeHash === undefined || normalizeHex(e.compose_hash) === normalizeHex(query.composeHash));
-  const matching = trusted.filter(hasKey);
+  const compose = query.composeHash === undefined ? undefined : normalizeHex(query.composeHash);
+  const hasKey = (e: KeyEntry) => normalizeHex(e.signing_address) === wanted;
+  const matches = (e: KeyEntry) => hasKey(e) && (compose === undefined || normalizeHex(e.compose_hash) === compose);
+  const withKey = trusted.filter(hasKey);
+  const matching = withKey.filter(matches);
   const confirmedBy = verifiersOf(matching);
+  // By key alone: "only verifiers you do not trust know this key" is true whatever deployment they saw behind it.
   const loggedByUntrusted = verifiersOf(untrusted.filter(hasKey));
+  const deployment = compose === undefined ? undefined : { composeHash: compose, loggedComposes: [...new Set(withKey.map((e) => normalizeHex(e.compose_hash)))] };
+  const what = compose === undefined ? `key ${shortHex(wanted)}` : `key ${shortHex(wanted)} with deployment ${shortHex(compose)}`;
 
   // The trust set can now come from the viewer's browser: whatever arrives here, no key passes without a confirmation.
   const quorum = Math.max(1, query.quorum);
   const split = findSplitView(forModel, query.model, query.trustedVerifiers);
-  if (split) return { status: 'split-view', reason: 'split-view', quorum, confirmedBy: [], matching: [], untrusted, loggedByUntrusted, detail: `${split.detail}: refusing to send` };
+  if (split) return { status: 'split-view', reason: 'split-view', quorum, confirmedBy: [], matching: [], untrusted, loggedByUntrusted, deployment, detail: `${split.detail}: refusing to send` };
   if (confirmedBy.length >= quorum) {
-    return { status: 'ok', reason: 'ok', quorum, confirmedBy, matching, untrusted, loggedByUntrusted, detail: `key ${shortHex(wanted)} confirmed by ${confirmedBy.join(', ')}` };
+    return { status: 'ok', reason: 'ok', quorum, confirmedBy, matching, untrusted, loggedByUntrusted, deployment, detail: `${what} confirmed by ${confirmedBy.join(', ')}` };
   }
-  // A trusted match short of quorum outranks entries from outside the trust set, which are named, never counted.
-  const reason = matching.length > 0 ? 'below-quorum' : loggedByUntrusted.length > 0 ? 'untrusted-only' : 'absent';
+  // A trusted match short of quorum comes first. Then the key that trusted verifiers know, but not with this deployment: the case the
+  // key alone cannot catch. Entries from outside the trust set are named, never counted.
+  const reason = matching.length > 0 ? 'below-quorum' : withKey.length > 0 ? 'unknown-deployment' : loggedByUntrusted.length > 0 ? 'untrusted-only' : 'absent';
   const why = {
-    'below-quorum': `only ${confirmedBy.length} of ${quorum} required confirmations`,
+    'below-quorum': `only ${confirmedBy.length} of ${quorum} required confirmations for ${what}`,
+    'unknown-deployment': `key ${shortHex(wanted)} is logged, but not with deployment ${shortHex(deployment?.composeHash ?? '')}: trusted verifiers saw ${deployment?.loggedComposes.map(shortHex).join(', ')} behind it`,
     'untrusted-only': `key ${shortHex(wanted)} is logged only by ${loggedByUntrusted.join(', ')}, outside the trust set`,
     absent: `key ${shortHex(wanted)} is not in the public log`,
   }[reason];
-  return { status: 'not-logged', reason, quorum, confirmedBy, matching, untrusted, loggedByUntrusted, detail: `${why}: not sent (fail-closed)` };
+  return { status: 'not-logged', reason, quorum, confirmedBy, matching, untrusted, loggedByUntrusted, deployment, detail: `${why}: not sent (fail-closed)` };
+}
+
+export interface SeenDeployment {
+  composeHash: string;
+  /** Distinct signing keys logged with it. */
+  keys: string[];
+  verifiers: string[];
+  entries: number;
+  /** `observed_at` of its oldest and newest entry among those given, unix ms. */
+  firstSeenMs: number;
+  lastSeenMs: number;
+}
+
+/**
+ * The deployments of a model as the log shows them: one line per compose hash, newest first. Several deployments behind one key is
+ * normal (replicas, a rollout); a new one appearing is exactly what the log is there to record. "First seen" is only as old as the
+ * entries given: the contract's views return the latest 100.
+ */
+export function deploymentsSeen(entries: readonly KeyEntry[], model: string): SeenDeployment[] {
+  const seen = new Map<string, SeenDeployment>();
+  for (const e of entries) {
+    if (e.model !== model) continue;
+    const composeHash = normalizeHex(e.compose_hash);
+    const at = Number(e.observed_at);
+    const d = seen.get(composeHash) ?? { composeHash, keys: [], verifiers: [], entries: 0, firstSeenMs: at, lastSeenMs: at };
+    const key = normalizeHex(e.signing_address);
+    if (!d.keys.includes(key)) d.keys.push(key);
+    if (!d.verifiers.includes(e.verifier)) d.verifiers.push(e.verifier);
+    d.entries += 1;
+    d.firstSeenMs = Math.min(d.firstSeenMs, at);
+    d.lastSeenMs = Math.max(d.lastSeenMs, at);
+    seen.set(composeHash, d);
+  }
+  return [...seen.values()].sort((a, b) => b.lastSeenMs - a.lastSeenMs);
+}
+
+/** Where a deployment stands for a viewer right now: would the deployment check pass for it, and if not, why. */
+export type DeploymentStanding = 'ok' | 'split-view' | 'below-quorum' | 'untrusted' | 'old';
+
+/**
+ * The chat's own rule (`evaluateKeyLog` on the 24 h window) asked about one deployment from `deploymentsSeen`, for each key it was
+ * logged with. When no trusted verifier has it in the window: `untrusted` if only verifiers outside the trust set logged it there or
+ * ever, `old` if a trusted verifier did, but before the window.
+ */
+export function deploymentStanding(window: readonly KeyEntry[], d: SeenDeployment, query: Pick<KeyLogQuery, 'model' | 'trustedVerifiers' | 'quorum'>): DeploymentStanding {
+  const reasons = d.keys.map((key) => evaluateKeyLog(window, { ...query, signingAddress: key, composeHash: d.composeHash }).reason);
+  if (reasons.includes('ok')) return 'ok';
+  if (reasons.includes('split-view')) return 'split-view';
+  if (reasons.includes('below-quorum')) return 'below-quorum';
+  const inWindow = window.some((e) => e.model === query.model && normalizeHex(e.compose_hash) === d.composeHash);
+  return !inWindow && d.verifiers.some((v) => query.trustedVerifiers.includes(v)) ? 'old' : 'untrusted';
 }
 
 export const verifiersOf = (entries: readonly KeyEntry[]): string[] => [...new Set(entries.map((e) => e.verifier))];
@@ -103,8 +171,8 @@ export const verifiersOf = (entries: readonly KeyEntry[]): string[] => [...new S
 /**
  * The entry a proof points at, from a verdict that passed. Instances of a model share one signing key, so several composes
  * can sit behind it: take the newest entry with the attested compose, so that the proof and the card name the deployment
- * that was checked. No such entry is not a refusal (the compose is shown, not enforced: DEV-NOTES 2026-11-02), it means the
- * newest entry for the key. `matching` keeps the contract's newest-first order.
+ * that was checked. With the deployment check on, every matching entry has that compose. With it off, no such entry is not a
+ * refusal: it means the newest entry for the key, and the card says so. `matching` keeps the contract's newest-first order.
  */
 export function proofEntryOf(verdict: KeyLogVerdict, composeHash: string): KeyEntry {
   const compose = normalizeHex(composeHash);

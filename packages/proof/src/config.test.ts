@@ -41,7 +41,7 @@ test('quorum and TCB policy can never be weakened by a bad value', () => {
 
 test('the public settings in .env.example are the code defaults, so a host that sets none (Vercel) runs the same config', () => {
   const example = parseEnv(new TextDecoder().decode(readRepoFile('.env.example')));
-  const keys = ['NEARAI_BASE_URL', 'NEARAI_MODEL', 'NEARAI_INCOGNITO_MODEL', 'NEAR_NETWORK', 'AINEK_CONTRACT', 'AINEK_LOG_SOURCE', 'AINEK_TRUSTED_VERIFIERS', 'AINEK_QUORUM', 'AINEK_ACCEPTED_TCB', 'AGENT_ACCOUNT_ID'];
+  const keys = ['NEARAI_BASE_URL', 'NEARAI_MODEL', 'NEARAI_INCOGNITO_MODEL', 'NEAR_NETWORK', 'AINEK_CONTRACT', 'AINEK_LOG_SOURCE', 'AINEK_TRUSTED_VERIFIERS', 'AINEK_QUORUM', 'AINEK_ACCEPTED_TCB', 'AINEK_REQUIRE_DEPLOYMENT', 'AGENT_ACCOUNT_ID'];
   const fromExample = Object.fromEntries(keys.map((k) => [k, example[k]]));
   for (const k of keys) assert.ok(fromExample[k], `${k} is set in .env.example`);
   assert.deepEqual(ainekConfigFromEnv(fromExample), ainekConfigFromEnv({}));
@@ -56,3 +56,9 @@ test('the policy job defaults are the published ones in .env.example, and a blan
   assert.equal(ainekConfigFromEnv({ AGENT_ACCOUNT_ID: '' }).agentAccount, example['AGENT_ACCOUNT_ID']);
 });
 
+test('the deployment check: only an explicit 0 or false turns it off; blank is the default, and a typo turns it on', () => {
+  const byDefault = ainekConfigFromEnv({}).requireLoggedDeployment;
+  for (const v of ['1', 'true', ' TRUE ', 'yes', 'on', 'enabled']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, true, v);
+  for (const v of ['0', 'false', ' False ']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, false, v);
+  for (const v of ['', '  ']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, byDefault, JSON.stringify(v));
+});

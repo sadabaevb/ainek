@@ -19,6 +19,12 @@ export interface AinekConfig {
   trustedVerifiers: string[];
   /** Distinct trusted confirmations required; always an integer >= 1. */
   quorum: number;
+  /**
+   * SPEC §7.1: refuse to send unless a trusted verifier logged the attested key together with the attested compose hash. Off: the
+   * key alone decides, and a deployment the log has not seen is shown on the card, not refused. Only an explicit 0 or false turns
+   * it off; a blank value means the default, and anything else turns it on, so a typo cannot weaken the policy.
+   */
+  requireLoggedDeployment: boolean;
   /** TCB statuses accepted for gateway and model quotes (SPEC §3.2 policy); unknown names are dropped, never empty. */
   acceptedTcbStatuses: TcbStatusName[];
   explorer: string;
@@ -34,6 +40,10 @@ export type EnvLike = Record<string, string | undefined>;
 
 // The demo's trust policy for the live log; the replay's recorded entry #0 is by the same verifier (config.test.ts checks).
 const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
+
+// One line to turn the deployment check on in the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables). Off until the
+// verifier samples every instance behind the gateway each round (DEV-NOTES 2026-11-10); `.env.example` carries the same value.
+const REQUIRE_DEPLOYMENT_DEFAULT = '0';
 
 function list(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback).split(',').map((s) => s.trim()).filter(Boolean);
@@ -55,6 +65,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     logSource,
     trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
+    requireLoggedDeployment: !['0', 'false'].includes((env['AINEK_REQUIRE_DEPLOYMENT']?.trim() || REQUIRE_DEPLOYMENT_DEFAULT).toLowerCase()),
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.
