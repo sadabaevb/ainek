@@ -9,7 +9,7 @@ export const verifyTdxQuote = quoteVerifierOf(qvl.verify);
  * Fetches a run's attestation and checks it. OutLayer answers 404 until the worker has uploaded the quote, so this waits for it, within a
  * limit that covers every request here: no attestation means no way to tell which code ran.
  */
-export async function verifyPolicyRunAt(attestationUrl: string, x: { output: string; input: string; freshness?: { nowSeconds: number; maxAgeSeconds: number }; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): Promise<Check[]> {
+export async function verifyPolicyRunAt(attestationUrl: string, x: { output: string; input: string | null; freshness?: { nowSeconds: number; maxAgeSeconds: number }; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): Promise<Check[]> {
   const { fetch: f = fetch, pollMs = 1000, timeoutMs = 60_000, ...rest } = x;
   const signal = AbortSignal.timeout(timeoutMs);
   for (;;) {

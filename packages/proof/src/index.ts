@@ -50,7 +50,7 @@ export { agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPoli
 export type { AgentKeys, AgentState, ModelCommitLookup } from './agent-ledger.ts';
 export type { ActionVerdict } from './action-on-chain.ts';
 export type { ActionReport } from './policy.ts';
-export { PolicyRun, checkPolicyRun, fmspcOf, policySecretsRef, quoteVerifierOf, tryVerifyQuote, verifyPolicyRun } from './policy-run.ts';
+export { PolicyRun, checkPolicyRun, fmspcOf, outlayerWorkerOf, policyOutputOf, policySecretsRef, quoteVerifierOf, tryVerifyQuote, verifyPolicyRun } from './policy-run.ts';
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';

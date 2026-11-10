@@ -1,5 +1,6 @@
 {
- "_about": "The policy runs behind the agent service's live actions on ainek-log-dastan.testnet (testnet), recorded on 2026-11-10 for the offline check in `pnpm demo:policy`. Per run: decision, teePubkey and teeSignature from the contract's view action(id); attestation from GET attestationUrl; collateral (an index into collaterals) from GET https://testnet-api.outlayer.ai/public/collateral for the quote's platform and the run's time; measurementsApproved from the view is_measurements_approved on worker.outlayer.testnet. The job's input is not here: a run made over HTTPS does not publish it, and the check says so. Re-record with `pnpm -F demo record-policy-runs`.",
+ "_about": "The policy runs behind the agent service's live actions on ainek-log-dastan.testnet (testnet), recorded on 2026-11-10 (UTC) for the offline check in `pnpm demo:policy`. Per run: decision, teePubkey and teeSignature from the contract's view action(id); attestation from GET attestationUrl; collateral (an index into collaterals) from GET https://testnet-api.outlayer.ai/public/collateral for the quote's platform and the run's time; measurementsApproved from the view is_measurements_approved on worker.outlayer.testnet. The job's input is not here: a run made over HTTPS does not publish it, and the check says so. Re-record with `pnpm -F demo record-policy-runs`.",
+ "recordedOn": "2026-11-10",
  "published": {
   "wasmHash": "8041305f57d4f5668ee5d40f0f461b3df3fd22145f3e90c704a0204625f2d2eb",
   "project": "ainek-dev-dastan.testnet/policy",
@@ -22,7 +23,7 @@
  "runs": [
   {
    "actionId": 2,
-   "by": "pnpm -F agent once",
+   "by": "the agent from the command line",
    "status": "Executed",
    "attestationUrl": "https://testnet-api.outlayer.ai/attestations/by-call/48c62234-033e-4441-b684-0dae271d7375",
    "decision": {
@@ -56,8 +57,8 @@
     "attached_usd": "0",
     "timestamp": 1793964802
    },
-   "collateral": 0,
-   "measurementsApproved": true
+   "measurementsApproved": true,
+   "collateral": 0
   },
   {
    "actionId": 3,
@@ -95,8 +96,8 @@
     "attached_usd": "0",
     "timestamp": 1794054410
    },
-   "collateral": 0,
-   "measurementsApproved": true
+   "measurementsApproved": true,
+   "collateral": 0
   },
   {
    "actionId": 4,
@@ -134,8 +135,8 @@
     "attached_usd": "0",
     "timestamp": 1794054795
    },
-   "collateral": 0,
-   "measurementsApproved": true
+   "measurementsApproved": true,
+   "collateral": 0
   },
   {
    "actionId": 8,
@@ -173,8 +174,8 @@
     "attached_usd": "0",
     "timestamp": 1794060863
    },
-   "collateral": 0,
-   "measurementsApproved": true
+   "measurementsApproved": true,
+   "collateral": 0
   },
   {
    "actionId": 9,
@@ -212,8 +213,8 @@
     "attached_usd": "0",
     "timestamp": 1794060982
    },
-   "collateral": 0,
-   "measurementsApproved": true
+   "measurementsApproved": true,
+   "collateral": 0
   }
  ]
 }
