@@ -86,7 +86,7 @@ async function proxy(req: Request): Promise<Response> {
   if (req.method === 'POST') {
     body = await readLimited(req, MAX_BODY_BYTES);
     if (body === null) return NextResponse.json({ error: `body larger than ${MAX_BODY_BYTES} bytes` }, { status: 413 });
-    const problem = completionProblem(body, allowedModels);
+    const problem = completionProblem(body, allowedModels, req.headers, cfg.model);
     if (problem) return NextResponse.json({ error: problem }, { status: 400 });
   }
 

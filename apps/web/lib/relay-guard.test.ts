@@ -20,7 +20,7 @@ async function relayVerdict(r: Request): Promise<string | null> {
   const dropped = [...r.headers.keys()].filter((name) => !ALLOWED_REQUEST_HEADERS.has(name));
   if (dropped.length > 0) return `${what}: headers ${dropped.join(', ')} would be dropped`;
   const problem = relayRequestProblem(r.method, url.pathname.replace('/api/nearai/', ''), url.searchParams, MODELS)
-    ?? (r.method === 'POST' ? completionProblem(await r.clone().arrayBuffer(), MODELS) : null);
+    ?? (r.method === 'POST' ? completionProblem(await r.clone().arrayBuffer(), MODELS, r.headers, MODEL) : null);
   return problem && `${what}: ${problem}`;
 }
 
@@ -45,21 +45,49 @@ test('every request the page makes through the relay passes, with every header i
   assert.equal(seen.length, 4, 'one request per call');
   const messages = [{ role: 'user' as const, content: 'hello' }];
   const e2ee = await prepareE2eeChatRequest({ request: chatRequest(BASE, MODEL, messages), modelKey: { signingAlgo: 'ed25519', publicKey: MODEL_KEY } });
+  // The SDK marks its request as E2EE v3 (packages/proof/src/e2ee.ts says why that matters); the relay check below then
+  // passes it. A downgraded SDK fails here instead of in the hosted chat.
+  assert.equal(e2ee.request.headers.get('x-encryption-version'), '3');
   seen.push(e2ee.request, chatRequest(BASE, INCOGNITO, messages));
   for (const r of seen) assert.equal(await relayVerdict(r), null);
 });
 
+/** Headers of an E2EE request as the SDK marks it; the relay reads only these. */
+const E2EE_HEADERS = { 'x-model-pub-key': MODEL_KEY, 'x-client-pub-key': 'ab'.repeat(32), 'x-encryption-version': '3' };
+const E2EE = new Headers(E2EE_HEADERS);
+const PLAIN = new Headers();
+
 test('the chat body: only the page\'s fields, our models, not streamed', () => {
   const ok = { model: MODEL, messages: [{ role: 'user', content: 'x' }], stream: false };
-  assert.equal(completionProblem(bytes(ok), MODELS), null);
-  assert.equal(completionProblem(bytes({ ...ok, max_tokens: 200_000 }), MODELS), 'field not allowed');
-  assert.equal(completionProblem(bytes({ ...ok, n: 3 }), MODELS), 'field not allowed');
-  assert.equal(completionProblem(bytes({ ...ok, model: 'openai/gpt-x' }), MODELS), 'model not allowed');
-  assert.equal(completionProblem(bytes({ ...ok, stream: true }), MODELS), 'streaming not allowed');
-  assert.equal(completionProblem(bytes({ ...ok, stream: 'true' }), MODELS), 'streaming not allowed');
-  assert.equal(completionProblem(bytes({ ...ok, messages: [] }), MODELS), 'messages must be 1..50');
-  assert.equal(completionProblem(bytes([ok]), MODELS), 'body is not a JSON object');
-  assert.equal(completionProblem(new TextEncoder().encode('{').buffer as ArrayBuffer, MODELS), 'body is not JSON');
+  const problem = (body: ArrayBuffer) => completionProblem(body, MODELS, E2EE, MODEL);
+  assert.equal(problem(bytes(ok)), null);
+  assert.equal(problem(bytes({ ...ok, max_tokens: 200_000 })), 'field not allowed');
+  assert.equal(problem(bytes({ ...ok, n: 3 })), 'field not allowed');
+  assert.equal(problem(bytes({ ...ok, model: 'openai/gpt-x' })), 'model not allowed');
+  assert.equal(problem(bytes({ ...ok, stream: true })), 'streaming not allowed');
+  assert.equal(problem(bytes({ ...ok, stream: 'true' })), 'streaming not allowed');
+  assert.equal(problem(bytes({ ...ok, messages: [] })), 'messages must be 1..50');
+  assert.equal(problem(bytes([ok])), 'body is not a JSON object');
+  assert.equal(problem(new TextEncoder().encode('{').buffer as ArrayBuffer), 'body is not JSON');
+});
+
+test('the attested model goes through only as complete E2EE v3; the Incognito model may be plaintext', () => {
+  const chat = (model: string) => bytes({ model, messages: [{ role: 'user', content: 'x' }], stream: false });
+  const v2 = new Headers({ ...E2EE_HEADERS, 'x-encryption-version': '2' });
+  const { 'x-encryption-version': _version, ...noVersion } = E2EE_HEADERS;
+  const { 'x-client-pub-key': _reply, ...noReplyKey } = E2EE_HEADERS;
+  const { 'x-model-pub-key': _model, ...noModelKey } = E2EE_HEADERS;
+  assert.equal(completionProblem(chat(MODEL), MODELS, E2EE, MODEL), null);
+  assert.equal(completionProblem(chat(MODEL), MODELS, PLAIN, MODEL), 'the attested model takes only end-to-end encrypted requests');
+  assert.match(completionProblem(chat(MODEL), MODELS, v2, MODEL) ?? '', /E2EE version 3 required, the request says 2\. Reload the page/);
+  assert.match(completionProblem(chat(MODEL), MODELS, new Headers(noVersion), MODEL) ?? '', /the request says none/);
+  assert.match(completionProblem(chat(MODEL), MODELS, new Headers(noReplyKey), MODEL) ?? '', /without the model key or the reply key/);
+  assert.equal(completionProblem(chat(INCOGNITO), MODELS, PLAIN, MODEL), null);
+  // An Incognito model that turns out to be attested is sent the E2EE way (flow.ts): the same floor applies, and a
+  // half-marked request (an old version without the model key) is not taken for plaintext.
+  assert.equal(completionProblem(chat(INCOGNITO), MODELS, E2EE, MODEL), null);
+  assert.match(completionProblem(chat(INCOGNITO), MODELS, v2, MODEL) ?? '', /E2EE version 3 required/);
+  assert.match(completionProblem(chat(INCOGNITO), MODELS, new Headers({ ...noModelKey, 'x-encryption-version': '2' }), MODEL) ?? '', /E2EE version 3 required/);
 });
 
 test('another model, an encoded way out of the path, or extra segments do not pass', () => {

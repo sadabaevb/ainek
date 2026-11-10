@@ -6,12 +6,15 @@ import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
 import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
+import { chatHistory, hasOtherThread } from '@/lib/history';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter, type Consent } from '@/lib/wallet';
 import { useConfig, useT, useTrust } from './providers';
 
 interface Turn {
   message: ChatMessage;
+  /** The model this turn was sent to: the next message carries only the turns of its own model (lib/history.ts). */
+  model: string;
   steps: StepEvent[];
   outcome?: ChatOutcome;
 }
@@ -44,7 +47,7 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
   const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
   const { outcome } = turn;
   // The honest retry helps only when the swap was the whole problem: a split log or a short quorum would refuse the honest message too.
-  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.honestWouldPass ? outcome.model : null;
+  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.honestWouldPass ? turn.model : null;
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>
@@ -55,8 +58,9 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
           <CheckList items={turn.steps} />
         </details>
       )}
-      {turn.outcome && 'reply' in turn.outcome && (
-        <div className="bubble assistant"><span className="who">{t.assistant}</span>{turn.outcome.reply}</div>
+      {outcome && 'reply' in outcome && <div className="bubble assistant"><span className="who">{t.assistant}</span>{outcome.reply}</div>}
+      {outcome?.kind === 'failed' && outcome.unverifiedReply !== undefined && (
+        <div className="bubble assistant unverified"><span className="who">{t.assistantUnverified}</span>{outcome.unverifiedReply}</div>
       )}
       {outcome && <ProofCard outcome={outcome} onCommit={commit} onRetry={retryModel ? () => onRetry(turn.message.content, retryModel) : undefined} />}
     </article>
@@ -157,10 +161,9 @@ export default function ChatPage() {
     setTamper(opts.tamper);
     setInput('');
     setBusy(true);
-    const history: ChatMessage[] = turns.flatMap((x) => (x.outcome && 'reply' in x.outcome && typeof x.outcome.reply === 'string' ? [x.message, { role: 'assistant' as const, content: x.outcome.reply }] : []));
-    const messages = [...history, { role: 'user' as const, content }];
+    const messages = [...chatHistory(turns, opts.model, cfg.model), { role: 'user' as const, content }];
     const idx = turns.length;
-    setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
+    setTurns((prev) => [...prev, { message: { role: 'user', content }, model: opts.model, steps: [] }]);
     try {
       const outcome = await runChat(cfg, { ...opts, trust, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
       setTurns(atTurn(idx, withOutcome(outcome)));
@@ -200,6 +203,7 @@ export default function ChatPage() {
           <label><input type="checkbox" checked={tamper === 'deployment'} onChange={(e) => setTamper(e.target.checked && 'deployment')} disabled={busy} /> {t.tamperDeployment}</label>
         </span>
       </div>
+      {hasOtherThread(turns, model, cfg.model) && <p className="muted small">{t.ownThread}</p>}
 
       <section className="thread">
         {turns.map((turn, i) => <TurnView key={i} turn={turn} idx={i} canRetry={!busy && i === turns.length - 1} onCommit={onCommitClick} onRetry={onRetryClick} />)}

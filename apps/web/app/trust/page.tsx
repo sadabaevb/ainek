@@ -18,7 +18,7 @@ export default function TrustPage() {
       <h1>Who sees what</h1>
       <p className="muted">The trust boundary of Ainek, as stated in the spec. We say "our server cannot read", not "nobody can".</p>
       <StackTable columns={COLUMNS} rows={rows} rowKey={(r) => r[0] ?? ''} />
-      <p className="muted small">The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until this client moves to E2EE v3 (SDK 0.3.0), a relay that did so could read the replies it diverted, and the card would only fail afterwards (README, "Known issues we inherited").</p>
+      <p className="muted small">The "does not see" column holds for requests. For replies it rests on E2EE v3 (SDK 0.3.0, since Nov 10): the reply key is bound into every encrypted request field, and NEAR AI's proxy should refuse a swapped one before inference. We have not tested that refusal ourselves (README, "Known issues we inherited").</p>
     </main>
   );
 }

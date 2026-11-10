@@ -19,7 +19,7 @@ import {
   type TcbStatus,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, composeHashOf, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, proofEntryOf, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { buildCheckedModelProof, composeHashOf, evaluateKeyLog, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
@@ -114,9 +114,9 @@ export function functionCallsOf(completion: ChatCompletion): Array<{ id: string;
 /** Reads the log for `model`; `signal` is aborted when the run fails before the read is needed, so a reader should stop then. */
 export type ReadLog = (model: string, signal: AbortSignal) => Promise<{ entries: KeyEntry[]; source: string }>;
 /** The contract log over JSON-RPC, what the browser reads too (an unreachable contract fails the run before sending, never a silent fallback). */
-export function contractLog(cfg: Pick<AinekConfig, 'rpcUrl' | 'contract'>): ReadLog {
+export function contractLog(cfg: Pick<AinekConfig, 'rpcUrl' | 'contract' | 'trustedVerifiers'>): ReadLog {
   const reader = keyLogReader(cfg.rpcUrl, cfg.contract);
-  return async (model, signal) => ({ entries: await reader.latestKeys(model, undefined, signal), source: `contract ${cfg.contract} via ${new URL(cfg.rpcUrl).host}` });
+  return async (model, signal) => ({ entries: await latestKeysFor(reader, model, cfg.trustedVerifiers, undefined, signal), source: `contract ${cfg.contract} via ${new URL(cfg.rpcUrl).host}` });
 }
 
 
@@ -251,8 +251,8 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(
       'encrypt',
-      () =>
-        prepareE2eeChatRequest({
+      async () => {
+        const request = await prepareE2eeChatRequest({
           request: new Request(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Accept-Encoding': 'identity', [NO_ALIASING_HEADER]: 'true' },
@@ -260,7 +260,10 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
             signal: AbortSignal.timeout(STEP_TIMEOUT_MS), // closes the socket; the step's own deadline only stops waiting for it
           }),
           modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelPublicKey },
-        }),
+        });
+        requireE2eeVersion(request.request.headers);
+        return request;
+      },
       () => `encrypted to the attested model key ${short(modelAttestation.signer.signingAddress)}`,
     );
     const requestBody = new Uint8Array(await prepared.request.clone().arrayBuffer());

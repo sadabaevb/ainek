@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -63,8 +63,9 @@ export type ChatOutcome =
   | VerifiedOutcome
   | { kind: 'refused'; model: string; /** A demo switch swapped something: the card can offer the honest retry. */ tampered: Tamper; /** With a demo switch on: would the same message pass the log check without it? Only then is the retry worth offering. */ honestWouldPass: boolean; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string; /** The compose hash the log was asked about; undefined when the deployment check did not run. */ seenCompose: string | undefined }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
-  /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
-  | { kind: 'failed'; step: StepId; reason: string; reply?: string };
+  /** `unverifiedReply` is present when a reply had come back before the failing step (see failurePhase). It is not `reply`:
+   *  nothing vouches for it, so it is shown marked and never reused (packages/tier1-node calls its twin `unverifiedCompletion`). */
+  | { kind: 'failed'; step: StepId; reason: string; unverifiedReply?: string };
 
 class StepFailed extends Error {
   constructor(readonly step: StepId, readonly reason: string) {
@@ -121,8 +122,8 @@ export async function runChat(cfg: PublicConfig, params: ChatParams): Promise<Ch
   try {
     return await (params.model === cfg.incognitoModel ? nonTeeRoute(cfg, route, progress) : teeRoute(cfg, route, progress));
   } catch (err) {
-    // `reply` only when one came back: the page shows the assistant bubble on the key's presence.
-    const failed = (step: StepId, reason: string): ChatOutcome => ({ kind: 'failed', step, reason, ...(progress.reply === undefined ? {} : { reply: progress.reply }) });
+    // `unverifiedReply` only when one came back: the page shows the marked bubble on the key's presence.
+    const failed = (step: StepId, reason: string): ChatOutcome => ({ kind: 'failed', step, reason, ...(progress.reply === undefined ? {} : { unverifiedReply: progress.reply }) });
     if (err instanceof StepFailed) return failed(err.step, err.reason);
     const reason = describeError(err);
     emit({ id: running, status: 'fail', detail: reason });
@@ -139,9 +140,13 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
 
   // 1. Verify gateway and model evidence on this device; read the log meanwhile (independent, the send waits for both).
   const log = keyLogFor(cfg);
-  const keyLogPromise = log.latestKeys(model);
+  const logStop = new AbortController(); // if attestation fails, the log reads have nothing left to serve
+  const keyLogPromise = latestKeysFor(log, model, trust.verifiers, undefined, logStop.signal);
   keyLogPromise.catch(() => undefined); // awaited below; avoid an unhandled rejection if attestation fails first
-  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`);
+  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
+    logStop.abort();
+    throw err;
+  });
   const modelAttestation = deployment.models.find((m) => m.signingPublicKey !== undefined) ?? deployment.models[0];
   if (!modelAttestation) fail(emit, 'attestation', 'no model attestation returned');
 

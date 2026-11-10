@@ -18,7 +18,7 @@
   "dependencies": {
     "@ainek/proof": "workspace:*",
     "@ainek/tier1-node": "workspace:*",
-    "@nearai/inference-sdk": "0.2.1",
+    "@nearai/inference-sdk": "0.3.0",
     "@phala/dcap-qvl": "0.7.0",
     "jose": "6.2.13"
   },
