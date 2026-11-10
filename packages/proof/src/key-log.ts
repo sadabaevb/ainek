@@ -11,9 +11,10 @@ export interface KeyLogQuery {
   model: string;
   signingAddress: string;
   /**
-   * The compose hash of the deployment that was attested. When given, only an entry with this key AND this compose counts: instances
-   * of a model share one signing key, so the key alone does not say which code answers. Callers pass it when the deployment check is
-   * on (`requireLoggedDeployment` in the config, or the demo switch), and undefined otherwise.
+   * The compose hash of the deployment this client attested. When given, only an entry with this key AND this compose counts. Callers
+   * pass it when the deployment check is on (`requireLoggedDeployment` in the config, or the demo switch), and undefined otherwise.
+   * What it does not settle: instances of a model share one signing key and the gateway picks the instance per request, so the
+   * instance that answers the message may be another one than the instance that answered the attestation.
    */
   composeHash?: string | undefined;
   trustedVerifiers: readonly string[];
@@ -90,7 +91,8 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   const withKey = trusted.filter(hasKey);
   const matching = withKey.filter(matches);
   const confirmedBy = verifiersOf(matching);
-  const loggedByUntrusted = verifiersOf(untrusted.filter(matches));
+  // By key alone: "only verifiers you do not trust know this key" is true whatever deployment they saw behind it.
+  const loggedByUntrusted = verifiersOf(untrusted.filter(hasKey));
   const deployment = compose === undefined ? undefined : { composeHash: compose, loggedComposes: [...new Set(withKey.map((e) => normalizeHex(e.compose_hash)))] };
   const what = compose === undefined ? `key ${shortHex(wanted)}` : `key ${shortHex(wanted)} with deployment ${shortHex(compose)}`;
 
@@ -107,7 +109,7 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   const why = {
     'below-quorum': `only ${confirmedBy.length} of ${quorum} required confirmations for ${what}`,
     'unknown-deployment': `key ${shortHex(wanted)} is logged, but not with deployment ${shortHex(deployment?.composeHash ?? '')}: trusted verifiers saw ${deployment?.loggedComposes.map(shortHex).join(', ')} behind it`,
-    'untrusted-only': `${what} is logged only by ${loggedByUntrusted.join(', ')}, outside the trust set`,
+    'untrusted-only': `key ${shortHex(wanted)} is logged only by ${loggedByUntrusted.join(', ')}, outside the trust set`,
     absent: `key ${shortHex(wanted)} is not in the public log`,
   }[reason];
   return { status: 'not-logged', reason, quorum, confirmedBy, matching, untrusted, loggedByUntrusted, deployment, detail: `${why}: not sent (fail-closed)` };
@@ -145,6 +147,23 @@ export function deploymentsSeen(entries: readonly KeyEntry[], model: string): Se
     seen.set(composeHash, d);
   }
   return [...seen.values()].sort((a, b) => b.lastSeenMs - a.lastSeenMs);
+}
+
+/** Where a deployment stands for a viewer right now: would the deployment check pass for it, and if not, why. */
+export type DeploymentStanding = 'ok' | 'split-view' | 'below-quorum' | 'untrusted' | 'old';
+
+/**
+ * The chat's own rule (`evaluateKeyLog` on the 24 h window) asked about one deployment from `deploymentsSeen`, for each key it was
+ * logged with. When no trusted verifier has it in the window: `untrusted` if only verifiers outside the trust set logged it there or
+ * ever, `old` if a trusted verifier did, but before the window.
+ */
+export function deploymentStanding(window: readonly KeyEntry[], d: SeenDeployment, query: Pick<KeyLogQuery, 'model' | 'trustedVerifiers' | 'quorum'>): DeploymentStanding {
+  const reasons = d.keys.map((key) => evaluateKeyLog(window, { ...query, signingAddress: key, composeHash: d.composeHash }).reason);
+  if (reasons.includes('ok')) return 'ok';
+  if (reasons.includes('split-view')) return 'split-view';
+  if (reasons.includes('below-quorum')) return 'below-quorum';
+  const inWindow = window.some((e) => e.model === query.model && normalizeHex(e.compose_hash) === d.composeHash);
+  return !inWindow && d.verifiers.some((v) => query.trustedVerifiers.includes(v)) ? 'old' : 'untrusted';
 }
 
 export const verifiersOf = (entries: readonly KeyEntry[]): string[] => [...new Set(entries.map((e) => e.verifier))];

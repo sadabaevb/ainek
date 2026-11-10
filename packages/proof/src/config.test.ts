@@ -56,7 +56,9 @@ test('the policy job defaults are the published ones in .env.example, and a blan
   assert.equal(ainekConfigFromEnv({ AGENT_ACCOUNT_ID: '' }).agentAccount, example['AGENT_ACCOUNT_ID']);
 });
 
-test('the deployment check: on only for an explicit 1 or true, whatever the spelling around it', () => {
-  for (const v of ['1', 'true', ' TRUE ']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, true, v);
-  for (const v of ['0', 'false', '', 'yes', 'on']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, false, v);
+test('the deployment check: only an explicit 0 or false turns it off; blank is the default, and a typo turns it on', () => {
+  const byDefault = ainekConfigFromEnv({}).requireLoggedDeployment;
+  for (const v of ['1', 'true', ' TRUE ', 'yes', 'on', 'enabled']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, true, v);
+  for (const v of ['0', 'false', ' False ']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, false, v);
+  for (const v of ['', '  ']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, byDefault, JSON.stringify(v));
 });

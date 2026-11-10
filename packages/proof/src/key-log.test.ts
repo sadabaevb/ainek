@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deploymentsSeen, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
+import { deploymentStanding, deploymentsSeen, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
 import type { KeyEntry } from './schema.ts';
 import { readRepoJson } from './fixtures.ts';
 
@@ -96,6 +96,9 @@ test('unknown deployment: quorum is counted per deployment, and an untrusted wri
   const outsider = [logged({ index: 2, verifier: 'stranger.testnet', compose_hash: composeB }), logged({ index: 1, compose_hash: composeA })];
   assert.equal(evaluateKeyLog(outsider, { ...base, composeHash: composeB }).reason, 'unknown-deployment', 'the trusted verifier knows the key, so this outranks "logged only outside the trust set"');
   assert.equal(evaluateKeyLog([logged({ verifier: 'stranger.testnet', compose_hash: composeB })], { ...base, composeHash: composeB }).reason, 'untrusted-only');
+  const strangerOtherCompose = evaluateKeyLog([logged({ verifier: 'stranger.testnet', compose_hash: composeA })], { ...base, composeHash: composeB });
+  assert.equal(strangerOtherCompose.reason, 'untrusted-only', 'the key IS in the log, from a stranger: never "not in the public log"');
+  assert.deepEqual(strangerOtherCompose.loggedByUntrusted, ['stranger.testnet']);
   assert.equal(evaluateKeyLog(log, { ...base, signingAddress: KEY_B, composeHash: composeA }).reason, 'absent', 'a key nobody logged stays "not in the log"');
 });
 
@@ -105,7 +108,7 @@ test('deploymentsSeen: one line per compose of the model, newest first, with who
     logged({ index: 5, compose_hash: composeA, observed_at: '5000' }),
     logged({ index: 4, compose_hash: composeB, observed_at: '4000', verifier: V2 }),
     logged({ index: 3, compose_hash: composeB, observed_at: '3000' }),
-    logged({ index: 2, compose_hash: composeA.toUpperCase().toLowerCase(), observed_at: '2000' }),
+    logged({ index: 2, compose_hash: `0x${composeA.toUpperCase()}`, observed_at: '2000' }), // another spelling of the same hash is the same deployment
     logged({ index: 1, model: 'another/model', compose_hash: 'ee'.repeat(32), observed_at: '1000' }),
   ];
   assert.deepEqual(deploymentsSeen(log, entry.model), [
@@ -113,6 +116,19 @@ test('deploymentsSeen: one line per compose of the model, newest first, with who
     { composeHash: composeB, keys: [KEY_A], verifiers: [V2, entry.verifier], entries: 2, firstSeenMs: 3000, lastSeenMs: 4000 },
   ]);
   assert.deepEqual(deploymentsSeen([], entry.model), []);
+});
+
+test('deploymentStanding: the chat rule per deployment, and why not when it would not pass', () => {
+  const [composeA, composeB, composeC, composeD] = ['a0'.repeat(32), '5f'.repeat(32), 'cc'.repeat(32), 'dd'.repeat(32)];
+  const window = [logged({ index: 9, compose_hash: composeA }), logged({ index: 8, verifier: 'stranger.testnet', compose_hash: composeB }), logged({ index: 7, verifier: 'stranger.testnet', compose_hash: composeD })];
+  const all = [...window, logged({ index: 3, compose_hash: composeC, observed_at: '1000' }), logged({ index: 2, compose_hash: composeD, observed_at: '900' })];
+  const q = { model: entry.model, trustedVerifiers: [entry.verifier, V2], quorum: 1 };
+  const standing = Object.fromEntries(deploymentsSeen(all, entry.model).map((d) => [d.composeHash, deploymentStanding(window, d, q)]));
+  assert.deepEqual(standing, { [composeA]: 'ok', [composeB]: 'untrusted', [composeC]: 'old', [composeD]: 'untrusted' }, 'D: trusted long ago, a stranger now: not "older than 24 h" next to a fresh entry');
+  const [a] = deploymentsSeen(window, entry.model).filter((d) => d.composeHash === composeA);
+  assert.equal(a && deploymentStanding(window, a, { ...q, quorum: 2 }), 'below-quorum');
+  const split = [...window, logged({ index: 10, verifier: V2, signing_address: KEY_B, signing_public_key: KEY_B, compose_hash: composeA })];
+  assert.equal(a && deploymentStanding(split, a, q), 'split-view');
 });
 
 // ---- resolveLogEntry: the chain is the source of truth, the embedded copy is only a fallback that says so ----

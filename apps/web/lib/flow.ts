@@ -61,7 +61,7 @@ export interface VerifiedOutcome {
 
 export type ChatOutcome =
   | VerifiedOutcome
-  | { kind: 'refused'; model: string; /** A demo switch swapped something: the card can offer the honest retry. */ tampered: Tamper; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string; /** The compose hash the log was asked about; undefined when the deployment check did not run. */ seenCompose: string | undefined }
+  | { kind: 'refused'; model: string; /** A demo switch swapped something: the card can offer the honest retry. */ tampered: Tamper; /** With a demo switch on: would the same message pass the log check without it? Only then is the retry worth offering. */ honestWouldPass: boolean; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string; /** The compose hash the log was asked about; undefined when the deployment check did not run. */ seenCompose: string | undefined }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
   /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
   | { kind: 'failed'; step: StepId; reason: string; reply?: string };
@@ -96,10 +96,9 @@ interface Progress {
   reply?: string;
 }
 
-/** The demo switches: what the client is shown instead of what was attested, before the log check. Nothing is sent either way. */
+/** The demo switches for the private model: what the client is shown instead of what was attested, before the log check. With one on, that route sends nothing, whatever the log says (`teeRoute`). */
 export type Tamper = false | 'key' | 'deployment';
-/** The refusal each switch causes when the swap is the whole problem: only then does the honest retry help. */
-export const REFUSAL_OF_TAMPER = { key: 'absent', deployment: 'unknown-deployment' } as const;
+
 
 export interface ChatParams {
   model: string;
@@ -152,11 +151,15 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const seenKey = tamper === 'key' ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
   const attestedCompose = composeHashOf(modelAttestation.deployment);
   const seenCompose = tamper === 'deployment' ? DEMO_UNKNOWN_COMPOSE : cfg.requireLoggedDeployment ? attestedCompose : undefined;
-  const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, composeHash: seenCompose, trustedVerifiers: trust.verifiers, quorum: trust.quorum });
+  const logPolicy = { model, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
+  const keyVerdict = evaluateKeyLog(entries, { ...logPolicy, signingAddress: seenKey, composeHash: seenCompose });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, seenCompose };
+    const honestWouldPass = tamper !== false && evaluateKeyLog(entries, { ...logPolicy, signingAddress: modelAttestation.signer.signingAddress, composeHash: cfg.requireLoggedDeployment ? attestedCompose : undefined }).status === 'ok';
+    return { kind: 'refused', model, tampered: tamper, honestWouldPass, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, seenCompose };
   }
+  // A demo value passed the check, so somebody logged it: the real key and deployment were never checked, and a demo must not send.
+  if (tamper) fail(emit, 'key-log', `the demo ${tamper} is in the log of a verifier this client trusts: nothing is sent while a demo switch is on`);
   const logEntry = proofEntryOf(keyVerdict, attestedCompose);
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });
 

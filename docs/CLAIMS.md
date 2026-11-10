@@ -51,14 +51,16 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **Protection from the server that serves the page.** The browser code that verifies, encrypts and checks the log is served
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
-- **A measurement allowlist, yet.** Today the log works as a *key* allowlist: the client sends only to a key a trusted verifier
-  logged. Instances of a model share one signing key, so the key alone does not say which deployment answers. The check that
-  closes this (SPEC §7.1: the key must be logged together with the attested compose hash, otherwise "Unknown deployment.
-  Message not sent.") is written and tested, and is off by default (`AINEK_REQUIRE_DEPLOYMENT=0`) until the verifier samples
-  every instance behind the gateway on each round; with one sample per round a real rollout would refuse honest users for
-  hours. Until then the browser and `demo:live` show the deployment on the card and say when the log has not seen it; the
-  offline replay already refuses. The chat's demo switch shows the refusal. Which compose hashes are acceptable is not
-  governed either: the log records what verifiers saw, not what should run (next steps).
+- **A measurement allowlist.** Today the log works as a *key* allowlist: the client sends only to a key a trusted verifier
+  logged. Instances of a model share one signing key, so the signature alone does not say which deployment answered. A
+  check that narrows this (SPEC §7.1: the key must be logged together with the compose hash the client attested, otherwise
+  "Unknown deployment. Message not sent.") is written and tested, and is off by default (`AINEK_REQUIRE_DEPLOYMENT=0`) until
+  the verifier samples every instance behind the gateway on each round; with one sample per round a real rollout would
+  refuse honest users for hours. It narrows and does not close: the client attests one instance, the gateway picks the
+  instance per request, and a verification is reused for 60 minutes, so another instance behind the same key may answer.
+  Until the check is on, the browser and `demo:live` show the attested deployment on the card and say when the log has not
+  seen it; the offline replay already refuses. The chat's demo switch shows the refusal. Which compose hashes are
+  acceptable is not governed either: the log records what verifiers saw, not what should run (next steps).
 - **A trustless read of the log.** The client reads `latest_keys` through one JSON-RPC endpoint (FastNear by default,
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested
