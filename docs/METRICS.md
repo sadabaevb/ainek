@@ -1,7 +1,6 @@
 # Metrics: how they were measured
 
-The numbers the README quotes, with the method and the caveats in full. Moved here from the README on Nov 10, 2026,
-unchanged.
+The numbers the README quotes, with the method and the caveats in full. Moved here from the README on Nov 10, 2026, with pointers adjusted; the two tables stay in the README.
 
 50 runs one after another on Nov 10, 14:11–14:18 UTC, from one Mac at commit `765708d`, with `z-ai/glm-5.3-flash` and
 the one-line prompt `Reply with the single word: ok.` A long answer takes longer. Every run's timings are in
@@ -14,19 +13,7 @@ gave a median of 9.9 s and a first run of 22.7 s. The difference is in the netwo
 model round trip 2.5 → 1.9 s; the local steps take about 20 ms on both days), and since Nov 6 the client added a log
 read, it did not remove work. Read the two days as a range, not as a speed-up.
 
-| Metric | Value (50 runs) |
-| --- | --- |
-| Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
-| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 50 of 50 |
-| Honest key refused (log window empty or key unlogged) | 0 of 50 |
-| Runs that needed an SDK retry | 0 of 50 |
-| Attestation (gateway + model, re-fetched, in Node) | median 3.7 s, p90 5.8 s |
-| Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.7 s |
-| E2EE round trip to the model | median 1.9 s, p90 4.1 s |
-| Signature fetch | median 0.6 s, p90 0.9 s |
-| Whole run, evidence re-fetched (a real first message can be slower, see above) | median 7.1 s, p90 10.3 s |
-| Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 3.1 s, p90 5.2 s |
-| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1071 B received |
+The table is in the [README](../README.md#metrics); it is what `pnpm demo:metrics` printed for these runs.
 
 Measured by `pnpm demo:metrics --runs N` (it overwrites `docs/metrics.json`; `--out` writes elsewhere): N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
 the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
@@ -39,6 +26,10 @@ daemon ran on a server; none missing in the 130 hours since Nov 5, 04:44 UTC. Th
 quorum: it matches what the client decides only because the model's key did not change in that time and the quorum is 1.
 So a refusal caused by a key the verifier has not logged yet has not been observed. The times are the verifier's own
 clock.
+
+**Compose hashes behind the key** (the log on Nov 10): six since Nov 3, three of them in the last 24 hours. By their
+image digests the six are two builds: four hashes share one set of images, two share the other, so most new hashes are
+replicas of one build, not new code. `/log` shows the current list.
 
 **In a browser.** The script does not measure it. It was timed once with Playwright in headless Chromium on the same
 Mac, on the hosted demo (so through our relay), on Nov 10, 14:19–14:21 UTC, right after the 50 runs: from the message
@@ -63,12 +54,7 @@ came from the agent service with a real model answer (action 2 from `pnpm -F age
 Telegram bot); the other five (0, 1, 5, 6, 7) from scripts with a placeholder model proof (`docs/DEPLOY.md`). Times from
 message to transfer were not measured.
 
-| Decision signed in the enclave | Actions | Status the contract recorded |
-| --- | --- | --- |
-| Allow | 5 | 4 Executed; 1 Failed (the token refused: the receiver is not registered on it) |
-| NeedsApproval | 4 | 3 Executed after the owner's `approve`; 1 Rejected by the owner |
-| Deny | 1 | Denied |
-| Any whose status the signed decision does not allow (say, a Deny marked Executed) | 0 | each record's signature, the action hash in the decision and its status re-check |
+The tally by decision and status is in the [README](../README.md#metrics).
 
 The script reads the contract's records, not the token's transfers. The totals agree with them: the contract holds
 8,794 AINEK, the 10,000 sent to it minus the 1,206 of the seven Executed actions. That does not rule out flows that

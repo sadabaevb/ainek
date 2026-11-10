@@ -1,6 +1,6 @@
 # Prior art in this hackathon, and what Ainek adds
 
-Moved here from the README on Nov 10, 2026, unchanged. The method and the full list of entries we looked at are in
+Moved here from the README on Nov 10, 2026, with one pointer adjusted. The method and the full list of entries we looked at are in
 [FIELD.md](FIELD.md) (in Russian).
 
 We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Rows marked (Tier 2) describe a part of Ainek that ran on testnet on Nov 7, through the Telegram bot except for a rejection and the stop button; see "Tier 2 flow" in the [README](../README.md#tier-2-flow).

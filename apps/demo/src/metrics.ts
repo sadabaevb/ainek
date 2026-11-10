@@ -94,7 +94,7 @@ const logViews = 1 + new Set(cfg.trustedVerifiers).size; // the model's window a
 console.log(`| Public log read (${logViews} \`latest_keys\` views${logViews <= 6 ? ' at once' : ''}, ${rpcHost}) | ${spread(of((r) => r.timings['key-log']))} |`);
 console.log(`| E2EE round trip to the model | ${spread(of((r) => r.timings.send, verified))} |`);
 console.log(`| Signature fetch | ${spread(of((r) => r.timings.signature, verified))} |`);
-console.log(`| Whole run, evidence re-fetched (a real first message can be slower: run 1 took ${seconds(results[0]?.totalMs ?? 0)}) | ${spread(of((r) => r.totalMs, verified))} |`);
+console.log(`| Whole run, evidence re-fetched (a real first message can be slower) | ${spread(of((r) => r.totalMs, verified))} |`);
 console.log(`| Later message, attestation cached (not timed: each run's steps after attestation, added up) | ${spread(of(laterMessage, verified))} |`);
 console.log(`| Request and response body (encrypted fields plus plain metadata) | median ${quantile(of((r) => r.bytesSent, verified), 0.5) ?? '?'} B sent, ${quantile(of((r) => r.bytesReceived, verified), 0.5) ?? '?'} B received |`);
 writeFileSync(outFile, `${JSON.stringify({ meta: { model: cfg.model, baseUrl: cfg.nearaiBaseUrl, contract: cfg.contract, rpcUrl: cfg.rpcUrl, node: process.version, measuredAt: new Date().toISOString(), prompt: PROMPT, note: 'from Node, direct to NEAR AI (no relay), evidence re-fetched on every run; connections and proxy caches may be warm; times in ms' }, runs: results }, null, 2)}\n`);
