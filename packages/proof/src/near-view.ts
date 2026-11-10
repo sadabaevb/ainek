@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { isNetworkFailure, withRetry } from './retry.ts';
 import { bytesToBase64 } from './disclosure.ts';
 import { KeyEntry, ProofCommitRecord, hex64, u128String } from './schema.ts';
+import { NEAR_ACCOUNT } from './trust-set.ts';
 import type { Check } from './verify.ts';
 
 const TIMEOUT_MS = 10_000;
@@ -31,6 +32,18 @@ export function keyScopeProblem(permission: unknown, contract: string): string |
 /** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
 export class ContractMethodNotFound extends Error {}
 
+/** A signal that aborts when either does. `AbortSignal.any` would do, but it is newer than the browsers Next.js targets
+ *  (Safari 17.4, Chrome 116), and the log read runs in every visitor's browser. */
+function eitherSignal(first: AbortSignal, second?: AbortSignal): AbortSignal {
+  if (!second) return first;
+  const both = new AbortController();
+  for (const s of [first, second]) {
+    if (s.aborted) both.abort(s.reason);
+    else s.addEventListener('abort', () => both.abort(s.reason), { once: true });
+  }
+  return both.signal;
+}
+
 /**
  * One `query` to the RPC with the timeout and the bounded retries every read shares: network failures, timeouts and 429/5xx are retried,
  * an answer from the node is not. `fail` words an error the node itself reported. `signal` lets a caller abandon the read (the Node
@@ -41,7 +54,7 @@ async function rpcQuery(rpcUrl: string, params: Record<string, unknown>, fail: (
   const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || isNetworkFailure(err));
   return withRetry(
     async () => {
-      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
+      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: eitherSignal(AbortSignal.timeout(TIMEOUT_MS), signal) });
       if (res.status === 429 || res.status >= 500) throw new Transient(`${rpcUrl}: HTTP ${res.status}`);
       if (!res.ok) throw new Error(`${rpcUrl}: HTTP ${res.status}`);
       const json = (await res.json()) as { result?: Record<string, unknown> & { error?: string }; error?: { message?: string; data?: unknown } };
@@ -83,8 +96,8 @@ export const ANY_AGE_NS = '18446744073709551615';
 const Head = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64 }).nullable();
 
 export interface KeyLogReader {
-  /** `latest_keys(model, max_age_ns)`: newest first, the fail-closed window by default. */
-  latestKeys(model: string, maxAgeNs?: string, signal?: AbortSignal): Promise<KeyEntry[]>;
+  /** `latest_keys(model, max_age_ns, verifier?)`: newest first, at most 100, the fail-closed window by default; with `verifier`, that account's entries only. */
+  latestKeys(model: string, maxAgeNs?: string, signal?: AbortSignal, verifier?: string): Promise<KeyEntry[]>;
   /** `entry(index)`; null when the index does not exist. */
   entry(index: number): Promise<KeyEntry | null>;
   /** `entries_since(index, limit)`. */
@@ -98,7 +111,7 @@ export interface KeyLogReader {
 export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
   const view = (method: string, args: Record<string, unknown>, signal?: AbortSignal) => viewFunction(rpcUrl, contractId, method, args, signal);
   return {
-    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS, signal) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs }, signal)),
+    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS, signal, verifier) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs, ...(verifier === undefined ? {} : { verifier }) }, signal)),
     entry: async (index) => {
       const raw = await view('entry', { index });
       return raw == null ? null : KeyEntry.parse(raw);
@@ -107,6 +120,42 @@ export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
     head: async () => Head.parse((await view('head', {})) ?? null),
     verifiers: async () => z.string().array().parse(await view('verifiers', {})),
   };
+}
+
+/** How many log reads go out at once. A visitor may trust up to 100 verifiers; a public RPC answers such a burst with refusals. */
+const LOG_READS_AT_ONCE = 6;
+
+/**
+ * The window the fail-closed check works on: the newest entries of the model, plus each trusted verifier's own entries
+ * read separately, merged newest first. `latest_keys` returns at most 100 entries, and registering a verifier is not
+ * the client's decision: without the separate reads, one registered account writing 100 entries would push every
+ * trusted entry out of the answer and the client would refuse honest messages (or miss a split view). A trusted
+ * verifier's own read is capped at 100 too: its older entries in the window are not seen. The general
+ * read stays because it tells "logged only outside your trust set" from "not logged at all".
+ * Any read failing fails the whole: a partial window must not pass for the log (fail-closed). A name that is not a NEAR
+ * account id is skipped: the contract's view rejects such an argument, and it can have no entries anyway.
+ */
+export async function latestKeysFor(reader: Pick<KeyLogReader, 'latestKeys'>, model: string, trustedVerifiers: readonly string[], maxAgeNs?: string, signal?: AbortSignal): Promise<KeyEntry[]> {
+  // The general read first, then one per trusted verifier.
+  const filters: Array<string | undefined> = [undefined, ...new Set(trustedVerifiers.filter((v) => NEAR_ACCOUNT.test(v)))];
+  // One failed read fails the whole, so the reads still in flight are stopped with it.
+  const stop = new AbortController();
+  const signals = eitherSignal(stop.signal, signal);
+  const byIndex = new Map<number, KeyEntry>();
+  let next = 0;
+  const worker = async () => {
+    while (next < filters.length && !signals.aborted) {
+      const entries = await reader.latestKeys(model, maxAgeNs, signals, filters[next++]);
+      for (const e of entries) byIndex.set(e.index, e);
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(LOG_READS_AT_ONCE, filters.length) }, worker));
+  } catch (err) {
+    stop.abort();
+    throw err;
+  }
+  return [...byIndex.values()].sort((x, y) => y.index - x.index);
 }
 
 // ---- proof_commit (SPEC §4.2) --------------------------------------------------------------------

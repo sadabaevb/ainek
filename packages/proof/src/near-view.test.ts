@@ -1,5 +1,7 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readRepoJson } from './fixtures.ts';
+import type { KeyEntry } from './schema.ts';
 import { ContractMethodNotFound, checkProofCommit, keyScopeProblem, readProofCommit, viewFunction, type ProofCommitLookup, readStorageBalance } from './near-view.ts';
 
 const realFetch = globalThis.fetch;
@@ -103,6 +105,68 @@ test('keyLogReader.latestKeys: the fail-closed window by default, any age when a
   assert.deepEqual(calls.map((c) => c.args), [{ model: 'z-ai/glm-5.3-flash', max_age_ns: LOG_WINDOW_NS }, { model: 'z-ai/glm-5.3-flash', max_age_ns: ANY_AGE_NS }]);
   assert.equal(LOG_WINDOW_NS, '86400000000000');
   assert.equal(ANY_AGE_NS, String(2n ** 64n - 1n));
+});
+
+const { entry: sampleEntry } = readRepoJson<{ entry: KeyEntry }>('docs/samples/key-entry.sample.json');
+const logEntry = (index: number, verifier: string): KeyEntry => ({ ...sampleEntry, index, verifier });
+
+test('latestKeysFor: each trusted verifier is read on its own, so a flood from another verifier cannot push its entries out', async () => {
+  const { latestKeysFor, LOG_WINDOW_NS } = await import('./near-view.ts');
+  const asked: unknown[] = [];
+  const flood = [9, 8, 7].map((i) => logEntry(i, 'noisy.testnet'));
+  const reader = {
+    latestKeys: async (_model: string, maxAgeNs?: string, _signal?: AbortSignal, verifier?: string) => {
+      asked.push([maxAgeNs, verifier]);
+      if (verifier === undefined) return flood; // the general window holds only the flood
+      return verifier === 'a.testnet' ? [logEntry(2, 'a.testnet')] : verifier === 'b.testnet' ? [logEntry(8, 'noisy.testnet'), logEntry(1, 'b.testnet')] : [];
+    },
+  };
+  const entries = await latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet', 'a.testnet', 'Not An Account'], LOG_WINDOW_NS);
+  assert.deepEqual(entries.map((e) => e.index), [9, 8, 7, 2, 1], 'merged newest first, each index once');
+  assert.deepEqual(asked, [[LOG_WINDOW_NS, undefined], [LOG_WINDOW_NS, 'a.testnet'], [LOG_WINDOW_NS, 'b.testnet']], 'one general read, one per distinct valid verifier');
+});
+
+test('latestKeysFor: one failed read fails the whole, a partial window never passes for the log', async () => {
+  const { latestKeysFor } = await import('./near-view.ts');
+  const reader = { latestKeys: async (_m: string, _a?: string, _s?: AbortSignal, verifier?: string) => (verifier === 'b.testnet' ? Promise.reject(new Error('rpc down')) : []) };
+  await assert.rejects(latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet']), /rpc down/);
+});
+
+test('latestKeysFor: a large trust set is read a few at a time, and a failure stops the reads still in flight', async () => {
+  const { latestKeysFor } = await import('./near-view.ts');
+  /** A reader that counts its calls and how many run at once; it fails on `failOn` and notes the signals it saw aborted. */
+  const counting = (failOn?: string) => {
+    const seen = { calls: 0, inFlight: 0, most: 0, aborted: 0 };
+    const latestKeys = async (_m: string, _a?: string, signal?: AbortSignal, verifier?: string): Promise<KeyEntry[]> => {
+      seen.calls++;
+      seen.most = Math.max(seen.most, ++seen.inFlight);
+      signal?.addEventListener('abort', () => seen.aborted++);
+      await new Promise((r) => setTimeout(r, 2));
+      seen.inFlight--;
+      if (failOn !== undefined && verifier === failOn) throw new Error('rpc down');
+      return [];
+    };
+    return { seen, reader: { latestKeys } };
+  };
+  const many = Array.from({ length: 40 }, (_, i) => `v${i}.testnet`);
+
+  const calm = counting();
+  assert.deepEqual(await latestKeysFor(calm.reader, 'm', many), []);
+  assert.equal(calm.seen.calls, 41, 'the general read and one per verifier');
+  assert.ok(calm.seen.most > 1 && calm.seen.most <= 6, `reads overlap, at most 6 at once, saw ${calm.seen.most}`);
+
+  const failing = counting('v3.testnet');
+  await assert.rejects(latestKeysFor(failing.reader, 'm', many), /rpc down/);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(failing.seen.calls <= 12, `no new reads start after the failure, saw ${failing.seen.calls} of 41`);
+  assert.ok(failing.seen.aborted > 0, 'the reads in flight were told to stop');
+});
+
+test('keyLogReader.latestKeys: the verifier filter goes to the contract only when asked for', async () => {
+  const { keyLogReader, LOG_WINDOW_NS } = await import('./near-view.ts');
+  const calls = rpcAnswering(viewResult([]));
+  await keyLogReader('http://rpc.test', 'ainek.testnet').latestKeys('m', undefined, undefined, 'a.testnet');
+  assert.deepEqual(calls.map((c) => c.args), [{ model: 'm', max_age_ns: LOG_WINDOW_NS, verifier: 'a.testnet' }]);
 });
 
 test('readStorageBalance: the U128 decimal string becomes a bigint, with the call shape of SPEC §4.2', async () => {

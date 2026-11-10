@@ -3,7 +3,7 @@
 // verifiers disagree (split view). Wallet login here asks for the function-call key later used for commit_proof.
 import { useEffect, useMemo, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
-import { ANY_AGE_NS, LOG_WINDOW_NS, deploymentStanding, deploymentsSeen, findSplitView, type KeyEntry, type SeenDeployment } from '@ainek/proof';
+import { ANY_AGE_NS, LOG_WINDOW_NS, latestKeysFor, deploymentStanding, deploymentsSeen, findSplitView, type KeyEntry, type SeenDeployment } from '@ainek/proof';
 import { RedCard } from '@/components/red-card';
 import { StackTable, type Column } from '@/components/stack-table';
 import { TrustPanel } from '@/components/trust-panel';
@@ -35,19 +35,33 @@ export default function LogPage() {
   const { signedAccountId, getAccessKeyList } = useNearWallet();
   const [keys, setKeys] = useState<AccessKeyInfo[]>([]);
 
+  // The verifiers you trust are read one by one as well as in the general window (latestKeysFor in @ainek/proof), so the
+  // page shows what the chat's check will see even when another registered verifier wrote the newest 100 entries.
+  const trustedKey = trust.verifiers.join(',');
   useEffect(() => {
     const reader = keyLogFor(cfg);
-    // Both reads start together. The window (and the explanation card) shows as soon as it answers; the wider read only adds to it.
-    const wider = reader.latestKeys(cfg.model, ANY_AGE_NS).catch(() => null);
-    reader
-      .latestKeys(cfg.model)
-      .then((entries) => {
+    const verifiers = trustedKey ? trustedKey.split(',') : [];
+    // A window read for another trust set is not this one's: it goes off the screen until the new answer is in, and the
+    // reads still in flight for it are stopped (their answers must not replace a newer one, nor keep loading the RPC).
+    const stop = new AbortController();
+    const current = () => !stop.signal.aborted;
+    setLog(null);
+    setError('');
+    void (async () => {
+      try {
+        const entries = await latestKeysFor(reader, cfg.model, verifiers, undefined, stop.signal);
+        if (!current()) return;
         setLog({ entries });
-        void wider.then((all) => setLog({ entries, all }));
-      })
-      .catch((e: unknown) => setError(describeError(e)));
-    reader.verifiers().then(setRegistered).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
-  }, [cfg]);
+        // The wider read only adds to the page, so it waits its turn: together the two would double the burst on the RPC.
+        const all = await latestKeysFor(reader, cfg.model, verifiers, ANY_AGE_NS, stop.signal).catch(() => null);
+        if (current()) setLog({ entries, all });
+      } catch (e) {
+        if (current()) setError(describeError(e));
+      }
+    })();
+    reader.verifiers().then((v) => current() && setRegistered(v)).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
+    return () => stop.abort();
+  }, [cfg, trustedKey]);
 
   useEffect(() => {
     if (!signedAccountId) {

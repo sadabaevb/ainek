@@ -13,7 +13,7 @@ function sampleLog(): KeyLog {
   const entries = [KeyEntry.parse(sample.entry)];
   return {
     source: 'sample',
-    latestKeys: async (model) => entries.filter((e) => e.model === model), // the sample never ages out
+    latestKeys: async (model, _maxAgeNs, _signal, verifier) => entries.filter((e) => e.model === model && (verifier === undefined || e.verifier === verifier)), // the sample never ages out
     entry: async (index) => entries.find((e) => e.index === index) ?? null,
     verifiers: async () => verifiersOf(entries),
   };
