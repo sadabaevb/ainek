@@ -6,6 +6,7 @@ import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
 import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
+import { chatHistory } from '@/lib/history';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter, type Consent } from '@/lib/wallet';
 import { useConfig, useT, useTrust } from './providers';
@@ -56,7 +57,7 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
         </details>
       )}
       {turn.outcome && 'reply' in turn.outcome && (
-        <div className="bubble assistant"><span className="who">{t.assistant}</span>{turn.outcome.reply}</div>
+        <div className={turn.outcome.kind === 'failed' ? 'bubble assistant unverified' : 'bubble assistant'}><span className="who">{turn.outcome.kind === 'failed' ? t.assistantUnverified : t.assistant}</span>{turn.outcome.reply}</div>
       )}
       {outcome && <ProofCard outcome={outcome} onCommit={commit} onRetry={retryModel ? () => onRetry(turn.message.content, retryModel) : undefined} />}
     </article>
@@ -157,8 +158,7 @@ export default function ChatPage() {
     setTamper(opts.tamper);
     setInput('');
     setBusy(true);
-    const history: ChatMessage[] = turns.flatMap((x) => (x.outcome && 'reply' in x.outcome && typeof x.outcome.reply === 'string' ? [x.message, { role: 'assistant' as const, content: x.outcome.reply }] : []));
-    const messages = [...history, { role: 'user' as const, content }];
+    const messages = [...chatHistory(turns), { role: 'user' as const, content }];
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, steps: [] }]);
     try {
