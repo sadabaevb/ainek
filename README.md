@@ -1,7 +1,7 @@
 # Ainek — a glass box for private AI agents on NEAR
 
-> NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation,
-> Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
+> NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
+> Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: two accounts, both ours); the
@@ -399,8 +399,8 @@ Tests:
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   <!-- TODO link compare pre-hackathon...hackathon-submission -->
-- Other projects by the same people in this hackathon: Dastan also submits a separate project, built apart from this one.
-  <!-- TODO before submission: its name and link (each README has to name the other) -->
+- Other projects by the same people in this hackathon: Dastan also submits a separate project, shashpai, built apart from
+  this one. <!-- TODO before submission: its link, and the exact spelling of the name (each README has to name the other) -->
 
 ## Next steps
 
