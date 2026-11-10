@@ -122,9 +122,9 @@ claim".
 We read the code of the 26 nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or
 open their demos, and they may have moved on since. Several are ahead of Ainek in places: Vouch has the deepest attestation check we saw, Charter
 runs on mainnet, AgentGuard is deployed and in use, and TEE Receipts checks the answer's signature in the contract. Each
-entry, with where it is ahead and what Ainek adds, is in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
+entry (with two more read on Nov 10), with where it is ahead and what Ainek adds, is in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
-Among those 26 entries, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
+Among those 26 entries, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours. On Nov 10 we read two later entries from their posts, READMEs and parts of their code: CIPHERWORK also refuses before sending and encrypts to the attested key, with one verifier key of its own and no public key log; Provable AI Compliance has neither a key log nor a refusal on the model's evidence, and is ahead of our Tier 2 in what it proves about each run.
 
 ## Try it (do X → see Y)
 

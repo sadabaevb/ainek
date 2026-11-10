@@ -15,6 +15,7 @@ Honest limitations won prizes at previous NEAR hackathons.
 - Among the 26 hackathon entries whose code we read on Nov 6, 2026 (`docs/FIELD.md`), none combines a public log of TEE keys, a
   refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
   of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
+  On Nov 10 we read two later entries from their posts, READMEs and parts of their code: CIPHERWORK also refuses before sending and encrypts to the attested key, with one verifier key of its own and no public key log; Provable AI Compliance has neither a key log nor a refusal on the model's evidence, and is ahead of our Tier 2 in what it proves about each run.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
