@@ -113,8 +113,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)). Since Nov 10 this repo uses SDK 0.3.0: it sends
   `X-Encryption-Version: 3` and does not fall back to an older version (a test pins the header). A live exchange went
   through on Nov 10 (`pnpm demo:live`), so production accepts v3. What we have not done is send a request with a swapped
-  reply key and watch the proxy refuse it: that the proxy enforces the binding rests on NEAR AI's code, which we read and
-  did not test. The gateway still accepts v1/v2 requests from other clients. The recorded exchange the offline replay
+  reply key and watch the proxy refuse it: that the proxy enforces the binding rests on NEAR AI's code, which we
+  have not tested. The gateway still accepts v1/v2 requests from other clients. The recorded exchange the offline replay
   uses was made under v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one writes to the log, a second account of ours is registered and has not
