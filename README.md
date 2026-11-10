@@ -199,9 +199,9 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Agent service and Telegram (Tier 2) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
-The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until this
-client moves to E2EE v3 (SDK 0.3.0), a relay that did so could read the replies it diverted, and the card would only fail afterwards (see
-"Known issues we inherited" below).
+The "does not see" column holds for requests. For replies it rests on E2EE v3 (SDK 0.3.0, since Nov 10): the reply
+key is bound into every encrypted request field, and NEAR AI's proxy is to refuse a swapped one before inference. We have
+not tested that refusal ourselves (see "Known issues we inherited" below).
 
 ## What we do not claim
 
@@ -267,19 +267,21 @@ client moves to E2EE v3 (SDK 0.3.0), a relay that did so could read the replies 
 
 Known issues we inherited (and say so):
 
-- NEAR AI's E2EE route has an open reply-key-substitution finding ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061),
-  cited by the Miller registry). We pin the model key from a verified report via `X-Model-Pub-Key`, which protects the request.
-  The reply key travels as an unsigned header (`x-client-pub-key`), so any hop that swapped it could read each reply it
-  diverted, and the card would only fail afterwards. Upstream status, checked 2026-11-10: NEAR AI's fix is "E2EE v3" (design:
-  [inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)), which binds the reply key and the field label
-  into the AEAD associated data of every encrypted request field, so the proxy rejects a swapped key before inference. The
-  gateway and proxy sides were merged on Oct 28 2026 ([cloud-api#1296](https://github.com/nearai/cloud-api/pull/1296),
-  [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)); v1/v2 requests keep their old, unauthenticated
-  format for compatibility, and we have not checked whether production runs the new code. The SDK side
-  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)) was merged on Nov 6 and shipped in SDK 0.3.0 on
-  Nov 8. This repo still pins SDK 0.2.1, which sends `X-Encryption-Version: 2` (with ed25519, which we always request), so
-  the exposure above stands for us. Moving to v3 needs a live chat that shows the gateway accepting it, and we have not
-  run one. The finding itself is still open upstream.
+- NEAR AI's E2EE route has a reply-key-substitution finding ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061),
+  cited by the Miller registry; still open upstream, checked 2026-11-10). We pin the model key from a verified report via
+  `X-Model-Pub-Key`, which protects the request. The reply key travels as a header (`x-client-pub-key`). Under E2EE v1/v2
+  nothing bound it, so any hop that swapped it could read each reply it diverted, and the card would only fail afterwards.
+  NEAR AI's fix is "E2EE v3" (design: [inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)), which
+  binds the reply key and the field label into the AEAD associated data of every encrypted request field, so the proxy
+  rejects a swapped key before inference. The gateway and proxy sides were merged on Oct 28 2026
+  ([cloud-api#1296](https://github.com/nearai/cloud-api/pull/1296),
+  [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)), the SDK side shipped in SDK 0.3.0 on Nov 8
+  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)). Since Nov 10 this repo uses SDK 0.3.0: it sends
+  `X-Encryption-Version: 3` and does not fall back to an older version (a test pins the header). A live exchange went
+  through on Nov 10 (`pnpm demo:live`), so production accepts v3. What we have not done is send a request with a swapped
+  reply key and watch the proxy refuse it: that the proxy enforces the binding rests on NEAR AI's code, which we read and
+  did not test. The gateway still accepts v1/v2 requests from other clients. The recorded exchange the offline replay
+  uses was made under v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one writes to the log, a second account of ours is registered and has not
   written (checked 2026-11-10). Nobody outside the team runs one yet.
@@ -377,7 +379,7 @@ Tests:
 
 ## Disclosures
 
-- Libraries: `@nearai/inference-sdk` 0.2.1 (attestation and signature verification, E2EE), `@hot-labs/near-connect` +
+- Libraries: `@nearai/inference-sdk` 0.3.0 (attestation and signature verification, E2EE), `@hot-labs/near-connect` +
   `near-connect-hooks` (wallet), `near-api-js` 7 (RPC error types), `zod` (schemas), `tweetnacl` (ed25519), `ethers`
   (sha256, EIP-191 recovery for ecdsa signatures), `@phala/dcap-qvl` (checks the TDX quote of a policy run; with `jose`, offline replay of Intel and NVIDIA
   evidence), Next.js 16 / React 19, the Inter font self-hosted under `apps/web/public/fonts` (SIL OFL 1.1, licence

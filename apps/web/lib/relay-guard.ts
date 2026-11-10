@@ -1,5 +1,5 @@
 // What the NEAR AI relay (app/api/nearai/[...path]/route.ts, SPEC §3.4) forwards: exactly the requests the page makes
-// through the pinned SDK (0.2.1) for the two configured models, and the headers it sends. relay-guard.test.ts drives
+// through the pinned SDK (0.3.0) for the two configured models, and the headers it sends. relay-guard.test.ts drives
 // the same code (nearai-requests.ts), so an SDK update that changes them fails a test instead of the hosted chat.
 
 /** Request headers the SDK and the chat request send: content negotiation, model-key routing and E2EE. The relay drops

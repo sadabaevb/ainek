@@ -45,6 +45,9 @@ test('every request the page makes through the relay passes, with every header i
   assert.equal(seen.length, 4, 'one request per call');
   const messages = [{ role: 'user' as const, content: 'hello' }];
   const e2ee = await prepareE2eeChatRequest({ request: chatRequest(BASE, MODEL, messages), modelKey: { signingAlgo: 'ed25519', publicKey: MODEL_KEY } });
+  // E2EE v3 binds the reply key into every encrypted field (README "Known issues we inherited"). A downgrade of the
+  // SDK, or one that stopped sending the header, would bring the reply-key exposure back without any other test failing.
+  assert.equal(e2ee.request.headers.get('x-encryption-version'), '3');
   seen.push(e2ee.request, chatRequest(BASE, INCOGNITO, messages));
   for (const r of seen) assert.equal(await relayVerdict(r), null);
 });
