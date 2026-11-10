@@ -74,23 +74,24 @@ README и код репозиториев, просмотр контрактов
 | Open Innovation | | 29 | 49 | 91 |
 | Privacy & Private AI | | 27 | 51 | 82 |
 
-- **Заявок прибавляется всё быстрее:** +126 за 6–8 ноября, +153 за 8–10 ноября. Privacy вырос с 51 до 82, примерно как
-  вся галерея (в полтора раза); Open с 49 до 91, быстрее. Из 463 записей уникальных названий 436: AgentGuard встречается
-  семь раз, Leash шесть, и это разные заявки.
+- **Заявок прибавляется всё быстрее:** +126 за 6–8 ноября, +153 за 8–10 ноября. Privacy вырос с 51 до 82 (в 1,6 раза при
+  1,5 по всей галерее), Open с 49 до 91 (в 1,9 раза). Из 463 записей уникальных названий 436: «AgentGuard» записан
+  семь раз, «Leash» шесть. Это разные записи; разные ли это проекты, по названию и трекам не видно.
 - **Теснее всего в Security и Agents:** 217 заявок в Security (47 % галереи), 140 одновременно в Security и Agents. Для
   нашей половины про агента и политику это людная сторона, как и 6 ноября.
 - **В Privacy много заявок «во все треки».** Из 82 заявок 38 поданы в четыре трека и больше (46 % против 15 % по
   галерее), и только 23 — в один-два. Только в Privacy подались 8, три из них мы знаем с 6–8 ноября (Sealed Ledger, Sealed
   Dossier, PredicTEE). Мы в трёх треках.
-- **Ту же тройку Privacy + Security + Open заявили 15 проектов**, среди них AgentGuard, Charter, Sealed Exploit и Veto
-  из прежнего списка.
+- **Privacy, Security и Open вместе указаны у 15 записей**, но ровно эту тройку, как у нас, заявила одна (Provable AI
+  Compliance); у остальных 14 треков от четырёх до девяти. Среди них записи с названиями AgentGuard, Charter, Sealed
+  Exploit и Veto.
 - **Ainek в галерее нет**: форма ещё не отправлена, это по плану.
 - **Кого открыть вручную перед подачей.** Название говорит мало, поэтому это «неизвестно, стоит проверить», а не
   «ближайшие». По теме проверки ИИ и доказательств: Provable AI Compliance, VeilProof (Privacy), Key proof, Agent-Receipt
-  (Security). По теме «агент подписывает только по политике»: Claw Guard: Signing Gate for AI Agents, presign-guard for
-  NEAR, near-threshold-guardian, Mandate (две заявки), Approval Moment. Менее ясные по названию: RedactGate, Hushmark,
-  Morrowseal, SealedBounty, SealedSwarm, cipherwork, Redline, Antibody, TAINT. Из тех, чей код мы читали 6 ноября, в
-  галерее на месте TEE Receipts, Judge on NEAR, Jurat, Measure, Black box, PrivatePay Agent; из увиденных 8 ноября —
+  (Security). По теме «агент подписывает только по политике»: presign-guard for NEAR, near-threshold-guardian,
+  Mandate (две записи), Approval Moment. Менее ясные по названию: RedactGate, Hushmark,
+  Morrowseal, SealedBounty, SealedSwarm, cipherwork, Antibody, TAINT. Из тех, чей код мы читали 6 ноября, в
+  галерее на месте TEE Receipts, Judge on NEAR, Jurat, Measure, Black box, PrivatePay Agent, Claw Guard, Redline; из увиденных 8 ноября —
   PredicTEE, Sealed Dossier, Sealed Ledger, Glassbox.
 - **Что это меняет.** По названиям ничего не подтверждено и не опровергнуто: вывод от 6 ноября («публичный журнал
   ключей + отказ до отправки» вместе не сделал никто из прочитанных по коду) не пересмотрен и остаётся с той датой. То,
