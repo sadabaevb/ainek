@@ -9,12 +9,12 @@ Honest limitations won prizes at previous NEAR hackathons.
 - The model runs in an **attested deployment** on NEAR AI Cloud (Intel TDX + NVIDIA confidential GPU).
   The client verifies the TDX quote and the GPU attestation itself (browser SDK; the NVIDIA verdict is fetched through
   NEAR AI's proxy and checked against NVIDIA's keys) and checks the signing key against a **public, append-only log on
-  NEAR** written by verifiers (today: one, ours; the log is designed for independent verifiers). If the key is not in the
+  NEAR** written by verifiers (today: two, both ours; the log is designed for independent verifiers). If the key is not in the
   log, the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
   only sets the default.
 - Among the 26 hackathon entries whose code we read on Nov 6, 2026 (`docs/FIELD.md`), none combines a public log of TEE keys, a
   refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
-  of them has independent verifiers writing to a public log of AI model keys, and neither do we: today only one verifier writes to our log.
+  of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
@@ -119,5 +119,5 @@ Honest limitations won prizes at previous NEAR hackathons.
   reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Every verifier in the demo is ours: one writes to the log, a second account of ours is registered and has not
-  written (checked 2026-11-10). Nobody outside the team runs one yet.
+  write to it. Every verifier in the demo is ours: one on a server since Nov 6, a second account that wrote its first entry on
+  Nov 10 (checked 2026-11-10). Nobody outside the team runs one yet.

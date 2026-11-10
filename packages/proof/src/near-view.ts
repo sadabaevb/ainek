@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { isNetworkFailure, withRetry } from './retry.ts';
 import { bytesToBase64 } from './disclosure.ts';
 import { KeyEntry, ProofCommitRecord, hex64, u128String } from './schema.ts';
+import { NEAR_ACCOUNT } from './trust-set.ts';
 import type { Check } from './verify.ts';
 
 const TIMEOUT_MS = 10_000;
@@ -83,8 +84,8 @@ export const ANY_AGE_NS = '18446744073709551615';
 const Head = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64 }).nullable();
 
 export interface KeyLogReader {
-  /** `latest_keys(model, max_age_ns)`: newest first, the fail-closed window by default. */
-  latestKeys(model: string, maxAgeNs?: string, signal?: AbortSignal): Promise<KeyEntry[]>;
+  /** `latest_keys(model, max_age_ns, verifier?)`: newest first, at most 100, the fail-closed window by default; with `verifier`, that account's entries only. */
+  latestKeys(model: string, maxAgeNs?: string, signal?: AbortSignal, verifier?: string): Promise<KeyEntry[]>;
   /** `entry(index)`; null when the index does not exist. */
   entry(index: number): Promise<KeyEntry | null>;
   /** `entries_since(index, limit)`. */
@@ -98,7 +99,7 @@ export interface KeyLogReader {
 export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
   const view = (method: string, args: Record<string, unknown>, signal?: AbortSignal) => viewFunction(rpcUrl, contractId, method, args, signal);
   return {
-    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS, signal) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs }, signal)),
+    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS, signal, verifier) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs, ...(verifier === undefined ? {} : { verifier }) }, signal)),
     entry: async (index) => {
       const raw = await view('entry', { index });
       return raw == null ? null : KeyEntry.parse(raw);
@@ -107,6 +108,22 @@ export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
     head: async () => Head.parse((await view('head', {})) ?? null),
     verifiers: async () => z.string().array().parse(await view('verifiers', {})),
   };
+}
+
+/**
+ * The window the fail-closed check works on: the newest entries of the model, plus each trusted verifier's own entries
+ * read separately, merged newest first. `latest_keys` returns at most 100 entries, and registering a verifier is not
+ * the client's decision: without the separate reads, one registered account writing 100 entries would push every
+ * trusted entry out of the answer and the client would refuse honest messages (or miss a split view). The general
+ * read stays because it tells "logged only outside your trust set" from "not logged at all".
+ * Any read failing fails the whole: a partial window must not pass for the log (fail-closed). A name that is not a NEAR
+ * account id is skipped: the contract's view rejects such an argument, and it can have no entries anyway.
+ */
+export async function latestKeysFor(reader: Pick<KeyLogReader, 'latestKeys'>, model: string, trustedVerifiers: readonly string[], maxAgeNs?: string, signal?: AbortSignal): Promise<KeyEntry[]> {
+  const verifiers = [...new Set(trustedVerifiers)].filter((v) => NEAR_ACCOUNT.test(v));
+  const reads = await Promise.all([reader.latestKeys(model, maxAgeNs, signal), ...verifiers.map((v) => reader.latestKeys(model, maxAgeNs, signal, v))]);
+  const byIndex = new Map(reads.flat().map((e) => [e.index, e]));
+  return [...byIndex.values()].sort((a, b) => b.index - a.index);
 }
 
 // ---- proof_commit (SPEC §4.2) --------------------------------------------------------------------

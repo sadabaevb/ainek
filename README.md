@@ -4,7 +4,7 @@
 > Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
-checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
+checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: two, both ours); the
 request is end-to-end encrypted to that key; the signed answer is re-verified in your browser, byte for byte. A salted hash of
 the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 is built to let an agent act on the answer
 only within a policy evaluated inside Intel TDX (OutLayer); what ran is under [Status](#status).
@@ -54,7 +54,7 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 - **Is this key real?** The client sends nothing unless the model's signing key is in the public log on NEAR (fail-closed).
   A verifier logs a key only after checking the Intel TDX quote and the NVIDIA GPU evidence, and the client re-verifies the
   evidence itself as well, so the log is a second opinion, not the only one. If two trusted verifiers disagree on a model,
-  you see a split view, not an average. Today: one verifier, ours. Entry #0 was logged by hand from a report our code
+  you see a split view, not an average. Today: two verifiers, both ours; the second wrote its first entry on Nov 10. Entry #0 was logged by hand from a report our code
   verified with the SDK; entries #1 and #2 are re-logs of that same recording by a stopgap script, since removed (same nonce
   and report hash, fresh `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh
   attestation each. No entry records the NVIDIA verdict hash yet (the SDK's GPU verifier does not return it).
@@ -98,7 +98,7 @@ claim".
 | --- | --- | --- |
 | Inference in TEE, attestation, response signatures, E2EE, JS SDK | NEAR AI Cloud, `@nearai/inference-sdk` | used as-is, in the browser: the SDK's TDX + GPU checks (NVIDIA's verdict fetched through NEAR AI's proxy and checked against NVIDIA's keys) and `prepareE2eeChatRequest` |
 | Verifying an answer | Verification Center (signature + fresh attestation; cannot recompute hashes; no allowlist) | local hash recomputation over the exact bytes; check against a **public log**, not the vendor's current answer; a card a non-technical user can read; `/verify` and `/auditor`; an offline replay (`pnpm demo`) that needs no key |
-| Key & measurement log | none (TEE Receipts: owner-registered signer list) | append-only, hash-chained log in a NEAR contract designed for independent verifiers (today: one, ours; registration is owner-gated); fail-closed client with a configurable trust set and quorum; split-view detection |
+| Key & measurement log | none (TEE Receipts: owner-registered signer list) | append-only, hash-chained log in a NEAR contract designed for independent verifiers (today: two, both ours; registration is owner-gated); fail-closed client with a configurable trust set and quorum; split-view detection |
 | Agents in TEE | IronClaw runtime (no policies, limits or proofs); Shade Agents (deprecated Apr 2026) | (Tier 2) agent mandate + policy; decision signed inside TDX (OutLayer); contract executes; public proof without details; stop button |
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
 | NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | sign-in asks the wallet for a function-call key limited to `commit_proof` (the wallet may widen it, see [What we do not claim](#what-we-do-not-claim)), so commits are signed without a popup; only the storage prepayment (`deposit_storage`, 0.1 NEAR for 50 to 68 commits depending on the account name, topped up when it runs out) goes through the wallet dialog |
@@ -119,7 +119,7 @@ We read the code of the nearest entries and looked at their contracts on chain o
 | [PrivatePay Agent](https://github.com/Nassami1/privatepay-agent) | An invoice is redacted locally, then an agent pays through a contract with public caps | Deployed, with a large audience | The client verifies TDX and GPU evidence itself (its README lists quote verification as not implemented yet); E2EE instead of redaction; (Tier 2) a private policy |
 | Dozens of spending guards (Veto, Leash, Tollgate, Claw Guard, Approval Moment, …) | Limits, a whitelist and a function-call key; an injection gets blocked | Several run on mainnet or have stronger contracts, for example a contract that builds the transaction itself | We are not another guard: (Tier 2) the point is a verifiable route from model to policy to chain, built so that someone other than the vendor can check it |
 
-Among the 26 hackathon entries whose code we read on Nov 6, 2026, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: today only one verifier writes to our log.
+Among the 26 hackathon entries whose code we read on Nov 6, 2026, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
 
 ## Try it (do X → see Y)
 
@@ -151,7 +151,7 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
 
 At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev` running:
 
-1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
+1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` and `ainek-v2-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
 3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent." The second switch (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
@@ -192,7 +192,7 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | NEAR AI gateway and proxy | ciphertext, token accounting; the browser's IP during collateral and NRAS calls | contents | E2EE; the gateway is attested; the proxy cannot forge the NVIDIA verdict (checked against NVIDIA's keys) |
 | NVIDIA key server | the browser's IP and timing of each cold verification (the SDK fetches NVIDIA's public keys directly) | anything about the exchange | public keys only; the NRAS verdict itself goes through NEAR AI's proxy |
 | Wallet connector's hosts (`raw.githubusercontent.com`, the connected wallet's code host, `storage.herewallet.app` for an icon) | the browser's IP and the time of each page load: `@hot-labs/near-connect` fetches the wallet list from `hot-dao/near-selector` and, once a wallet is connected, that wallet's code; opening Connect also loads wallet icons | the conversation | none for privacy; the wallet list is pinned to a commit, the code it points to is not (Nightly's is on `hot-dao/near-selector`'s main branch); that code runs in a sandboxed iframe on Connect and, once connected, on every page load and signature. Outside the list: a browser-extension wallet and a wallet added by hand in the dialog's settings (kept in the browser) |
-| NEAR RPC endpoint (FastNear by default, `NEAR_RPC_URL`) | the browser's IP and the time of every log read (one per message), the model id; on a commit, `/verify` and `/auditor` also the NEAR account and the commit looked up; on `/agent` reads of public records only, every ten seconds while the page is open; the signed `commit_proof` transaction, which the wallet connector broadcasts through its own FastNear endpoint (the storage deposit goes through the wallet's) | contents | none for privacy; the log read is a plain JSON-RPC view with no light-client proof, so the client trusts what the endpoint answers: a lying endpoint can pass an unlogged key or refuse a logged one, not swap in an unattested key (attestation is checked locally) |
+| NEAR RPC endpoint (FastNear by default, `NEAR_RPC_URL`) | the browser's IP and the time of every log read (per message: one for the model and one for each verifier you trust), the model id; on a commit, `/verify` and `/auditor` also the NEAR account and the commit looked up; on `/agent` reads of public records only, every ten seconds while the page is open; the signed `commit_proof` transaction, which the wallet connector broadcasts through its own FastNear endpoint (the storage deposit goes through the wallet's) | contents | none for privacy; the log read is a plain JSON-RPC view with no light-client proof, so the client trusts what the endpoint answers: a lying endpoint can pass an unlogged key or refuse a logged one, not swap in an unattested key (attestation is checked locally) |
 | Model enclave | plaintext for the duration of inference | — | TDX + GPU attestation; retention inside the enclave is not provable by attestation |
 | NEAR blockchain | provider keys and measurements, salted commits with the committing account and time, executed transfers (testnet); (Tier 2) proposed actions, the OutLayer job input, decisions, the policy hash | the policy contents, the conversation, the proofs | salted commits; transfer details are hidden only with Confidential Intents (out of scope) |
 | OutLayer policy job (Tier 2) | the action and the policy, while computing | the conversation | TDX, decision key generated in the TEE; a WASI-P1 module with no network or disk and a reproducible build cannot retain its input (the model enclave can; this says nothing about the OutLayer worker, and the action input is public on-chain); what the OutLayer API gateway sees is still open; checking an action proof on `/verify` shows that API the browser's IP and which run |
@@ -285,8 +285,8 @@ Known issues we inherited (and say so):
   reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Every verifier in the demo is ours: one writes to the log, a second account of ours is registered and has not
-  written (checked 2026-11-10). Nobody outside the team runs one yet.
+  write to it. Every verifier in the demo is ours: one on a server since Nov 6, a second account that wrote its first entry on
+  Nov 10 (checked 2026-11-10). Nobody outside the team runs one yet.
 
 ## Architecture
 
@@ -304,7 +304,9 @@ stop button: DeleteKey + pause_agent                                            
   taken on trust.
 - The key log is a key allowlist: the client sends only to a key a trusted verifier logged (what the verifier checked is the
   verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust:
-  `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` set what the site offers, and a visitor can replace them on `/log`.
+  `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` set what the site offers, and a visitor can replace them on `/log`. Each
+  trusted verifier's entries are read on their own as well, so another registered verifier cannot push them out of the
+  100 entries a read returns.
 - Every attested exchange becomes a proof (`packages/proof`, SPEC §5): signature, hashes, log index, salt, commit. The commit
   is `sha256(salt ‖ canonical_json(proof without salt/commit/commitTx))`, computed in the browser; the contract stores
   only the commit. The Rust contract uses the same canonical JSON for the log's `entry_hash` (shared test vectors in

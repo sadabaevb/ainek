@@ -48,6 +48,6 @@ test('withDeadline: the result when it comes in time, a named failure when it do
 });
 
 test('contractLog: a malformed RPC URL fails the read, not the construction, so it stays a failed step of the run', async () => {
-  const read = contractLog({ rpcUrl: 'rpc.testnet.fastnear.com', contract: 'c.testnet' });
+  const read = contractLog({ rpcUrl: 'rpc.testnet.fastnear.com', contract: 'c.testnet', trustedVerifiers: ['v.testnet'] });
   await assert.rejects(read('m', new AbortController().signal));
 });

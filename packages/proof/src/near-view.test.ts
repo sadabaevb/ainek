@@ -105,6 +105,37 @@ test('keyLogReader.latestKeys: the fail-closed window by default, any age when a
   assert.equal(ANY_AGE_NS, String(2n ** 64n - 1n));
 });
 
+const logEntry = (index: number, verifier: string) => ({ index, model: 'm', signing_address: 'aa'.repeat(32), signing_algo: 'ed25519', signing_public_key: 'aa'.repeat(32), compose_hash: 'bb'.repeat(32), image_digests: [], tcb_status: 'UpToDate', ita_jwt_hash: '', nras_result_hash: '', nonce: 'cc'.repeat(32), report_hash: 'dd'.repeat(32), observed_at: String(1_794_000_000_000 + index), verifier, prev_hash: 'ee'.repeat(32), entry_hash: 'ff'.repeat(32) });
+
+test('latestKeysFor: each trusted verifier is read on its own, so a flood from another verifier cannot push its entries out', async () => {
+  const { latestKeysFor, LOG_WINDOW_NS } = await import('./near-view.ts');
+  const asked: unknown[] = [];
+  const flood = [9, 8, 7].map((i) => logEntry(i, 'noisy.testnet'));
+  const reader = {
+    latestKeys: async (_model: string, maxAgeNs?: string, _signal?: AbortSignal, verifier?: string) => {
+      asked.push([maxAgeNs, verifier]);
+      if (verifier === undefined) return flood as never; // the general window holds only the flood
+      return (verifier === 'a.testnet' ? [logEntry(2, 'a.testnet')] : verifier === 'b.testnet' ? [logEntry(8, 'noisy.testnet'), logEntry(1, 'b.testnet')] : []) as never;
+    },
+  };
+  const entries = await latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet', 'a.testnet', 'Not An Account'], LOG_WINDOW_NS);
+  assert.deepEqual(entries.map((e) => e.index), [9, 8, 7, 2, 1], 'merged newest first, each index once');
+  assert.deepEqual(asked, [[LOG_WINDOW_NS, undefined], [LOG_WINDOW_NS, 'a.testnet'], [LOG_WINDOW_NS, 'b.testnet']], 'one general read, one per distinct valid verifier');
+});
+
+test('latestKeysFor: one failed read fails the whole, a partial window never passes for the log', async () => {
+  const { latestKeysFor } = await import('./near-view.ts');
+  const reader = { latestKeys: async (_m: string, _a?: string, _s?: AbortSignal, verifier?: string) => (verifier === 'b.testnet' ? Promise.reject(new Error('rpc down')) : ([] as never)) };
+  await assert.rejects(latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet']), /rpc down/);
+});
+
+test('keyLogReader.latestKeys: the verifier filter goes to the contract only when asked for', async () => {
+  const { keyLogReader, LOG_WINDOW_NS } = await import('./near-view.ts');
+  const calls = rpcAnswering(viewResult([]));
+  await keyLogReader('http://rpc.test', 'ainek.testnet').latestKeys('m', undefined, undefined, 'a.testnet');
+  assert.deepEqual(calls.map((c) => c.args), [{ model: 'm', max_age_ns: LOG_WINDOW_NS, verifier: 'a.testnet' }]);
+});
+
 test('readStorageBalance: the U128 decimal string becomes a bigint, with the call shape of SPEC §4.2', async () => {
   const calls = rpcAnswering(viewResult('10000000000000000000000'));
   assert.equal(await readStorageBalance('http://rpc.test', 'ainek.testnet', 'alice.testnet'), 10n ** 22n);
