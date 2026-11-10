@@ -32,6 +32,9 @@ export interface RpcCall {
  * returning null), every access-key list from `keys`. Returns the calls it saw, a key list as method `view_access_key_list`.
  * The caller puts the real `fetch` back (afterEach).
  */
+/** What `answer` returns for a view the stand-in contract does not have: the node then reports MethodNotFound, as a real one does. */
+export const NO_SUCH_METHOD = Symbol('no such method');
+
 export function fakeRpc(answer: (call: RpcCall) => unknown, keys: (account: string) => unknown[] = () => []): RpcCall[] {
   const calls: RpcCall[] = [];
   globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
@@ -42,7 +45,9 @@ export function fakeRpc(answer: (call: RpcCall) => unknown, keys: (account: stri
     }
     const call: RpcCall = { account: p.account_id, method: p.method_name ?? '', args: JSON.parse(Buffer.from(p.args_base64 ?? '', 'base64').toString()) as Record<string, unknown> };
     calls.push(call);
-    return new Response(JSON.stringify({ result: { result: [...Buffer.from(JSON.stringify(answer(call) ?? null))] } }), { status: 200 });
+    const value = answer(call);
+    if (value === NO_SUCH_METHOD) return new Response(JSON.stringify({ result: { error: 'wasm execution failed with error: MethodResolveError(MethodNotFound)', logs: [] } }), { status: 200 });
+    return new Response(JSON.stringify({ result: { result: [...Buffer.from(JSON.stringify(value ?? null))] } }), { status: 200 });
   }) as typeof fetch;
   return calls;
 }

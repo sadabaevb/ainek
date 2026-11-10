@@ -5,7 +5,7 @@ import { agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPoli
 import { canonicalBytes } from './canonical.ts';
 import { actionCommitOf } from './commit.ts';
 import { bytesToBase64 } from './disclosure.ts';
-import { fakeRpc } from './fixtures.ts';
+import { NO_SUCH_METHOD, fakeRpc } from './fixtures.ts';
 import { bytesToHex } from './hash.ts';
 import type { Action, ActionRecord, AgentInfo, Decision } from './schema.ts';
 
@@ -29,8 +29,8 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-/** A contract from before Nov 10: no `action_count()` (the stand-in answers null for it), so the end is found by asking. */
-const ledgerOf = (count: number) => fakeRpc(({ args }) => (Number(args['action_id']) < count ? recordOf(Number(args['action_id'])) : null));
+/** An older build of the contract: no `action_count()`, so the end is found by asking. */
+const ledgerOf = (count: number) => fakeRpc(({ method, args }) => (method === 'action_count' ? NO_SUCH_METHOD : Number(args['action_id']) < count ? recordOf(Number(args['action_id'])) : null));
 /** The same contract with `action_count()`; `visible` lets a node lag behind the count. */
 const countedLedgerOf = (count: number, visible = count) => fakeRpc(({ method, args }) => (method === 'action_count' ? count : Number(args['action_id']) < visible ? recordOf(Number(args['action_id'])) : null));
 const asked = (calls: ReturnType<typeof fakeRpc>) => calls.filter((c) => c.method === 'action');
@@ -41,7 +41,6 @@ test('readActions: every action from 0, oldest first, and it stops at the first 
   assert.deepEqual(records.map((r) => r.action_id), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.equal(more, false);
   assert.equal(asked(calls).length, 12); // three chunks of four: the third one meets the end
-  assert.equal(calls[0]?.method, 'action_count'); // asked first; this contract cannot say
 });
 
 test('readActions: a count that fills the last chunk exactly costs one more chunk, and an empty contract is an empty list', async () => {
@@ -49,7 +48,7 @@ test('readActions: a count that fills the last chunk exactly costs one more chun
   assert.equal((await readActions('https://rpc.test', contract, { chunk: 4 })).records.length, 4);
   assert.equal(asked(calls).length, 8);
   ledgerOf(0);
-  assert.deepEqual(await readActions('https://rpc.test', contract), { records: [], more: false });
+  assert.deepEqual(await readActions('https://rpc.test', contract), { records: [], more: false, count: null });
 });
 
 test('readActions: at the cap the list is a prefix and says so, and exactly that many actions are the whole record', async () => {
@@ -71,7 +70,7 @@ test('readActions: a re-read from a known id asks a narrow window first, and ret
   ledgerOf(30);
   assert.deepEqual((await readActions('https://rpc.test', contract, { from: 10, chunk: 8 })).records.map((r) => r.action_id), Array.from({ length: 20 }, (_, i) => 10 + i)); // past the window it goes on in full chunks
   const atCap = ledgerOf(600);
-  assert.deepEqual(await readActions('https://rpc.test', contract, { from: 512 }), { records: [], more: true });
+  assert.deepEqual(await readActions('https://rpc.test', contract, { from: 512 }), { records: [], more: true, count: null });
   assert.deepEqual(asked(atCap).map((c) => c.args['action_id']), [512]); // already at the cap: only whether there is more is asked
 });
 
@@ -100,11 +99,11 @@ test('readModelCommits: one answer per record in order, a failed read is that re
 
 test('readActions with action_count(): exactly the ids the contract has, none past the end, and the cap without a probe', async () => {
   const calls = countedLedgerOf(10);
-  assert.deepEqual(await readActions('https://rpc.test', contract, { chunk: 4 }).then((r) => [r.records.map((x) => x.action_id), r.more]), [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], false]);
-  assert.deepEqual(asked(calls).map((c) => c.args['action_id']), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(await readActions('https://rpc.test', contract, { chunk: 4 }).then((r) => [r.records.length, r.more, r.count]), [10, false, 10]);
+  assert.deepEqual(asked(calls).map((c) => c.args['action_id']), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]); // no id past the end is asked
   // A re-read from a known id: nothing new costs one call, one new action costs two.
   const quiet = countedLedgerOf(10);
-  assert.deepEqual(await readActions('https://rpc.test', contract, { from: 10 }), { records: [], more: false });
+  assert.deepEqual(await readActions('https://rpc.test', contract, { from: 10 }), { records: [], more: false, count: 10 });
   assert.deepEqual(quiet.map((c) => c.method), ['action_count']);
   const one = countedLedgerOf(11);
   assert.deepEqual((await readActions('https://rpc.test', contract, { from: 10 })).records.map((r) => r.action_id), [10]);
@@ -116,16 +115,23 @@ test('readActions with action_count(): exactly the ids the contract has, none pa
   countedLedgerOf(6);
   assert.equal((await readActions('https://rpc.test', contract, { chunk: 4, max: 6 })).more, false);
   countedLedgerOf(0);
-  assert.deepEqual(await readActions('https://rpc.test', contract), { records: [], more: false });
+  assert.deepEqual(await readActions('https://rpc.test', contract), { records: [], more: false, count: 0 });
 });
 
 test('readActions with action_count(): an id the count promises and the node does not have yet ends the list, it is not an error', async () => {
   countedLedgerOf(11, 10);
-  assert.deepEqual(await readActions('https://rpc.test', contract, { chunk: 4 }).then((r) => [r.records.length, r.more]), [10, false]);
+  assert.deepEqual(await readActions('https://rpc.test', contract, { chunk: 4 }).then((r) => [r.records.length, r.more, r.count]), [10, false, 11]); // the count says the list is short
+});
+
+test('readActionCount: only a missing view means "ask instead"; an answer that is not a count is an error', async () => {
+  for (const answer of ['10', -1, 1.5, null, { count: 10 }]) {
+    fakeRpc(({ method }) => (method === 'action_count' ? answer : recordOf(0)));
+    await assert.rejects(readActions('https://rpc.test', contract), /action_count: not a count/, JSON.stringify(answer));
+  }
 });
 
 test('readActions: a record that is not what SPEC §4.3 describes is an error, not a row', async () => {
-  fakeRpc(() => ({ ...recordOf(0), decision: { verdict: 'Maybe' } }));
+  fakeRpc(({ method }) => (method === 'action_count' ? 1 : { ...recordOf(0), decision: { verdict: 'Maybe' } }));
   await assert.rejects(readActions('https://rpc.test', contract));
 });
 

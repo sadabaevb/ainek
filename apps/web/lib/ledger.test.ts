@@ -31,6 +31,7 @@ function chain(w: World): RpcCall[] {
     ({ method, args }) =>
       ({
         owner: 'owner.testnet',
+        action_count: w.actions.length,
         action: w.actions[Number(args['action_id'])],
         agent: w.agents[String(args['agent_id'])],
         pending_actions: w.actions.filter((r) => r.agent_id === args['agent_id'] && r.status === 'Pending'),
@@ -94,7 +95,7 @@ test('loadLedger after an earlier read: settled actions and known tokens are kep
   const next = await loadLedger(cfg, new AbortController().signal, first);
   assert.deepEqual(next.records.map((r) => [r.action_id, r.status]), [[0, 'Executed'], [1, 'Denied'], [2, 'Executed'], [3, 'Executed']]);
   assert.equal(next.records[0], first.records[0]); // the same object: a settled record is not read again
-  assert.deepEqual(calls.filter((c) => c.method === 'action').map((c) => c.args['action_id']), [2, 3, 4, 5]);
+  assert.deepEqual(calls.filter((c) => c.method === 'action').map((c) => c.args['action_id']), [2, 3]); // by the contract's count: no id past the end
   assert.equal(calls.some((c) => c.method === 'ft_metadata'), false);
   assert.deepEqual(next.tokens, first.tokens);
   assert.equal(calls.filter((c) => c.method === 'ft_balance_of').length, 2); // where the tokens are is always read fresh

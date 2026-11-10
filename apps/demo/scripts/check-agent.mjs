@@ -23,7 +23,7 @@ const note = (line) => console.log(`  — ${line}`);
 
 console.log(`Agent ${agentId} on ${cfg.contract} via ${rpc}`);
 // Everything that does not depend on another answer is asked together; the lines below print in a fixed order.
-const [{ info: agent, keys, funds }, { records, more }, contractKeys] = await Promise.all([readAgentState(rpc, cfg.contract, agentId), readActions(rpc, cfg.contract), viewAccessKeys(rpc, cfg.contract)]);
+const [{ info: agent, keys, funds }, { records, more, count }, contractKeys] = await Promise.all([readAgentState(rpc, cfg.contract, agentId), readActions(rpc, cfg.contract), viewAccessKeys(rpc, cfg.contract)]);
 if (!agent) {
   report(false, 'not registered on this contract');
   process.exit(1);
@@ -53,6 +53,9 @@ for (const [i, record] of mine.entries()) {
   report(failed.length === 0, `#${action_id} ${decision.verdict}, ${status}${earlier}: ${amount(action.amount)} to ${action.receiver_id}; ${failed.join('; ') || 're-checked here: signature, the action hash in the decision, status; a model proof commit by the agent exists'}`);
 }
 if (more) report(false, `the contract holds more than ${records.length} actions: the later ones were not read`);
+// The list above is every action only if the node returned as many as the contract counts.
+if (count === null) note(`this build of the contract has no action_count(): the end of the list was found by asking, ${records.length} actions`);
+else if (!more) report(records.length === count, records.length === count ? `action_count() = ${count}: every action is listed above` : `the contract counts ${count} actions and this node returned ${records.length}: run it again`);
 note('A commit is a salted hash: neither the chain nor this script opens it, so this does not show a model answer behind it. The test actions run from scripts used placeholders (docs/DEPLOY.md).');
 
 const contractFullAccess = agentKeysOf(contractKeys, cfg.contract).fullAccess;

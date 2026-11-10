@@ -34,51 +34,67 @@ const CHUNK = 16;
 const FOLLOW_UP = 4;
 const MAX_ACTIONS = 512;
 
-/** `action_count()`: the ids are `0..count-1`. Null when the contract cannot say (a build from before Nov 10 has no such view): the caller then finds the end by asking. */
+/** `action_count()`: the ids are `0..count-1`. Null only when the contract has no such view (an older build): the caller then finds the end by asking. */
 export async function readActionCount(rpcUrl: string, contract: string, signal?: AbortSignal): Promise<number | null> {
+  let raw: unknown;
   try {
-    const raw = await viewFunction(rpcUrl, contract, 'action_count', {}, signal);
-    return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? raw : null;
+    raw = await viewFunction(rpcUrl, contract, 'action_count', {}, signal);
   } catch (err) {
     if (err instanceof ContractMethodNotFound) return null;
     throw err;
   }
+  // An answer that is not a count is a broken node or a changed contract: an error, like a record that is not what SPEC §4.3 describes.
+  if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw < 0) throw new Error(`${contract}.action_count: not a count: ${JSON.stringify(raw)}`);
+  return raw;
+}
+
+interface ActionList {
+  records: ActionRecord[];
+  /** The contract holds actions past the ones read (the cap). */
+  more: boolean;
+  /** What `action_count()` said; null when the contract has no such view. Above `records.length` without `more`: the node did not return them all. */
+  count: number | null;
+}
+type ListOptions = { from: number; chunk: number; max: number; signal?: AbortSignal | undefined };
+
+/** `n` actions from id `from`, read together; the list stops at the first id the node does not have. */
+async function readRun(rpcUrl: string, contract: string, from: number, n: number, signal?: AbortSignal): Promise<{ found: ActionRecord[]; ended: boolean }> {
+  const batch = await Promise.all(Array.from({ length: n }, (_, i) => readAction(rpcUrl, contract, from + i, signal)));
+  const end = batch.indexOf(null);
+  return { found: (end === -1 ? batch : batch.slice(0, end)) as ActionRecord[], ended: end !== -1 };
 }
 
 /**
- * The actions the contract holds from id `from` on, oldest first. Ids start at 0 and have no gaps. With `action_count()` the
- * range is known and read a chunk at a time; without it (an older build) the ids are asked a chunk at a time until one is
- * missing. Ids from `max` on are not read; `more` says whether the contract holds any: the list is then a prefix, and a caller
- * must say so instead of showing it as the whole record.
+ * The actions the contract holds from id `from` on, oldest first: ids `from..count-1` by `action_count()`, or found by asking
+ * when the contract has no such view. Ids from `max` on are not read; `more` says whether the contract holds any: the list is
+ * then a prefix, and a caller must say so instead of showing it as the whole record.
  */
-export async function readActions(rpcUrl: string, contract: string, { from = 0, chunk = CHUNK, max = MAX_ACTIONS, signal }: { from?: number; chunk?: number; max?: number; signal?: AbortSignal } = {}): Promise<{ records: ActionRecord[]; more: boolean }> {
+export async function readActions(rpcUrl: string, contract: string, { from = 0, chunk = CHUNK, max = MAX_ACTIONS, signal }: Partial<ListOptions> = {}): Promise<ActionList> {
   const count = await readActionCount(rpcUrl, contract, signal);
   if (count === null) return probeActions(rpcUrl, contract, { from, chunk, max, signal });
   const records: ActionRecord[] = [];
   const end = Math.min(count, max);
   for (let next = from; next < end; next += chunk) {
-    const batch = await Promise.all(Array.from({ length: Math.min(chunk, end - next) }, (_, i) => readAction(rpcUrl, contract, next + i, signal)));
-    // The count and an action can come from two nodes a block apart: an id the count promises and this node does not have
-    // yet ends the list here, and the next read picks it up.
-    const missing = batch.indexOf(null);
-    records.push(...(missing === -1 ? batch : batch.slice(0, missing)).flatMap((r) => (r ? [r] : [])));
-    if (missing !== -1) return { records, more: false };
+    const { found, ended } = await readRun(rpcUrl, contract, next, Math.min(chunk, end - next), signal);
+    records.push(...found);
+    // The count and an action can come from two nodes a block apart. An id the count promises and this node does not have
+    // yet ends the list; `count` tells the caller it is short, and the next read picks the rest up.
+    if (ended) return { records, more: false, count };
   }
-  return { records, more: count > max };
+  return { records, more: count > max, count };
 }
 
 /** The same list for a contract without `action_count()`: ask the ids a chunk at a time until one is missing, and one id past the cap. */
-async function probeActions(rpcUrl: string, contract: string, { from, chunk, max, signal }: { from: number; chunk: number; max: number; signal?: AbortSignal | undefined }): Promise<{ records: ActionRecord[]; more: boolean }> {
+async function probeActions(rpcUrl: string, contract: string, { from, chunk, max, signal }: ListOptions): Promise<ActionList> {
   const records: ActionRecord[] = [];
   let width = from === 0 ? chunk : Math.min(chunk, FOLLOW_UP);
   for (let next = from; next < max; next = from + records.length) {
-    const batch = await Promise.all(Array.from({ length: Math.min(width, max - next) }, (_, i) => readAction(rpcUrl, contract, next + i, signal)));
-    const end = batch.indexOf(null);
-    records.push(...(end === -1 ? batch : batch.slice(0, end)).flatMap((r) => (r ? [r] : [])));
-    if (end !== -1) return { records, more: false };
+    const { found, ended } = await readRun(rpcUrl, contract, next, Math.min(width, max - next), signal);
+    records.push(...found);
+    if (ended) return { records, more: false, count: null };
     width = chunk;
   }
-  return { records, more: (await readAction(rpcUrl, contract, max, signal)) !== null };
+  return { records, more: (await readAction(rpcUrl, contract, max, signal)) !== null, count: null };
 }
 
 /** `pending_actions(agent_id)`: the ids that wait for the owner, oldest first, in one call (the contract keeps at most 20 per agent). */
