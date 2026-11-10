@@ -9,7 +9,7 @@ export const verifyTdxQuote = quoteVerifierOf(qvl.verify);
  * Fetches a run's attestation and checks it. OutLayer answers 404 until the worker has uploaded the quote, so this waits for it, within a
  * limit that covers every request here: no attestation means no way to tell which code ran.
  */
-export async function verifyPolicyRunAt(attestationUrl: string, x: { output: string; input: string | null; freshness?: { nowSeconds: number; maxAgeSeconds: number }; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): Promise<Check[]> {
+export async function verifyPolicyRunAt(attestationUrl: string, x: { output: string; input: string; freshness?: { nowSeconds: number; maxAgeSeconds: number }; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; pollMs?: number; timeoutMs?: number }): Promise<Check[]> {
   const { fetch: f = fetch, pollMs = 1000, timeoutMs = 60_000, ...rest } = x;
   const signal = AbortSignal.timeout(timeoutMs);
   for (;;) {
@@ -18,4 +18,17 @@ export async function verifyPolicyRunAt(attestationUrl: string, x: { output: str
     if (res.status !== 404) throw new Error(`OutLayer attestation: HTTP ${res.status}`);
     await sleep(pollMs, undefined, { signal });
   }
+}
+
+/**
+ * A later re-check of a run whose input is not public: the quote is checked against the build, the output and the project, and the
+ * input line is skipped. Not for the agent, which must check its own input before it proposes. The attestation of an old run is
+ * fetched once: a 404 means it is gone, not that it is still on its way.
+ */
+export async function recheckPolicyRunAt(attestationUrl: string, x: { output: string; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; timeoutMs?: number }): Promise<Check[]> {
+  const { fetch: f = fetch, timeoutMs = 30_000, ...rest } = x;
+  const signal = AbortSignal.timeout(timeoutMs);
+  const res = await f(attestationUrl, { signal, redirect: 'error' });
+  if (!res.ok) throw new Error(`OutLayer attestation: HTTP ${res.status}`);
+  return verifyPolicyRun({ ...rest, input: null, run: PolicyRun.parse(await res.json()), verifyQuote: verifyTdxQuote, fetch: f, signal });
 }

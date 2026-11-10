@@ -6,7 +6,7 @@
 // The list below is the agent's live actions (docs/DEPLOY.md); a new one is added by hand with its call id, which the
 // agent service prints and keeps in the action proof (`attestationUrl`).
 import { writeFileSync } from 'node:fs';
-import { ainekConfigFromEnv, base64ToBytes, fmspcOf, outlayerWorkerOf, readAction, tryVerifyQuote, viewFunction } from '@ainek/proof';
+import { PolicyRun, ainekConfigFromEnv, base64ToBytes, checkPolicyRun, fmspcOf, outlayerWorkerOf, policyOutputOf, readAction, tryVerifyQuote, verifyDecisionSignature, viewFunction } from '@ainek/proof';
 import { verifyTdxQuote } from '@ainek/tier1-node/dcap';
 
 const RUNS = [
@@ -26,18 +26,24 @@ const getJson = async (url) => {
   return res.json();
 };
 
-/** Everything about one run, read together; a run that would not pass the offline check is not recorded. */
+/** Everything about one run, read together and put through the offline check: a run that would not pass it is not recorded. */
 async function record({ actionId, callId, by }) {
   const attestationUrl = `${api}/attestations/by-call/${callId}`;
   const [action, attestation] = await Promise.all([readAction(cfg.rpcUrl, cfg.contract, actionId), getJson(attestationUrl)]);
   if (!action) throw new Error(`action ${actionId} is not on ${cfg.contract}`);
   const quote = base64ToBytes(attestation.tdx_quote);
-  const { collateral } = await getJson(`${api}/public/collateral?fmspc=${fmspcOf(quote)}&at=${attestation.timestamp}`);
+  const fmspc = fmspcOf(quote);
+  if (!fmspc) throw new Error(`action ${actionId}: the quote names no Intel platform`);
+  const { collateral } = await getJson(`${api}/public/collateral?fmspc=${fmspc}&at=${attestation.timestamp}`);
   const verified = tryVerifyQuote(verifyTdxQuote, quote, JSON.parse(collateral), attestation.timestamp);
   if ('error' in verified) throw new Error(`action ${actionId}: the quote does not verify: ${verified.error}`);
   const measurementsApproved = (await viewFunction(cfg.rpcUrl, worker, 'is_measurements_approved', { measurements: verified.measurements })) === true;
-  if (!measurementsApproved) throw new Error(`action ${actionId}: the worker's measurements are not on the approved list of ${worker}`);
-  console.log(`action ${actionId}: ${action.decision.verdict}, ${action.status}; quote verifies, measurements approved`);
+  // The whole offline check, so a wrong call id (another action's run) stops here and not in `pnpm demo:policy`.
+  if (!verifyDecisionSignature(action.decision, action.tee_signature, action.tee_pubkey)) throw new Error(`action ${actionId}: the decision is not signed by the key recorded with it`);
+  const output = policyOutputOf({ decision: action.decision, teePubkey: action.tee_pubkey, teeSignature: action.tee_signature, wasmHash: cfg.policyWasmHash });
+  const failed = checkPolicyRun({ run: PolicyRun.parse(attestation), input: null, output, wasmHash: cfg.policyWasmHash, project: cfg.policyProject, quote: verified, measurementsApproved }).filter((c) => c.status === 'fail');
+  if (failed.length > 0) throw new Error(`action ${actionId}: the run at ${attestationUrl} is not the run behind it: ${failed.map((c) => c.detail).join('; ')}`);
+  console.log(`action ${actionId}: ${action.decision.verdict}, ${action.status}; the run passes the offline check`);
   return { collateral, run: { actionId, by, status: action.status, attestationUrl, decision: action.decision, teePubkey: action.tee_pubkey, teeSignature: action.tee_signature, attestation, measurementsApproved } };
 }
 

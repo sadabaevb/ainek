@@ -46,7 +46,7 @@ export { stripHexPrefix, normalizeHex } from './hash.ts';
 export { ainekConfigFromEnv, explorerAccountUrl, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { actionRunChecks, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
-export { agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readAgentState, readModelCommits, readOwner, readPendingIds } from './agent-ledger.ts';
+export { actionStatusCheck, agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readAgentState, readModelCommits, readOwner, readPendingIds } from './agent-ledger.ts';
 export type { AgentKeys, AgentState, ModelCommitLookup } from './agent-ledger.ts';
 export type { ActionVerdict } from './action-on-chain.ts';
 export type { ActionReport } from './policy.ts';

@@ -220,10 +220,6 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
   ];
 }
 
-/**
- * The same checks with the network parts done: Intel's collateral as OutLayer archived it for the run's moment, and OutLayer's list of approved
- * workers. A verdict comes back as checks; an outage throws, because "could not check" is a different thing to tell someone than "does not verify".
- */
 /** OutLayer's contract that keeps the list of approved worker measurements. */
 export const outlayerWorkerOf = (network: 'testnet' | 'mainnet'): string => (network === 'mainnet' ? 'worker.outlayer.near' : 'worker.outlayer.testnet');
 
@@ -235,6 +231,10 @@ export function policyOutputOf(x: { decision: Decision; teePubkey: string; teeSi
   return canonicalJson({ decision: x.decision, pubkey: x.teePubkey, sig: x.teeSignature, wasm_hash: x.wasmHash });
 }
 
+/**
+ * The same checks with the network parts done: Intel's collateral as OutLayer archived it for the run's moment, and OutLayer's list of approved
+ * workers. A verdict comes back as checks; an outage throws, because "could not check" is a different thing to tell someone than "does not verify".
+ */
 export async function verifyPolicyRun({ apiUrl, rpcUrl, network, verifyQuote, fetch: f = fetch, signal, ...evidence }: Omit<PolicyRunEvidence, 'quote' | 'measurementsApproved'> & { apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; verifyQuote: QuoteVerifier; fetch?: typeof fetch; signal?: AbortSignal }): Promise<Check[]> {
   const { run } = evidence;
   const quote = await verifiedQuoteOf(run, apiUrl, verifyQuote, f, signal);

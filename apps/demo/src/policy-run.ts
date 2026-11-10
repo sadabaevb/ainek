@@ -6,17 +6,21 @@
 // `--tamper` shows what an edited decision and another build look like. `--live` reads everything again: the attestations,
 // Intel's collateral, OutLayer's list of approved workers and, for the agent's actions, their records on the contract (still no key).
 import { parseArgs } from 'node:util';
-import { Decision, PolicyRun, ainekConfigFromEnv, base64ToBytes, checkPolicyRun, policyOutputOf, readAction, sha256Hex, tryVerifyQuote, verifyDecisionSignature, type Check, type PolicyRunEvidence } from '@ainek/proof';
-import { verifyPolicyRunAt, verifyTdxQuote } from '@ainek/tier1-node/dcap';
+import { Decision, PolicyRun, actionStatusCheck, ainekConfigFromEnv, base64ToBytes, checkPolicyRun, policyOutputOf, readAction, sha256Hex, tryVerifyQuote, verifyDecisionSignature, type Check, type PolicyRunEvidence } from '@ainek/proof';
+import { recheckPolicyRunAt, verifyPolicyRunAt, verifyTdxQuote } from '@ainek/tier1-node/dcap';
 import { readJson } from './evidence.ts';
 import { FAIL, OK, describe, exitFlushed, head, line, markOf } from './term.ts';
 
 // ---- 1. the run recorded with its input -------------------------------------------------------------
 const sample = readJson<{ attestation: unknown; input: string; output: string; collateral: unknown; published: { wasmHash: string; project: string; apiUrl: string }; measurementsApproved: boolean }>('policy-run.sample.json');
 const sampleRun = PolicyRun.parse(sample.attestation);
-const sampleQuote = tryVerifyQuote(verifyTdxQuote, base64ToBytes(sampleRun.tdx_quote), sample.collateral, sampleRun.timestamp);
+/** Verified on first use and once: `--live` never needs the recorded collateral. */
+let sampleQuote: ReturnType<typeof tryVerifyQuote> | undefined;
 
-const checkSample = (over: Partial<PolicyRunEvidence> = {}): Check[] => checkPolicyRun({ run: sampleRun, input: sample.input, output: sample.output, wasmHash: sample.published.wasmHash, project: sample.published.project, quote: sampleQuote, measurementsApproved: sample.measurementsApproved, ...over });
+function checkSample(over: Partial<PolicyRunEvidence> = {}): Check[] {
+  sampleQuote ??= tryVerifyQuote(verifyTdxQuote, base64ToBytes(sampleRun.tdx_quote), sample.collateral, sampleRun.timestamp);
+  return checkPolicyRun({ run: sampleRun, input: sample.input, output: sample.output, wasmHash: sample.published.wasmHash, project: sample.published.project, quote: sampleQuote, measurementsApproved: sample.measurementsApproved, ...over });
+}
 
 function checkSampleLive(): Promise<Check[]> {
   const { rpcUrl, network } = ainekConfigFromEnv({});
@@ -67,7 +71,7 @@ function checkAction(a: AgentAction, edit?: (output: string) => string): Checked
   const run = edit ? { ...attested, output_hash: sha256Hex(output) } : attested;
   const quote = tryVerifyQuote(verifyTdxQuote, base64ToBytes(attested.tdx_quote), actions.collaterals[a.collateral], attested.timestamp);
   const checks = checkPolicyRun({ run, input: null, output, wasmHash: actions.published.wasmHash, project: actions.published.project, quote, measurementsApproved: a.measurementsApproved });
-  return { verdict: decision.verdict, status: a.status, checks: [decisionCheck(decision, a), ...checks] };
+  return { verdict: decision.verdict, status: a.status, checks: [decisionCheck(decision, a), actionStatusCheck(decision.verdict, a.status), ...checks] };
 }
 
 /** The same action with only its number and the address of its attestation taken from the file: the record, the attestation, the collateral and the approved list are read again. */
@@ -77,22 +81,24 @@ async function checkActionLive(a: AgentAction): Promise<Checked> {
   const record = await readAction(rpcUrl, contract, a.actionId);
   if (!record) throw new Error(`action ${a.actionId} is not on ${contract}`);
   const output = policyOutputOf({ decision: record.decision, teePubkey: record.tee_pubkey, teeSignature: record.tee_signature, wasmHash });
-  const checks = await verifyPolicyRunAt(a.attestationUrl, { input: null, output, wasmHash, project, apiUrl, rpcUrl, network });
-  return { verdict: record.decision.verdict, status: record.status, checks: [decisionCheck(record.decision, { teePubkey: record.tee_pubkey, teeSignature: record.tee_signature }), ...checks] };
+  const checks = await recheckPolicyRunAt(a.attestationUrl, { output, wasmHash, project, apiUrl, rpcUrl, network });
+  return { verdict: record.decision.verdict, status: record.status, checks: [decisionCheck(record.decision, { teePubkey: record.tee_pubkey, teeSignature: record.tee_signature }), actionStatusCheck(record.decision.verdict, record.status), ...checks] };
 }
 
 /** What a row vouches for, in the words the heading uses. The job's input is the one check these runs cannot have. */
 const ROW_CLAIMS: ReadonlyArray<readonly [string, string]> = [
   ['decision-signature', 'the decision is signed by the key recorded with it'],
+  ['action-status', 'the recorded outcome is one that verdict allows'],
   ['run-quote', 'Intel signed the quote of its run'],
   ['run-build', 'the run is of the published build'],
   ['run-output', 'the run printed this decision'],
   ['run-binding', 'the quote commits to that build and that output, under our project'],
   ['run-worker', "the worker's measurements are on OutLayer's approved list"],
 ];
-/** A row passes when nothing failed, every claim in the heading holds, and nothing but the input was left unchecked. */
-const rowPasses = (checks: Check[]): boolean =>
-  checks.every((c) => c.status === 'ok' || c.id === 'run-input') && ROW_CLAIMS.every(([id]) => checks.some((c) => c.id === id && c.status === 'ok'));
+/** The one line these runs cannot have: their input is not public, so its check is skipped. A failed input check is a failure like any other. */
+const inputNotPublic = (c: Check): boolean => c.id === 'run-input' && c.status === 'skipped';
+/** A row passes when every claim in the heading holds and nothing else failed or was left unchecked, the unpublished input aside. */
+const rowPasses = (checks: Check[]): boolean => checks.every((c) => c.status === 'ok' || inputNotPublic(c)) && ROW_CLAIMS.every(([id]) => checks.some((c) => c.id === id && c.status === 'ok'));
 
 /** One row per action, read together and printed in order; the failing checks in full. True when every row passed. */
 async function reportActions(checkOne: (a: AgentAction) => Checked | Promise<Checked>, source: string): Promise<boolean> {
@@ -116,7 +122,7 @@ async function reportActions(checkOne: (a: AgentAction) => Checked | Promise<Che
     }
     const ok = rowPasses(r.checks);
     all &&= ok;
-    const failed = r.checks.filter((c) => c.status !== 'ok' && c.id !== 'run-input').map((c) => c.detail);
+    const failed = r.checks.filter((c) => c.status !== 'ok' && !inputNotPublic(c)).map((c) => c.detail);
     line(ok ? OK : FAIL, `#${r.a.actionId} ${r.verdict}, ${r.status} (${r.a.by})${ok ? '' : `: ${failed.join('; ')}`}`);
   }
   return all;
@@ -134,12 +140,13 @@ function tamper(): boolean {
   head("The agent's live actions, each with its verdict changed and the attestation's own hash of the output changed to match");
   let batchPassed = false;
   for (const a of actions.runs) {
-    const { checks } = checkAction(a, flip);
-    const caught = checks.filter((c) => c.status === 'fail').map((c) => c.id);
-    const byQuote = caught.includes('run-binding');
-    // Anything short of the quote objecting counts as a pass of the tampered run: that is the claim this scene is for.
+    // The scene shows one thing: the untouched run passes, and after the edit the quote's binding is the only check that fails.
+    // Anything else (a run that already failed, another check objecting, nothing objecting) is reported as the scene not holding.
+    const honest = rowPasses(checkAction(a).checks);
+    const caught = checkAction(a, flip).checks.filter((c) => c.status === 'fail').map((c) => c.id);
+    const byQuote = honest && caught.length === 1 && caught[0] === 'run-binding';
     batchPassed ||= !byQuote;
-    line(byQuote ? OK : FAIL, `#${a.actionId}: ${byQuote ? "refused: Intel's quote does not commit to the edited decision" : caught.length > 0 ? `refused, but not by the quote (${caught.join(', ')})` : 'the edited decision passed'}`);
+    line(byQuote ? OK : FAIL, `#${a.actionId}: ${byQuote ? "refused: Intel's quote does not commit to the edited decision" : !honest ? 'the recorded run does not pass even unedited, so the scene shows nothing' : caught.length > 0 ? `refused, but not by the quote alone (${caught.join(', ')})` : 'the edited decision passed'}`);
   }
   return editedPassed || swappedPassed || batchPassed;
 }
