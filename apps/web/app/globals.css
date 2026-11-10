@@ -162,6 +162,7 @@ textarea.json.drop { border-style: dashed; border-color: var(--accent); backgrou
 .bubble.user { align-self: flex-end; max-width: 85%; background: var(--grad); color: var(--on-accent); border-radius: 18px 18px 4px 18px; box-shadow: var(--glow); }
 .bubble.user .who { color: var(--on-accent); opacity: 0.8; }
 .bubble.assistant { background: var(--surface); border: 1px solid var(--line); border-radius: 18px 18px 18px 4px; box-shadow: var(--shadow); }
+.bubble.assistant.unverified { border-style: dashed; border-color: var(--fail-line); box-shadow: none; }
 .who { display: block; margin-bottom: 0.2rem; }
 .steps summary { font-size: 0.85rem; }
 .checks { list-style: none; padding: 0.4rem 0 0; margin: 0; font-size: 0.8rem; }
