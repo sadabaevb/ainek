@@ -146,7 +146,7 @@ const en = {
     notTrusted: '(not in trust set)',
     deployments: {
       title: 'Deployments seen',
-      intro: 'Instances of a model share one signing key, so one key can stand in front of several deployments. Each line is one compose hash, the measurement of the container set, as verifiers logged it. A new line means the provider rolled something out: that is what the log is there to record.',
+      intro: 'Instances of a model share one signing key, so one key can stand in front of several deployments. Each line is one compose hash, the measurement of the container set, as verifiers logged it. A new line is a new compose file, not always new code: several hashes in this log carry the same set of container images, as replicas of one build would. The log records each one.',
       enforced: { on: 'This site refuses to send unless the deployment that attests to your browser was logged in the last 24 hours by the verifiers you trust (the last column). The instance that then answers may be another one behind the same key: the gateway chooses per request.', off: 'This site does not refuse on the deployment yet: it sends when the key is logged and shows the deployment on the proof card. The chat has a demo switch that shows the refusal.' },
       columns: { compose: 'compose', keys: 'signing key', verifiers: 'logged by', entries: 'entries', first: 'first seen', last: 'last seen', counts: 'would pass now' },
       counts: { ok: 'yes', 'below-quorum': 'no: below your quorum', 'split-view': 'no: your verifiers disagree', old: 'no: older than 24 h', untrusted: 'no: not from your trust set' },
@@ -488,7 +488,7 @@ const ru: typeof en = {
     notTrusted: '(не в доверенном наборе)',
     deployments: {
       title: 'Виденные деплои',
-      intro: 'Экземпляры модели делят один ключ подписи, поэтому за одним ключом может стоять несколько деплоев. Каждая строка — один compose-хеш, измерение набора контейнеров, как его записали верификаторы. Новая строка значит, что провайдер что-то выкатил: именно это журнал и должен фиксировать.',
+      intro: 'Экземпляры модели делят один ключ подписи, поэтому за одним ключом может стоять несколько деплоев. Каждая строка — один compose-хеш, измерение набора контейнеров, как его записали верификаторы. Новая строка — это новый compose-файл, но не всегда новый код: у нескольких хешей в этом журнале один и тот же набор образов контейнеров, как было бы у реплик одной сборки. Журнал записывает каждую.',
       enforced: { on: 'Сайт не отправляет сообщение, если деплой, прошедший аттестацию перед твоим браузером, не записан за последние 24 часа верификаторами, которым ты доверяешь (последняя колонка). Ответить затем может другой экземпляр под тем же ключом: его на каждый запрос выбирает шлюз.', off: 'По деплою сайт пока не отказывает: он отправляет, когда записан ключ, и показывает деплой на карточке proof. В чате есть демо-переключатель, который показывает отказ.' },
       columns: { compose: 'compose', keys: 'ключ подписи', verifiers: 'кто записал', entries: 'записей', first: 'впервые', last: 'последний раз', counts: 'прошёл бы сейчас' },
       counts: { ok: 'да', 'below-quorum': 'нет: меньше твоего кворума', 'split-view': 'нет: твои верификаторы расходятся', old: 'нет: старше 24 ч', untrusted: 'нет: не из твоего trust set' },

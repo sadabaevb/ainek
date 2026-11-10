@@ -18,7 +18,7 @@
 | Ярус | Что входит | Треки |
 | --- | --- | --- |
 | 1. Ainek Verify (обязателен) | контракт-лог ключей, верификатор-демон (2 инстанса), fail-closed клиент, model proof с локальным пересчётом хешей, `commit_proof`, страница /verify, страница /log, **детектор не-TEE маршрута** (красная карточка), **replay-режим** `pnpm demo` без ключей | Privacy & Private AI, Open Innovation |
-| 2. Ainek Agent (после контрольной точки 6.11) | суб-аккаунт агента с FC-ключом, OutLayer policy job, `register_agent / propose_action / approve / pause_agent`, action proof, Telegram-одобрение, стоп-кнопка, **воспроизводимая сборка policy job** (`wasm_hash` из репо = хеш в аттестации) и строка карточки «ретеншн невозможен по конструкции», сценарий инъекции → отказ контракта | AI Security & Defense, Social Money, Real-World Money |
+| 2. Ainek Agent (после контрольной точки 6.11) | суб-аккаунт агента с FC-ключом, OutLayer policy job, `register_agent / propose_action / approve / pause_agent`, action proof, Telegram-одобрение, стоп-кнопка, **воспроизводимая сборка policy job** (`wasm_hash` из репо = хеш в аттестации) и строка карточки «ретеншн невозможен по конструкции», сценарий инъекции → отказ контракта | AI Security & Defense |
 | Stretch (только 10–11.11 при зелёном статусе) | адаптер второго провайдера в верификаторе (Venice) — «публичный лог для всей индустрии приватного ИИ»; `@ainek/proof` как публикуемый пакет с embed-ссылкой на карточку; provenance образов через Sigstore; relay внутри OutLayer WASI-P2 (аттестованный relay) — только в next steps | — |
 
 Контрольная точка — вечер 6 ноября: ярус 1 бегает end-to-end из чистого клона (контракт задеплоен на

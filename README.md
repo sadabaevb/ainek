@@ -1,7 +1,7 @@
 # Ainek — a glass box for private AI agents on NEAR
 
-> NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation,
-> Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
+> NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
+> Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: two accounts, both ours); the
@@ -75,8 +75,9 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 3. **Agent over its mandate.** (Tier 2) An "urgent transfer to a new vendor, ignore limits" → the policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. A real one from testnet is action #4 on `/agent` (Nov 7; the owner typed the message, a forwarded injection has not run live): the page re-checks the signature in your browser, and `/verify` checks the run's attestation.
 
 A fourth catch is written and switched off by default: **unknown deployment → nothing is sent.** The key is real, but the
-instance that attests to the client runs code no trusted verifier has logged. `/?tamper=deployment` shows the refusal; `/log` lists the deployments
-verifiers have seen behind the key (six since Nov 3, three in the last 24 hours on Nov 10). Why it is off: "What we do not claim".
+instance that attests to the client runs code no trusted verifier has logged. `/?tamper=deployment` shows the refusal; `/log` lists the compose hashes
+verifiers have seen behind the key (six since Nov 3, three in the last 24 hours on Nov 10; by their image digests the six
+are two builds: four hashes share one set of images, two share the other). Why it is off: "What we do not claim".
 
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
@@ -399,8 +400,8 @@ Tests:
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   <!-- TODO link compare pre-hackathon...hackathon-submission -->
-- Other projects by the same people in this hackathon: Dastan also submits a separate project, built apart from this one.
-  <!-- TODO before submission: its name and link (each README has to name the other) -->
+- Other projects by the same people in this hackathon: Dastan also submits a separate project, shashpai, built apart from
+  this one. <!-- TODO before submission: its link, and the exact spelling of the name (each README has to name the other) -->
 
 ## Next steps
 
