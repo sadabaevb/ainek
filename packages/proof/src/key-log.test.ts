@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deploymentStanding, deploymentsSeen, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
+import { deploymentStanding, deploymentsSeen, evaluateKeyLog, findSplitView, freshCoverage, proofEntryOf, resolveLogEntry } from './key-log.ts';
 import type { KeyEntry } from './schema.ts';
 import { readRepoJson } from './fixtures.ts';
 
@@ -175,15 +175,17 @@ test('resolveLogEntry: a log that answers without a valid entry (no view, malfor
   }
 });
 
-test('freshCoverage: the hours a fail-closed client would have refused for lack of a fresh entry', async () => {
-  const { freshCoverage } = await import('./key-log.ts');
+test('freshCoverage: the hours a fail-closed client would have had no fresh entry to go on', () => {
   const H = 3_600_000;
   // Entries at 0 h, 10 h, 50 h, 56 h with a 24 h window: served 0–34 h, a hole 34–50 h, served again from 50 h.
   const c = freshCoverage([0, 10 * H, 50 * H, 56 * H], 0, 70 * H, 24 * H);
   assert.deepEqual(c.holes, [{ from: 34 * H, to: 50 * H }]);
   assert.equal(c.uncoveredMs, 16 * H);
   assert.equal(c.unbrokenSince, 50 * H);
-  assert.equal(c.longestPauseMs, 6 * H);
+  assert.equal(c.longestPauseMs, 14 * H, 'the pause still open at the end counts: 56 h to 70 h');
+  assert.equal(freshCoverage([0, 10 * H, 50 * H, 56 * H], 0, 58 * H, 24 * H).longestPauseMs, 6 * H);
+  // A verifier whose clock runs ahead: the contract serves its entry, so it covers.
+  assert.deepEqual(freshCoverage([0, 31 * H], 0, 30 * H, 24 * H).holes, [{ from: 24 * H, to: 31 * H }]);
   // A log that went stale before `to` ends in a hole: nothing is unbroken now.
   const stale = freshCoverage([0], 0, 30 * H, 24 * H);
   assert.deepEqual(stale.holes, [{ from: 24 * H, to: 30 * H }]);

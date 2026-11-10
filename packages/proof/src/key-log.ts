@@ -219,14 +219,16 @@ export interface FreshCoverage {
   uncoveredMs: number;
   /** When the stretch without a hole that reaches `to` began (`to` itself when the log is stale at `to`). */
   unbrokenSince: number;
-  /** The longest pause between two entries inside that stretch, in ms (0 with fewer than two). */
+  /** The longest pause inside that stretch, in ms: between two entries, or from the last one to `to` (the one still open). */
   longestPauseMs: number;
 }
 
-/** Over the history of the log, how long a client that trusts these entries would have refused for lack of a fresh one.
- *  `observedAtMs` are the entries' times; each keeps the client served for `windowMs` (24 h for the chat). */
+/** Over the history of the log, how long a client that trusts these entries would have had no fresh one to go on.
+ *  `observedAtMs` are the entries' times; each keeps the client served for `windowMs` (24 h for the chat).
+ *  A lower bound on refusals, not the client's verdict: it does not look at which key an entry carries, at the quorum or
+ *  at the deployment check, and it goes by the verifier's clock (an entry is visible only once its transaction lands). */
 export function freshCoverage(observedAtMs: readonly number[], from: number, to: number, windowMs: number): FreshCoverage {
-  const times = [...observedAtMs].filter((t) => t <= to).sort((a, b) => a - b);
+  const times = [...observedAtMs].sort((a, b) => a - b);
   const holes: FreshCoverage['holes'] = [];
   let covered = from; // everything before this moment is accounted for
   for (const t of times) {
@@ -237,7 +239,7 @@ export function freshCoverage(observedAtMs: readonly number[], from: number, to:
   if (covered < to) holes.push({ from: covered, to });
   const last = holes.at(-1);
   const unbrokenSince = last ? last.to : from;
-  const stretch = times.filter((t) => t >= unbrokenSince);
+  const stretch = [...times.filter((t) => t >= unbrokenSince && t < to), to];
   const longestPauseMs = stretch.reduce((max, t, i) => (i === 0 ? 0 : Math.max(max, t - stretch[i - 1]!)), 0);
   return { holes, uncoveredMs: holes.reduce((sum, h) => sum + h.to - h.from, 0), unbrokenSince, longestPauseMs };
 }

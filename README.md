@@ -327,7 +327,7 @@ be warm, so a real first message can be slower: run 1 took 8.8 s, 5.3 s of it at
 
 Timings move from day to day with NEAR AI, Intel and NVIDIA. The same command on Nov 6 (commit `6c596e4`, SDK 0.2.1)
 gave a median of 9.9 s and a first run of 22.7 s. The difference is in the network steps (attestation median 5.0 → 3.7 s,
-model round trip 2.5 → 1.9 s; the local steps take about 40 ms on both days), and since Nov 6 the client added a log
+model round trip 2.5 → 1.9 s; the local steps take about 20 ms on both days), and since Nov 6 the client added a log
 read, it did not remove work. Read the two days as a range, not as a speed-up.
 
 | Metric | Value (50 runs) |
@@ -351,9 +351,10 @@ and the proof. The two log views are the model's 24-hour window and the trusted 
 **Over the log's history.** "Honest key refused: 0 of 50" covers seven minutes. Over the whole log, as
 `pnpm -F demo check-contract` printed it on Nov 10 at 14:26 UTC: 46 entries by the trusted verifier since Nov 3; an
 honest client would have had no entry younger than 24 hours for 13.6 of 167 hours, all of it on Nov 4–5, before the
-daemon ran on a server; none missing in the 130 hours since Nov 5, 04:44 UTC. The model's key did not change in that
-time, so a refusal caused by a key the verifier has not logged yet has not been observed. The times are the verifier's
-own clock.
+daemon ran on a server; none missing in the 130 hours since Nov 5, 04:44 UTC. The count looks only at whether a trusted entry existed, not at its key or at a
+quorum: it matches what the client decides only because the model's key did not change in that time and the quorum is 1.
+So a refusal caused by a key the verifier has not logged yet has not been observed. The times are the verifier's own
+clock.
 
 **In a browser.** The script does not measure it. It was timed once with Playwright in headless Chromium on the same
 Mac, on the hosted demo (so through our relay), on Nov 10, 14:19–14:21 UTC, right after the 50 runs: from the message

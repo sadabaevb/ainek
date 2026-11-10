@@ -3,7 +3,7 @@
 // Prints ✓/✗ per method and validates every returned entry against the KeyEntry schema from @ainek/proof.
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { ainekConfigFromEnv, checkProofCommit, freshCoverage, keyLogReader, parseDisclosure, readProofCommit, resolveLogEntry } from '@ainek/proof';
+import { LOG_WINDOW_NS, ainekConfigFromEnv, checkProofCommit, freshCoverage, keyLogReader, parseDisclosure, readProofCommit, resolveLogEntry } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
 const [account = cfg.contract, rpc = cfg.rpcUrl, model = cfg.model] = process.argv.slice(2);
@@ -79,17 +79,26 @@ try {
 // every 6 hours, so pauses between entries are not downtime.
 try {
   const all = [];
-  for (let from = 0; head != null && from <= head.index; from += 100) all.push(...(await log.entriesSince(from, 100)));
-  const times = all.filter((e) => e.model === model && cfg.trustedVerifiers.includes(e.verifier)).map((e) => Number(e.observed_at));
-  if (times.length > 0) {
+  for (;;) {
+    const page = await log.entriesSince(all.length, 100); // the contract may return fewer than asked: go by what came back
+    if (page.length === 0) break;
+    all.push(...page);
+  }
+  const mine = all.filter((e) => e.model === model && cfg.trustedVerifiers.includes(e.verifier));
+  if (mine.length > 0) {
     const H = 3_600_000;
+    const windowMs = Number(BigInt(LOG_WINDOW_NS) / 1_000_000n);
+    const windowText = `${windowMs / H} h`;
+    const times = mine.map((e) => Number(e.observed_at));
+    const keys = new Set(mine.map((e) => e.signing_address)).size;
     const now = Date.now();
     const first = Math.min(...times);
-    const c = freshCoverage(times, first, now, 24 * H);
+    const c = freshCoverage(times, first, now, windowMs);
     const hours = (ms) => (ms / H).toFixed(1);
     const at = (ms) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
-    console.log(`  — history of ${model} by ${cfg.trustedVerifiers.join(', ')}: ${times.length} entries since ${at(first)} UTC; no entry younger than 24 h for ${hours(c.uncoveredMs)} of ${hours(now - first)} h` +
-      (c.unbrokenSince < now ? `; none missing since ${at(c.unbrokenSince)} UTC (${hours(now - c.unbrokenSince)} h, longest pause between entries ${hours(c.longestPauseMs)} h)` : '; the log is stale now'));
+    console.log(`  — history of ${model} by ${cfg.trustedVerifiers.join(', ')}: ${mine.length} entries since ${at(first)} UTC, ${keys} signing key${keys === 1 ? '' : 's'}; no entry younger than ${windowText} for ${hours(c.uncoveredMs)} of ${hours(now - first)} h` +
+      (c.unbrokenSince < now ? `; none missing since ${at(c.unbrokenSince)} UTC (${hours(now - c.unbrokenSince)} h, longest pause ${hours(c.longestPauseMs)} h, the one still open included)` : '; the log is stale now') +
+      '. Any entry counts here, whatever its key: with a key change or a quorum above 1 the client can refuse while this line shows no gap');
   }
 } catch (err) {
   console.log(`  — could not read the log's history: ${err instanceof Error ? err.message : String(err)}`);
