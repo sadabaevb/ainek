@@ -3,7 +3,7 @@
 // Prints ✓/✗ per method and validates every returned entry against the KeyEntry schema from @ainek/proof.
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { ainekConfigFromEnv, checkProofCommit, keyLogReader, parseDisclosure, readProofCommit, resolveLogEntry } from '@ainek/proof';
+import { ainekConfigFromEnv, checkProofCommit, freshCoverage, keyLogReader, parseDisclosure, readProofCommit, resolveLogEntry } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
 const [account = cfg.contract, rpc = cfg.rpcUrl, model = cfg.model] = process.argv.slice(2);
@@ -73,6 +73,26 @@ try {
   }
 } catch (err) {
   console.log(`  — could not check the /auditor sample: ${err instanceof Error ? err.message : String(err)}`);
+}
+// Not an ABI check: over the log's whole history, how long would the chat have refused for lack of a fresh entry by a
+// verifier the site trusts? `observed_at` is the verifier's own clock, and the daemon re-logs an unchanged key about
+// every 6 hours, so pauses between entries are not downtime.
+try {
+  const all = [];
+  for (let from = 0; head != null && from <= head.index; from += 100) all.push(...(await log.entriesSince(from, 100)));
+  const times = all.filter((e) => e.model === model && cfg.trustedVerifiers.includes(e.verifier)).map((e) => Number(e.observed_at));
+  if (times.length > 0) {
+    const H = 3_600_000;
+    const now = Date.now();
+    const first = Math.min(...times);
+    const c = freshCoverage(times, first, now, 24 * H);
+    const hours = (ms) => (ms / H).toFixed(1);
+    const at = (ms) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ');
+    console.log(`  — history of ${model} by ${cfg.trustedVerifiers.join(', ')}: ${times.length} entries since ${at(first)} UTC; no entry younger than 24 h for ${hours(c.uncoveredMs)} of ${hours(now - first)} h` +
+      (c.unbrokenSince < now ? `; none missing since ${at(c.unbrokenSince)} UTC (${hours(now - c.unbrokenSince)} h, longest pause between entries ${hours(c.longestPauseMs)} h)` : '; the log is stale now'));
+  }
+} catch (err) {
+  console.log(`  — could not read the log's history: ${err instanceof Error ? err.message : String(err)}`);
 }
 if (Array.isArray(latest) && latest.length === 0) console.log(`  — latest_keys is empty for ${model} in the last 24 h: the client would refuse to send (fail-closed)`);
 console.log(failures === 0 ? 'Result: ABI OK, the methods the client calls are there' : `Result: ${failures} check(s) failed`);

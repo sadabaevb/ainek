@@ -174,3 +174,20 @@ test('resolveLogEntry: a log that answers without a valid entry (no view, malfor
     assert.equal(r.entry, null);
   }
 });
+
+test('freshCoverage: the hours a fail-closed client would have refused for lack of a fresh entry', async () => {
+  const { freshCoverage } = await import('./key-log.ts');
+  const H = 3_600_000;
+  // Entries at 0 h, 10 h, 50 h, 56 h with a 24 h window: served 0–34 h, a hole 34–50 h, served again from 50 h.
+  const c = freshCoverage([0, 10 * H, 50 * H, 56 * H], 0, 70 * H, 24 * H);
+  assert.deepEqual(c.holes, [{ from: 34 * H, to: 50 * H }]);
+  assert.equal(c.uncoveredMs, 16 * H);
+  assert.equal(c.unbrokenSince, 50 * H);
+  assert.equal(c.longestPauseMs, 6 * H);
+  // A log that went stale before `to` ends in a hole: nothing is unbroken now.
+  const stale = freshCoverage([0], 0, 30 * H, 24 * H);
+  assert.deepEqual(stale.holes, [{ from: 24 * H, to: 30 * H }]);
+  assert.equal(stale.unbrokenSince, 30 * H);
+  // No entries at all: one hole over the whole span.
+  assert.equal(freshCoverage([], 0, 5 * H, 24 * H).uncoveredMs, 5 * H);
+});

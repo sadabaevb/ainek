@@ -90,11 +90,11 @@ console.log(`| Log check refuses a swapped key (the rule behind the chat's switc
 console.log(`| Honest key refused (log window empty or key unlogged) | ${count((r) => r.outcome === 'refused')} |`);
 console.log(`| Runs that needed an SDK retry | ${count((r) => r.retries > 0)} |`);
 console.log(`| Attestation (gateway + model, re-fetched, in Node) | ${spread(of((r) => r.timings.attestation))} |`);
-console.log(`| Public log read (latest_keys views on ${rpcHost}: the model's window and each trusted verifier's own entries) | ${spread(of((r) => r.timings['key-log']))} |`);
+console.log(`| Public log read (${1 + cfg.trustedVerifiers.length} \`latest_keys\` views at once, ${rpcHost}) | ${spread(of((r) => r.timings['key-log']))} |`);
 console.log(`| E2EE round trip to the model | ${spread(of((r) => r.timings.send, verified))} |`);
 console.log(`| Signature fetch | ${spread(of((r) => r.timings.signature, verified))} |`);
 console.log(`| Whole run, evidence re-fetched (a real first message can be slower, see above) | ${spread(of((r) => r.totalMs, verified))} |`);
-console.log(`| Later message, attestation cached (derived from the same runs) | ${spread(of(laterMessage, verified))} |`);
+console.log(`| Later message, attestation cached (not timed: each run's steps after attestation, added up) | ${spread(of(laterMessage, verified))} |`);
 console.log(`| Request and response body (encrypted fields plus plain metadata) | median ${quantile(of((r) => r.bytesSent, verified), 0.5) ?? '?'} B sent, ${quantile(of((r) => r.bytesReceived, verified), 0.5) ?? '?'} B received |`);
 writeFileSync(outFile, `${JSON.stringify({ meta: { model: cfg.model, baseUrl: cfg.nearaiBaseUrl, contract: cfg.contract, rpcUrl: cfg.rpcUrl, node: process.version, measuredAt: new Date().toISOString(), prompt: PROMPT, note: 'from Node, direct to NEAR AI (no relay), evidence re-fetched on every run; connections and proxy caches may be warm; times in ms' }, runs: results }, null, 2)}\n`);
 console.log(`\nwritten: ${outFile}`);
