@@ -1,0 +1,75 @@
+# Metrics: how they were measured
+
+The numbers the README quotes, with the method and the caveats in full. Moved here from the README on Nov 10, 2026,
+unchanged.
+
+50 runs one after another on Nov 10, 14:11–14:18 UTC, from one Mac at commit `765708d`, with `z-ai/glm-5.3-flash` and
+the one-line prompt `Reply with the single word: ok.` A long answer takes longer. Every run's timings are in
+[`docs/metrics.json`](metrics.json); medians and p90 are nearest rank (the 25th and 45th of 50). This shows the
+sequence holds, not how the services behave over days. With runs this close, connections and NEAR AI's proxy caches may
+be warm, so a real first message can be slower: run 1 took 8.8 s, 5.3 s of it attestation.
+
+Timings move from day to day with NEAR AI, Intel and NVIDIA. The same command on Nov 6 (commit `6c596e4`, SDK 0.2.1)
+gave a median of 9.9 s and a first run of 22.7 s. The difference is in the network steps (attestation median 5.0 → 3.7 s,
+model round trip 2.5 → 1.9 s; the local steps take about 20 ms on both days), and since Nov 6 the client added a log
+read, it did not remove work. Read the two days as a range, not as a speed-up.
+
+| Metric | Value (50 runs) |
+| --- | --- |
+| Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
+| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 50 of 50 |
+| Honest key refused (log window empty or key unlogged) | 0 of 50 |
+| Runs that needed an SDK retry | 0 of 50 |
+| Attestation (gateway + model, re-fetched, in Node) | median 3.7 s, p90 5.8 s |
+| Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.7 s |
+| E2EE round trip to the model | median 1.9 s, p90 4.1 s |
+| Signature fetch | median 0.6 s, p90 0.9 s |
+| Whole run, evidence re-fetched (a real first message can be slower, see above) | median 7.1 s, p90 10.3 s |
+| Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 3.1 s, p90 5.2 s |
+| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1071 B received |
+
+Measured by `pnpm demo:metrics --runs N` (it overwrites `docs/metrics.json`; `--out` writes elsewhere): N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
+the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
+and the proof. The two log views are the model's 24-hour window and the trusted verifier's own entries.
+
+**Over the log's history.** "Honest key refused: 0 of 50" covers seven minutes. Over the whole log, as
+`pnpm -F demo check-contract` printed it on Nov 10 at 14:26 UTC: 46 entries by the trusted verifier since Nov 3; an
+honest client would have had no entry younger than 24 hours for 13.6 of 167 hours, all of it on Nov 4–5, before the
+daemon ran on a server; none missing in the 130 hours since Nov 5, 04:44 UTC. The count looks only at whether a trusted entry existed, not at its key or at a
+quorum: it matches what the client decides only because the model's key did not change in that time and the quorum is 1.
+So a refusal caused by a key the verifier has not logged yet has not been observed. The times are the verifier's own
+clock.
+
+**In a browser.** The script does not measure it. It was timed once with Playwright in headless Chromium on the same
+Mac, on the hosted demo (so through our relay), on Nov 10, 14:19–14:21 UTC, right after the 50 runs: from the message
+appearing on the page to the green card, with the same prompt and no wallet (no commit). There is no script for it in
+the repo; the steps are in `docs/DEV-NOTES.md` (Nov 10). Three first messages with nothing cached in the browser (Ainek's
+IndexedDB cache cleared, page reloaded, runs more than 30 s apart because NEAR AI's collateral proxy lets the browser
+cache for 29 s; the proxies' own caches may have been warm) took 6.3, 5.9 and 5.6 s; the page's own step timer showed
+4.3, 3.9 and 3.3 s of that as attestation. One later message on the same page, attestation cached: 2.1 s. Four messages
+are a spot check, not a distribution: on Nov 3 the same cold attestation took 13 s. A slow or retried collateral or
+NVIDIA verdict fetch, both through NEAR AI's proxies in the browser, makes it longer.
+
+**The on-chain commit** is measured once, not per run: `commit_proof` burnt 2.41 TGas
+(0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR; 130 + account + kind bytes per SPEC §4.2, here a
+26-character account) in
+[8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM). On Nov 5 the page signed
+the same call in a browser connected through Meteor, with the function-call key added at sign-in and without a popup:
+[FLHbBzAv…](https://testnet.nearblocks.io/txns/FLHbBzAvaBN6jkmAQ1fnuAXAaViPZkgLi1XoWnhSiDnR).
+
+**Tier 2.** Not a benchmark. These are the ten actions the agent has on testnet, all proposed by us by Nov 7 and all
+decided under the current key and policy, as `pnpm -F demo check-agent` re-read them from the chain on Nov 10. Five
+came from the agent service with a real model answer (action 2 from `pnpm -F agent once`; 3, 4, 8 and 9 through the
+Telegram bot); the other five (0, 1, 5, 6, 7) from scripts with a placeholder model proof (`docs/DEPLOY.md`). Times from
+message to transfer were not measured.
+
+| Decision signed in the enclave | Actions | Status the contract recorded |
+| --- | --- | --- |
+| Allow | 5 | 4 Executed; 1 Failed (the token refused: the receiver is not registered on it) |
+| NeedsApproval | 4 | 3 Executed after the owner's `approve`; 1 Rejected by the owner |
+| Deny | 1 | Denied |
+| Any whose status the signed decision does not allow (say, a Deny marked Executed) | 0 | each record's signature, the action hash in the decision and its status re-check |
+
+The script reads the contract's records, not the token's transfers. The totals agree with them: the contract holds
+8,794 AINEK, the 10,000 sent to it minus the 1,206 of the seven Executed actions. That does not rule out flows that
+cancel out.

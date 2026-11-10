@@ -104,21 +104,12 @@ claim".
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
 | NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | sign-in asks the wallet for a function-call key limited to `commit_proof` (the wallet may widen it, see [What we do not claim](#what-we-do-not-claim)), so commits are signed without a popup; only the storage prepayment (`deposit_storage`, 0.1 NEAR for 50 to 68 commits depending on the account name, topped up when it runs out) goes through the wallet dialog |
 
-## Prior art in this hackathon (and what Ainek adds)
+## Prior art in this hackathon
 
-We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Rows marked (Tier 2) describe a part of Ainek that ran on testnet on Nov 7, through the Telegram bot except for a rejection and the stop button; see "Tier 2 flow" below.
-
-| Project | What it does | Where it is ahead of Ainek | What Ainek adds |
-| --- | --- | --- | --- |
-| [TEE Receipts](https://github.com/tmdry4530/tee-receipts) | Receipts for NEAR AI answers; signer registry with key history, registered by the contract owner; on-chain signature check | Raw evidence in the repo; the contract checks the answer's signature itself | A hash-chained log designed for independent verifiers (our registration is owner-gated today too); the client refuses **before sending**, not after; E2EE to the attested key; salted commits |
-| [Vouch](https://github.com/Oduwal/Vouch) | An AI posts a bond on its answer; disputes go to a staked jury | The deepest attestation check we saw (DCAP, RTMR0-3 replay, compose, NVIDIA signature, gateway), with raw evidence in transactions that anyone can re-check | A public key log; the check happens before a prompt leaves the browser; E2EE |
-| [Charter](https://github.com/Spagero763/charter) | An AI fund with a mandate; an OutLayer guardian signs trades; on mainnet | Live on mainnet; the guardian's key derives from the wasm hash, so a new build gets a new key | The model route is verified against a public log and encrypted; (Tier 2) the policy stays private |
-| [AgentGuard](https://github.com/CodeMasterLabs/agentguard) | The agent asks, an on-chain vault pays, holds or refuses; an optional TEE risk oracle | Deployed and in use, with MCP and Intents | (Tier 2) Every action needs a decision signed in the enclave, and the policy stays private; the model route is verified and encrypted |
-| [Judge on NEAR](https://github.com/vijaygopalbalasa/judge-near) | A TDX judge and escrow between agents | The browser checks each run's quote and wasm hash; the contract has no keys | Private AI for people, not a verdict between agents; a public key log |
-| [Black box](https://github.com/tenxagent/blackbox) | A hash-chained decision log of an agent, anchored on mainnet | The registry has no keys, so its immutability is provable | The log covers TEE keys and where an answer came from; (Tier 2) action proofs bound to a signed decision and a model proof |
-| [Measure](https://github.com/dreyyyy1/measure) | Independently checks TDX quotes of NEAR's MPC nodes | A third party re-checks Intel's signature itself, without trusting the network | It covers MPC nodes and blocks nothing; we log AI model keys, and the client acts on the log |
-| [PrivatePay Agent](https://github.com/Nassami1/privatepay-agent) | An invoice is redacted locally, then an agent pays through a contract with public caps | Deployed, with a large audience | The client verifies TDX and GPU evidence itself (its README lists quote verification as not implemented yet); E2EE instead of redaction; (Tier 2) a private policy |
-| Dozens of spending guards (Veto, Leash, Tollgate, Claw Guard, Approval Moment, …) | Limits, a whitelist and a function-call key; an injection gets blocked | Several run on mainnet or have stronger contracts, for example a contract that builds the transaction itself | We are not another guard: (Tier 2) the point is a verifiable route from model to policy to chain, built so that someone other than the vendor can check it |
+We read the code of the 26 nearest entries and looked at their contracts on chain on Nov 6, 2026; we did not run them, and
+they may have moved on since. Several are ahead of Ainek in places: Vouch has the deepest attestation check we saw, Charter
+runs on mainnet, AgentGuard is deployed and in use, TEE Receipts checks the answer's signature in the contract. The table, entry by entry, with
+where each is ahead and what Ainek adds: [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
 Among the 26 hackathon entries whose code we read on Nov 6, 2026, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
 
@@ -319,16 +310,10 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-50 runs one after another on Nov 10, 14:11–14:18 UTC, from one Mac at commit `765708d`, with `z-ai/glm-5.3-flash` and
-the one-line prompt `Reply with the single word: ok.` A long answer takes longer. Every run's timings are in
-[`docs/metrics.json`](docs/metrics.json); medians and p90 are nearest rank (the 25th and 45th of 50). This shows the
-sequence holds, not how the services behave over days. With runs this close, connections and NEAR AI's proxy caches may
-be warm, so a real first message can be slower: run 1 took 8.8 s, 5.3 s of it attestation.
-
-Timings move from day to day with NEAR AI, Intel and NVIDIA. The same command on Nov 6 (commit `6c596e4`, SDK 0.2.1)
-gave a median of 9.9 s and a first run of 22.7 s. The difference is in the network steps (attestation median 5.0 → 3.7 s,
-model round trip 2.5 → 1.9 s; the local steps take about 20 ms on both days), and since Nov 6 the client added a log
-read, it did not remove work. Read the two days as a range, not as a speed-up.
+50 live runs one after another on Nov 10, 2026, from Node, direct to NEAR AI, with a one-line prompt; every run's timings
+are in [`docs/metrics.json`](docs/metrics.json), re-run with `pnpm demo:metrics --runs N`. This shows the sequence holds,
+not how the services behave over days: the same command on Nov 6 gave a median of 9.9 s, and the difference is in the
+network steps. How each number was measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 
 | Metric | Value (50 runs) |
 | --- | --- |
@@ -344,40 +329,16 @@ read, it did not remove work. Read the two days as a range, not as a speed-up.
 | Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 3.1 s, p90 5.2 s |
 | Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1071 B received |
 
-Measured by `pnpm demo:metrics --runs N` (it overwrites `docs/metrics.json`; `--out` writes elsewhere): N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
-the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
-and the proof. The two log views are the model's 24-hour window and the trusted verifier's own entries.
-
-**Over the log's history.** "Honest key refused: 0 of 50" covers seven minutes. Over the whole log, as
-`pnpm -F demo check-contract` printed it on Nov 10 at 14:26 UTC: 46 entries by the trusted verifier since Nov 3; an
-honest client would have had no entry younger than 24 hours for 13.6 of 167 hours, all of it on Nov 4–5, before the
-daemon ran on a server; none missing in the 130 hours since Nov 5, 04:44 UTC. The count looks only at whether a trusted entry existed, not at its key or at a
-quorum: it matches what the client decides only because the model's key did not change in that time and the quorum is 1.
-So a refusal caused by a key the verifier has not logged yet has not been observed. The times are the verifier's own
-clock.
-
-**In a browser.** The script does not measure it. It was timed once with Playwright in headless Chromium on the same
-Mac, on the hosted demo (so through our relay), on Nov 10, 14:19–14:21 UTC, right after the 50 runs: from the message
-appearing on the page to the green card, with the same prompt and no wallet (no commit). There is no script for it in
-the repo; the steps are in `docs/DEV-NOTES.md` (Nov 10). Three first messages with nothing cached in the browser (Ainek's
-IndexedDB cache cleared, page reloaded, runs more than 30 s apart because NEAR AI's collateral proxy lets the browser
-cache for 29 s; the proxies' own caches may have been warm) took 6.3, 5.9 and 5.6 s; the page's own step timer showed
-4.3, 3.9 and 3.3 s of that as attestation. One later message on the same page, attestation cached: 2.1 s. Four messages
-are a spot check, not a distribution: on Nov 3 the same cold attestation took 13 s. A slow or retried collateral or
-NVIDIA verdict fetch, both through NEAR AI's proxies in the browser, makes it longer.
-
-**The on-chain commit** is measured once, not per run: `commit_proof` burnt 2.41 TGas
-(0.00022 NEAR in fees) and 161 bytes of prepaid storage (0.00161 NEAR; 130 + account + kind bytes per SPEC §4.2, here a
-26-character account) in
-[8syaAPnB…](https://testnet.nearblocks.io/txns/8syaAPnB5FxZiC1qTjod9rfA5REThqyMFCz7jxZNPLpM). On Nov 5 the page signed
-the same call in a browser connected through Meteor, with the function-call key added at sign-in and without a popup:
-[FLHbBzAv…](https://testnet.nearblocks.io/txns/FLHbBzAvaBN6jkmAQ1fnuAXAaViPZkgLi1XoWnhSiDnR).
-
-**Tier 2.** Not a benchmark. These are the ten actions the agent has on testnet, all proposed by us by Nov 7 and all
-decided under the current key and policy, as `pnpm -F demo check-agent` re-read them from the chain on Nov 10. Five
-came from the agent service with a real model answer (action 2 from `pnpm -F agent once`; 3, 4, 8 and 9 through the
-Telegram bot); the other five (0, 1, 5, 6, 7) from scripts with a placeholder model proof (`docs/DEPLOY.md`). Times from
-message to transfer were not measured.
+- **In a browser** (hosted demo, headless Chromium, four messages, a spot check): three first messages with nothing
+  cached took 6.3, 5.9 and 5.6 s; one later message with the attestation cached, 2.1 s.
+- **Over the log's history** (`pnpm -F demo check-contract`, Nov 10): an honest client would have had no entry younger
+  than 24 hours for 13.6 of 167 hours, all on Nov 4–5, before the verifier ran on a server; none missing since. The count
+  does not look at the key or a quorum; the model's key did not change in that time.
+- **The on-chain commit**, measured once: `commit_proof` burnt 2.41 TGas (0.00022 NEAR) and 161 bytes of prepaid storage
+  (0.00161 NEAR).
+- **Tier 2** is a tally, not a benchmark: the ten actions the agent has on testnet, all proposed by us, five of them from
+  scripts with a placeholder model proof. `check-agent` reads the contract's records, not the token's transfers; times
+  from message to transfer were not measured.
 
 | Decision signed in the enclave | Actions | Status the contract recorded |
 | --- | --- | --- |
@@ -385,10 +346,6 @@ message to transfer were not measured.
 | NeedsApproval | 4 | 3 Executed after the owner's `approve`; 1 Rejected by the owner |
 | Deny | 1 | Denied |
 | Any whose status the signed decision does not allow (say, a Deny marked Executed) | 0 | each record's signature, the action hash in the decision and its status re-check |
-
-The script reads the contract's records, not the token's transfers. The totals agree with them: the contract holds
-8,794 AINEK, the 10,000 sent to it minus the 1,206 of the seven Executed actions. That does not rule out flows that
-cancel out.
 
 ## Repository
 
@@ -406,7 +363,8 @@ jobs/policy/         Rust OutLayer WASI-P1 job: evaluates the owner's policy, si
 services/verifier/   daemon: attestation report → SDK checks → KeyEntry → log_key (`pnpm -F verifier start`, Dockerfile)
 services/agent/      NL → NEAR AI → OutLayer → contract, Telegram bot, stop command (Tier 2): tested against fakes,
                      run on testnet through the bot on Nov 7 (see "Tier 2 flow")
-docs/                SPEC.md (interfaces), CLAIMS.md, DEV-NOTES.md, samples/ (recorded evidence), test-vectors/
+docs/                SPEC.md (interfaces), CLAIMS.md, REVIEW.md (claim by claim), METRICS.md, PRIOR-ART.md, DEV-NOTES.md,
+                     samples/ (recorded evidence), test-vectors/
 ```
 
 Tests:

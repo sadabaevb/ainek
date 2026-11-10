@@ -1,0 +1,20 @@
+# Prior art in this hackathon, and what Ainek adds
+
+Moved here from the README on Nov 10, 2026, unchanged. The method and the full list of entries we looked at are in
+[FIELD.md](FIELD.md) (in Russian).
+
+We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Rows marked (Tier 2) describe a part of Ainek that ran on testnet on Nov 7, through the Telegram bot except for a rejection and the stop button; see "Tier 2 flow" in the [README](../README.md#tier-2-flow).
+
+| Project | What it does | Where it is ahead of Ainek | What Ainek adds |
+| --- | --- | --- | --- |
+| [TEE Receipts](https://github.com/tmdry4530/tee-receipts) | Receipts for NEAR AI answers; signer registry with key history, registered by the contract owner; on-chain signature check | Raw evidence in the repo; the contract checks the answer's signature itself | A hash-chained log designed for independent verifiers (our registration is owner-gated today too); the client refuses **before sending**, not after; E2EE to the attested key; salted commits |
+| [Vouch](https://github.com/Oduwal/Vouch) | An AI posts a bond on its answer; disputes go to a staked jury | The deepest attestation check we saw (DCAP, RTMR0-3 replay, compose, NVIDIA signature, gateway), with raw evidence in transactions that anyone can re-check | A public key log; the check happens before a prompt leaves the browser; E2EE |
+| [Charter](https://github.com/Spagero763/charter) | An AI fund with a mandate; an OutLayer guardian signs trades; on mainnet | Live on mainnet; the guardian's key derives from the wasm hash, so a new build gets a new key | The model route is verified against a public log and encrypted; (Tier 2) the policy stays private |
+| [AgentGuard](https://github.com/CodeMasterLabs/agentguard) | The agent asks, an on-chain vault pays, holds or refuses; an optional TEE risk oracle | Deployed and in use, with MCP and Intents | (Tier 2) Every action needs a decision signed in the enclave, and the policy stays private; the model route is verified and encrypted |
+| [Judge on NEAR](https://github.com/vijaygopalbalasa/judge-near) | A TDX judge and escrow between agents | The browser checks each run's quote and wasm hash; the contract has no keys | Private AI for people, not a verdict between agents; a public key log |
+| [Black box](https://github.com/tenxagent/blackbox) | A hash-chained decision log of an agent, anchored on mainnet | The registry has no keys, so its immutability is provable | The log covers TEE keys and where an answer came from; (Tier 2) action proofs bound to a signed decision and a model proof |
+| [Measure](https://github.com/dreyyyy1/measure) | Independently checks TDX quotes of NEAR's MPC nodes | A third party re-checks Intel's signature itself, without trusting the network | It covers MPC nodes and blocks nothing; we log AI model keys, and the client acts on the log |
+| [PrivatePay Agent](https://github.com/Nassami1/privatepay-agent) | An invoice is redacted locally, then an agent pays through a contract with public caps | Deployed, with a large audience | The client verifies TDX and GPU evidence itself (its README lists quote verification as not implemented yet); E2EE instead of redaction; (Tier 2) a private policy |
+| Dozens of spending guards (Veto, Leash, Tollgate, Claw Guard, Approval Moment, …) | Limits, a whitelist and a function-call key; an injection gets blocked | Several run on mainnet or have stronger contracts, for example a contract that builds the transaction itself | We are not another guard: (Tier 2) the point is a verifiable route from model to policy to chain, built so that someone other than the vendor can check it |
+
+Among the 26 hackathon entries whose code we read on Nov 6, 2026, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
