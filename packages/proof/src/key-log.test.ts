@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
+import { deploymentsSeen, evaluateKeyLog, findSplitView, proofEntryOf, resolveLogEntry } from './key-log.ts';
 import type { KeyEntry } from './schema.ts';
 import { readRepoJson } from './fixtures.ts';
 
@@ -68,6 +68,51 @@ test('split view: two trusted verifiers with disjoint key sets → refuse even i
 test('compose hash is enforced only when asked', () => {
   assert.equal(evaluateKeyLog([entry], { ...base, composeHash: 'ff'.repeat(32) }).status, 'not-logged');
   assert.equal(evaluateKeyLog([entry], { ...base, composeHash: entry.compose_hash }).status, 'ok');
+  assert.equal(evaluateKeyLog([entry], base).deployment, undefined);
+});
+
+test('unknown deployment: the key is logged by a trusted verifier, but not with the attested compose → refused, and the verdict names what was seen', () => {
+  const [composeA, composeB, unknown] = ['a0'.repeat(32), '5f'.repeat(32), 'cd'.repeat(32)];
+  const log = [logged({ index: 5, compose_hash: composeB }), logged({ index: 4, compose_hash: composeA }), logged({ index: 2, compose_hash: composeA })];
+  const v = evaluateKeyLog(log, { ...base, composeHash: unknown });
+  assert.equal(v.status, 'not-logged');
+  assert.equal(v.reason, 'unknown-deployment');
+  assert.deepEqual(v.deployment, { composeHash: unknown, loggedComposes: [composeB, composeA] });
+  assert.deepEqual(v.matching, []);
+  assert.match(v.detail, /is logged, but not with deployment cdcdcdcd…cdcd: trusted verifiers saw 5f5f5f5f…5f5f, a0a0a0a0…a0a0 behind it: not sent/);
+  const ok = evaluateKeyLog(log, { ...base, composeHash: `0x${composeA.toUpperCase()}` });
+  assert.equal(ok.status, 'ok');
+  assert.deepEqual(ok.matching.map((e) => e.index), [4, 2], 'only entries with that deployment count, so the proof points at one of them');
+  assert.match(ok.detail, /with deployment a0a0a0a0…a0a0 confirmed by/);
+});
+
+test('unknown deployment: quorum is counted per deployment, and an untrusted writer cannot vouch for one', () => {
+  const [composeA, composeB] = ['a0'.repeat(32), '5f'.repeat(32)];
+  // Both trusted verifiers know the key, only one has seen deployment B.
+  const log = [logged({ index: 3, compose_hash: composeB }), logged({ index: 2, verifier: V2, compose_hash: composeA }), logged({ index: 1, compose_hash: composeA })];
+  assert.equal(evaluateKeyLog(log, { ...base, quorum: 2, composeHash: composeA }).status, 'ok');
+  assert.equal(evaluateKeyLog(log, { ...base, quorum: 2, composeHash: composeB }).reason, 'below-quorum');
+  assert.equal(evaluateKeyLog(log, { ...base, quorum: 2 }).status, 'ok', 'without the deployment check the key alone has both');
+  const outsider = [logged({ index: 2, verifier: 'stranger.testnet', compose_hash: composeB }), logged({ index: 1, compose_hash: composeA })];
+  assert.equal(evaluateKeyLog(outsider, { ...base, composeHash: composeB }).reason, 'unknown-deployment', 'the trusted verifier knows the key, so this outranks "logged only outside the trust set"');
+  assert.equal(evaluateKeyLog([logged({ verifier: 'stranger.testnet', compose_hash: composeB })], { ...base, composeHash: composeB }).reason, 'untrusted-only');
+  assert.equal(evaluateKeyLog(log, { ...base, signingAddress: KEY_B, composeHash: composeA }).reason, 'absent', 'a key nobody logged stays "not in the log"');
+});
+
+test('deploymentsSeen: one line per compose of the model, newest first, with who logged it and since when', () => {
+  const [composeA, composeB] = ['a0'.repeat(32), '5f'.repeat(32)];
+  const log = [
+    logged({ index: 5, compose_hash: composeA, observed_at: '5000' }),
+    logged({ index: 4, compose_hash: composeB, observed_at: '4000', verifier: V2 }),
+    logged({ index: 3, compose_hash: composeB, observed_at: '3000' }),
+    logged({ index: 2, compose_hash: composeA.toUpperCase().toLowerCase(), observed_at: '2000' }),
+    logged({ index: 1, model: 'another/model', compose_hash: 'ee'.repeat(32), observed_at: '1000' }),
+  ];
+  assert.deepEqual(deploymentsSeen(log, entry.model), [
+    { composeHash: composeA, keys: [KEY_A], verifiers: [entry.verifier], entries: 2, firstSeenMs: 2000, lastSeenMs: 5000 },
+    { composeHash: composeB, keys: [KEY_A], verifiers: [V2, entry.verifier], entries: 2, firstSeenMs: 3000, lastSeenMs: 4000 },
+  ]);
+  assert.deepEqual(deploymentsSeen([], entry.model), []);
 });
 
 // ---- resolveLogEntry: the chain is the source of truth, the embedded copy is only a fallback that says so ----
