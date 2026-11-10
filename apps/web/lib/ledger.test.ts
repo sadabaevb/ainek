@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { fakeRpc, type RpcCall } from '../../../packages/proof/src/fixtures.ts';
+import { NO_SUCH_METHOD, fakeRpc, type RpcCall } from '../../../packages/proof/src/fixtures.ts';
 import { amountText, isUnsettled, ledgerMoved, loadLedger } from './ledger.ts';
 
 const cfg = { rpcUrl: 'http://rpc.test', contract: 'ainek.testnet', agentAccount: 'agent.testnet' };
@@ -17,6 +17,8 @@ interface World {
   agents: Record<string, ReturnType<typeof info>>;
   keys: Record<string, unknown[]>;
   metadata: unknown;
+  /** What `action_count()` answers when it is not simply the number of actions the node serves: another number (two nodes a block apart), or no such view. */
+  count?: number | typeof NO_SUCH_METHOD;
 }
 const world = (): World => ({ actions: [record(0), record(1, 'Denied')], agents: { [cfg.agentAccount]: info(cfg.agentAccount) }, keys: { [cfg.agentAccount]: [fcKey, fullKey] }, metadata: { symbol: 'AINEK', decimals: 6 } });
 
@@ -31,6 +33,7 @@ function chain(w: World): RpcCall[] {
     ({ method, args }) =>
       ({
         owner: 'owner.testnet',
+        action_count: w.count ?? w.actions.length,
         action: w.actions[Number(args['action_id'])],
         agent: w.agents[String(args['agent_id'])],
         pending_actions: w.actions.filter((r) => r.agent_id === args['agent_id'] && r.status === 'Pending'),
@@ -94,10 +97,31 @@ test('loadLedger after an earlier read: settled actions and known tokens are kep
   const next = await loadLedger(cfg, new AbortController().signal, first);
   assert.deepEqual(next.records.map((r) => [r.action_id, r.status]), [[0, 'Executed'], [1, 'Denied'], [2, 'Executed'], [3, 'Executed']]);
   assert.equal(next.records[0], first.records[0]); // the same object: a settled record is not read again
-  assert.deepEqual(calls.filter((c) => c.method === 'action').map((c) => c.args['action_id']), [2, 3, 4, 5]);
+  assert.deepEqual(calls.filter((c) => c.method === 'action').map((c) => c.args['action_id']), [2, 3, 4]); // what the contract counts, and one id past it
   assert.equal(calls.some((c) => c.method === 'ft_metadata'), false);
   assert.deepEqual(next.tokens, first.tokens);
   assert.equal(calls.filter((c) => c.method === 'ft_balance_of').length, 2); // where the tokens are is always read fresh
+});
+
+test('loadLedger: an older contract without action_count() is read all the same, and a count ahead of the node is said', async () => {
+  const w = world();
+  w.count = NO_SUCH_METHOD;
+  chain(w);
+  assert.deepEqual(await load().then((l) => [l.records.length, l.more, l.behind]), [2, false, 0]);
+  w.count = 3; // the contract counts an action the node does not serve yet
+  assert.deepEqual(await load().then((l) => [l.records.length, l.behind]), [2, 1]);
+});
+
+test('loadLedger after an earlier read: a node that is a block behind takes nothing off the page', async () => {
+  const w = world();
+  w.actions.push(record(2, 'Pending'), record(3));
+  chain(w);
+  const first = await load();
+  w.actions.length = 3; // this node has not seen action 3 yet, and neither has its count
+  const next = await loadLedger(cfg, new AbortController().signal, first);
+  assert.deepEqual(next.records.map((r) => r.action_id), [0, 1, 2, 3]);
+  assert.equal(next.records[3], first.records[3]);
+  assert.equal(next.behind, 0);
 });
 
 test('ledgerMoved: nothing new is false, and the look costs a handful of calls, not the whole ledger', async () => {

@@ -2,7 +2,7 @@
 // proposed with the decision the contract accepted. Shared by `pnpm -F demo check-agent`, the /agent page and /verify, so each
 // reads and re-checks a record the same way. The contract checked every decision when it mattered; these checks repeat what an
 // outsider can repeat.
-import { checkProofCommit, keyScopeProblem, readProofCommit, viewAccessKeys, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
+import { ContractMethodNotFound, checkProofCommit, keyScopeProblem, readProofCommit, viewAccessKeys, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
 import { actionCommitCheck, check, decisionSignatureCheck } from './policy.ts';
 import { ActionRecord, AgentInfo } from './schema.ts';
 import { readTokenBalance } from './token.ts';
@@ -30,23 +30,77 @@ export async function readAction(rpcUrl: string, contract: string, actionId: num
 }
 
 const CHUNK = 16;
-/** A re-read from a known id usually finds one or two new actions: a narrow first window, then full chunks. */
+/** Without a count, a re-read from a known id usually finds one or two new actions: a narrow first window, then full chunks. */
 const FOLLOW_UP = 4;
 const MAX_ACTIONS = 512;
 
+/** `action_count()`: the ids are `0..count-1`. Null only when the contract has no such view (an older build): the caller then finds the end by asking. */
+export async function readActionCount(rpcUrl: string, contract: string, signal?: AbortSignal): Promise<number | null> {
+  let raw: unknown;
+  try {
+    raw = await viewFunction(rpcUrl, contract, 'action_count', {}, signal);
+  } catch (err) {
+    if (err instanceof ContractMethodNotFound) return null;
+    throw err;
+  }
+  // An answer that is not a count is a broken node or a changed contract: an error, like a record that is not what SPEC §4.3 describes.
+  if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw < 0) throw new Error(`${contract}.action_count: not a count: ${JSON.stringify(raw)}`);
+  return raw;
+}
+
+export interface ActionList {
+  records: ActionRecord[];
+  /** The contract holds actions past the ones read (the cap). */
+  more: boolean;
+  /**
+   * How many actions the contract counts that this read did not return, the cap aside: the count and an action can come from
+   * two nodes a block apart. Above 0 the list is short, and a caller must say so or ask again.
+   */
+  behind: number;
+  /** What `action_count()` said; null when the contract has no such view. */
+  count: number | null;
+}
+type ListOptions = { from: number; chunk: number; max: number; signal?: AbortSignal | undefined };
+
+/** `n` actions from id `from`, read together; the list stops at the first id the node does not have. */
+async function readRun(rpcUrl: string, contract: string, from: number, n: number, signal?: AbortSignal): Promise<{ found: ActionRecord[]; ended: boolean }> {
+  const batch = await Promise.all(Array.from({ length: n }, (_, i) => readAction(rpcUrl, contract, from + i, signal)));
+  const end = batch.indexOf(null);
+  return { found: (end === -1 ? batch : batch.slice(0, end)) as ActionRecord[], ended: end !== -1 };
+}
+
 /**
- * The actions the contract holds from id `from` on, oldest first. The contract has no count and no list view, only `action(id)`
- * with ids from 0 and no gaps, so the ids are asked a chunk at a time until one is missing. Ids from `max` on are not read; `more`
- * says whether id `max` exists: the list is then a prefix, and a caller must say so instead of showing it as the whole record.
+ * The actions the contract holds from id `from` on, oldest first. Ids start at 0 and have no gaps. `action_count()` says how
+ * many to read; the read then asks one id past the count, because the count may be a block behind the node that serves the
+ * actions, and goes on while that node has more. A contract without the view is read by asking alone. Ids from `max` on are not
+ * read; `more` says whether the contract holds any: the list is then a prefix, and a caller must say so instead of showing
+ * it as the whole record.
  */
-export async function readActions(rpcUrl: string, contract: string, { from = 0, chunk = CHUNK, max = MAX_ACTIONS, signal }: { from?: number; chunk?: number; max?: number; signal?: AbortSignal } = {}): Promise<{ records: ActionRecord[]; more: boolean }> {
+export async function readActions(rpcUrl: string, contract: string, { from = 0, chunk = CHUNK, max = MAX_ACTIONS, signal }: Partial<ListOptions> = {}): Promise<ActionList> {
+  const count = await readActionCount(rpcUrl, contract, signal);
+  if (count === null) return { ...(await probeActions(rpcUrl, contract, { from, chunk, max, signal }, from === 0 ? chunk : FOLLOW_UP)), behind: 0, count };
   const records: ActionRecord[] = [];
-  let width = from === 0 ? chunk : Math.min(chunk, FOLLOW_UP);
+  const end = Math.min(count, max);
+  for (let next = from; next < end; next += chunk) {
+    const { found, ended } = await readRun(rpcUrl, contract, next, Math.min(chunk, end - next), signal);
+    records.push(...found);
+    // The node does not have an id the count promises yet: the list is short by what is left up to the count (or the cap).
+    if (ended) return { records, more: count > max, behind: end - (from + records.length), count };
+  }
+  if (count > max) return { records, more: true, behind: 0, count };
+  // Everything the count promised is here. One id past it tells a count that is behind from the real end.
+  const past = await probeActions(rpcUrl, contract, { from: Math.max(from, end), chunk, max, signal }, 1);
+  return { records: [...records, ...past.records], more: count > max || past.more, behind: 0, count };
+}
+
+/** Finds the end by asking: `first` ids, then a chunk at a time, until one is missing, and one id past the cap. */
+async function probeActions(rpcUrl: string, contract: string, { from, chunk, max, signal }: ListOptions, first: number): Promise<{ records: ActionRecord[]; more: boolean }> {
+  const records: ActionRecord[] = [];
+  let width = Math.min(chunk, first);
   for (let next = from; next < max; next = from + records.length) {
-    const batch = await Promise.all(Array.from({ length: Math.min(width, max - next) }, (_, i) => readAction(rpcUrl, contract, next + i, signal)));
-    const end = batch.indexOf(null);
-    records.push(...(end === -1 ? batch : batch.slice(0, end)).flatMap((r) => (r ? [r] : [])));
-    if (end !== -1) return { records, more: false };
+    const { found, ended } = await readRun(rpcUrl, contract, next, Math.min(width, max - next), signal);
+    records.push(...found);
+    if (ended) return { records, more: false };
     width = chunk;
   }
   return { records, more: (await readAction(rpcUrl, contract, max, signal)) !== null };

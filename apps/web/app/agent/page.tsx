@@ -371,6 +371,7 @@ export default function AgentPage() {
           )}
           <h2>{ta.actionsTitle(ledger.records.length)}</h2>
           {ledger.more && <p className="muted small">{ta.more(ledger.records.length)}</p>}
+          {ledger.behind > 0 && <p className="muted small">{ta.behind(ledger.behind)}</p>}
           {ledger.records.length === 0 ? (
             <p className="muted">{ta.noActions}</p>
           ) : (

@@ -23,7 +23,16 @@ const note = (line) => console.log(`  — ${line}`);
 
 console.log(`Agent ${agentId} on ${cfg.contract} via ${rpc}`);
 // Everything that does not depend on another answer is asked together; the lines below print in a fixed order.
-const [{ info: agent, keys, funds }, { records, more }, contractKeys] = await Promise.all([readAgentState(rpc, cfg.contract, agentId), readActions(rpc, cfg.contract), viewAccessKeys(rpc, cfg.contract)]);
+/** The whole list. The count and an action can come from two nodes a block apart, so a short list is asked again before it is called short. */
+async function everyAction() {
+  let list = await readActions(rpc, cfg.contract);
+  for (let again = 0; list.behind > 0 && again < 3; again++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    list = await readActions(rpc, cfg.contract);
+  }
+  return list;
+}
+const [{ info: agent, keys, funds }, { records, more, behind, count }, contractKeys] = await Promise.all([readAgentState(rpc, cfg.contract, agentId), everyAction(), viewAccessKeys(rpc, cfg.contract)]);
 if (!agent) {
   report(false, 'not registered on this contract');
   process.exit(1);
@@ -53,6 +62,10 @@ for (const [i, record] of mine.entries()) {
   report(failed.length === 0, `#${action_id} ${decision.verdict}, ${status}${earlier}: ${amount(action.amount)} to ${action.receiver_id}; ${failed.join('; ') || 're-checked here: signature, the action hash in the decision, status; a model proof commit by the agent exists'}`);
 }
 if (more) report(false, `the contract holds more than ${records.length} actions: the later ones were not read`);
+// The list is found by asking the node id by id, past what the contract counts; a count ahead of the node means it is short.
+if (behind > 0) report(false, `the contract counts ${count} actions and the node returned ${records.length} after three more tries`);
+else if (count === null) note(`this build of the contract has no action_count(): the end of the list was found by asking, ${records.length} actions`);
+else note(`action_count() = ${count}; the node has no action past #${records.length - 1}`);
 note('A commit is a salted hash: neither the chain nor this script opens it, so this does not show a model answer behind it. The test actions run from scripts used placeholders (docs/DEPLOY.md).');
 
 const contractFullAccess = agentKeysOf(contractKeys, cfg.contract).fullAccess;
