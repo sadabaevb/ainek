@@ -1,15 +1,7 @@
 # Ainek — a glass box for private AI agents on NEAR
 
-> **Status:** NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense,
-> Open Innovation, Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
->
-> **Done:** Tier 1 client, proof package, offline replay, auditor page; key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (docs/DEPLOY.md). Tier 2 on testnet since Nov 6: contract v3 with agents, the policy job on OutLayer, the demo token, the agent account.
-> **In progress:** the Telegram bot ran live on Nov 7: a payment, a denial, a token refusal and an approval through the whole chain (actions 3, 4, 8 and 9). For the approval the bot gives the owner the command and the owner signs with their own key. The same day a rejection, an approval and the stop button ran on chain from a script with a placeholder model proof (actions 5 to 7). What has not run live is listed under "Tier 2 flow".
->
-> **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
->
-> **Hosted demo:** https://ainek.vercel.app (testnet, nothing to install). The chat runs on our NEAR AI key, which has a
-> spend limit and a rate limit: if it stops answering, run it locally with your own key ("Try it").
+> NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation,
+> Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: one verifier, ours); the
@@ -18,6 +10,34 @@ the proof is committed to NEAR (`commit_proof`, paid from storage the account pr
 only within a policy evaluated inside Intel TDX (OutLayer); status under "Tier 2 flow".
 
 <!-- TODO before submission: 90-second video link. -->
+
+## See it in a minute
+
+No key, no wallet, nothing to set up.
+
+**In a browser**, at https://ainek.vercel.app (testnet):
+
+| Do | See |
+| --- | --- |
+| Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
+| Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. "Demo: change the verdict and re-check" turns the signature check red |
+| Open [`/log`](https://ainek.vercel.app/log) | The public key log, read from the NEAR contract: who logged the model's key, whom the client trusts, which deployments were seen behind the key |
+| Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
+
+**From a clean clone** (Node 24+, pnpm 10), offline, about a second each:
+
+```bash
+git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
+pnpm demo            # recorded TDX + GPU evidence and two signed exchanges, re-verified → "Result: VERIFIED"
+pnpm demo:tamper     # the same recording with the key swapped → "Result: REFUSED", nothing is sent
+pnpm demo:policy     # a recorded policy run on OutLayer: Intel's quote, the published build, the decision → "Result: VERIFIED"
+```
+
+A verified reply in the hosted chat costs us tokens: it runs on our NEAR AI key, which has a spend limit and a rate limit.
+If it stops answering, run the chat locally with your own key ([Try it](#try-it-do-x--see-y)).
+
+**Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
+What is done and what has not run live: [Status](#status-nov-10-2026).
 
 **The problem.** Every "private AI" today says "we run in a TEE, trust us". Hardware attestation is now
 commodity; what is missing is proof a *user* can re-check, independently of the vendor, that *this*
@@ -60,8 +80,8 @@ verifiers have seen behind the key (six since Nov 3, three in the last 24 hours 
 | ![The proof card: model, hardware, key in the public log, hashes, E2EE, on NEAR](docs/screenshots/proof-card.png) | ![Red card: key not in the public log, message not sent](docs/screenshots/refused.png) |
 | Unknown deployment: nothing is sent (`/?tamper=deployment`) | |
 | ![Red card: unknown deployment, message not sent](docs/screenshots/unknown-deployment.png) | |
-| The public key log (`/log`) | A disclosure checked by an auditor (`/auditor`) |
-| ![The public key log page](docs/screenshots/log.png) | ![The auditor verdict card](docs/screenshots/auditor.png) |
+| The public key log and the deployments seen behind the key (`/log`) | A disclosure checked by an auditor (`/auditor`) |
+| ![The public key log: the latest entries and the table of deployments seen](docs/screenshots/log.png) | ![The auditor verdict card: commit, disclosed bytes, signature, log entry, the commit found on NEAR](docs/screenshots/auditor.png) |
 | The agent as the chain shows it (`/agent`) | A recorded denial, re-checked in the browser (`/agent`, action #4) |
 | ![The agent card: can it act, what its key may do, where the tokens are, policy hash, decision key, owner](docs/screenshots/agent.png) | ![Action 4 open: the four checks, the link to its proof, the record's fields](docs/screenshots/agent-action.png) |
 
@@ -101,20 +121,17 @@ Among the 26 hackathon entries whose code we read on Nov 6, 2026, none combines 
 ## Try it (do X → see Y)
 
 Requires Node 24+ and pnpm 10 (`corepack enable`). Rust (rustup) is needed only for `contracts/ainek` (plus `cargo-near`) and
-`jobs/policy`, whose commands are under "Tests" in "Repository"; Docker only for the reproducible wasm builds (`docs/REVIEW.md`). The first block needs no key
-or network; `demo:live` and the chat need `NEARAI_API_KEY` (cloud.near.ai → API Keys). Each step says what you should see.
+`jobs/policy`, whose commands are under "Tests" in "Repository"; Docker only for the reproducible wasm builds (`docs/REVIEW.md`).
+After the clone and `pnpm i` from "See it in a minute": the first block needs no key or network; `demo:live` and the chat
+need `NEARAI_API_KEY` (cloud.near.ai → API Keys). Each step says what you should see.
 
 ```bash
-git clone https://github.com/sadabaevb/ainek && cd ainek
 cp .env.example .env             # optional: NEARAI_API_KEY only for demo:live and the chat
-pnpm i
-pnpm demo                        # offline replay, no key, no network (~1 s): SDK checks on recorded TDX + GPU evidence,
-                                 #   fail-closed rule, two signed exchanges (plaintext, E2EE) → ✓/✗ per step, proof card,
-                                 #   "Result: VERIFIED"
+pnpm demo                        # offline replay (~1 s): SDK checks on recorded TDX + GPU evidence, fail-closed rule, two
+                                 #   signed exchanges (plaintext, E2EE) → ✓/✗ per step, proof card, "Result: VERIFIED"
 pnpm demo:tamper                 # same recording, the key the client sees is swapped → "Result: REFUSED", nothing is sent
-pnpm demo:policy                 # offline: which code made a policy decision? A real run on OutLayer testnet is re-checked:
-                                 #   Intel signed the quote, and the quote commits to the published build and to the decision
-                                 #   → ✓ per check, "Result: VERIFIED". `--tamper` → "Result: REFUSED". `--live` fetches it all again
+pnpm demo:policy                 # offline: which code made a policy decision? A real run on OutLayer testnet is re-checked.
+                                 #   `--tamper` → "Result: REFUSED". `--live` fetches it all again
 pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
                                  #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
 
@@ -135,7 +152,7 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
 
 At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev` running:
 
-1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log (entry #3 was its first run); since Nov 6 it runs on a server (docs/DEPLOY.md).
+1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
 3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent." The second switch (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
@@ -143,6 +160,15 @@ At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev
 6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the commit found on NEAR under the account that committed it → "This disclosure checks out". The button fills in that account (`docs/samples/disclosure.sample.chain.json`); any other account gets "… never committed this hash": the chain decides, not the file. The page says what the file does and does not prove. Where the sample comes from and when to record it again: `docs/samples/README.md`.
 7. **Re-check an agent's action:** `/verify` → "Use a real action proof" → Verify → a real denial from testnet (action 4: 5000 AINEK to a new vendor, nothing moved), checked in your browser: the decision's signature under the key the contract recorded, the same action and status on chain, the proof's salted commit, and the run's attestation (Intel's signature, the published build, this decision). The job's input shows as "—": a proof does not carry the input.
 8. **See what the agent did:** `/agent` → the agent as the chain shows it (can it act, what its key may call, where the tokens are, the policy hash) and every action it proposed, newest first. Each record is re-checked in your browser: the decision's signature under the key recorded with it, the payment it covers, an outcome that verdict allows, a model proof commit by the agent. Open #4, the denial → "Demo: change the verdict and re-check" → the signature check turns red; "open it on /verify" → step 7 for that action. The page follows the chain while it is open, so a new action appears by itself. The contract owner can approve or reject a waiting action there through a wallet (1 yoctoNEAR, a full-access signature); that path has unit tests and has not run on chain yet.
+
+## Status (Nov 10, 2026)
+
+- **Tier 1 runs end to end:** the client, the proof package, the offline replay, `/verify`, `/log` and `/auditor`; the
+  key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (`docs/DEPLOY.md`).
+- **Tier 2 has been on testnet since Nov 6** (the contract with agents, the policy job on OutLayer, the demo token, the
+  agent account) and ran through the Telegram bot on Nov 7. What ran and what has not is listed below.
+- **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
+  account still has a full-access key; the deployment check, written and switched off ("What we do not claim").
 
 **Tier 2 flow.** The agent is in `services/agent`; the contract, the policy job, the demo token and the agent account have been on testnet since Nov 6 (`docs/DEPLOY.md`). On Nov 7 the Telegram bot ran the scenes below through the whole chain (the model, the policy job over HTTPS with its attestation checked, the contract, the token), except the rejection and the stop button. Those two ran on chain the same day from a script with a placeholder model proof, and actions 5 to 7 in `check-agent` all come from that script. Not run live, so the plan and not a record: a rejection through the bot, a forwarded injection message (the denial below was typed), a commit failure recovered by the retry. Running the agent yourself needs your own testnet accounts, keys and Telegram bot: see `services/agent/README.md`.
 
@@ -233,19 +259,19 @@ Known issues we inherited (and say so):
 - NEAR AI's E2EE route has an open reply-key-substitution finding ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061),
   cited by the Miller registry). We pin the model key from a verified report via `X-Model-Pub-Key`, which protects the request.
   The reply key travels as an unsigned header (`x-client-pub-key`), so any hop that swapped it could read each reply it
-  diverted, and the card would only fail afterwards. Upstream status, checked 2026-11-04: NEAR AI's fix is "E2EE v3" (design:
+  diverted, and the card would only fail afterwards. Upstream status, checked 2026-11-10: NEAR AI's fix is "E2EE v3" (design:
   [inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)), which binds the reply key and the field label
   into the AEAD associated data of every encrypted request field, so the proxy rejects a swapped key before inference. The
   gateway and proxy sides were merged on Oct 28 2026 ([cloud-api#1296](https://github.com/nearai/cloud-api/pull/1296),
   [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)); v1/v2 requests keep their old, unauthenticated
   format for compatibility, and we have not checked whether production runs the new code. The SDK side
-  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)) is still open: SDK 0.2.1, which we use, sends
-  `X-Encryption-Version: 2` (with ed25519, which we always request), so the exposure above stands for us. We will move to v3
-  when the SDK ships it; if that happens before Nov 14 and a live chat shows the gateway accepting v3, the demo moves to v3.
-  <!-- TODO Nov 12: re-check inference-sdk#127, the SDK version and the issue state; update the date above -->
+  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)) was merged on Nov 6 and shipped in SDK 0.3.0 on
+  Nov 8. This repo still pins SDK 0.2.1, which sends `X-Encryption-Version: 2` (with ed25519, which we always request), so
+  the exposure above stands for us. Moving to v3 needs a live chat that shows the gateway accepting it, and we have not
+  run one. The finding itself is still open upstream.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Today the log is written by our own verifier; a verifier run by someone outside the team is planned.
-  <!-- TODO by Nov 12: name/nick with consent, or the honest line "all verifiers in the demo are ours" -->
+  write to it. Every verifier in the demo is ours: one writes to the log, a second is registered and not writing. Nobody
+  outside the team runs one yet.
 
 ## Architecture
 
@@ -354,7 +380,8 @@ Tests:
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   <!-- TODO link compare pre-hackathon...hackathon-submission -->
-- Other projects by the same people in this hackathon: none.
+- Other projects by the same people in this hackathon: Dastan also submits a separate project, built apart from this one.
+  <!-- TODO before submission: its name and link (each README has to name the other) -->
 
 ## Next steps
 

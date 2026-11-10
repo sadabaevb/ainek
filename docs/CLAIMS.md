@@ -104,16 +104,16 @@ Honest limitations won prizes at previous NEAR hackathons.
 - NEAR AI's E2EE route has an open reply-key-substitution finding ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061),
   cited by the Miller registry). We pin the model key from a verified report via `X-Model-Pub-Key`, which protects the request.
   The reply key travels as an unsigned header (`x-client-pub-key`), so any hop that swapped it could read each reply it
-  diverted, and the card would only fail afterwards. Upstream status, checked 2026-11-04: NEAR AI's fix is "E2EE v3" (design:
+  diverted, and the card would only fail afterwards. Upstream status, checked 2026-11-10: NEAR AI's fix is "E2EE v3" (design:
   [inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)), which binds the reply key and the field label
   into the AEAD associated data of every encrypted request field, so the proxy rejects a swapped key before inference. The
   gateway and proxy sides were merged on Oct 28 2026 ([cloud-api#1296](https://github.com/nearai/cloud-api/pull/1296),
   [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)); v1/v2 requests keep their old, unauthenticated
   format for compatibility, and we have not checked whether production runs the new code. The SDK side
-  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)) is still open: SDK 0.2.1, which we use, sends
-  `X-Encryption-Version: 2` (with ed25519, which we always request), so the exposure above stands for us. We will move to v3
-  when the SDK ships it; if that happens before Nov 14 and a live chat shows the gateway accepting v3, the demo moves to v3.
-  <!-- TODO Nov 12: re-check inference-sdk#127, the SDK version and the issue state; update the date above -->
+  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)) was merged on Nov 6 and shipped in SDK 0.3.0 on
+  Nov 8. This repo still pins SDK 0.2.1, which sends `X-Encryption-Version: 2` (with ed25519, which we always request), so
+  the exposure above stands for us. Moving to v3 needs a live chat that shows the gateway accepting it, and we have not
+  run one. The finding itself is still open upstream.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Today the log is written by our own verifier; a verifier run by someone outside the team is planned.
-  <!-- TODO by Nov 12: name/nick with consent, or the honest line "all verifiers in the demo are ours" -->
+  write to it. Every verifier in the demo is ours: one writes to the log, a second is registered and not writing. Nobody
+  outside the team runs one yet.
