@@ -51,9 +51,15 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
 3. **Agent over its mandate.** (Tier 2) An "urgent transfer to a new vendor, ignore limits" → the policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. A real one from testnet is action #4 on `/agent` (Nov 7; the owner typed the message, a forwarded injection has not run live): the page re-checks the signature in your browser, and `/verify` checks the run's attestation.
 
+A fourth catch is written and switched off by default: **unknown deployment → nothing is sent.** The key is real, but the code
+behind it is one no trusted verifier has logged. `/?tamper=deployment` shows the refusal; `/log` lists the deployments
+verifiers have seen behind the key (six since Nov 3, three in the last 24 hours on Nov 10). Why it is off: "What we do not claim".
+
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
 | ![The proof card: model, hardware, key in the public log, hashes, E2EE, on NEAR](docs/screenshots/proof-card.png) | ![Red card: key not in the public log, message not sent](docs/screenshots/refused.png) |
+| Unknown deployment: nothing is sent (`/?tamper=deployment`) | |
+| ![Red card: unknown deployment, message not sent](docs/screenshots/unknown-deployment.png) | |
 | The public key log (`/log`) | A disclosure checked by an auditor (`/auditor`) |
 | ![The public key log page](docs/screenshots/log.png) | ![The auditor verdict card](docs/screenshots/auditor.png) |
 | The agent as the chain shows it (`/agent`) | A recorded denial, re-checked in the browser (`/agent`, action #4) |
@@ -131,7 +137,7 @@ At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev
 
 1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log (entry #3 was its first run); since Nov 6 it runs on a server (docs/DEPLOY.md).
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
-3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent."
+3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent." The second switch (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
 5. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste [`docs/samples/disclosure.sample.json`](docs/samples/disclosure.sample.json) (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
 6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the commit found on NEAR under the account that committed it → "This disclosure checks out". The button fills in that account (`docs/samples/disclosure.sample.chain.json`); any other account gets "… never committed this hash": the chain decides, not the file. The page says what the file does and does not prove. Where the sample comes from and when to record it again: `docs/samples/README.md`.
@@ -180,12 +186,14 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
 - **Protection from the server that serves the page.** The browser code that verifies, encrypts and checks the log is served
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
-- **A measurement allowlist.** Our log is a *key* allowlist: the client sends only to a key a trusted verifier logged. The
-  offline replay also compares the attested compose hash with the logged one; the browser and `demo:live` show it on the
-  card and point the proof at a log entry with that compose when there is one, but still send when there is none, and the
-  card says so (SPEC §7.1 asks for a refusal; enforcing it is a pending team decision), and acceptable compose hashes are not
-  governed yet (next steps). Instances of a model share one signing key, so the signature alone does not say which deployment
-  answered.
+- **A measurement allowlist, yet.** Today the log works as a *key* allowlist: the client sends only to a key a trusted verifier
+  logged. Instances of a model share one signing key, so the key alone does not say which deployment answers. The check that
+  closes this (SPEC §7.1: the key must be logged together with the attested compose hash, otherwise "Unknown deployment.
+  Message not sent.") is written and tested, and is off by default (`AINEK_REQUIRE_DEPLOYMENT=0`) until the verifier samples
+  every instance behind the gateway on each round; with one sample per round a real rollout would refuse honest users for
+  hours. Until then the browser and `demo:live` show the deployment on the card and say when the log has not seen it; the
+  offline replay already refuses. The chat's demo switch shows the refusal. Which compose hashes are acceptable is not
+  governed either: the log records what verifiers saw, not what should run (next steps).
 - **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
   previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
   rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the

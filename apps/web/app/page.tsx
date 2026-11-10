@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
-import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type VerifiedOutcome } from '@/lib/flow';
+import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter, type Consent } from '@/lib/wallet';
 import { useConfig, useT, useTrust } from './providers';
@@ -43,8 +43,9 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
   const { t } = useT();
   const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
   const { outcome } = turn;
-  // The honest key helps only when the swapped key was the whole problem: a split log would refuse the honest key too.
-  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.tampered && outcome.keyVerdict.reason === 'absent' ? outcome.model : null;
+  // The honest retry helps only when the swap was the whole problem: a split log would refuse the honest key too.
+  const swapWasWhy = outcome?.kind === 'refused' && ((outcome.tampered === 'key' && outcome.keyVerdict.reason === 'absent') || (outcome.tampered === 'deployment' && outcome.keyVerdict.reason === 'unknown-deployment'));
+  const retryModel = canRetry && outcome?.kind === 'refused' && swapWasWhy ? outcome.model : null;
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>
@@ -63,9 +64,10 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
   );
 });
 
-const DOT: Record<Chip, 'ok' | 'fail' | 'warn'> = { ask: 'ok', tamper: 'fail', incognito: 'warn' };
+const DOT: Record<Chip, 'ok' | 'fail' | 'warn'> = { ask: 'ok', tamper: 'fail', deployment: 'fail', incognito: 'warn' };
+const TAMPER_OF: Partial<Record<Chip, Tamper>> = { tamper: 'key', deployment: 'deployment' };
 
-/** First screen: what the page is about and the three catches as one-click scenarios. Shown until the first message. */
+/** First screen: what the page is about, the honest path and the catches as one-click scenarios. Shown until the first message. */
 function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
   const { t } = useT();
   const chips = Object.keys(t.intro.chips) as Chip[];
@@ -99,7 +101,7 @@ export default function ChatPage() {
   const { t } = useT();
   const wallet = useNearWallet();
   const [model, setModel] = useState(cfg.model);
-  const [tamper, setTamper] = useState(false);
+  const [tamper, setTamper] = useState<Tamper>(false);
   const [input, setInput] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -110,7 +112,8 @@ export default function ChatPage() {
   });
 
   useEffect(() => {
-    setTamper(new URLSearchParams(window.location.search).get('tamper') === '1');
+    const asked = new URLSearchParams(window.location.search).get('tamper');
+    setTamper(asked === '1' ? 'key' : asked === 'deployment' ? 'deployment' : false);
   }, []);
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: 'smooth' });
@@ -178,7 +181,7 @@ export default function ChatPage() {
 
   /** A scenario card sends its prompt with the controls it names. */
   function pick(chip: Chip) {
-    void send(t.intro.prompts[chip], { model: chip === 'incognito' ? cfg.incognitoModel : cfg.model, tamper: chip === 'tamper' });
+    void send(t.intro.prompts[chip], { model: chip === 'incognito' ? cfg.incognitoModel : cfg.model, tamper: TAMPER_OF[chip] ?? false });
   }
 
   return (
@@ -193,9 +196,10 @@ export default function ChatPage() {
             <option value={cfg.incognitoModel}>{cfg.incognitoModel} · {t.incognitoModel}</option>
           </select>
         </label>
-        <label className="muted">
-          <input type="checkbox" checked={tamper} onChange={(e) => setTamper(e.target.checked)} disabled={busy} /> {t.tamper}
-        </label>
+        <span className="demo-switches muted">
+          <label><input type="checkbox" checked={tamper === 'key'} onChange={(e) => setTamper(e.target.checked && 'key')} disabled={busy} /> {t.tamper}</label>
+          <label><input type="checkbox" checked={tamper === 'deployment'} onChange={(e) => setTamper(e.target.checked && 'deployment')} disabled={busy} /> {t.tamperDeployment}</label>
+        </span>
       </div>
 
       <section className="thread">
