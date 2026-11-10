@@ -125,6 +125,11 @@ in progress finish) and the `docker run` again. The reports stay in
 the `ainek-verifier-data` volume. `--restart unless-stopped` restarts the daemon after a crash, and after a reboot
 because the Docker service is enabled at boot on this server (`systemctl is-enabled docker`); the reboot itself has not
 been tried. Run one daemon per verifier account: two with the same key race and can write the same entry twice.
+Since Nov 10 a round fetches `VERIFIER_REPORTS_PER_ROUND` reports (default 5, nothing to set in `verifier.env`): each
+request reaches one replica behind the gateway's balancer, so this is how every replica's deployment gets logged
+over the following rounds, which the deployment check (`AINEK_REQUIRE_DEPLOYMENT`) depends on. Storage: at most one
+entry per key, compose and model per 6 h; with the six composes seen so far that is up to 24 entries a day for the one
+model, up to ~0.24 NEAR (one entry is about 1 KB, 0.01 NEAR).
 
 ### The second verifier, on GitHub's machines (`ainek-v2-dastan.testnet`)
 
@@ -144,7 +149,7 @@ on GitHub-hosted runners, as `ainek-v2-dastan.testnet`; the schedule runs once t
   `gh secret set VERIFIER_V2_PRIVATE_KEY < file`, then `near account delete-keys` for the old one.
 - Minutes: the verifier step takes seconds, the job one to two minutes (checkout and `pnpm install`), billed per started
   minute; 24 runs a day are at most ~1,500 of a private repository's 2,000 free minutes a month, a public repository is
-  not metered. A run that hangs stops at 15 minutes. A scheduled run can start late by a few minutes; nothing depends
+  not metered. A run that hangs stops at 25 minutes. A scheduled run can start late by a few minutes; nothing depends
   on the exact time.
 
 ## Agent service (Tier 2)

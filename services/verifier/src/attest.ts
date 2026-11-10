@@ -57,7 +57,10 @@ export async function fetchReport(baseUrl: string, model: string, nonce: string,
   // `x-no-aliasing: true` (CLAUDE.md): the gateway must answer for exactly this model id, never an alias of it,
   // otherwise a neighbouring deployment's key could end up in the log under this model's name.
   const res = await fetchImpl(url, {
-    headers: { Accept: 'application/json', 'Accept-Encoding': 'identity', 'x-no-aliasing': 'true' },
+    // `Connection: close`: the gateway's balancer picks a replica per connection, not per request (12 of 12 reports from one
+    // replica over a kept-alive connection, 7 and 5 from two with this header, DEV-NOTES 2026-11-10). Without it the several
+    // reports of a round would all come from the replica the first one reached.
+    headers: { Accept: 'application/json', 'Accept-Encoding': 'identity', 'x-no-aliasing': 'true', Connection: 'close' },
     signal: AbortSignal.timeout(120_000),
   });
   if (!res.ok) throw new Error(`attestation report for ${model}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);

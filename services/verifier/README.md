@@ -7,12 +7,14 @@ the log depends on us.
 
 What one round does, per model:
 
-1. `GET /v1/attestation/report?model=…&nonce=<32 random bytes>` from NEAR AI Cloud with `x-no-aliasing: true` (no API key needed). The exact bytes are kept.
+1. `GET /v1/attestation/report?model=…&nonce=<32 random bytes>` from NEAR AI Cloud with `x-no-aliasing: true` (no API key needed),
+   `VERIFIER_REPORTS_PER_ROUND` times (default 5): each request is answered by one replica behind the gateway's balancer, and the
+   replicas differ in compose hash. The exact bytes of every report are kept.
 2. The NEAR AI SDK verifies the evidence locally: Intel TDX quote (DCAP, live collateral), NVIDIA GPU verdict (NRAS),
    nonce and signing key bound in the report data, `app_compose` vs MRCONFIGID, RTMR3 replay. Policy: `AINEK_ACCEPTED_TCB` (default `UpToDate`), GPU evidence required.
 3. Every attestation the report carries for the model (replicas, rolling deployments) is verified separately; one `KeyEntryInput` per verified key (`packages/proof` `buildKeyEntryInput`, same code for every verifier).
-4. A key+compose pair this verifier logged in the last 6 h is not sent again. Otherwise `log_key` under the verifier's account.
-5. The report is written to `data/reports/<report_hash>.json`.
+4. A key+compose pair this verifier logged in the last 6 h, or already sent in this round, is not sent again. Otherwise `log_key` under the verifier's account.
+5. Each report is written to `data/reports/<report_hash>.json`.
 
 A key whose evidence does not verify is not logged, the other keys of the report still are. Nothing else happens: clients then refuse the unlogged key (fail-closed).
 
@@ -61,13 +63,18 @@ account at all.
 Expected output of a round:
 
 ```
-z-ai/glm-5.3-flash: report with 1 attestation(s) checked in 4.2 s
+z-ai/glm-5.3-flash: 5 report(s) with 5 attestation(s) checked in 21.4 s
 z-ai/glm-5.3-flash: key 5a02…caff verified: TCB UpToDate, GPU verified, compose a0e3…8c5f, 4 image digest(s)
 logged z-ai/glm-5.3-flash key 5a02…caff at index 3, tx 7Nd…
+z-ai/glm-5.3-flash: key 5a02…caff verified: TCB UpToDate, GPU verified, compose e841…729d, 4 image digest(s)
+logged z-ai/glm-5.3-flash key 5a02…caff at index 4, tx 9Qa…
+z-ai/glm-5.3-flash: key 5a02…caff verified: TCB UpToDate, GPU verified, compose a0e3…8c5f, 4 image digest(s)
+z-ai/glm-5.3-flash: key 5a02…caff with this compose already sent by us in this round, not logging again
+…
 ```
 
 Variables (root `.env`, see `.env.example`): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`
-(comma-separated, default `z-ai/glm-5.3-flash`), `VERIFIER_INTERVAL_MIN` (15), `AINEK_CONTRACT`, `NEAR_RPC_URL`,
+(comma-separated, default `z-ai/glm-5.3-flash`), `VERIFIER_INTERVAL_MIN` (15), `VERIFIER_REPORTS_PER_ROUND` (5; 1 in a dry run), `AINEK_CONTRACT`, `NEAR_RPC_URL`,
 `NEARAI_BASE_URL`, `AINEK_ACCEPTED_TCB`, optional `VERIFIER_DATA_DIR`.
 
 Tests: `pnpm -F verifier test` (offline, on the recorded report in `docs/samples`).

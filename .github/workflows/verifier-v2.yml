@@ -15,7 +15,7 @@ permissions:
 jobs:
   round:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25 # five reports that each hang for the verifier's 180 s deadline are 15 minutes, and entries are written after them
     env:
       VERIFIER_ACCOUNT_ID: ainek-v2-dastan.testnet
       VERIFIER_PRIVATE_KEY: ${{ secrets.VERIFIER_V2_PRIVATE_KEY }} # function-call key, log_key only
