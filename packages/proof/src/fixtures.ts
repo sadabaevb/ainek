@@ -7,8 +7,18 @@ export function readRepoFile(path: string): Uint8Array {
   return new Uint8Array(readFileSync(new URL(path, root)));
 }
 
+export function readRepoText(path: string): string {
+  return new TextDecoder().decode(readRepoFile(path));
+}
+
 export function readRepoJson<T = unknown>(path: string): T {
-  return JSON.parse(new TextDecoder().decode(readRepoFile(path))) as T;
+  return JSON.parse(readRepoText(path)) as T;
+}
+
+/** The body of a `## heading` section of a markdown text, up to the next `## ` or, with `toEnd`, to the end of the file. */
+export function mdSection(md: string, heading: string, toEnd = false): string | undefined {
+  const rest = md.split(`\n## ${heading}\n`)[1];
+  return toEnd ? rest : rest?.split('\n## ')[0];
 }
 
 export interface RpcCall {
