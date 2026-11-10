@@ -11,6 +11,9 @@ export interface VerifierConfig extends AinekConfig {
   privateKey: string;
   models: string[];
   intervalMs: number;
+  /** Attestation reports fetched per model per round. The gateway answers each request from one replica behind its balancer, and
+   *  the replicas differ in compose hash; one report a round would log a new deployment only when the balancer happened to pick it. */
+  reportsPerRound: number;
   /** Where full attestation reports are kept, one file per `report_hash`. */
   reportsDir: string;
   /** A key already logged by this verifier within this window is not logged again (gas). */
@@ -22,6 +25,8 @@ export interface VerifierConfig extends AinekConfig {
 export const SIX_HOURS_NS = String(6n * 3600n * 1_000_000_000n);
 /** 24 days: under setTimeout's 2^31-1 ms limit. */
 export const MAX_INTERVAL_MIN = 24 * 24 * 60;
+/** Each report is one attestation fetch and one full verification (5–60 s, up to 180 s when it hangs), fetched one after another; more than this per round is a round that never ends. */
+export const MAX_REPORTS_PER_ROUND = 20;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { dryRun?: boolean } = {}): VerifierConfig {
   const dryRun = opts.dryRun === true;
@@ -44,12 +49,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { dryRun?
     throw new Error(`VERIFIER_INTERVAL_MIN must be between 1 and ${MAX_INTERVAL_MIN}, got ${String(env['VERIFIER_INTERVAL_MIN'])}`);
   }
 
+  // A dry run is the clean-clone check and should stay short; a writing verifier wants to see every replica (five is what
+  // the gateway has shown so far, DEV-NOTES 2026-11-10).
+  const reportsPerRound = Number(env['VERIFIER_REPORTS_PER_ROUND'] ?? (dryRun ? '1' : '5'));
+  if (!Number.isInteger(reportsPerRound) || reportsPerRound < 1 || reportsPerRound > MAX_REPORTS_PER_ROUND) {
+    throw new Error(`VERIFIER_REPORTS_PER_ROUND must be a whole number between 1 and ${MAX_REPORTS_PER_ROUND}, got ${String(env['VERIFIER_REPORTS_PER_ROUND'])}`);
+  }
+
   return {
     ...ainekConfigFromEnv(env),
     accountId,
     privateKey,
     models,
     intervalMs: intervalMin * 60_000,
+    reportsPerRound,
     // `||`, not `??`: an empty `VERIFIER_DATA_DIR=` line in .env must mean "default", not mkdir('').
     reportsDir: env['VERIFIER_DATA_DIR'] || path.resolve(import.meta.dirname, '../data/reports'),
     dedupWindowNs: SIX_HOURS_NS,

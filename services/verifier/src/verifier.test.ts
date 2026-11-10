@@ -2,14 +2,15 @@
 // for the network. The SDK's verification itself is exercised by `pnpm demo` (replay) and by the live run.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { test } from 'node:test';
+import { readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { after, test } from 'node:test';
 import { VerificationError, type VerificationFailure, type verifyModelAttestation } from '@nearai/inference-sdk/node';
 import { buildKeyEntryInput, type KeyEntry, type RawReport } from '@ainek/proof';
-import { attestModel, selectModelAttestations, withDeadline } from './attest.ts';
-import { MAX_INTERVAL_MIN, loadConfig } from './config.ts';
-import { alreadyLogged, parseLoggedIndex } from './log.ts';
-import { RETRY_AFTER_FAILURE_MS, failureStreaks, nextDelayMs } from './main.ts';
+import { attestModel, selectModelAttestations, withDeadline, type AttestedKey } from './attest.ts';
+import { MAX_INTERVAL_MIN, MAX_REPORTS_PER_ROUND, loadConfig } from './config.ts';
+import { alreadyLogged, parseLoggedIndex, type KeyLogWriter } from './log.ts';
+import { RETRY_AFTER_FAILURE_MS, failureStreaks, nextDelayMs, runRound } from './main.ts';
 
 const samples = new URL('../../../docs/samples/', import.meta.url);
 const reportBytes = readFileSync(new URL('attestation-report.json', samples));
@@ -70,6 +71,50 @@ test('loadConfig refuses to start without the verifier account and key, and boun
   assert.throws(() => loadConfig({ ...base, VERIFIER_INTERVAL_MIN: String(MAX_INTERVAL_MIN + 1) }), /between 1 and/);
   // A dry run sends nothing, so the .env.example placeholders must be enough (clean-clone rule).
   assert.equal(loadConfig({ VERIFIER_ACCOUNT_ID: 'v1.ainek.testnet', VERIFIER_PRIVATE_KEY: 'ed25519:...' }, { dryRun: true }).dryRun, true);
+  // A writing verifier wants every replica; the clean-clone dry run stays one report long.
+  assert.equal(cfg.reportsPerRound, 5);
+  assert.equal(loadConfig({}, { dryRun: true }).reportsPerRound, 1);
+  assert.equal(loadConfig({ ...base, VERIFIER_REPORTS_PER_ROUND: '2' }).reportsPerRound, 2);
+  assert.throws(() => loadConfig({ ...base, VERIFIER_REPORTS_PER_ROUND: String(MAX_REPORTS_PER_ROUND + 1) }), /between 1 and/);
+  assert.throws(() => loadConfig({ ...base, VERIFIER_REPORTS_PER_ROUND: '1.5' }), /whole number/);
+});
+
+/** A round in which the gateway's balancer answers from the given replicas, one per report; `fail` reports do not come back. */
+function roundWith(...composes: (string | 'fail')[]) {
+  const base = selectModelAttestations(raw, model)[0]!;
+  let call = 0;
+  const attest = async (m: string) => {
+    const compose = composes[call++ % composes.length]!;
+    if (compose === 'fail') throw new Error('gateway: HTTP 502');
+    const entry = { ...entryFromRecording(), compose_hash: compose.repeat(32) };
+    return { model: m, nonce: base.request_nonce, reportBytes: new Uint8Array([call]), reportHash: `report-${call}`, keys: [{ ok: true as const, verified: { gpuEvidence: 'verified' } as AttestedKey extends { verified: infer V } ? V : never, entry }] };
+  };
+  const logged: string[] = [];
+  const writer: KeyLogWriter = { recentByMe: async () => [], logKey: async (e) => (logged.push(e.compose_hash), { index: logged.length, txHash: `tx${logged.length}` }) };
+  return { attest, writer, logged, calls: () => call };
+}
+
+test('one round sees every replica behind the balancer and logs each deployment once', async () => {
+  const reportsDir = `${tmpdir()}/ainek-verifier-test-${process.pid}`;
+  after(() => rmSync(reportsDir, { recursive: true, force: true }));
+  const cfg = { ...loadConfig({ VERIFIER_ACCOUNT_ID: 'v1.testnet', VERIFIER_PRIVATE_KEY: 'ed25519:' + '1'.repeat(80), VERIFIER_REPORTS_PER_ROUND: '4' }), reportsDir };
+  const lines: string[] = [];
+  // Nov 10: the same key is served from several composes (replicas). Until a verifier logs a compose, a client that checks
+  // the deployment refuses it; with one report a round that took as long as the balancer took to pick that replica.
+  const r = roundWith('aa', 'bb', 'aa', 'fail');
+  const results = await runRound(cfg, r.writer, (l) => lines.push(l), r.attest);
+  assert.equal(r.calls(), 4, 'every report of the round is fetched, a failed one is not retried in the round');
+  assert.deepEqual(r.logged, ['aa'.repeat(32), 'bb'.repeat(32)], 'each deployment is logged once, the repeated replica is not');
+  assert.equal(results.filter((x) => x.outcome === 'logged').length, 2);
+  assert.equal(results.filter((x) => x.outcome === 'current').length, 1, 'the repeated replica counts as current, not as a failure');
+  assert.ok(lines.some((l) => /report 4 of 4 failed/.test(l)), 'the lost report is said, and does not fail the round');
+  assert.ok(lines.some((l) => /3 report\(s\) with 3 attestation/.test(l)));
+
+  // No report at all is the one case the model's round fails: nothing could be checked.
+  const none = roundWith('fail');
+  const failed = await runRound(cfg, none.writer, () => {}, none.attest);
+  assert.deepEqual(failed.map((x) => x.outcome), ['failed']);
+  assert.equal(none.logged.length, 0);
 });
 
 test('a new failure is retried within a minute; one that stays backs off without slowing the others', () => {

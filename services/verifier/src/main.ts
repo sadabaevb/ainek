@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Ainek verifier daemon (SPEC §3.2). Every VERIFIER_INTERVAL_MIN minutes, for each model in VERIFIER_MODELS:
-// re-attest with a fresh nonce, verify the evidence locally, and append every verified signing key of the model
-// to the public key log under this verifier's account, unless the same key+deployment was logged by us within
-// the last 6 h. The full report is kept in data/reports/<report_hash>.json so `report_hash` can always be checked.
+// re-attest with a fresh nonce (VERIFIER_REPORTS_PER_ROUND times, so the replicas behind the gateway's balancer all
+// get seen), verify the evidence locally, and append every verified signing key of the model to the public key log
+// under this verifier's account, unless the same key+deployment was logged by us within the last 6 h. Each full report
+// is kept in data/reports/<report_hash>.json so `report_hash` can always be checked.
 //
 //   pnpm -F verifier start          loop
 //   pnpm -F verifier once           one round, exit 0 if every key was logged or already current
@@ -10,7 +11,7 @@
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { shortHex } from '@ainek/proof';
-import { attestModel, withDeadline } from './attest.ts';
+import { attestModel, withDeadline, type AttestationRound } from './attest.ts';
 import { loadConfig, type VerifierConfig } from './config.ts';
 import { alreadyLogged, keyLogWriter, type KeyLogWriter } from './log.ts';
 
@@ -42,20 +43,31 @@ export function nextDelayMs(streaks: ReadonlyMap<string, number>, intervalMs: nu
   return Math.min(RETRY_AFTER_FAILURE_MS * 2 ** (Math.min(...streaks.values()) - 1), intervalMs);
 }
 
-export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (line: string) => void = console.log): Promise<KeyResult[]> {
+/** Fetches and verifies one attestation report; `attestModel` in the daemon, a stub in the tests. */
+export type Attest = (model: string) => Promise<AttestationRound>;
+
+export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (line: string) => void = console.log, attest: Attest = (model) => attestModel(model, { baseUrl: cfg.nearaiBaseUrl, acceptedTcbStatuses: cfg.acceptedTcbStatuses })): Promise<KeyResult[]> {
   const results: KeyResult[] = [];
   for (const model of cfg.models) {
     const started = performance.now();
-    // Anything that fails before the per-key loop (attestation fetch, disk, reading the log) fails this model's
-    // round and nothing else: the daemon keeps running and tries again next round.
-    let round;
+    // Each request reaches one replica behind the gateway's balancer, so several reports a round are how every
+    // replica's deployment gets logged soon after it appears. A fetch that fails is one report fewer and is only said
+    // here (it does not fail the round or hasten the next one); the model's round fails only when none came back, or
+    // the log cannot be read (without it we cannot dedup, and writing blindly would spend gas on every round). Either
+    // way the daemon keeps running and tries again next round.
+    const reports: AttestationRound[] = [];
     let recent;
     try {
-      round = await attestModel(model, { baseUrl: cfg.nearaiBaseUrl, acceptedTcbStatuses: cfg.acceptedTcbStatuses });
+      for (let i = 0; i < cfg.reportsPerRound; i++) {
+        try {
+          reports.push(await attest(model));
+        } catch (err) {
+          log(`${model}: report ${i + 1} of ${cfg.reportsPerRound} failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (reports.length === 0) throw new Error('no attestation report could be fetched');
       mkdirSync(cfg.reportsDir, { recursive: true });
-      writeFileSync(path.join(cfg.reportsDir, `${round.reportHash}.json`), round.reportBytes);
-      log(`${model}: report with ${round.keys.length} attestation(s) checked in ${((performance.now() - started) / 1000).toFixed(1)} s`);
-      // Without the log we cannot dedup; writing blindly would spend gas on every round, so skip this model.
+      for (const r of reports) writeFileSync(path.join(cfg.reportsDir, `${r.reportHash}.json`), r.reportBytes);
       recent = await writer.recentByMe(model, cfg.dedupWindowNs);
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -64,10 +76,13 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       continue;
     }
 
-    // Keys sent earlier in this same round: two replicas with the same key and compose count once. A key counts as
-    // sent from the moment we try: a `log_key` we stopped waiting for may still land, and must not be sent twice.
+    // Keys sent earlier in this same round: two reports from the same replica, or two replicas with the same key and
+    // compose, count once. A key counts as sent from the moment we try: a `log_key` we stopped waiting for may still
+    // land, and must not be sent twice.
     const sentNow = new Set<string>();
-    for (const k of round.keys) {
+    const keys = reports.flatMap((r) => r.keys);
+    log(`${model}: ${reports.length} report(s) with ${keys.length} attestation(s) checked in ${((performance.now() - started) / 1000).toFixed(1)} s`);
+    for (const k of keys) {
       if (!k.ok) {
         // Fail closed: a replica whose evidence does not verify is simply not logged; clients then refuse that key.
         log(`${model}: key ${shortHex(k.signingAddress)} NOT logged: ${k.error}`);

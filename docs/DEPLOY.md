@@ -125,6 +125,11 @@ in progress finish) and the `docker run` again. The reports stay in
 the `ainek-verifier-data` volume. `--restart unless-stopped` restarts the daemon after a crash, and after a reboot
 because the Docker service is enabled at boot on this server (`systemctl is-enabled docker`); the reboot itself has not
 been tried. Run one daemon per verifier account: two with the same key race and can write the same entry twice.
+Since Nov 10 a round fetches `VERIFIER_REPORTS_PER_ROUND` reports (default 5, nothing to set in `verifier.env`): each
+request reaches one replica behind the gateway's balancer, so this is how every replica's deployment gets logged
+over the following rounds, which the deployment check (`AINEK_REQUIRE_DEPLOYMENT`) depends on. Storage: at most one
+entry per key, compose and model per 6 h; with the six composes seen so far that is up to 24 entries a day for the one
+model, up to ~0.24 NEAR (one entry is about 1 KB, 0.01 NEAR).
 
 ## Agent service (Tier 2)
 
