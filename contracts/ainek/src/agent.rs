@@ -442,6 +442,11 @@ impl Contract {
         u32::try_from(action_id).ok().and_then(|i| self.actions.get(i)).cloned()
     }
 
+    /// How many actions exist: ids are `0..action_count()`, so a page can list them without probing for the last one.
+    pub fn action_count(&self) -> u64 {
+        u64::from(self.actions.len())
+    }
+
     pub fn pending_actions(&self, agent_id: AccountId) -> Vec<ActionRecord> {
         let ids = self.agents.get(&agent_id).map(|a| a.pending.clone()).unwrap_or_default();
         ids.into_iter().filter_map(|id| self.action(id)).collect()
@@ -623,6 +628,17 @@ mod tests {
         agent.spent_day = DECIDED_AT_MS / DAY_MS;
         agent.spent = amount;
         contract.agents.insert(acc(AGENT), agent);
+    }
+
+    /// The /agent page lists every action; `action_count` tells it where the ids end, including the one being settled.
+    #[test]
+    fn action_count_is_the_next_action_id() {
+        let mut contract = setup();
+        assert_eq!(contract.action_count(), 0);
+        let id = propose(&mut contract, 0);
+        assert_eq!(id, 0);
+        assert_eq!(contract.action_count(), 1);
+        assert!(contract.action(contract.action_count()).is_none(), "the count is one past the last id");
     }
 
     #[test]

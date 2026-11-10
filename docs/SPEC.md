@@ -197,6 +197,7 @@ propose_action(action: Action, model_proof_commit: String, decision: Decision, t
 approve(action_id: u64) / reject(action_id: u64)                                                                   // owner, 1 yocto
 view agent(agent_id) -> AgentInfo | null
 view action(action_id) -> ActionRecord | null
+view action_count() -> u64                                                                                          // ids are 0..action_count()
 view pending_actions(agent_id) -> Vec<ActionRecord>
 ```
 ```
