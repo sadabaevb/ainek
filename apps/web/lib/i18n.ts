@@ -307,6 +307,7 @@ const en = {
     actionsTitle: (n: number) => `Recorded actions (${n})`,
     noActions: 'No action has been proposed on this contract yet.',
     more: (n: number) => `Showing the first ${n} actions. The contract holds more.`,
+    behind: (n: number) => `The contract counts ${n} more action${n === 1 ? '' : 's'} that the node has not returned yet. The page keeps asking.`,
     outcome: {
       'Allow/Executed': 'Allowed by the policy, paid',
       'Allow/Executing': 'Allowed by the policy, transfer in progress',
@@ -649,6 +650,7 @@ const ru: typeof en = {
     actionsTitle: (n: number) => `Записанные действия (${n})`,
     noActions: 'В этом контракте ещё не предложено ни одного действия.',
     more: (n: number) => `Показаны первые ${n} действий. В контракте их больше.`,
+    behind: (n: number) => `По счётчику контракта есть ещё действия (${n}), которые узел пока не вернул. Страница продолжает спрашивать.`,
     outcome: {
       'Allow/Executed': 'Разрешено политикой, оплачено',
       'Allow/Executing': 'Разрешено политикой, перевод выполняется',

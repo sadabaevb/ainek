@@ -27,14 +27,14 @@ export interface RpcCall {
   args: Record<string, unknown>;
 }
 
+/** What `answer` returns for a view the stand-in contract does not have: the node then reports MethodNotFound, as a real one does. */
+export const NO_SUCH_METHOD = Symbol('no such method');
+
 /**
  * Installs a `fetch` that plays the NEAR JSON-RPC: every view call is answered from `answer` (undefined reads as the contract
  * returning null), every access-key list from `keys`. Returns the calls it saw, a key list as method `view_access_key_list`.
  * The caller puts the real `fetch` back (afterEach).
  */
-/** What `answer` returns for a view the stand-in contract does not have: the node then reports MethodNotFound, as a real one does. */
-export const NO_SUCH_METHOD = Symbol('no such method');
-
 export function fakeRpc(answer: (call: RpcCall) => unknown, keys: (account: string) => unknown[] = () => []): RpcCall[] {
   const calls: RpcCall[] = [];
   globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {

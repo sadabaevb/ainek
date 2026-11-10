@@ -10,6 +10,8 @@ export interface Ledger {
   records: ActionRecord[];
   /** The contract holds more actions than were read. */
   more: boolean;
+  /** Actions the contract counts and the node has not returned yet (two nodes a block apart): the list is short until the next read. */
+  behind: number;
   /** The configured agent first, then any other agent that has proposed something. */
   agents: AgentState[];
   /** By token account. A token whose metadata cannot be read is left out, and its amounts are shown in minimal units. */
@@ -34,13 +36,16 @@ export async function loadLedger(cfg: Chain, signal: AbortSignal, previous?: Led
     readActions(cfg.rpcUrl, cfg.contract, { from: kept.length, signal }),
     readAgentState(cfg.rpcUrl, cfg.contract, cfg.agentAccount, signal),
   ]);
-  const records = [...kept, ...tail.records];
+  const read = [...kept, ...tail.records];
+  // A node that is a block behind must not take an action off the page: what was shown past this read stays as it was.
+  const records = previous && previous.records.length > read.length ? [...read, ...previous.records.slice(read.length)] : read;
+  const behind = Math.max(0, tail.behind - (records.length - read.length));
   const otherIds = [...new Set(records.map((r) => r.agent_id))].filter((id) => id !== cfg.agentAccount);
   const agents = [shown, ...(await Promise.all(otherIds.map((id) => readAgentState(cfg.rpcUrl, cfg.contract, id, signal))))];
   const known = previous?.tokens ?? {};
   const tokenIds = [...new Set([...agents.flatMap((a) => (a.info ? [a.info.token_id] : [])), ...records.map((r) => r.action.token_id)])].filter((id) => !(id in known));
   const fresh = await Promise.all(tokenIds.map(async (id) => [id, await readTokenInfo(cfg.rpcUrl, id, signal).catch(() => null)] as const));
-  return { owner, records, more: tail.more, agents, tokens: { ...known, ...Object.fromEntries(fresh.flatMap(([id, info]) => (info ? [[id, info] as const] : []))) } };
+  return { owner, records, more: tail.more, behind, agents, tokens: { ...known, ...Object.fromEntries(fresh.flatMap(([id, info]) => (info ? [[id, info] as const] : []))) } };
 }
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
