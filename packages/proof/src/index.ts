@@ -32,6 +32,7 @@ export { buildModelProof, buildCheckedModelProof, buildActionProof } from './bui
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
 export { withRetry, isNetworkFailure } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
+export { e2eeVersionProblem, looksE2ee, requireE2eeVersion } from './e2ee.ts';
 export { PolicyInput, PolicyOutput, checkPolicyOutput, decidedAtMs, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';

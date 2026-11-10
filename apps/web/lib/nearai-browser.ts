@@ -16,7 +16,7 @@ import {
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
-import { parseChatCompletion, withRetry } from '@ainek/proof';
+import { parseChatCompletion, requireE2eeVersion, withRetry } from '@ainek/proof';
 import { chatRequest, relayAttestationClient, type ChatMessage } from './nearai-requests';
 import { getDeployment, putDeployment } from './store';
 
@@ -150,6 +150,7 @@ export async function prepareE2ee(model: string, messages: ChatMessage[], modelA
     request: chatRequest(baseUrl(), model, messages),
     modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelAttestation.signingPublicKey },
   });
+  requireE2eeVersion(prepared.request.headers);
   return { prepared, requestBody: new Uint8Array(await prepared.request.clone().arrayBuffer()) };
 }
 

@@ -53,7 +53,7 @@ docs/                SPEC.md, ROADMAP.md, HACKATHON-RULES.md, CLAIMS.md, LINKS.m
 
 ## Stack and versions (check npm/crates before pinning; pin exact versions in lockfiles)
 
-- `@nearai/inference-sdk` 0.2.1 (published 2026-10-29). Server code uses `@nearai/inference-sdk/node`
+- `@nearai/inference-sdk` 0.3.0 (published 2026-11-08; E2EE v3). Server code uses `@nearai/inference-sdk/node`
   on **Node 24+** and calls NVIDIA NRAS and Intel PCS (`api.trustedservices.intel.com`) directly; the browser uses the root
   entry, which reaches them through NEAR AI's own proxies. Our relay only forwards the four SDK paths.
 - Model: `z-ai/glm-5.3-flash` (Private TEE tier). Always pass `signingAlgo: 'ed25519'` explicitly,
