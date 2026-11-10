@@ -63,8 +63,9 @@ export type ChatOutcome =
   | VerifiedOutcome
   | { kind: 'refused'; model: string; /** A demo switch swapped something: the card can offer the honest retry. */ tampered: Tamper; /** With a demo switch on: would the same message pass the log check without it? Only then is the retry worth offering. */ honestWouldPass: boolean; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string; /** The compose hash the log was asked about; undefined when the deployment check did not run. */ seenCompose: string | undefined }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
-  /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
-  | { kind: 'failed'; step: StepId; reason: string; reply?: string };
+  /** `unverifiedReply` is present when a reply had come back before the failing step (see failurePhase). It is not `reply`:
+   *  nothing vouches for it, so it is shown marked and never reused (packages/tier1-node calls its twin `unverifiedCompletion`). */
+  | { kind: 'failed'; step: StepId; reason: string; unverifiedReply?: string };
 
 class StepFailed extends Error {
   constructor(readonly step: StepId, readonly reason: string) {
@@ -121,8 +122,8 @@ export async function runChat(cfg: PublicConfig, params: ChatParams): Promise<Ch
   try {
     return await (params.model === cfg.incognitoModel ? nonTeeRoute(cfg, route, progress) : teeRoute(cfg, route, progress));
   } catch (err) {
-    // `reply` only when one came back: the page shows the assistant bubble on the key's presence.
-    const failed = (step: StepId, reason: string): ChatOutcome => ({ kind: 'failed', step, reason, ...(progress.reply === undefined ? {} : { reply: progress.reply }) });
+    // `unverifiedReply` only when one came back: the page shows the marked bubble on the key's presence.
+    const failed = (step: StepId, reason: string): ChatOutcome => ({ kind: 'failed', step, reason, ...(progress.reply === undefined ? {} : { unverifiedReply: progress.reply }) });
     if (err instanceof StepFailed) return failed(err.step, err.reason);
     const reason = describeError(err);
     emit({ id: running, status: 'fail', detail: reason });

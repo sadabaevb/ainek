@@ -187,7 +187,7 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Party | Sees | Does not see | Guarantee |
 | --- | --- | --- | --- |
 | Relay (our server) | ciphertext, size, timing, IP, API key; model id, message count and roles, token usage, completion ids | prompt, response and tool-call contents | E2EE to the model key from the verified attestation report |
-| Relay on the Incognito demo route (user-chosen) | the plaintext prompt and reply | — | none (no model key to encrypt to); the red card says so |
+| Relay on the Incognito demo route (user-chosen) | the plaintext prompts and replies of that route, and no earlier turn sent to the private model | — | none (no model key to encrypt to); the red card says so |
 | Hosting (Vercel), hosted demo only | what the relay sees, since the relay runs there, plus request logs (IP, path, time) and the API key in the project's settings | on the E2EE route, prompt, response and tool-call contents (on the Incognito route it sees the plaintext, as the relay does) | E2EE, as for the relay; it also serves the page's code, so you trust it to serve this repo's (`pnpm -F web dev` from a clean clone removes that) |
 | NEAR AI gateway and proxy | ciphertext, token accounting; the browser's IP during collateral and NRAS calls | contents | E2EE; the gateway is attested; the proxy cannot forge the NVIDIA verdict (checked against NVIDIA's keys) |
 | NVIDIA key server | the browser's IP and timing of each cold verification (the SDK fetches NVIDIA's public keys directly) | anything about the exchange | public keys only; the NRAS verdict itself goes through NEAR AI's proxy |
