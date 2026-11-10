@@ -19,7 +19,7 @@ import {
   type TcbStatus,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, composeHashOf, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, proofEntryOf, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { buildCheckedModelProof, composeHashOf, evaluateKeyLog, failurePhase, keyLogReader, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
@@ -263,6 +263,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
         }),
       () => `encrypted to the attested model key ${short(modelAttestation.signer.signingAddress)}`,
     );
+    requireE2eeVersion(prepared.request.headers);
     const requestBody = new Uint8Array(await prepared.request.clone().arrayBuffer());
 
     // 4. Send over the pinned connection; keep the ciphertext reply bytes, decrypt a clone.

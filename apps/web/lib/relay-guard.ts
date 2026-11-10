@@ -1,6 +1,7 @@
 // What the NEAR AI relay (app/api/nearai/[...path]/route.ts, SPEC §3.4) forwards: exactly the requests the page makes
 // through the pinned SDK (0.3.0) for the two configured models, and the headers it sends. relay-guard.test.ts drives
 // the same code (nearai-requests.ts), so an SDK update that changes them fails a test instead of the hosted chat.
+import { e2eeVersionProblem } from '@ainek/proof';
 
 /** Request headers the SDK and the chat request send: content negotiation, model-key routing and E2EE. The relay drops
  *  everything else (cookies, platform-injected forwarding headers, user agent). */
@@ -58,8 +59,10 @@ export function relayRequestProblem(method: string, rawPath: string, query: URLS
   return null;
 }
 
-/** The page's chat request and nothing more: its three fields, one of our models, not streamed, a bounded number of messages. */
-export function completionProblem(body: ArrayBuffer, models: ReadonlySet<string>): string | null {
+/** The page's chat request and nothing more: its three fields, one of our models, not streamed, a bounded number of messages.
+ *  The attested model is taken only as E2EE of the current version, so this server never relays its plaintext or a request
+ *  whose reply key is not bound (a tab still running an older build); the Incognito model is plaintext by design (SPEC §3.9). */
+export function completionProblem(body: ArrayBuffer, models: ReadonlySet<string>, headers: { get(name: string): string | null }, attestedModel: string): string | null {
   let json: Record<string, unknown>;
   try {
     json = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
@@ -71,5 +74,6 @@ export function completionProblem(body: ArrayBuffer, models: ReadonlySet<string>
   if (typeof json.model !== 'string' || !models.has(json.model)) return 'model not allowed';
   if (json.stream !== undefined && json.stream !== false) return 'streaming not allowed';
   if (!Array.isArray(json.messages) || json.messages.length === 0 || json.messages.length > MAX_MESSAGES) return `messages must be 1..${MAX_MESSAGES}`;
-  return null;
+  if (headers.get('x-model-pub-key') !== null) return e2eeVersionProblem(headers);
+  return json.model === attestedModel ? 'the attested model takes only end-to-end encrypted requests' : null;
 }

@@ -97,25 +97,26 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **Side-channel protection.** Message size and timing are visible to our relay and to NEAR AI.
 - **An audited contract.** The contract has unit tests and a `near-sandbox` integration test, no audit.
 - **That the E2EE flag in a disclosed file is proven.** The signature covers the request and response bytes; whether those
-  bytes were ciphertext is the sender's claim, and `/auditor` labels it as such.
+  bytes were ciphertext is the sender's claim, and `/auditor` labels it as such. A proof does not record the E2EE version
+  either, and nothing in the signed bytes shows it.
 
 ## Known issues we inherited (say so)
 
 - NEAR AI's E2EE route has a reply-key-substitution finding ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061),
-  cited by the Miller registry; still open upstream, checked 2026-11-10). We pin the model key from a verified report via
-  `X-Model-Pub-Key`, which protects the request. The reply key travels as a header (`x-client-pub-key`). Under E2EE v1/v2
-  nothing bound it, so any hop that swapped it could read each reply it diverted, and the card would only fail afterwards.
-  NEAR AI's fix is "E2EE v3" (design: [inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)), which
-  binds the reply key and the field label into the AEAD associated data of every encrypted request field, so the proxy
-  rejects a swapped key before inference. The gateway and proxy sides were merged on Oct 28 2026
+  cited by the Miller registry), still open upstream (checked 2026-11-10). We pin the model key from a verified report via
+  `X-Model-Pub-Key`, which protects the request. The reply key travels in a header (`x-client-pub-key`) that E2EE v1/v2
+  did not bind, so a hop that swapped it could read the reply it diverted. The card would fail for that reply, or stay
+  green if the hop also sent the same request again with the real key: a proof made under v2 does not rule out that a hop
+  read a reply to that prompt. E2EE v3 ([inference-proxy#312](https://github.com/nearai/inference-proxy/issues/312)) binds
+  the reply key and the field label into the AEAD associated data of every encrypted request field, so the proxy rejects a
+  swapped key before inference. Gateway and proxy merged it on Oct 28 2026
   ([cloud-api#1296](https://github.com/nearai/cloud-api/pull/1296),
-  [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)), the SDK side shipped in SDK 0.3.0 on Nov 8
-  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)). Since Nov 10 this repo uses SDK 0.3.0: it sends
-  `X-Encryption-Version: 3` and does not fall back to an older version (a test pins the header). A live exchange went
-  through on Nov 10 (`pnpm demo:live`), so production accepts v3. What we have not done is send a request with a swapped
-  reply key and watch the proxy refuse it: that the proxy enforces the binding rests on NEAR AI's code, which we
-  have not tested. The gateway still accepts v1/v2 requests from other clients. The recorded exchange the offline replay
-  uses was made under v2.
+  [inference-proxy#321](https://github.com/nearai/inference-proxy/pull/321)), the SDK shipped it on Nov 8 in 0.3.0
+  ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)). This repo has used 0.3.0 since Nov 10: the SDK
+  sends `X-Encryption-Version: 3` with no fallback, the client refuses to send a request not marked v3, and our relay
+  refuses one too. A live exchange passed on Nov 10 (`pnpm demo:live`), so production accepts v3. We did not send a swapped
+  reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
+  other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one writes to the log, a second account of ours is registered and has not
   written (checked 2026-11-10). Nobody outside the team runs one yet.
