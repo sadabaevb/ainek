@@ -38,6 +38,13 @@ for (const verifier of cfg.trustedVerifiers) {
     return `${own.length} entr${own.length === 1 ? 'y' : 'ies'}, all by ${verifier}`;
   });
 }
+// The check above cannot fail while that verifier is the only writer in the window. The contract account never writes
+// to its own log, so with the filter applied this read is empty; a build that ignores the argument answers with entries.
+await check(`latest_keys(${model}, 24h, verifier ${account})`, async () => {
+  const none = await log.latestKeys(model, undefined, undefined, account);
+  if (none.length > 0) throw new Error(`the filter is not applied: ${none.length} entries came back for an account that wrote none`);
+  return 'no entries for an account that wrote none: the filter is applied';
+});
 await check('entries_since(0, 10)', () => log.entriesSince(0, 10));
 if (head != null) await check(`entry(${head.index})`, async () => { const e = await log.entry(head.index); if (e === null) throw new Error('returned nothing for the head index'); return e; });
 // The offline replay's log is entry #0 recorded from this contract. A redeploy makes that recording stale: a note, not an ABI failure.

@@ -51,3 +51,21 @@ test('contractLog: a malformed RPC URL fails the read, not the construction, so 
   const read = contractLog({ rpcUrl: 'rpc.testnet.fastnear.com', contract: 'c.testnet', trustedVerifiers: ['v.testnet'] });
   await assert.rejects(read('m', new AbortController().signal));
 });
+
+test('contractLog: the general window and each trusted verifier\'s own entries are read from the contract', async () => {
+  const asked: Array<string | undefined> = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    const { params } = JSON.parse(String(init?.body)) as { params: { method_name: string; args_base64: string } };
+    assert.equal(params.method_name, 'latest_keys');
+    asked.push((JSON.parse(Buffer.from(params.args_base64, 'base64').toString()) as { verifier?: string }).verifier);
+    return new Response(JSON.stringify({ result: { result: [...Buffer.from('[]')] } }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const read = contractLog({ rpcUrl: 'http://rpc.test', contract: 'c.testnet', trustedVerifiers: ['a.testnet', 'b.testnet'] });
+    assert.deepEqual((await read('m', new AbortController().signal)).entries, []);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.deepEqual(asked.sort(), ['a.testnet', 'b.testnet', undefined]);
+});

@@ -307,7 +307,8 @@ stop button: DeleteKey + pause_agent                                            
   verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust:
   `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` set what the site offers, and a visitor can replace them on `/log`. Each
   trusted verifier's entries are read on their own as well, so another registered verifier cannot push them out of the
-  100 entries a read returns.
+  100 entries a read returns to the client. The verifier daemon does not read that way yet: under such a flood it would
+  miss its own recent entries and log them again.
 - Every attested exchange becomes a proof (`packages/proof`, SPEC §5): signature, hashes, log index, salt, commit. The commit
   is `sha256(salt ‖ canonical_json(proof without salt/commit/commitTx))`, computed in the browser; the contract stores
   only the commit. The Rust contract uses the same canonical JSON for the log's `entry_hash` (shared test vectors in

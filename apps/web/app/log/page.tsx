@@ -41,25 +41,26 @@ export default function LogPage() {
   useEffect(() => {
     const reader = keyLogFor(cfg);
     const verifiers = trustedKey ? trustedKey.split(',') : [];
-    // Both reads start together. The window (and the explanation card) shows as soon as it answers; the wider read only adds to it.
-    let current = true; // a slower answer for an earlier trust set must not replace a newer one
-    const wider = latestKeysFor(reader, cfg.model, verifiers, ANY_AGE_NS).catch(() => null);
+    // A window read for another trust set is not this one's: it goes off the screen until the new answer is in, and the
+    // reads still in flight for it are stopped (their answers must not replace a newer one, nor keep loading the RPC).
+    const stop = new AbortController();
+    const current = () => !stop.signal.aborted;
+    setLog(null);
+    setError('');
     void (async () => {
       try {
-        const entries = await latestKeysFor(reader, cfg.model, verifiers);
-        if (!current) return;
+        const entries = await latestKeysFor(reader, cfg.model, verifiers, undefined, stop.signal);
+        if (!current()) return;
         setLog({ entries });
-        setError('');
-        const all = await wider;
-        if (current) setLog({ entries, all });
+        // The wider read only adds to the page, so it waits its turn: together the two would double the burst on the RPC.
+        const all = await latestKeysFor(reader, cfg.model, verifiers, ANY_AGE_NS, stop.signal).catch(() => null);
+        if (current()) setLog({ entries, all });
       } catch (e) {
-        if (current) setError(describeError(e));
+        if (current()) setError(describeError(e));
       }
     })();
-    reader.verifiers().then((v) => current && setRegistered(v)).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
-    return () => {
-      current = false;
-    };
+    reader.verifiers().then((v) => current() && setRegistered(v)).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
+    return () => stop.abort();
   }, [cfg, trustedKey]);
 
   useEffect(() => {

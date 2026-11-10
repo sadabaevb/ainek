@@ -32,6 +32,18 @@ export function keyScopeProblem(permission: unknown, contract: string): string |
 /** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
 export class ContractMethodNotFound extends Error {}
 
+/** A signal that aborts when either does. `AbortSignal.any` would do, but it is newer than the browsers Next.js targets
+ *  (Safari 17.4, Chrome 116), and the log read runs in every visitor's browser. */
+function eitherSignal(first: AbortSignal, second?: AbortSignal): AbortSignal {
+  if (!second) return first;
+  const both = new AbortController();
+  for (const s of [first, second]) {
+    if (s.aborted) both.abort(s.reason);
+    else s.addEventListener('abort', () => both.abort(s.reason), { once: true });
+  }
+  return both.signal;
+}
+
 /**
  * One `query` to the RPC with the timeout and the bounded retries every read shares: network failures, timeouts and 429/5xx are retried,
  * an answer from the node is not. `fail` words an error the node itself reported. `signal` lets a caller abandon the read (the Node
@@ -42,7 +54,7 @@ async function rpcQuery(rpcUrl: string, params: Record<string, unknown>, fail: (
   const transient = (err: unknown): boolean => !signal?.aborted && (err instanceof Transient || isNetworkFailure(err));
   return withRetry(
     async () => {
-      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS) });
+      const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: eitherSignal(AbortSignal.timeout(TIMEOUT_MS), signal) });
       if (res.status === 429 || res.status >= 500) throw new Transient(`${rpcUrl}: HTTP ${res.status}`);
       if (!res.ok) throw new Error(`${rpcUrl}: HTTP ${res.status}`);
       const json = (await res.json()) as { result?: Record<string, unknown> & { error?: string }; error?: { message?: string; data?: unknown } };
@@ -128,11 +140,11 @@ export async function latestKeysFor(reader: Pick<KeyLogReader, 'latestKeys'>, mo
   const filters: Array<string | undefined> = [undefined, ...new Set(trustedVerifiers.filter((v) => NEAR_ACCOUNT.test(v)))];
   // One failed read fails the whole, so the reads still in flight are stopped with it.
   const stop = new AbortController();
-  const signals = signal ? AbortSignal.any([signal, stop.signal]) : stop.signal;
+  const signals = eitherSignal(stop.signal, signal);
   const byIndex = new Map<number, KeyEntry>();
   let next = 0;
   const worker = async () => {
-    while (next < filters.length && !stop.signal.aborted) {
+    while (next < filters.length && !signals.aborted) {
       const entries = await reader.latestKeys(model, maxAgeNs, signals, filters[next++]);
       for (const e of entries) byIndex.set(e.index, e);
     }

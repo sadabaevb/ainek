@@ -140,9 +140,13 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
 
   // 1. Verify gateway and model evidence on this device; read the log meanwhile (independent, the send waits for both).
   const log = keyLogFor(cfg);
-  const keyLogPromise = latestKeysFor(log, model, trust.verifiers);
+  const logStop = new AbortController(); // if attestation fails, the log reads have nothing left to serve
+  const keyLogPromise = latestKeysFor(log, model, trust.verifiers, undefined, logStop.signal);
   keyLogPromise.catch(() => undefined); // awaited below; avoid an unhandled rejection if attestation fails first
-  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`);
+  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
+    logStop.abort();
+    throw err;
+  });
   const modelAttestation = deployment.models.find((m) => m.signingPublicKey !== undefined) ?? deployment.models[0];
   if (!modelAttestation) fail(emit, 'attestation', 'no model attestation returned');
 
