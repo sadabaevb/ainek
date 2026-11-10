@@ -7,7 +7,8 @@
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: two accounts, both ours); the
-request is end-to-end encrypted to that key; the signed answer is re-verified in your browser, byte for byte. A salted hash of
+request is end-to-end encrypted to that key; the signed answer is re-verified in your browser, byte for byte. Which verifiers
+count is your choice on `/log`, with a quorum, and verifiers with no key in common show as a split view, not an average. A salted hash of
 the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 is built to let an agent act on the answer
 only within a policy evaluated inside Intel TDX (OutLayer); what ran is under [Status](#status).
 
@@ -22,8 +23,8 @@ No key, no wallet, nothing to set up.
 | Do | See |
 | --- | --- |
 | Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
+| Open [`/log`](https://ainek.vercel.app/log), "Who you trust" | The public key log, read from the NEAR contract, and your own choice of which verifiers count: untick the trusted one and the page says the chat would refuse |
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
-| Open [`/log`](https://ainek.vercel.app/log) | The public key log, read from the NEAR contract: who logged the model's key, whom the client trusts, which deployments of the model verifiers have seen behind the key |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
 **From a clean clone** (Node 24+ and pnpm 10: `corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack). The three commands are offline, about a second each:
@@ -122,9 +123,9 @@ claim".
 We read the code of the 26 nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or
 open their demos, and they may have moved on since. Several are ahead of Ainek in places: Vouch has the deepest attestation check we saw, Charter
 runs on mainnet, AgentGuard is deployed and in use, and TEE Receipts checks the answer's signature in the contract. Each
-entry (with two more read on Nov 10), with where it is ahead and what Ainek adds, is in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
+entry, including two read on Nov 10, with where it is ahead and what Ainek adds, is in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
-Among those 26 entries, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours. On Nov 10 we read two later entries from their posts, READMEs and parts of their code: CIPHERWORK also refuses before sending and encrypts to the attested key, with one verifier key of its own and no public key log; Provable AI Compliance has neither a key log nor a refusal on the model's evidence, and is ahead of our Tier 2 in what it proves about each run.
+Among those 26 entries, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours. On Nov 10 we also read two later entries (posts, READMEs, parts of the code; `docs/PRIOR-ART.md`). CIPHERWORK refuses before sending and encrypts to the attested model key, with no public key log: it trusts one verifier key of its own. Provable AI Compliance refuses and encrypts at another layer, to an attested OutLayer enclave that then reaches the model over TLS; it has no key log, and when the model's evidence fails a check it records that and still delivers the answer. It binds its gateway's code, input and output into one Intel quote per run, where our Tier 2 has two artifacts joined by hashes.
 
 ## Try it (do X → see Y)
 
