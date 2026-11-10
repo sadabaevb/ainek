@@ -90,7 +90,7 @@ console.log(`| Log check refuses a swapped key (the rule behind the chat's switc
 console.log(`| Honest key refused (log window empty or key unlogged) | ${count((r) => r.outcome === 'refused')} |`);
 console.log(`| Runs that needed an SDK retry | ${count((r) => r.retries > 0)} |`);
 console.log(`| Attestation (gateway + model, re-fetched, in Node) | ${spread(of((r) => r.timings.attestation))} |`);
-console.log(`| Public log read (latest_keys view on ${rpcHost}) | ${spread(of((r) => r.timings['key-log']))} |`);
+console.log(`| Public log read (latest_keys views on ${rpcHost}: the model's window and each trusted verifier's own entries) | ${spread(of((r) => r.timings['key-log']))} |`);
 console.log(`| E2EE round trip to the model | ${spread(of((r) => r.timings.send, verified))} |`);
 console.log(`| Signature fetch | ${spread(of((r) => r.timings.signature, verified))} |`);
 console.log(`| Whole run, evidence re-fetched (a real first message can be slower, see above) | ${spread(of((r) => r.totalMs, verified))} |`);
