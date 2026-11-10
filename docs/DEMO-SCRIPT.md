@@ -48,7 +48,8 @@ Day-of checklist (an hour before)
 - Signer account: storage prepaid, NEAR balance for gas; the wallet is reconnected after the site-data clear (see rules). Tier 2: agent and Telegram bot running,
   OutLayer job warmed with a throwaway request, whitelist entry for the demo receiver present.
 - In the recording browser, after a site-data clear, time the Catch 1 path once ("Swap the key before sending": metadata,
-  attestation, log read; about 4 s on Nov 5, 13 s seen on Nov 3; nothing is sent, so it costs nothing). If the strip runs
+  attestation, log read; attestation alone took 3.3 to 4.3 s on Nov 10 and 13 s on Nov 3, metadata and the log read add up to a second;
+  nothing is sent, so it costs nothing). If the strip runs
   past ~6 s, retake later or trim it in the edit. Clear the site data again right before the take: this run warmed the
   60-minute cache.
 - A spare take of every scene exists from Nov 11. Notifications off.

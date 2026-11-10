@@ -210,3 +210,36 @@ export async function resolveLogEntry(reader: Pick<KeyLogReader, 'entry'>, logIn
   if (embedded && canonicalJson(embedded) !== canonicalJson(fromChain)) return { entry: fromChain, check: { id, status: 'fail', detail: `entry #${logIndex} in ${logName} differs from the embedded entry` } };
   return { entry: fromChain, check: { id, status: 'ok', detail: `entry #${logIndex} re-read from ${logName}${embedded ? ', equal to the embedded entry' : ''}` } };
 }
+
+/** When the fail-closed client would have had nothing fresh to go on: the holes in `[from, to]` not covered by any entry's `windowMs` after it was observed. */
+export interface FreshCoverage {
+  /** Holes, oldest first, in ms since the epoch. */
+  holes: Array<{ from: number; to: number }>;
+  /** Their total length in ms. */
+  uncoveredMs: number;
+  /** When the stretch without a hole that reaches `to` began (`to` itself when the log is stale at `to`). */
+  unbrokenSince: number;
+  /** The longest pause inside that stretch, in ms: between two entries, or from the last one to `to` (the one still open). */
+  longestPauseMs: number;
+}
+
+/** Over the history of the log, how long a client that trusts these entries would have had no fresh one to go on.
+ *  `observedAtMs` are the entries' times; each keeps the client served for `windowMs` (24 h for the chat).
+ *  A lower bound on refusals, not the client's verdict: it does not look at which key an entry carries, at the quorum or
+ *  at the deployment check, and it goes by the verifier's clock (an entry is visible only once its transaction lands). */
+export function freshCoverage(observedAtMs: readonly number[], from: number, to: number, windowMs: number): FreshCoverage {
+  const times = [...observedAtMs].sort((a, b) => a - b);
+  const holes: FreshCoverage['holes'] = [];
+  let covered = from; // everything before this moment is accounted for
+  for (const t of times) {
+    if (t + windowMs <= covered) continue;
+    if (t > covered) holes.push({ from: covered, to: t });
+    covered = Math.max(covered, t + windowMs);
+  }
+  if (covered < to) holes.push({ from: covered, to });
+  const last = holes.at(-1);
+  const unbrokenSince = last ? last.to : from;
+  const stretch = [...times.filter((t) => t >= unbrokenSince && t < to), to];
+  const longestPauseMs = stretch.reduce((max, t, i) => (i === 0 ? 0 : Math.max(max, t - stretch[i - 1]!)), 0);
+  return { holes, uncoveredMs: holes.reduce((sum, h) => sum + h.to - h.from, 0), unbrokenSince, longestPauseMs };
+}

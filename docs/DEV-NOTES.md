@@ -1946,3 +1946,38 @@ Task hash у OutLayer склеивает текстовые поля без ра
   замечание Бектура): раньше он искал свои записи в общем окне на 100 и при наплыве чужих начал бы писать дубликаты.
   Это другая инфраструктура, чем сервер первого верификатора, так что кворум 2 на `/log` становится
   достижим (дефолты сайта пока один доверенный верификатор и кворум 1 — менять их Бектуру). Подробности и ротация в DEPLOY.
+
+## 2026-11-10 — метрики перемерены после SDK 0.3.0 и чтения журнала по верификатору (Бектур)
+
+- `pnpm demo:metrics --runs 50` на `765708d`, 14:11–14:18 UTC, с разрешения Бектура (50 коротких ответов): 50 из 50
+  проверены, подмена ключа отклонена 50 из 50, ретраев SDK нет. Медиана всего прогона 7,1 с (6 ноября было 9,9 с),
+  аттестация 3,7 с, чтение журнала 0,3 с — второе чтение по доверенному верификатору идёт параллельно и медиану не
+  сдвинуло, p90 вырос с 0,3 до 0,7 с. Разницу с 6 ноября нельзя приписать нашему коду: сервисы NEAR AI, Intel и NVIDIA
+  в разные дни отвечают по-разному, README так и говорит.
+- **Браузер** замерен руками на `ainek.vercel.app` (Playwright, headless Chromium, 4 сообщения): три холодных первых
+  сообщения 6,3 / 5,9 / 5,6 с (аттестация 4,3 / 3,9 / 3,3 с), одно повторное с кешем 2,1 с. Время считалось от появления
+  сообщения в ленте до зелёной карточки, наблюдателем за DOM. Это впервые замеренное в браузере «повторное сообщение»:
+  раньше строка была только выведена из Node-прогонов.
+- **Как мерили браузер** (скрипта в репозитории нет, чтобы его не пытались запускать как тест):
+
+  ```js
+  // 1. On https://ainek.vercel.app: delete every IndexedDB database of the origin, then reload the page.
+  // 2. Before sending, start this observer; `ms` runs from the user bubble appearing to the green card.
+  window.__t = { runs: [] }; let cur = null;
+  new MutationObserver(() => {
+    const bubbles = document.querySelectorAll('.bubble.user').length;
+    const cards = [...document.querySelectorAll('main *')].filter((e) => e.children.length === 0 && e.textContent.includes('Verified in this browser')).length;
+    if (bubbles > window.__t.runs.length && !cur) cur = { start: performance.now() };
+    if (cur && cards > window.__t.runs.length) { cur.ms = Math.round(performance.now() - cur.start); window.__t.runs.push(cur); cur = null; }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  // 3. Send "Reply with the single word: ok." and read window.__t.runs; the attestation time is the page's own step line.
+  // 4. Wait more than 30 s before the next cold run (the collateral proxy lets the browser cache for 29 s).
+  ```
+- **История журнала.** `check-contract` теперь печатает, сколько часов за всю историю у клиента не было бы записи
+  моложе суток от доверенного верификатора (`freshCoverage` в `packages/proof/src/key-log.ts`, с тестом): 13,6 из 167 ч,
+  всё 4–5 ноября, до запуска демона на сервере; с 5 ноября 04:44 UTC дыр нет. Это не «аптайм»: демон переписывает
+  неизменившийся ключ примерно раз в 6 часов, паузы между записями простоем не являются.
+- **Tier 2** в таблице — не замер, а сводка десяти записей с цепочки (`check-agent`). Скрипт сверяет записи контракта,
+  а не переводы токена; сходится и итог: 8 794 AINEK в контракте = 10 000 минус 1 206 по семи исполненным действиям.
+  Из десяти действий пять сделаны скриптами с заглушкой вместо proof модели (0, 1, 5, 6, 7), пять сервисом агента. Время от сообщения до перевода
+  не мерили: для этого нужен живой прогон агента.
