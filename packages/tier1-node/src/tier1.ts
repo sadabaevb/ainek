@@ -251,8 +251,8 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(
       'encrypt',
-      () =>
-        prepareE2eeChatRequest({
+      async () => {
+        const request = await prepareE2eeChatRequest({
           request: new Request(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Accept-Encoding': 'identity', [NO_ALIASING_HEADER]: 'true' },
@@ -260,10 +260,12 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
             signal: AbortSignal.timeout(STEP_TIMEOUT_MS), // closes the socket; the step's own deadline only stops waiting for it
           }),
           modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelPublicKey },
-        }),
+        });
+        requireE2eeVersion(request.request.headers);
+        return request;
+      },
       () => `encrypted to the attested model key ${short(modelAttestation.signer.signingAddress)}`,
     );
-    requireE2eeVersion(prepared.request.headers);
     const requestBody = new Uint8Array(await prepared.request.clone().arrayBuffer());
 
     // 4. Send over the pinned connection; keep the ciphertext reply bytes, decrypt a clone.

@@ -52,8 +52,9 @@ test('every request the page makes through the relay passes, with every header i
   for (const r of seen) assert.equal(await relayVerdict(r), null);
 });
 
-/** Headers of an E2EE request as the SDK marks it; the relay reads only these two. */
-const E2EE = new Headers({ 'x-model-pub-key': MODEL_KEY, 'x-encryption-version': '3' });
+/** Headers of an E2EE request as the SDK marks it; the relay reads only these. */
+const E2EE_HEADERS = { 'x-model-pub-key': MODEL_KEY, 'x-client-pub-key': 'ab'.repeat(32), 'x-encryption-version': '3' };
+const E2EE = new Headers(E2EE_HEADERS);
 const PLAIN = new Headers();
 
 test('the chat body: only the page\'s fields, our models, not streamed', () => {
@@ -70,18 +71,23 @@ test('the chat body: only the page\'s fields, our models, not streamed', () => {
   assert.equal(problem(new TextEncoder().encode('{').buffer as ArrayBuffer), 'body is not JSON');
 });
 
-test('the attested model goes through only as E2EE v3; the Incognito model may be plaintext', () => {
+test('the attested model goes through only as complete E2EE v3; the Incognito model may be plaintext', () => {
   const chat = (model: string) => bytes({ model, messages: [{ role: 'user', content: 'x' }], stream: false });
-  const v2 = new Headers({ 'x-model-pub-key': MODEL_KEY, 'x-encryption-version': '2' });
-  const unversioned = new Headers({ 'x-model-pub-key': MODEL_KEY });
+  const v2 = new Headers({ ...E2EE_HEADERS, 'x-encryption-version': '2' });
+  const { 'x-encryption-version': _version, ...noVersion } = E2EE_HEADERS;
+  const { 'x-client-pub-key': _reply, ...noReplyKey } = E2EE_HEADERS;
+  const { 'x-model-pub-key': _model, ...noModelKey } = E2EE_HEADERS;
   assert.equal(completionProblem(chat(MODEL), MODELS, E2EE, MODEL), null);
   assert.equal(completionProblem(chat(MODEL), MODELS, PLAIN, MODEL), 'the attested model takes only end-to-end encrypted requests');
-  assert.match(completionProblem(chat(MODEL), MODELS, v2, MODEL) ?? '', /E2EE version 3 required, the request says 2/);
-  assert.match(completionProblem(chat(MODEL), MODELS, unversioned, MODEL) ?? '', /the request says none/);
+  assert.match(completionProblem(chat(MODEL), MODELS, v2, MODEL) ?? '', /E2EE version 3 required, the request says 2\. Reload the page/);
+  assert.match(completionProblem(chat(MODEL), MODELS, new Headers(noVersion), MODEL) ?? '', /the request says none/);
+  assert.match(completionProblem(chat(MODEL), MODELS, new Headers(noReplyKey), MODEL) ?? '', /without the model key or the reply key/);
   assert.equal(completionProblem(chat(INCOGNITO), MODELS, PLAIN, MODEL), null);
-  // An Incognito model that turns out to be attested is sent the E2EE way (flow.ts): the same floor applies.
+  // An Incognito model that turns out to be attested is sent the E2EE way (flow.ts): the same floor applies, and a
+  // half-marked request (an old version without the model key) is not taken for plaintext.
   assert.equal(completionProblem(chat(INCOGNITO), MODELS, E2EE, MODEL), null);
   assert.match(completionProblem(chat(INCOGNITO), MODELS, v2, MODEL) ?? '', /E2EE version 3 required/);
+  assert.match(completionProblem(chat(INCOGNITO), MODELS, new Headers({ ...noModelKey, 'x-encryption-version': '2' }), MODEL) ?? '', /E2EE version 3 required/);
 });
 
 test('another model, an encoded way out of the path, or extra segments do not pass', () => {
