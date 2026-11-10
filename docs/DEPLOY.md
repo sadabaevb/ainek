@@ -131,6 +131,27 @@ over the following rounds, which the deployment check (`AINEK_REQUIRE_DEPLOYMENT
 entry per key, compose and model per 6 h; with the six composes seen so far that is up to 24 entries a day for the one
 model, up to ~0.24 NEAR (one entry is about 1 KB, 0.01 NEAR).
 
+### The second verifier, on GitHub's machines (`ainek-v2-dastan.testnet`)
+
+Two writers on different infrastructure are what make a quorum of 2 on `/log` possible (the site's defaults are still
+one trusted verifier and quorum 1, `.env.example`; a visitor sets 2 on `/log`, or the defaults change). The second
+verifier is the same daemon run as one round (`pnpm -F verifier once`) once an hour by `.github/workflows/verifier-v2.yml`,
+on GitHub-hosted runners, as `ainek-v2-dastan.testnet`; the schedule runs once the file is on `main`. A round reads the chain to skip what it logged in the last
+6 hours, so it needs no state between runs; the full attestation reports go to the run's artifacts (30 days).
+
+- Its key is a function-call key, `log_key` only, 1 NEAR allowance (`ed25519:6UfMSWGt…GhsU`, added Nov 10, tx
+  `Dm7aQ3FQfhWYaPiPzwACnhsSr73A9SFrAy2M3Aq8gRWE`), to be held in the repository secret `VERIFIER_V2_PRIVATE_KEY`
+  (Dastan sets it by hand from the key file; until then every run fails at startup with a clear message). A leak
+  can write entries under that account until the allowance runs out and nothing else; the owner cannot remove a
+  verifier, so a leaked key is dealt with client-side (drop it from `AINEK_TRUSTED_VERIFIERS`).
+- To rotate: generate a pair, `near account add-key ainek-v2-dastan.testnet grant-function-call-access --allowance
+  '1 NEAR' --contract-account-id <contract> --function-names 'log_key' use-manually-provided-public-key <pk> …`,
+  `gh secret set VERIFIER_V2_PRIVATE_KEY < file`, then `near account delete-keys` for the old one.
+- Minutes: the verifier step takes seconds, the job one to two minutes (checkout and `pnpm install`), billed per started
+  minute; 24 runs a day are at most ~1,500 of a private repository's 2,000 free minutes a month, a public repository is
+  not metered. A run that hangs stops at 25 minutes. A scheduled run can start late by a few minutes; nothing depends
+  on the exact time.
+
 ## Agent service (Tier 2)
 
 Runs only while demoing, on a team member's machine (not the one with the owner's keys) or next to the verifier

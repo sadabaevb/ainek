@@ -157,7 +157,12 @@ function verifiedWithNonce(nonce: string) {
 
 test('attestModel retries a verification Intel let down and does not retry a verdict against the attestation', async () => {
   const sdkFailure = (code: string, retryable: boolean) => new VerificationError({ code, retryable } as VerificationFailure);
-  const fetchImpl = (async () => new Response(reportBytes)) as unknown as typeof fetch;
+  // Each report must travel on its own connection: the gateway picks a replica per connection, so a reused one would show a
+  // round the same replica every time and the others' deployments would never be logged.
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    assert.equal(new Headers(init.headers).get('connection'), 'close');
+    return new Response(reportBytes);
+  }) as unknown as typeof fetch;
   const opts = { baseUrl: 'https://recorded', acceptedTcbStatuses: ['UpToDate'], fetchImpl };
 
   // Nov 7, Bektur's clean-clone run: two of three dry runs failed on `quote.collateral_unavailable` and the third went

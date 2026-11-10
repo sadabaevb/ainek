@@ -86,15 +86,16 @@ const laterMessage = (r: Run) => (r.outcome === 'verified' ? WARM.reduce((sum, i
 console.log(`\nFrom Node ${process.version}, direct to NEAR AI (no relay), attestation cold on every run; the browser caches it for 60 minutes after the first message.\n`);
 console.log(`| Metric | Value (${results.length} runs) |\n| --- | --- |`);
 console.log(`| Verified, attestation to proof (the on-chain commit is measured once, below) | ${count((r) => r.outcome === 'verified')} |`);
-console.log(`| Log check refuses a swapped key (the rule behind the chat's switch, on each run's log read; nothing is sent for it) | ${count((r) => r.swappedRefused === true)} |`);
+console.log(`| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | ${count((r) => r.swappedRefused === true)} |`);
 console.log(`| Honest key refused (log window empty or key unlogged) | ${count((r) => r.outcome === 'refused')} |`);
 console.log(`| Runs that needed an SDK retry | ${count((r) => r.retries > 0)} |`);
 console.log(`| Attestation (gateway + model, re-fetched, in Node) | ${spread(of((r) => r.timings.attestation))} |`);
-console.log(`| Public log read (latest_keys view on ${rpcHost}) | ${spread(of((r) => r.timings['key-log']))} |`);
+const logViews = 1 + new Set(cfg.trustedVerifiers).size; // the model's window and one per trusted verifier (latestKeysFor sends at most six at once)
+console.log(`| Public log read (${logViews} \`latest_keys\` views${logViews <= 6 ? ' at once' : ''}, ${rpcHost}) | ${spread(of((r) => r.timings['key-log']))} |`);
 console.log(`| E2EE round trip to the model | ${spread(of((r) => r.timings.send, verified))} |`);
 console.log(`| Signature fetch | ${spread(of((r) => r.timings.signature, verified))} |`);
 console.log(`| Whole run, evidence re-fetched (a real first message can be slower, see above) | ${spread(of((r) => r.totalMs, verified))} |`);
-console.log(`| Later message, attestation cached (derived from the same runs) | ${spread(of(laterMessage, verified))} |`);
+console.log(`| Later message, attestation cached (not timed: each run's steps after attestation, added up) | ${spread(of(laterMessage, verified))} |`);
 console.log(`| Request and response body (encrypted fields plus plain metadata) | median ${quantile(of((r) => r.bytesSent, verified), 0.5) ?? '?'} B sent, ${quantile(of((r) => r.bytesReceived, verified), 0.5) ?? '?'} B received |`);
 writeFileSync(outFile, `${JSON.stringify({ meta: { model: cfg.model, baseUrl: cfg.nearaiBaseUrl, contract: cfg.contract, rpcUrl: cfg.rpcUrl, node: process.version, measuredAt: new Date().toISOString(), prompt: PROMPT, note: 'from Node, direct to NEAR AI (no relay), evidence re-fetched on every run; connections and proxy caches may be warm; times in ms' }, runs: results }, null, 2)}\n`);
 console.log(`\nwritten: ${outFile}`);

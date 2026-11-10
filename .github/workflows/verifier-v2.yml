@@ -1,0 +1,40 @@
+# The second verifier (docs/DEPLOY.md "The second verifier, on GitHub's machines"): the same daemon, one round an hour on GitHub's
+# machines instead of our server, writing as its own account. Two writers on different infrastructure are what make a
+# quorum of 2 on /log mean something. The round reads the chain to skip what it logged in the last 6 hours, so it needs
+# no state between runs; the full attestation reports go to the run's artifacts.
+name: verifier-v2
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+concurrency:
+  group: verifier-v2 # two rounds with the same key would race and could write the same entry twice
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  round:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25 # five reports that each hang for the verifier's 180 s deadline are 15 minutes, and entries are written after them
+    env:
+      VERIFIER_ACCOUNT_ID: ainek-v2-dastan.testnet
+      VERIFIER_PRIVATE_KEY: ${{ secrets.VERIFIER_V2_PRIVATE_KEY }} # function-call key, log_key only
+      VERIFIER_MODELS: z-ai/glm-5.3-flash
+      AINEK_CONTRACT: ainek-log-dastan.testnet
+      NEAR_NETWORK: testnet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -F verifier once
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports-${{ github.run_id }}
+          path: services/verifier/data/reports
+          if-no-files-found: ignore
+          retention-days: 30
