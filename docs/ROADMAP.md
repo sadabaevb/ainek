@@ -92,5 +92,5 @@ OutLayer-политика (в контракт) → агент целиком. �
 
 ## 14 ноября — подача (до 23:59 UTC = 05:59 15 ноября по Бишкеку)
 
-- [ ] Репо публичный; форма: треки privacy, security, open (social и realworld сняты 10 ноября, DECISIONS), size «2 - 4», `website` пустое,
+- [ ] Репо публичный; форма: треки privacy, security, open (social снят 10 ноября, realworld в подачу не входил; DECISIONS), size «2 - 4», `website` пустое,
   `requestId` сохранить; ответ 201 — скриншот в docs/
