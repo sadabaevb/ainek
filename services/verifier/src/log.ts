@@ -42,7 +42,9 @@ export function keyLogWriter(cfg: { rpcUrl: string; contract: string; accountId:
   const account = new Account(cfg.accountId, provider, KeyPairSigner.fromSecretKey(cfg.privateKey as KeyPairString));
   const reader = keyLogReader(cfg.rpcUrl, cfg.contract);
   return {
-    recentByMe: async (model, windowNs) => (await reader.latestKeys(model, windowNs)).filter((e) => e.verifier === cfg.accountId),
+    // Asked of the contract by verifier: the shared newest-100 page can fill up with other verifiers' entries, and a round that
+    // cannot see its own earlier entry would log it again.
+    recentByMe: (model, windowNs) => reader.latestKeys(model, windowNs, undefined, cfg.accountId),
     logKey: async (entry) => {
       const outcome = await account.signAndSendTransaction({
         receiverId: cfg.contract,
