@@ -13,9 +13,9 @@ export interface KeyLogQuery {
   /**
    * The compose hash of the deployment that was attested. When given, only an entry with this key AND this compose counts: instances
    * of a model share one signing key, so the key alone does not say which code answers. Callers pass it when the deployment check is
-   * on (`requireLoggedDeployment` in the config, or the demo switch).
+   * on (`requireLoggedDeployment` in the config, or the demo switch), and undefined otherwise.
    */
-  composeHash?: string;
+  composeHash?: string | undefined;
   trustedVerifiers: readonly string[];
   /** Confirmations from distinct trusted verifiers required; 1 in the demo, 2 in production. */
   quorum: number;
@@ -35,7 +35,7 @@ export interface KeyLogVerdict {
   reason: KeyLogReason;
   /** The confirmations this verdict required: a card shown later must not read today's setting. */
   quorum: number;
-  /** Distinct trusted verifiers that logged this exact key. */
+  /** Distinct trusted verifiers that logged this exact key (with the queried deployment, when the query named one). */
   confirmedBy: string[];
   /** Entries that matched the query, trusted verifiers only. */
   matching: KeyEntry[];
@@ -44,7 +44,7 @@ export interface KeyLogVerdict {
   /** Distinct verifiers outside the trust set that logged this exact key: the card names them instead of saying "not in the log". */
   loggedByUntrusted: string[];
   /** Set when the query named a deployment: its compose hash, and the distinct composes trusted verifiers logged with this key in the window (newest first). */
-  deployment?: { composeHash: string; loggedComposes: string[] };
+  deployment?: { composeHash: string; loggedComposes: string[] } | undefined;
   detail: string;
 }
 
@@ -91,26 +91,26 @@ export function evaluateKeyLog(entries: readonly KeyEntry[], query: KeyLogQuery)
   const matching = withKey.filter(matches);
   const confirmedBy = verifiersOf(matching);
   const loggedByUntrusted = verifiersOf(untrusted.filter(matches));
-  const deployment = compose === undefined ? {} : { deployment: { composeHash: compose, loggedComposes: [...new Set(withKey.map((e) => normalizeHex(e.compose_hash)))] } };
+  const deployment = compose === undefined ? undefined : { composeHash: compose, loggedComposes: [...new Set(withKey.map((e) => normalizeHex(e.compose_hash)))] };
   const what = compose === undefined ? `key ${shortHex(wanted)}` : `key ${shortHex(wanted)} with deployment ${shortHex(compose)}`;
 
   // The trust set can now come from the viewer's browser: whatever arrives here, no key passes without a confirmation.
   const quorum = Math.max(1, query.quorum);
   const split = findSplitView(forModel, query.model, query.trustedVerifiers);
-  if (split) return { status: 'split-view', reason: 'split-view', quorum, confirmedBy: [], matching: [], untrusted, loggedByUntrusted, ...deployment, detail: `${split.detail}: refusing to send` };
+  if (split) return { status: 'split-view', reason: 'split-view', quorum, confirmedBy: [], matching: [], untrusted, loggedByUntrusted, deployment, detail: `${split.detail}: refusing to send` };
   if (confirmedBy.length >= quorum) {
-    return { status: 'ok', reason: 'ok', quorum, confirmedBy, matching, untrusted, loggedByUntrusted, ...deployment, detail: `${what} confirmed by ${confirmedBy.join(', ')}` };
+    return { status: 'ok', reason: 'ok', quorum, confirmedBy, matching, untrusted, loggedByUntrusted, deployment, detail: `${what} confirmed by ${confirmedBy.join(', ')}` };
   }
   // A trusted match short of quorum comes first. Then the key that trusted verifiers know, but not with this deployment: the case the
   // key alone cannot catch. Entries from outside the trust set are named, never counted.
   const reason = matching.length > 0 ? 'below-quorum' : withKey.length > 0 ? 'unknown-deployment' : loggedByUntrusted.length > 0 ? 'untrusted-only' : 'absent';
   const why = {
-    'below-quorum': `only ${confirmedBy.length} of ${quorum} required confirmations`,
-    'unknown-deployment': `key ${shortHex(wanted)} is logged, but not with deployment ${shortHex(compose ?? '')}: trusted verifiers saw ${deployment.deployment?.loggedComposes.map(shortHex).join(', ')} behind it`,
+    'below-quorum': `only ${confirmedBy.length} of ${quorum} required confirmations for ${what}`,
+    'unknown-deployment': `key ${shortHex(wanted)} is logged, but not with deployment ${shortHex(deployment?.composeHash ?? '')}: trusted verifiers saw ${deployment?.loggedComposes.map(shortHex).join(', ')} behind it`,
     'untrusted-only': `${what} is logged only by ${loggedByUntrusted.join(', ')}, outside the trust set`,
     absent: `key ${shortHex(wanted)} is not in the public log`,
   }[reason];
-  return { status: 'not-logged', reason, quorum, confirmedBy, matching, untrusted, loggedByUntrusted, ...deployment, detail: `${why}: not sent (fail-closed)` };
+  return { status: 'not-logged', reason, quorum, confirmedBy, matching, untrusted, loggedByUntrusted, deployment, detail: `${why}: not sent (fail-closed)` };
 }
 
 export interface SeenDeployment {

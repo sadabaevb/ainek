@@ -240,7 +240,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
     const { entries, source: logSource, ms: logMs } = log;
     timings['key-log'] = logMs;
     const attestedCompose = composeHashOf(modelAttestation.deployment);
-    const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum, ...(cfg.requireLoggedDeployment ? { composeHash: attestedCompose } : {}) });
+    const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum, composeHash: cfg.requireLoggedDeployment ? attestedCompose : undefined });
     if (verdict.status !== 'ok') {
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });

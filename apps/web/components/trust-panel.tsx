@@ -47,7 +47,7 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
     return registered === null || writers.has(account) ? undefined : tt.tag.added; // until the contract answers, "added by you" is not known
   };
 
-  const preview = entries && previewTrust(entries, cfg.model, trust);
+  const preview = entries && previewTrust(entries, cfg.model, trust, cfg.requireLoggedDeployment);
   const previewText = (): string | null => {
     if (!preview) return null;
     if (preview.kind === 'nobody') return tt.verdict.nobody;

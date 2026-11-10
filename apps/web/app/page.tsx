@@ -5,7 +5,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList } from '@/components/checks';
-import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
+import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, REFUSAL_OF_TAMPER, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter, type Consent } from '@/lib/wallet';
 import { useConfig, useT, useTrust } from './providers';
@@ -44,8 +44,7 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
   const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
   const { outcome } = turn;
   // The honest retry helps only when the swap was the whole problem: a split log would refuse the honest key too.
-  const swapWasWhy = outcome?.kind === 'refused' && ((outcome.tampered === 'key' && outcome.keyVerdict.reason === 'absent') || (outcome.tampered === 'deployment' && outcome.keyVerdict.reason === 'unknown-deployment'));
-  const retryModel = canRetry && outcome?.kind === 'refused' && swapWasWhy ? outcome.model : null;
+  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.tampered && outcome.keyVerdict.reason === REFUSAL_OF_TAMPER[outcome.tampered] ? outcome.model : null;
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>

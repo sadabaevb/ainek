@@ -40,7 +40,7 @@ export type EnvLike = Record<string, string | undefined>;
 // The demo's trust policy for the live log; the replay's recorded entry #0 is by the same verifier (config.test.ts checks).
 const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
-// One line to turn the deployment check on everywhere, the hosted demo included (it sets no public variables). Off until the
+// One line to turn the deployment check on in the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables). Off until the
 // verifier samples every instance behind the gateway each round (DEV-NOTES 2026-11-10); `.env.example` carries the same value.
 const REQUIRE_DEPLOYMENT_DEFAULT = '0';
 

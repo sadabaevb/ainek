@@ -61,7 +61,7 @@ export interface VerifiedOutcome {
 
 export type ChatOutcome =
   | VerifiedOutcome
-  | { kind: 'refused'; model: string; /** A demo switch swapped something: the card can offer the honest retry. */ tampered: Tamper; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string; /** The compose hash the log was asked about; absent when the deployment check did not run. */ seenCompose?: string }
+  | { kind: 'refused'; model: string; /** A demo switch swapped something: the card can offer the honest retry. */ tampered: Tamper; deployment: VerifiedDeployment; logSource: 'contract' | 'sample'; entriesInWindow: number; keyVerdict: KeyLogVerdict; seenKey: string; /** The compose hash the log was asked about; undefined when the deployment check did not run. */ seenCompose: string | undefined }
   | { kind: 'non-tee'; reply: string; gateway: VerifiedGatewayAttestation; exchange: Exchange; signature: CompletionSignature; model: string }
   /** `reply` is present when the failure happened after the model had already answered (see failurePhase). */
   | { kind: 'failed'; step: StepId; reason: string; reply?: string };
@@ -98,6 +98,8 @@ interface Progress {
 
 /** The demo switches: what the client is shown instead of what was attested, before the log check. Nothing is sent either way. */
 export type Tamper = false | 'key' | 'deployment';
+/** The refusal each switch causes when the swap is the whole problem: only then does the honest retry help. */
+export const REFUSAL_OF_TAMPER = { key: 'absent', deployment: 'unknown-deployment' } as const;
 
 export interface ChatParams {
   model: string;
@@ -149,11 +151,11 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const entries = await runStep(emit, 'key-log', `reading the public key log (${log.source})`, () => keyLogPromise, (e) => `${e.length} entr${e.length === 1 ? 'y' : 'ies'} in window (source: ${log.source})`);
   const seenKey = tamper === 'key' ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
   const attestedCompose = composeHashOf(modelAttestation.deployment);
-  const seenCompose = cfg.requireLoggedDeployment || tamper === 'deployment' ? { seenCompose: tamper === 'deployment' ? DEMO_UNKNOWN_COMPOSE : attestedCompose } : {};
-  const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, trustedVerifiers: trust.verifiers, quorum: trust.quorum, ...('seenCompose' in seenCompose ? { composeHash: seenCompose.seenCompose } : {}) });
+  const seenCompose = tamper === 'deployment' ? DEMO_UNKNOWN_COMPOSE : cfg.requireLoggedDeployment ? attestedCompose : undefined;
+  const keyVerdict = evaluateKeyLog(entries, { model, signingAddress: seenKey, composeHash: seenCompose, trustedVerifiers: trust.verifiers, quorum: trust.quorum });
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, ...seenCompose };
+    return { kind: 'refused', model, tampered: tamper, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, seenCompose };
   }
   const logEntry = proofEntryOf(keyVerdict, attestedCompose);
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });

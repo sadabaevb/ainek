@@ -3,7 +3,7 @@
 // verifiers disagree (split view). Wallet login here asks for the function-call key later used for commit_proof.
 import { useEffect, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
-import { ANY_AGE_NS, LOG_WINDOW_NS, deploymentsSeen, findSplitView, type KeyEntry, type SeenDeployment } from '@ainek/proof';
+import { ANY_AGE_NS, LOG_WINDOW_NS, deploymentsSeen, evaluateKeyLog, findSplitView, type KeyEntry, type SeenDeployment } from '@ainek/proof';
 import { RedCard } from '@/components/red-card';
 import { StackTable, type Column } from '@/components/stack-table';
 import { TrustPanel } from '@/components/trust-panel';
@@ -37,14 +37,13 @@ export default function LogPage() {
 
   useEffect(() => {
     const reader = keyLogFor(cfg);
+    // Both reads start together. The window (and the explanation card) shows as soon as it answers; the wider read only adds to it.
+    const wider = reader.latestKeys(cfg.model, ANY_AGE_NS).catch(() => undefined);
     reader
       .latestKeys(cfg.model)
       .then((entries) => {
-        setLog({ entries }); // the window (and the explanation card) first; the wider read must not delay or hide it
-        reader
-          .latestKeys(cfg.model, ANY_AGE_NS)
-          .then((all) => setLog({ entries, all }))
-          .catch(() => undefined);
+        setLog({ entries });
+        void wider.then((all) => all && setLog({ entries, all }));
       })
       .catch((e: unknown) => setError(describeError(e)));
     reader.verifiers().then(setRegistered).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
@@ -62,9 +61,15 @@ export default function LogPage() {
 
   const split = log ? findSplitView(log.entries, cfg.model, trust.verifiers) : null;
   const newest = log?.all?.[0];
-  // A deployment counts for sending when a verifier the viewer trusts logged it inside the window: the same rule the chat applies.
-  const inWindow = new Set(log?.entries.filter((e) => trust.verifiers.includes(e.verifier)).map((e) => e.compose_hash));
   const td = tl.deployments;
+  /** Would the deployment check pass for this deployment right now, under the viewer's trust set? The chat's own rule (evaluateKeyLog), asked for each key the deployment was logged with. */
+  const wouldPass = (d: SeenDeployment): string => {
+    const reasons = d.keys.map((key) => evaluateKeyLog(log?.entries ?? [], { model: cfg.model, signingAddress: key, composeHash: d.composeHash, trustedVerifiers: trust.verifiers, quorum: trust.quorum }).reason);
+    if (reasons.includes('ok')) return td.counts.yes;
+    if (reasons.includes('split-view')) return td.counts.split;
+    if (reasons.includes('below-quorum')) return td.counts.quorum;
+    return d.verifiers.some((v) => trust.verifiers.includes(v)) ? td.counts.old : td.counts.untrusted;
+  };
   const deploymentColumns: Column<SeenDeployment>[] = [
     { label: td.columns.compose, cell: (d) => short(d.composeHash), className: 'mono' },
     { label: td.columns.keys, cell: (d) => d.keys.map(short).join(', '), className: 'mono' },
@@ -72,7 +77,7 @@ export default function LogPage() {
     { label: td.columns.entries, cell: (d) => d.entries },
     { label: td.columns.first, cell: (d) => utcMinuteOf(d.firstSeenMs) },
     { label: td.columns.last, cell: (d) => utcMinuteOf(d.lastSeenMs) },
-    { label: td.columns.counts, cell: (d) => (inWindow.has(d.composeHash) ? td.counts.yes : d.verifiers.some((v) => trust.verifiers.includes(v)) ? td.counts.no : td.counts.untrusted) },
+    { label: td.columns.counts, cell: wouldPass },
   ];
   const c = tl.columns;
   const columns: Column<KeyEntry>[] = [
