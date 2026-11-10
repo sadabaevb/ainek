@@ -1,5 +1,7 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readRepoJson } from './fixtures.ts';
+import type { KeyEntry } from './schema.ts';
 import { ContractMethodNotFound, checkProofCommit, keyScopeProblem, readProofCommit, viewFunction, type ProofCommitLookup, readStorageBalance } from './near-view.ts';
 
 const realFetch = globalThis.fetch;
@@ -105,7 +107,8 @@ test('keyLogReader.latestKeys: the fail-closed window by default, any age when a
   assert.equal(ANY_AGE_NS, String(2n ** 64n - 1n));
 });
 
-const logEntry = (index: number, verifier: string) => ({ index, model: 'm', signing_address: 'aa'.repeat(32), signing_algo: 'ed25519', signing_public_key: 'aa'.repeat(32), compose_hash: 'bb'.repeat(32), image_digests: [], tcb_status: 'UpToDate', ita_jwt_hash: '', nras_result_hash: '', nonce: 'cc'.repeat(32), report_hash: 'dd'.repeat(32), observed_at: String(1_794_000_000_000 + index), verifier, prev_hash: 'ee'.repeat(32), entry_hash: 'ff'.repeat(32) });
+const { entry: sampleEntry } = readRepoJson<{ entry: KeyEntry }>('docs/samples/key-entry.sample.json');
+const logEntry = (index: number, verifier: string): KeyEntry => ({ ...sampleEntry, index, verifier });
 
 test('latestKeysFor: each trusted verifier is read on its own, so a flood from another verifier cannot push its entries out', async () => {
   const { latestKeysFor, LOG_WINDOW_NS } = await import('./near-view.ts');
@@ -114,8 +117,8 @@ test('latestKeysFor: each trusted verifier is read on its own, so a flood from a
   const reader = {
     latestKeys: async (_model: string, maxAgeNs?: string, _signal?: AbortSignal, verifier?: string) => {
       asked.push([maxAgeNs, verifier]);
-      if (verifier === undefined) return flood as never; // the general window holds only the flood
-      return (verifier === 'a.testnet' ? [logEntry(2, 'a.testnet')] : verifier === 'b.testnet' ? [logEntry(8, 'noisy.testnet'), logEntry(1, 'b.testnet')] : []) as never;
+      if (verifier === undefined) return flood; // the general window holds only the flood
+      return verifier === 'a.testnet' ? [logEntry(2, 'a.testnet')] : verifier === 'b.testnet' ? [logEntry(8, 'noisy.testnet'), logEntry(1, 'b.testnet')] : [];
     },
   };
   const entries = await latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet', 'a.testnet', 'Not An Account'], LOG_WINDOW_NS);
@@ -125,8 +128,38 @@ test('latestKeysFor: each trusted verifier is read on its own, so a flood from a
 
 test('latestKeysFor: one failed read fails the whole, a partial window never passes for the log', async () => {
   const { latestKeysFor } = await import('./near-view.ts');
-  const reader = { latestKeys: async (_m: string, _a?: string, _s?: AbortSignal, verifier?: string) => (verifier === 'b.testnet' ? Promise.reject(new Error('rpc down')) : ([] as never)) };
+  const reader = { latestKeys: async (_m: string, _a?: string, _s?: AbortSignal, verifier?: string) => (verifier === 'b.testnet' ? Promise.reject(new Error('rpc down')) : []) };
   await assert.rejects(latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet']), /rpc down/);
+});
+
+test('latestKeysFor: a large trust set is read a few at a time, and a failure stops the reads still in flight', async () => {
+  const { latestKeysFor } = await import('./near-view.ts');
+  /** A reader that counts its calls and how many run at once; it fails on `failOn` and notes the signals it saw aborted. */
+  const counting = (failOn?: string) => {
+    const seen = { calls: 0, inFlight: 0, most: 0, aborted: 0 };
+    const latestKeys = async (_m: string, _a?: string, signal?: AbortSignal, verifier?: string): Promise<KeyEntry[]> => {
+      seen.calls++;
+      seen.most = Math.max(seen.most, ++seen.inFlight);
+      signal?.addEventListener('abort', () => seen.aborted++);
+      await new Promise((r) => setTimeout(r, 2));
+      seen.inFlight--;
+      if (failOn !== undefined && verifier === failOn) throw new Error('rpc down');
+      return [];
+    };
+    return { seen, reader: { latestKeys } };
+  };
+  const many = Array.from({ length: 40 }, (_, i) => `v${i}.testnet`);
+
+  const calm = counting();
+  assert.deepEqual(await latestKeysFor(calm.reader, 'm', many), []);
+  assert.equal(calm.seen.calls, 41, 'the general read and one per verifier');
+  assert.ok(calm.seen.most > 1 && calm.seen.most <= 6, `reads overlap, at most 6 at once, saw ${calm.seen.most}`);
+
+  const failing = counting('v3.testnet');
+  await assert.rejects(latestKeysFor(failing.reader, 'm', many), /rpc down/);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(failing.seen.calls <= 12, `no new reads start after the failure, saw ${failing.seen.calls} of 41`);
+  assert.ok(failing.seen.aborted > 0, 'the reads in flight were told to stop');
 });
 
 test('keyLogReader.latestKeys: the verifier filter goes to the contract only when asked for', async () => {

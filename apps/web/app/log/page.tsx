@@ -44,14 +44,18 @@ export default function LogPage() {
     // Both reads start together. The window (and the explanation card) shows as soon as it answers; the wider read only adds to it.
     let current = true; // a slower answer for an earlier trust set must not replace a newer one
     const wider = latestKeysFor(reader, cfg.model, verifiers, ANY_AGE_NS).catch(() => null);
-    latestKeysFor(reader, cfg.model, verifiers)
-      .then((entries) => {
+    void (async () => {
+      try {
+        const entries = await latestKeysFor(reader, cfg.model, verifiers);
         if (!current) return;
         setLog({ entries });
         setError('');
-        void wider.then((all) => current && setLog({ entries, all }));
-      })
-      .catch((e: unknown) => current && setError(describeError(e)));
+        const all = await wider;
+        if (current) setLog({ entries, all });
+      } catch (e) {
+        if (current) setError(describeError(e));
+      }
+    })();
     reader.verifiers().then((v) => current && setRegistered(v)).catch(() => undefined); // only widens the list of choices: without it the log's own verifiers are still there
     return () => {
       current = false;

@@ -8,7 +8,7 @@ test('defaults point at the deployed testnet log and the demo trust policy', () 
   const c = ainekConfigFromEnv({});
   assert.equal(c.contract, 'ainek-log-dastan.testnet');
   assert.equal(c.logSource, 'contract');
-  assert.deepEqual(c.trustedVerifiers, ['ainek-dev-dastan.testnet', 'ainek-v2-dastan.testnet']);
+  assert.deepEqual(c.trustedVerifiers, ['ainek-dev-dastan.testnet']);
   assert.equal(c.quorum, 1);
   assert.deepEqual(c.acceptedTcbStatuses, ['UpToDate']);
   assert.equal(c.rpcUrl, 'https://rpc.testnet.fastnear.com');

@@ -110,20 +110,40 @@ export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
   };
 }
 
+/** How many log reads go out at once. A visitor may trust up to 100 verifiers; a public RPC answers such a burst with refusals. */
+const LOG_READS_AT_ONCE = 6;
+
 /**
  * The window the fail-closed check works on: the newest entries of the model, plus each trusted verifier's own entries
  * read separately, merged newest first. `latest_keys` returns at most 100 entries, and registering a verifier is not
  * the client's decision: without the separate reads, one registered account writing 100 entries would push every
- * trusted entry out of the answer and the client would refuse honest messages (or miss a split view). The general
+ * trusted entry out of the answer and the client would refuse honest messages (or miss a split view). A trusted
+ * verifier's own read is capped at 100 too: its older entries in the window are not seen. The general
  * read stays because it tells "logged only outside your trust set" from "not logged at all".
  * Any read failing fails the whole: a partial window must not pass for the log (fail-closed). A name that is not a NEAR
  * account id is skipped: the contract's view rejects such an argument, and it can have no entries anyway.
  */
 export async function latestKeysFor(reader: Pick<KeyLogReader, 'latestKeys'>, model: string, trustedVerifiers: readonly string[], maxAgeNs?: string, signal?: AbortSignal): Promise<KeyEntry[]> {
-  const verifiers = [...new Set(trustedVerifiers)].filter((v) => NEAR_ACCOUNT.test(v));
-  const reads = await Promise.all([reader.latestKeys(model, maxAgeNs, signal), ...verifiers.map((v) => reader.latestKeys(model, maxAgeNs, signal, v))]);
-  const byIndex = new Map(reads.flat().map((e) => [e.index, e]));
-  return [...byIndex.values()].sort((a, b) => b.index - a.index);
+  // The general read first, then one per trusted verifier.
+  const filters: Array<string | undefined> = [undefined, ...new Set(trustedVerifiers.filter((v) => NEAR_ACCOUNT.test(v)))];
+  // One failed read fails the whole, so the reads still in flight are stopped with it.
+  const stop = new AbortController();
+  const signals = signal ? AbortSignal.any([signal, stop.signal]) : stop.signal;
+  const byIndex = new Map<number, KeyEntry>();
+  let next = 0;
+  const worker = async () => {
+    while (next < filters.length && !stop.signal.aborted) {
+      const entries = await reader.latestKeys(model, maxAgeNs, signals, filters[next++]);
+      for (const e of entries) byIndex.set(e.index, e);
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(LOG_READS_AT_ONCE, filters.length) }, worker));
+  } catch (err) {
+    stop.abort();
+    throw err;
+  }
+  return [...byIndex.values()].sort((x, y) => y.index - x.index);
 }
 
 // ---- proof_commit (SPEC §4.2) --------------------------------------------------------------------

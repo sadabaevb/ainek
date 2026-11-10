@@ -119,5 +119,6 @@ Honest limitations won prizes at previous NEAR hackathons.
   reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Every verifier in the demo is ours: one on a server since Nov 6, a second account that wrote its first entry on
-  Nov 10 (checked 2026-11-10). Nobody outside the team runs one yet.
+  write to it. Every verifier in the demo is ours: one on a server since Nov 6, trusted by the site's default, and a second account
+  that wrote its first entry on Nov 10 and is not in the default yet (checked 2026-11-10). Nobody outside the team runs
+  one yet.

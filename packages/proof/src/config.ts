@@ -38,10 +38,11 @@ export interface AinekConfig {
 
 export type EnvLike = Record<string, string | undefined>;
 
-// The demo's trust policy for the live log; the replay's recorded entry #0 is by the first verifier (config.test.ts checks).
-// Two verifiers on different machines (a server; GitHub's runners, docs/DEPLOY.md), both ours. The quorum stays 1 until the
-// second has run for a day: with 2, one missed round of either would stop the chat.
-const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet,ainek-v2-dastan.testnet';
+// The demo's trust policy for the live log; the replay's recorded entry #0 is by the same verifier (config.test.ts checks).
+// Our second verifier (ainek-v2-dastan.testnet) writes too but is not trusted by default yet: a trusted verifier that
+// stalls across a key rotation ends with no key in common with the other one, which reads as a split view and stops the
+// chat for everyone (SPEC §7.1). It joins once it has run on a schedule for a day; a visitor can add it on /log now.
+const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
 // One line to turn the deployment check on in the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables). Off until the
 // verifier samples every instance behind the gateway each round (DEV-NOTES 2026-11-10); `.env.example` carries the same value.

@@ -4,7 +4,7 @@
 > Social Money. Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
-checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: two, both ours); the
+checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: two accounts, both ours); the
 request is end-to-end encrypted to that key; the signed answer is re-verified in your browser, byte for byte. A salted hash of
 the proof is committed to NEAR (`commit_proof`, paid from storage the account prepays). Tier 2 is built to let an agent act on the answer
 only within a policy evaluated inside Intel TDX (OutLayer); what ran is under [Status](#status).
@@ -53,8 +53,8 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 
 - **Is this key real?** The client sends nothing unless the model's signing key is in the public log on NEAR (fail-closed).
   A verifier logs a key only after checking the Intel TDX quote and the NVIDIA GPU evidence, and the client re-verifies the
-  evidence itself as well, so the log is a second opinion, not the only one. If two trusted verifiers disagree on a model,
-  you see a split view, not an average. Today: two verifiers, both ours; the second wrote its first entry on Nov 10. Entry #0 was logged by hand from a report our code
+  evidence itself as well, so the log is a second opinion, not the only one. If two trusted verifiers have no key in common for a model,
+  you see a split view, not an average. Today: two verifiers, both ours; the site trusts the first by default (why: SPEC §7.1). Entry #0 was logged by hand from a report our code
   verified with the SDK; entries #1 and #2 are re-logs of that same recording by a stopgap script, since removed (same nonce
   and report hash, fresh `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh
   attestation each. No entry records the NVIDIA verdict hash yet (the SDK's GPU verifier does not return it).
@@ -151,7 +151,7 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
 
 At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev` running:
 
-1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet` and `ainek-v2-dastan.testnet` on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
+1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet`, which the site trusts by default, and by `ainek-v2-dastan.testnet`, which you can add, on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
 3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent." The second switch (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
@@ -285,8 +285,9 @@ Known issues we inherited (and say so):
   reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Every verifier in the demo is ours: one on a server since Nov 6, a second account that wrote its first entry on
-  Nov 10 (checked 2026-11-10). Nobody outside the team runs one yet.
+  write to it. Every verifier in the demo is ours: one on a server since Nov 6, trusted by the site's default, and a second account
+  that wrote its first entry on Nov 10 and is not in the default yet (checked 2026-11-10). Nobody outside the team runs
+  one yet.
 
 ## Architecture
 
