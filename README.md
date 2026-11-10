@@ -24,7 +24,7 @@ No key, no wallet, nothing to set up.
 | Open [`/log`](https://ainek.vercel.app/log) | The public key log, read from the NEAR contract: who logged the model's key, whom the client trusts, which deployments of the model verifiers have seen behind the key |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
-**From a clean clone** (Node 24+; `corepack enable` gives you pnpm 10). The three commands are offline, about a second each:
+**From a clean clone** (Node 24+ and pnpm 10: `corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack). The three commands are offline, about a second each:
 
 ```bash
 git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
@@ -199,8 +199,8 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Agent service and Telegram (Tier 2) | the owner's messages and the agent's replies in plaintext; the service also holds the proofs and their salts | the policy contents, the owner's keys | none for privacy: ordinary server code and a messenger; what the agent can do is bounded on-chain (function-call key, TEE-signed decisions, contract checks, stop button), not eliminated |
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
-The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until the SDK
-ships E2EE v3, a relay that did so could read the replies it diverted, and the card would only fail afterwards (see
+The "does not see" column holds for requests. For replies it holds only while no hop swapped the reply key: until this
+client moves to E2EE v3 (SDK 0.3.0), a relay that did so could read the replies it diverted, and the card would only fail afterwards (see
 "Known issues we inherited" below).
 
 ## What we do not claim
@@ -231,8 +231,8 @@ ships E2EE v3, a relay that did so could read the replies it diverted, and the c
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested
   key, because attestation is checked locally. The endpoint also sees the browser's IP and the timing of every message's
-  log read, and the signed commit transaction, which the wallet connector broadcasts through its own FastNear endpoint
-  (README "Who sees what").
+  log read. The signed commit transaction goes to a second endpoint: the wallet connector broadcasts it through its own
+  FastNear endpoint (the "Who sees what" table).
 - **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
   previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
   rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the
@@ -281,8 +281,8 @@ Known issues we inherited (and say so):
   the exposure above stands for us. Moving to v3 needs a live chat that shows the gateway accepting it, and we have not
   run one. The finding itself is still open upstream.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Every verifier in the demo is ours: one writes to the log, a second is registered and not writing. Nobody
-  outside the team runs one yet.
+  write to it. Every verifier in the demo is ours: one writes to the log, a second account of ours is registered and has not
+  written (checked 2026-11-10). Nobody outside the team runs one yet.
 
 ## Architecture
 

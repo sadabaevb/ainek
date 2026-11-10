@@ -65,8 +65,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested
   key, because attestation is checked locally. The endpoint also sees the browser's IP and the timing of every message's
-  log read, and the signed commit transaction, which the wallet connector broadcasts through its own FastNear endpoint
-  (README "Who sees what").
+  log read. The signed commit transaction goes to a second endpoint: the wallet connector broadcasts it through its own
+  FastNear endpoint (the "Who sees what" table).
 - **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
   previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
   rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the
@@ -115,5 +115,5 @@ Honest limitations won prizes at previous NEAR hackathons.
   the exposure above stands for us. Moving to v3 needs a live chat that shows the gateway accepting it, and we have not
   run one. The finding itself is still open upstream.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Every verifier in the demo is ours: one writes to the log, a second is registered and not writing. Nobody
-  outside the team runs one yet.
+  write to it. Every verifier in the demo is ours: one writes to the log, a second account of ours is registered and has not
+  written (checked 2026-11-10). Nobody outside the team runs one yet.

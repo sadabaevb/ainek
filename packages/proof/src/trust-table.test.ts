@@ -1,12 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readRepoFile, readRepoJson } from './fixtures.ts';
+import { mdSection, readRepoJson, readRepoText } from './fixtures.ts';
 
 // README "Who sees what", /trust (apps/web/app/trust/rows.json) and SPEC §8 promise the same rows. The English pair is
 // checked here so a wording fix in one place cannot silently leave the other behind (SPEC §8 is Russian: by eye).
 function readmeRows(): string[][] {
-  const md = new TextDecoder().decode(readRepoFile('README.md'));
-  const section = md.split('\n## Who sees what\n')[1]?.split('\n## ')[0];
+  const section = mdSection(readRepoText('README.md'), 'Who sees what');
   assert.ok(section, 'README has a "Who sees what" section');
   return section
     .split('\n')
