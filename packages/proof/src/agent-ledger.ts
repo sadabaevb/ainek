@@ -2,7 +2,7 @@
 // proposed with the decision the contract accepted. Shared by `pnpm -F demo check-agent`, the /agent page and /verify, so each
 // reads and re-checks a record the same way. The contract checked every decision when it mattered; these checks repeat what an
 // outsider can repeat.
-import { checkProofCommit, keyScopeProblem, readProofCommit, viewAccessKeys, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
+import { ContractMethodNotFound, checkProofCommit, keyScopeProblem, readProofCommit, viewAccessKeys, viewFunction, type AccessKey, type ProofCommitLookup } from './near-view.ts';
 import { actionCommitCheck, check, decisionSignatureCheck } from './policy.ts';
 import { ActionRecord, AgentInfo } from './schema.ts';
 import { readTokenBalance } from './token.ts';
@@ -30,16 +30,45 @@ export async function readAction(rpcUrl: string, contract: string, actionId: num
 }
 
 const CHUNK = 16;
-/** A re-read from a known id usually finds one or two new actions: a narrow first window, then full chunks. */
+/** Without a count, a re-read from a known id usually finds one or two new actions: a narrow first window, then full chunks. */
 const FOLLOW_UP = 4;
 const MAX_ACTIONS = 512;
 
+/** `action_count()`: the ids are `0..count-1`. Null when the contract cannot say (a build from before Nov 10 has no such view): the caller then finds the end by asking. */
+export async function readActionCount(rpcUrl: string, contract: string, signal?: AbortSignal): Promise<number | null> {
+  try {
+    const raw = await viewFunction(rpcUrl, contract, 'action_count', {}, signal);
+    return typeof raw === 'number' && Number.isSafeInteger(raw) && raw >= 0 ? raw : null;
+  } catch (err) {
+    if (err instanceof ContractMethodNotFound) return null;
+    throw err;
+  }
+}
+
 /**
- * The actions the contract holds from id `from` on, oldest first. The contract has no count and no list view, only `action(id)`
- * with ids from 0 and no gaps, so the ids are asked a chunk at a time until one is missing. Ids from `max` on are not read; `more`
- * says whether id `max` exists: the list is then a prefix, and a caller must say so instead of showing it as the whole record.
+ * The actions the contract holds from id `from` on, oldest first. Ids start at 0 and have no gaps. With `action_count()` the
+ * range is known and read a chunk at a time; without it (an older build) the ids are asked a chunk at a time until one is
+ * missing. Ids from `max` on are not read; `more` says whether the contract holds any: the list is then a prefix, and a caller
+ * must say so instead of showing it as the whole record.
  */
 export async function readActions(rpcUrl: string, contract: string, { from = 0, chunk = CHUNK, max = MAX_ACTIONS, signal }: { from?: number; chunk?: number; max?: number; signal?: AbortSignal } = {}): Promise<{ records: ActionRecord[]; more: boolean }> {
+  const count = await readActionCount(rpcUrl, contract, signal);
+  if (count === null) return probeActions(rpcUrl, contract, { from, chunk, max, signal });
+  const records: ActionRecord[] = [];
+  const end = Math.min(count, max);
+  for (let next = from; next < end; next += chunk) {
+    const batch = await Promise.all(Array.from({ length: Math.min(chunk, end - next) }, (_, i) => readAction(rpcUrl, contract, next + i, signal)));
+    // The count and an action can come from two nodes a block apart: an id the count promises and this node does not have
+    // yet ends the list here, and the next read picks it up.
+    const missing = batch.indexOf(null);
+    records.push(...(missing === -1 ? batch : batch.slice(0, missing)).flatMap((r) => (r ? [r] : [])));
+    if (missing !== -1) return { records, more: false };
+  }
+  return { records, more: count > max };
+}
+
+/** The same list for a contract without `action_count()`: ask the ids a chunk at a time until one is missing, and one id past the cap. */
+async function probeActions(rpcUrl: string, contract: string, { from, chunk, max, signal }: { from: number; chunk: number; max: number; signal?: AbortSignal | undefined }): Promise<{ records: ActionRecord[]; more: boolean }> {
   const records: ActionRecord[] = [];
   let width = from === 0 ? chunk : Math.min(chunk, FOLLOW_UP);
   for (let next = from; next < max; next = from + records.length) {
