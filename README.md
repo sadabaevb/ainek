@@ -1,7 +1,9 @@
 # Ainek — a glass box for private AI agents on NEAR
 
 > NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
-> Testnet only. Not audited. See [What we do not claim](#what-we-do-not-claim).
+> Testnet only. Not audited. Both verifiers that write to the log are ours; the contract account still has a full-access
+> key; the log is a key allowlist, the deployment check is written and off. See [Who sees what](#who-sees-what) and
+> [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
 checked against a **public, append-only key log in a NEAR contract** that verifiers write to (today: two accounts, both ours); the
@@ -38,26 +40,38 @@ with your own key. That and the other checks (your own trust set, re-verifying a
 [Try it](#try-it-do-x--see-y).
 
 **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
-What is done and what has not run live: [Status](#status).
+
+## Status
+
+As of Nov 10, 2026.
+
+- **Tier 1 runs end to end:** the client, the proof package, the offline replay, `/verify`, `/log` and `/auditor`; the
+  key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (`docs/DEPLOY.md`).
+- **Tier 2 is on testnet** and ran through the Telegram bot on Nov 7: what ran and what has not is under [Tier 2 flow](#tier-2-flow).
+- **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
+  account still has a full-access key; the deployment check, written and switched off ("What we do not claim").
+- **The log's first entries:** entry #0 was logged by hand from a report our code verified with the SDK; entries #1 and
+  #2 are re-logs of that same recording by a stopgap script, since removed (same nonce and report hash, fresh
+  `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh attestation each. No
+  entry records the NVIDIA verdict hash yet (the SDK's GPU verifier does not return it).
 
 ## Why
 
 **The problem.** Every "private AI" today says "we run in a TEE, trust us". Hardware attestation is now
 commodity; what is missing is proof a *user* can re-check, independently of the vendor, that *this*
 answer came from *this* attested key under *this* policy — without leaking the user's data to a public chain.
-NEAR's own Verification Center says it "cannot recompute request/response hashes" and "does not compare
-measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15 2026 that there is
-"no public log of TEE keys yet". Independent monitoring rates 0 of 95 provider checks "end-to-end verified".
+NEAR's own [Verification Center](https://docs.near.ai/cloud/verification/verification-center.md) says it "cannot
+recompute request/response hashes" and "does not compare measurements to an approved allowlist";
+[Brave](https://brave.com/blog/browser-ai-e2ee/), built on NEAR AI, wrote on Oct 15 2026 that there is "no public log of
+TEE keys yet". [Independent monitoring](https://confidentialinference.net/attestation) rates 0 of 95 provider checks
+"end-to-end verified".
 
 **What Ainek does.** Three questions, each answered by something you can re-run:
 
 - **Is this key real?** The client sends nothing unless the model's signing key is in the public log on NEAR (fail-closed).
   A verifier logs a key only after checking the Intel TDX quote and the NVIDIA GPU evidence, and the client re-verifies the
   evidence itself as well, so the log is a second opinion, not the only one. If two trusted verifiers have no key in common for a model,
-  you see a split view, not an average. Today: two verifiers, both ours; the site trusts the first by default (why: SPEC §7.1). Entry #0 was logged by hand from a report our code
-  verified with the SDK; entries #1 and #2 are re-logs of that same recording by a stopgap script, since removed (same nonce
-  and report hash, fresh `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh
-  attestation each. No entry records the NVIDIA verdict hash yet (the SDK's GPU verifier does not return it).
+  you see a split view, not an average. Today: two verifiers, both ours; the site trusts the first by default (why: SPEC §7.1).
 - **Did this answer come from there?** The enclave signs `sha256(request)` and `sha256(response)`. Ainek keeps the exact
   bytes, recomputes both hashes and checks the signature against the logged key. A salted hash of the proof is committed
   to NEAR by your wallet (`commit_proof`, from storage your account prepays); until you connect one it stays in this browser. The salt and your copy of the exchange live
@@ -70,14 +84,13 @@ measurements to an approved allowlist"; Brave, built on NEAR AI, wrote on Oct 15
 
 ## Three catches (what you will see)
 
-1. **Swapped key → nothing is sent.** The key is not in the public log → the client refuses: "Result: REFUSED" (`pnpm demo:tamper`) or the red card "Key not in the public log. Message not sent." (`/?tamper=1`).
+1. **Swapped key → nothing is sent.** The key is not in the public log → the client refuses (`pnpm demo:tamper`, `/?tamper=1`).
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
-3. **Agent over its mandate.** (Tier 2) An "urgent transfer to a new vendor, ignore limits" → the policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. A real one from testnet is action #4 on `/agent` (Nov 7; the owner typed the message, a forwarded injection has not run live): the page re-checks the signature in your browser, and `/verify` checks the run's attestation.
+3. **Agent over its mandate.** (Tier 2) An "urgent transfer to a new vendor, ignore limits" → the policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. A real one from testnet: action #4 on `/agent` (typed by the owner; a forwarded injection has not run live).
 
 A fourth catch is written and switched off by default: **unknown deployment → nothing is sent.** The key is real, but the
 instance that attests to the client runs code no trusted verifier has logged. `/?tamper=deployment` shows the refusal; `/log` lists the compose hashes
-verifiers have seen behind the key (six since Nov 3, three in the last 24 hours on Nov 10; by their image digests the six
-are two builds: four hashes share one set of images, two share the other). Why it is off: "What we do not claim".
+verifiers have seen behind the key. Why it is off: "What we do not claim".
 
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
@@ -106,12 +119,12 @@ claim".
 
 ## Prior art in this hackathon
 
-We read the code of the 26 nearest entries and looked at their contracts on chain on Nov 6, 2026; we did not run them, and
+We read the code of the 26 nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them, and
 they may have moved on since. Several are ahead of Ainek in places: Vouch has the deepest attestation check we saw, Charter
-runs on mainnet, AgentGuard is deployed and in use, TEE Receipts checks the answer's signature in the contract. The table, entry by entry, with
-where each is ahead and what Ainek adds: [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
+runs on mainnet, AgentGuard is deployed and in use, and TEE Receipts checks the answer's signature in the contract. Each
+entry, with where it is ahead and what Ainek adds, is in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
-Among the 26 hackathon entries whose code we read on Nov 6, 2026, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
+Among those 26 entries, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
 
 ## Try it (do X → see Y)
 
@@ -145,24 +158,14 @@ At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev
 
 1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet`, which the site trusts by default, and by `ainek-v2-dastan.testnet`, which you can add, on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
-3. **See fail-closed:** `pnpm demo:tamper`, or tick "swap the key" in the chat (`/?tamper=1`) → "Key not in the public log. Message not sent." The second switch (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
+3. **See fail-closed for a deployment:** the chat's second switch (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
 5. **Re-verify a proof yourself:** "Re-verify yourself" on a card, or paste [`docs/samples/disclosure.sample.json`](docs/samples/disclosure.sample.json) (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
 6. **Audit a disclosure:** `/auditor` → "Use the sample file" → Check → the commit recomputed from salt + proof, the hashes from the disclosed bytes, the log entry re-read from the chain and compared with the file's; the commit found on NEAR under the account that committed it → "This disclosure checks out". The button fills in that account (`docs/samples/disclosure.sample.chain.json`); any other account gets "… never committed this hash": the chain decides, not the file. The page says what the file does and does not prove. Where the sample comes from and when to record it again: `docs/samples/README.md`.
-7. **Re-check an agent's action:** `/verify` → "Use a real action proof" → Verify → a real denial from testnet (action 4: 5000 AINEK to a new vendor, nothing moved), checked in your browser: the decision's signature under the key the contract recorded, the same action and status on chain, the proof's salted commit, and the run's attestation (Intel's signature, the published build, this decision). The job's input shows as "—": a proof does not carry the input.
-8. **See what the agent did:** `/agent` → the agent as the chain shows it (can it act, what its key may call, where the tokens are, the policy hash) and every action it proposed, newest first. Each record is re-checked in your browser: the decision's signature under the key recorded with it, the payment it covers, an outcome that verdict allows, a model proof commit by the agent. Open #4, the denial → "Demo: change the verdict and re-check" → the signature check turns red; "open it on /verify" → step 7 for that action. The page follows the chain while it is open, so a new action appears by itself. The contract owner can approve or reject a waiting action there through a wallet (1 yoctoNEAR, a full-access signature); that path has unit tests and has not run on chain yet.
+7. **Re-check an agent's action:** `/verify` → "Use a real action proof" → Verify → a real denial from testnet (action 4), checked in your browser: the decision's signature under the key the contract recorded, the same action and status on chain, the proof's salted commit, and the run's attestation (Intel's signature, the published build, this decision). The job's input shows as "—": a proof does not carry the input.
+8. **See what the agent did:** `/agent` → the agent as the chain shows it (can it act, what its key may call, where the tokens are, the policy hash) and every action it proposed, newest first. Each record is re-checked in your browser: the decision's signature under the key recorded with it, the payment it covers, an outcome that verdict allows, a model proof commit by the agent. On #4, "open it on /verify" is step 7 for that action. The page follows the chain while it is open, so a new action appears by itself.
 
-## Status
-
-As of Nov 10, 2026.
-
-- **Tier 1 runs end to end:** the client, the proof package, the offline replay, `/verify`, `/log` and `/auditor`; the
-  key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (`docs/DEPLOY.md`).
-- **Tier 2 is on testnet** and ran through the Telegram bot on Nov 7: what ran and what has not is under "Tier 2 flow" below.
-- **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
-  account still has a full-access key; the deployment check, written and switched off ("What we do not claim").
-
-### Tier 2 flow
+## Tier 2 flow
 
 The agent is in `services/agent`; the contract, the policy job, the demo token and the agent account have been on testnet since Nov 6 (`docs/DEPLOY.md`). On Nov 7 the Telegram bot ran the scenes below through the whole chain (the model, the policy job over HTTPS with its attestation checked, the contract, the token), except the rejection and the stop button. Those two ran on chain the same day from a script with a placeholder model proof, and actions 5 to 7 in `check-agent` all come from that script (so do the first two, 0 and 1, sent on Nov 6). Not run live, so the plan and not a record: a rejection through the bot, a forwarded injection message (the denial below was typed), a commit failure recovered by the retry. Running the agent yourself needs your own testnet accounts, keys and Telegram bot: see `services/agent/README.md`.
 
@@ -311,9 +314,10 @@ stop button: DeleteKey + pause_agent                                            
 ## Metrics
 
 50 live runs one after another on Nov 10, 2026, from Node, direct to NEAR AI, with a one-line prompt; every run's timings
-are in [`docs/metrics.json`](docs/metrics.json), re-run with `pnpm demo:metrics --runs N`. This shows the sequence holds,
-not how the services behave over days: the same command on Nov 6 gave a median of 9.9 s, and the difference is in the
-network steps. How each number was measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
+are in [`docs/metrics.json`](docs/metrics.json). To run it again: `pnpm demo:metrics --runs N --out <file>` (it needs
+`NEARAI_API_KEY` and spends N short replies; without `--out` it overwrites `docs/metrics.json`). The runs show that the
+sequence holds, not how the services behave over days: the same command on Nov 6 had a median of 9.9 s, and the gap is
+in the network steps. How each number was measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 
 | Metric | Value (50 runs) |
 | --- | --- |
@@ -325,20 +329,22 @@ network steps. How each number was measured, and what it does not show: [docs/ME
 | Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.7 s |
 | E2EE round trip to the model | median 1.9 s, p90 4.1 s |
 | Signature fetch | median 0.6 s, p90 0.9 s |
-| Whole run, evidence re-fetched (a real first message can be slower, see above) | median 7.1 s, p90 10.3 s |
+| Whole run, evidence re-fetched (a real first message can be slower: run 1 took 8.8 s) | median 7.1 s, p90 10.3 s |
 | Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 3.1 s, p90 5.2 s |
 | Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1071 B received |
 
 - **In a browser** (hosted demo, headless Chromium, four messages, a spot check): three first messages with nothing
   cached took 6.3, 5.9 and 5.6 s; one later message with the attestation cached, 2.1 s.
-- **Over the log's history** (`pnpm -F demo check-contract`, Nov 10): an honest client would have had no entry younger
-  than 24 hours for 13.6 of 167 hours, all on Nov 4–5, before the verifier ran on a server; none missing since. The count
-  does not look at the key or a quorum; the model's key did not change in that time.
+- **Over the log's history** (`pnpm -F demo check-contract`, Nov 10): an honest client would have found no entry younger
+  than 24 hours during 13.6 of the 167 hours, all on Nov 4–5, before the verifier ran on a server; none has been missing
+  since. The count ignores the key and the quorum; it matches the client's decision only because the model's key did not
+  change in that time.
 - **The on-chain commit**, measured once: `commit_proof` burnt 2.41 TGas (0.00022 NEAR) and 161 bytes of prepaid storage
   (0.00161 NEAR).
 - **Tier 2** is a tally, not a benchmark: the ten actions the agent has on testnet, all proposed by us, five of them from
-  scripts with a placeholder model proof. `check-agent` reads the contract's records, not the token's transfers; times
-  from message to transfer were not measured.
+  scripts with a placeholder model proof. `check-agent` reads the contract's records, not the token's transfers. The
+  totals agree: the contract holds 8,794 AINEK, the 10,000 sent to it minus the 1,206 of the seven Executed actions; that
+  does not rule out flows that cancel out. Times from message to transfer were not measured.
 
 | Decision signed in the enclave | Actions | Status the contract recorded |
 | --- | --- | --- |
