@@ -47,7 +47,7 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
   const commit = useCallback((outcome: VerifiedOutcome) => onCommit(idx, outcome), [onCommit, idx]);
   const { outcome } = turn;
   // The honest retry helps only when the swap was the whole problem: a split log or a short quorum would refuse the honest message too.
-  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.honestWouldPass ? outcome.model : null;
+  const retryModel = canRetry && outcome?.kind === 'refused' && outcome.honestWouldPass ? turn.model : null;
   return (
     <article className="turn">
       <div className="bubble user"><span className="who">{t.you}</span>{turn.message.content}</div>
@@ -161,7 +161,7 @@ export default function ChatPage() {
     setTamper(opts.tamper);
     setInput('');
     setBusy(true);
-    const messages = [...chatHistory(turns, opts.model), { role: 'user' as const, content }];
+    const messages = [...chatHistory(turns, opts.model, cfg.model), { role: 'user' as const, content }];
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, model: opts.model, steps: [] }]);
     try {
@@ -203,7 +203,7 @@ export default function ChatPage() {
           <label><input type="checkbox" checked={tamper === 'deployment'} onChange={(e) => setTamper(e.target.checked && 'deployment')} disabled={busy} /> {t.tamperDeployment}</label>
         </span>
       </div>
-      {hasOtherThread(turns, model) && <p className="muted small">{t.ownThread}</p>}
+      {hasOtherThread(turns, model, cfg.model) && <p className="muted small">{t.ownThread}</p>}
 
       <section className="thread">
         {turns.map((turn, i) => <TurnView key={i} turn={turn} idx={i} canRetry={!busy && i === turns.length - 1} onCommit={onCommitClick} onRetry={onRetryClick} />)}
