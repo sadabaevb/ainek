@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
-import { ActionProof, PolicyInput, PolicyOutput, PolicyRun, actionCommitOf, actionRunChecks, base64ToBytes, checkPolicyRun, type PolicyRunEvidence } from '@ainek/proof';
+import { ActionProof, Decision, PolicyInput, PolicyOutput, PolicyRun, actionCommitOf, actionRunChecks, base64ToBytes, canonicalJson, checkPolicyRun, verifyDecisionSignature, type PolicyRunEvidence } from '@ainek/proof';
 import { verifyTdxQuote } from './dcap.ts';
 
 const read = (path: string) => JSON.parse(readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8'));
@@ -91,4 +91,27 @@ test('no quote check or no worker list is said plainly, never read as passing', 
   assert.equal(statusOf(evidence({ measurementsApproved: null }), 'run-worker'), 'skipped');
   assert.equal(statusOf(evidence({ measurementsApproved: false }), 'run-worker'), 'fail');
   assert.equal(statusOf(evidence({ run: { ...run, worker_measurement: 'ff'.repeat(48) } }), 'run-worker'), 'fail');
+});
+
+// ---- the agent's live actions (docs/samples/policy-runs.sample.json, `pnpm demo:policy`) ---------------
+const agentRuns = read('docs/samples/policy-runs.sample.json') as { published: { wasmHash: string; project: string }; collaterals: unknown[]; runs: Array<{ actionId: number; decision: unknown; teePubkey: string; teeSignature: string; attestation: unknown; collateral: number; measurementsApproved: boolean }> };
+const agentRunChecks = (r: (typeof agentRuns.runs)[number], edit: (output: string) => string = (o) => o) => {
+  const attested = PolicyRun.parse(r.attestation);
+  const output = canonicalJson({ decision: Decision.parse(r.decision), pubkey: r.teePubkey, sig: r.teeSignature, wasm_hash: agentRuns.published.wasmHash });
+  return checkPolicyRun({ run: attested, input: null, output: edit(output), wasmHash: agentRuns.published.wasmHash, project: agentRuns.published.project, quote: verifyTdxQuote(base64ToBytes(attested.tdx_quote), agentRuns.collaterals[r.collateral], attested.timestamp), measurementsApproved: r.measurementsApproved });
+};
+
+test('every recorded policy run behind a live action of the agent: Intel signed the quote, and it commits to the published build and to the decision on chain', () => {
+  assert.deepEqual(agentRuns.runs.map((r) => r.actionId), [2, 3, 4, 8, 9]);
+  for (const r of agentRuns.runs) {
+    assert.deepEqual(agentRunChecks(r).map((c) => [c.id, c.status]), [['run-build', 'ok'], ['run-input', 'skipped'], ['run-output', 'ok'], ['run-quote', 'ok'], ['run-binding', 'ok'], ['run-worker', 'ok']], `action ${r.actionId}`);
+    assert.equal(verifyDecisionSignature(Decision.parse(r.decision), r.teeSignature, r.teePubkey), true, `action ${r.actionId}: the decision is signed by the recorded key`);
+  }
+});
+
+test('a recorded agent run stops vouching for a decision whose verdict was changed', () => {
+  for (const r of agentRuns.runs) {
+    const checks = agentRunChecks(r, (o) => o.replace(/"verdict":"(Allow|Deny|NeedsApproval)"/, (_m, v: string) => `"verdict":"${v === 'Deny' ? 'Allow' : 'Deny'}"`));
+    assert.ok(checks.some((c) => c.status === 'fail'), `action ${r.actionId}`);
+  }
 });

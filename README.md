@@ -33,7 +33,8 @@ No key, no wallet, nothing to set up.
 git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
 pnpm demo            # recorded TDX + GPU evidence and two signed exchanges, re-verified → "Result: VERIFIED"
 pnpm demo:tamper     # the same recording with the key swapped → "Result: REFUSED", nothing is sent
-pnpm demo:policy     # a recorded policy run on OutLayer: Intel's quote, the published build, the decision → "Result: VERIFIED"
+pnpm demo:policy     # recorded policy runs on OutLayer, the agent's five live actions among them: Intel's quote, the
+                     #   published build, the decision → "Result: VERIFIED"
 ```
 
 The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If it stops answering, run it locally
@@ -130,7 +131,7 @@ Among those 26 entries, none combines a public log of TEE keys, a refusal before
 ## Try it (do X → see Y)
 
 Clone and install as in [See it in a minute](#see-it-in-a-minute); its three commands are not repeated here
-(`pnpm demo:policy` also takes `--tamper` → "Result: REFUSED", and `--live`, which fetches the run again). Rust (rustup) is
+(`pnpm demo:policy` also takes `--tamper` → "Result: REFUSED", and `--live`, which reads every run and its action again). Rust (rustup) is
 needed only for `contracts/ainek` (plus `cargo-near`) and `jobs/policy`, whose commands are under "Tests" in "Repository";
 Docker only for the reproducible wasm builds (`docs/REVIEW.md`). Each step says what you should see.
 
