@@ -1,12 +1,14 @@
 // The picture a link to the site shows in X, Telegram and Slack (1200x630), drawn at build time with next/og.
-// It states what the product does and nothing about what it does not: the claims are in the README.
+// Two things the product does, and the footer's "testnet, not audited"; the full claims and limits are in the README.
+// The host in the footer and metadataBase in layout.tsx are the same site: change both when it moves.
 import { ImageResponse } from 'next/og';
 
 export const alt = 'Ainek: a glass box for private AI agents on NEAR. Key not in the public log: nothing is sent. Every answer comes with a proof you re-check yourself.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-const C = { bg: '#f5f7fb', surface: '#ffffff', fg: '#0f172a', muted: '#64748b', line: '#e2e8f0', accent: '#4f46e5', ok: '#15803d', okBg: '#ecfdf3', bad: '#b91c1c', badBg: '#fef2f2' };
+// Mirrors :root in globals.css: the image renderer cannot read CSS variables.
+const C = { bg: '#f5f7fb', fg: '#0f172a', muted: '#64748b', line: '#e2e8f0', accent: '#4f46e5', ok: '#15803d', okBg: '#ecfdf3', bad: '#b91c1c', badBg: '#fef2f2' };
 
 // The bundled font has one weight and no check mark glyph, so the marks are drawn.
 const Card = ({ color, bg, ok, title, text }: { color: string; bg: string; ok: boolean; title: string; text: string }) => (

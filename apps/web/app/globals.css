@@ -122,7 +122,7 @@ h3 { margin: 0 0 0.5rem; font-size: 1.05rem; }
 .card-head .when { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
 .row { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: 0.1rem 0.75rem; padding: 0.7rem 0; border-top: 1px solid var(--line); }
 .row:first-of-type { border-top: 0; }
-.row > :not(.mark) { grid-column: 2; }
+.row > :not(.mark) { grid-column: 2; overflow-wrap: anywhere; }
 .row .mark, .step .num { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700; line-height: 1; }
 .row .mark { grid-row: 1 / span 3; }
 .row.ok .mark { background: var(--ok-bg); color: var(--ok); }
