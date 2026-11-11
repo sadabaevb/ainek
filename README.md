@@ -347,16 +347,17 @@ measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 | Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1019 B received |
 
 - **The run that did not verify** (41 of 50): its attestation step did not finish within the 120 s the runner allows, so
-  the run stopped there and nothing was sent; the swapped-key rule was not reached in it. The model was slow that evening:
+  the run stopped there and nothing was sent; it reached neither the log check nor the swapped-key rule, so the
+  table's two log-check rows cover 49 runs. The model was slow that evening:
   replies took up to 24 s here, and one message on the hosted chat at the same time waited 58 s for its answer.
 - **In a browser** (hosted demo, headless Chromium, four messages, a spot check): three first messages with nothing
   cached took 6.3, 5.9 and 5.6 s; one later message with the attestation cached, 2.1 s.
-- **Over the log's history** ("honest request refused: 0 of 50" covers fourteen minutes; this is `pnpm -F demo check-contract`
+- **Over the log's history** ("honest request refused: 0 of 50" covers eleven minutes; this is `pnpm -F demo check-contract`
   on Nov 10): an honest client would have found no entry younger than 24 hours during 13.6 of the 167 hours, all on
   Nov 4–5, before the verifier ran on a server; none has been missing since. The count ignores the key and the quorum: it
   matches the client's decision only because the model's key did not change in that time and the quorum is 1, so a
   refusal caused by a key the verifier has not logged yet has not been observed. Nor has one caused by a deployment it
-  has not logged yet: the deployment check has been on since Nov 11, and these 50 runs are all it has been measured on.
+  has not logged yet: the deployment check has been on since Nov 11, and the 49 runs that reached it here are all it has been measured on.
 - **The on-chain commit**, measured once: `commit_proof` burnt 2.41 TGas (0.00022 NEAR) and 161 bytes of prepaid storage
   (0.00161 NEAR).
 - **Tier 2** is a tally, not a benchmark: the ten actions the agent has on testnet, all proposed by us, five of them from

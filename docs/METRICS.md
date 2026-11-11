@@ -2,15 +2,16 @@
 
 The numbers the README quotes, with the method and the caveats in full. Moved here from the README on Nov 10, 2026, with pointers adjusted; the two tables stay in the README.
 
-50 runs one after another on Nov 11, 16:03–16:17 UTC, from one Mac at commit `3941bde` (the deployment check on), with
+50 runs one after another on Nov 11, in about eleven minutes ending 16:17 UTC, from one Mac at commit `3941bde` (the deployment check on), with
 `z-ai/glm-5.3-flash` and the one-line prompt `Reply with the single word: ok.` A long answer takes longer. Every run's
 timings are in [`docs/metrics.json`](metrics.json); medians and p90 are nearest rank over the 49 runs that verified.
 This shows the sequence holds, not how the services behave over days. With runs this close, connections and NEAR AI's
-proxy caches may be warm, so a real first message can be slower: run 1 took 13.9 s.
+proxy caches may be warm, so a real first message can be slower.
 
 One run of the 50 (run 41) did not verify: its attestation step did not finish within 120 s, the runner's limit for a
-step, so it ended as failed before anything was sent. Which request hung is not recorded. No run was refused at the log
-check, so in these fourteen minutes every replica the gateway chose was one the verifier had logged with the key.
+step, so it ended as failed before anything was sent and before the log check. Which request hung is not recorded. None
+of the 49 runs that reached the log check was refused there (the table's "0 of 50" is the script's count over all runs),
+so in these eleven minutes every replica the gateway chose for them was one the verifier had logged with the key.
 
 Timings move from day to day with NEAR AI, Intel and NVIDIA. The same command gave a median of 9.9 s on Nov 6 (commit
 `6c596e4`, SDK 0.2.1, first run 22.7 s), 7.1 s on Nov 10 (commit `765708d`, 50 of 50 verified, p90 10.3 s) and 8.9 s on
@@ -24,7 +25,7 @@ Measured by `pnpm demo:metrics --runs N` (it overwrites `docs/metrics.json`; `--
 the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
 and the proof. The two log views are the model's 24-hour window and the trusted verifier's own entries.
 
-**Over the log's history.** "Honest request refused: 0 of 50" covers fourteen minutes. Over the whole log, as
+**Over the log's history.** "Honest request refused: 0 of 50" covers eleven minutes. Over the whole log, as
 `pnpm -F demo check-contract` printed it on Nov 10 at 14:26 UTC: 46 entries by the trusted verifier since Nov 3; an
 honest client would have had no entry younger than 24 hours for 13.6 of 167 hours, all of it on Nov 4–5, before the
 daemon ran on a server; none missing in the 130 hours since Nov 5, 04:44 UTC. The count looks only at whether a trusted entry existed, not at its key or at a
