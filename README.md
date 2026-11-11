@@ -2,7 +2,7 @@
 
 > NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
 > Testnet only. Not audited. Both verifiers that write to the log are ours; the contract account still has a full-access
-> key; the log is a key allowlist, the deployment check is written and off. See [Who sees what](#who-sees-what) and
+> key; the log records the keys and deployments verifiers saw, not which ones should run. See [Who sees what](#who-sees-what) and
 > [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
@@ -45,13 +45,14 @@ with your own key. That and the other checks (your own trust set, re-verifying a
 
 ## Status
 
-As of Nov 10, 2026.
+As of Nov 11, 2026.
 
 - **Tier 1 runs end to end:** the client, the proof package, the offline replay, `/verify`, `/log` and `/auditor`; the
   key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (`docs/DEPLOY.md`).
 - **Tier 2 is on testnet** and ran through the Telegram bot on Nov 7: what ran and what has not is under [Tier 2 flow](#tier-2-flow).
 - **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
-  account still has a full-access key; the deployment check, written and switched off ("What we do not claim").
+  account still has a full-access key.
+- **On since Nov 11:** the deployment check; its cost and its limits are under "What we do not claim".
 - **The log's first entries:** entry #0 was logged by hand from a report our code verified with the SDK; entries #1 and
   #2 are re-logs of that same recording by a stopgap script, since removed (same nonce and report hash, fresh
   `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh attestation each. No
@@ -90,9 +91,9 @@ TEE keys yet". [Independent monitoring](https://confidentialinference.net/attest
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
 3. **Agent over its mandate.** (Tier 2) An "urgent transfer to a new vendor, ignore limits" → the policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. A real one from testnet: action #4 on `/agent` (typed by the owner; a forwarded injection has not run live).
 
-A fourth catch is written and switched off by default: **unknown deployment → nothing is sent.** The key is real, but the
-instance that attests to the client runs code no trusted verifier has logged. `/?tamper=deployment` shows the refusal; `/log` lists the compose hashes
-verifiers have seen behind the key. Why it is off: "What we do not claim".
+A fourth: **unknown deployment → nothing is sent.** The key is real, but the instance that attests to the
+client runs code no trusted verifier has logged in the last 24 hours. `/?tamper=deployment` shows the refusal; `/log` lists
+the compose hashes verifiers have seen behind the key. What it does not close: "What we do not claim".
 
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
@@ -105,8 +106,8 @@ verifiers have seen behind the key. Why it is off: "What we do not claim".
 | ![The agent card: can it act, what its key may do, where the tokens are, policy hash, decision key, owner](docs/screenshots/agent.png) | ![Action 4 open: the four checks, the link to its proof, the record's fields](docs/screenshots/agent-action.png) |
 
 The card's compose hash comes from the attestation checked before sending, and its log entry is the newest one with that
-key and that compose; if the log window has none, it is the newest for the key and the card says so. See "What we do not
-claim".
+key and that compose; with the deployment check switched off and no such entry in the window, it is the newest for the
+key and the card says so. See "What we do not claim".
 
 ## How NEAR is used
 
@@ -214,16 +215,15 @@ not tested that refusal ourselves (see "Known issues we inherited" below).
 - **Protection from the server that serves the page.** The browser code that verifies, encrypts and checks the log is served
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
-- **A measurement allowlist.** Today the log works as a *key* allowlist: the client sends only to a key a trusted verifier
-  logged. Instances of a model share one signing key, so the signature alone does not say which deployment answered. A
-  check that narrows this (SPEC §7.1: the key must be logged together with the compose hash the client attested, otherwise
-  "Unknown deployment. Message not sent.") is written and tested, and is off by default (`AINEK_REQUIRE_DEPLOYMENT=0`) until
-  the verifier samples every instance behind the gateway on each round; with one sample per round a real rollout would
-  refuse honest users for hours. It narrows and does not close: the client attests one instance, the gateway picks the
-  instance per request, and a verification is reused for 60 minutes, so another instance behind the same key may answer.
-  Until the check is on, the browser and `demo:live` show the attested deployment on the card and say when the log has not
-  seen it; the offline replay already refuses. The chat's demo switch shows the refusal. Which compose hashes are
-  acceptable is not governed either: the log records what verifiers saw, not what should run (next steps).
+- **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
+  acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
+  which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
+  logged together with the compose hash the client attested, by a trusted verifier in the last 24 hours, otherwise
+  "Unknown deployment. Message not sent." It narrows and does not close: the client attests one instance, the gateway picks
+  the instance per request, and a verification is reused for 60 minutes, so another instance behind the same key may answer.
+  The cost: a replica that appears, or returns after more than a day away, refuses the honest users routed to it until
+  the verifier logs it. The verifier takes five reports every 15 minutes over fresh connections, so we expect minutes; we
+  have not measured that window (`docs/DEV-NOTES.md`, Nov 11, has what the log shows). The chat's demo switch shows the refusal.
 - **A trustless read of the log.** The client reads `latest_keys` through one JSON-RPC endpoint (FastNear by default,
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested
@@ -300,7 +300,8 @@ stop button: DeleteKey + pause_agent                                            
   through NEAR AI's proxy and checked against NVIDIA's keys). On the attested route our relay forwards only ciphertext; on
   the user-chosen Incognito route, plaintext, and the card says so. The relay code logs no bodies; on the hosted demo that is
   taken on trust.
-- The key log is a key allowlist: the client sends only to a key a trusted verifier logged (what the verifier checked is the
+- The key log is an allowlist of what verifiers saw: the client sends only to a key a trusted verifier logged with the
+  deployment the client attested (what the verifier checked is the
   verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust:
   `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` set what the site offers, and a visitor can replace them on `/log`. Each
   trusted verifier's entries are read on their own as well, so another registered verifier cannot push them out of the
@@ -325,7 +326,7 @@ in the network steps. How each number was measured, and what it does not show: [
 | --- | --- |
 | Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
 | Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 50 of 50 |
-| Honest key refused (log window empty or key unlogged) | 0 of 50 |
+| Honest key refused (log window empty or key unlogged; taken Nov 10, before the deployment check was on) | 0 of 50 |
 | Runs that needed an SDK retry | 0 of 50 |
 | Attestation (gateway + model, re-fetched, in Node) | median 3.7 s, p90 5.8 s |
 | Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.7 s |
@@ -408,6 +409,8 @@ Tests:
 - A verifier anyone can run in one command (`docker run` / `npx ainek-verify`) and, in a next version of the contract, open
   verifier registration with a storage deposit, so the log stops depending on us. In this contract the owner registers verifiers.
 - A revoke entry in the log and a governed allowlist of compose hashes, so the card can compare measurements, not only show them.
+- (Tier 2) The contract checks the model key behind an action against the key log at `propose_action`; today it checks
+  only that the agent committed a proof hash.
 - A second provider in the same log (Venice): one public log for the whole private-inference industry, not one vendor.
 - Image provenance via Sigstore, so "attested deployment" also says which source built it.
 - Starting the hardware check when the chat opens, so the first message does not wait three to four seconds for it. Written

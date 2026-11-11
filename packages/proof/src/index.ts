@@ -24,7 +24,7 @@ export {
   SigningAlgo,
   hex64,
 } from './schema.ts';
-export { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, deploymentStanding, deploymentsSeen, evaluateKeyLog, freshCoverage, findSplitView, proofEntryOf, resolveLogEntry, verifiersOf } from './key-log.ts';
+export { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, deploymentStanding, deploymentsSeen, evaluateKeyLog, evaluateKeyLogForAll, composesBehindKey, freshCoverage, findSplitView, proofEntryOf, resolveLogEntry, verifiersOf } from './key-log.ts';
 export { TIER1_STEPS, failurePhase } from './steps.ts';
 export type { Tier1StepId, FailurePhase } from './steps.ts';
 export type { DeploymentStanding, KeyLogQuery, KeyLogReason, KeyLogVerdict, KeyLogStatus, SeenDeployment, SplitView, ResolvedEntry } from './key-log.ts';
