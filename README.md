@@ -325,33 +325,38 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-50 live runs one after another on Nov 10, 2026, from Node, direct to NEAR AI, with a one-line prompt; every run's timings
-are in [`docs/metrics.json`](docs/metrics.json). To run it again: `pnpm demo:metrics --runs N --out <file>` (it needs
-`NEARAI_API_KEY` and spends N short replies; without `--out` it overwrites `docs/metrics.json`). The runs show that the
-sequence holds, not how the services behave over days: the same command on Nov 6 had a median of 9.9 s, and the gap is
-in the network steps. How each number was measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
+50 live runs one after another on Nov 11, 2026, from Node, direct to NEAR AI, with a one-line prompt and the deployment
+check on; every run's timings are in [`docs/metrics.json`](docs/metrics.json). To run it again:
+`pnpm demo:metrics --runs N --out <file>` (it needs `NEARAI_API_KEY` and spends N short replies; without `--out` it
+overwrites `docs/metrics.json`). The runs show that the sequence holds, not how the services behave over days: the same
+command had a median of 7.1 s on Nov 10 and 9.9 s on Nov 6, and the gap is in the network steps. How each number was
+measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 
 | Metric | Value (50 runs) |
 | --- | --- |
-| Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
-| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 50 of 50 |
-| Honest key refused (log window empty or key unlogged; taken Nov 10, before the deployment check was on) | 0 of 50 |
+| Verified, attestation to proof (the on-chain commit is measured once, below) | 49 of 50 |
+| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 49 of 50 |
+| Honest request refused at the log check (window empty, key unlogged or deployment unlogged) | 0 of 50 |
 | Runs that needed an SDK retry | 0 of 50 |
-| Attestation (gateway + model, re-fetched, in Node) | median 3.7 s, p90 5.8 s |
-| Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.7 s |
-| E2EE round trip to the model | median 1.9 s, p90 4.1 s |
-| Signature fetch | median 0.6 s, p90 0.9 s |
-| Whole run, evidence re-fetched (a real first message can be slower) | median 7.1 s, p90 10.3 s |
-| Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 3.1 s, p90 5.2 s |
-| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1071 B received |
+| Attestation (gateway + model, re-fetched, in Node) | median 3.6 s, p90 4.5 s |
+| Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.5 s |
+| E2EE round trip to the model | median 3.8 s, p90 10.0 s |
+| Signature fetch | median 0.6 s, p90 0.8 s |
+| Whole run, evidence re-fetched (a real first message can be slower) | median 8.9 s, p90 15.6 s |
+| Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 4.8 s, p90 11.8 s |
+| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1019 B received |
 
+- **The run that did not verify** (41 of 50): its attestation step did not finish within the 120 s the runner allows, so
+  the run stopped there and nothing was sent; the swapped-key rule was not reached in it. The model was slow that evening:
+  replies took up to 24 s here, and one message on the hosted chat at the same time waited 58 s for its answer.
 - **In a browser** (hosted demo, headless Chromium, four messages, a spot check): three first messages with nothing
   cached took 6.3, 5.9 and 5.6 s; one later message with the attestation cached, 2.1 s.
-- **Over the log's history** ("honest key refused: 0 of 50" covers seven minutes; this is `pnpm -F demo check-contract`
+- **Over the log's history** ("honest request refused: 0 of 50" covers fourteen minutes; this is `pnpm -F demo check-contract`
   on Nov 10): an honest client would have found no entry younger than 24 hours during 13.6 of the 167 hours, all on
   Nov 4–5, before the verifier ran on a server; none has been missing since. The count ignores the key and the quorum: it
   matches the client's decision only because the model's key did not change in that time and the quorum is 1, so a
-  refusal caused by a key the verifier has not logged yet has not been observed.
+  refusal caused by a key the verifier has not logged yet has not been observed. Nor has one caused by a deployment it
+  has not logged yet: the deployment check has been on since Nov 11, and these 50 runs are all it has been measured on.
 - **The on-chain commit**, measured once: `commit_proof` burnt 2.41 TGas (0.00022 NEAR) and 161 bytes of prepaid storage
   (0.00161 NEAR).
 - **Tier 2** is a tally, not a benchmark: the ten actions the agent has on testnet, all proposed by us, five of them from
