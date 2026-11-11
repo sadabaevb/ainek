@@ -373,7 +373,8 @@ apps/web/            Next.js app: chat with the proof card, /verify, /log, /audi
 apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:attest, demo:live, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
-                     demo:live, demo:metrics and the Tier 2 agent service; mirrors apps/web/lib/flow.ts
+                     demo:live, demo:metrics and the Tier 2 agent service, and up to the send, with no key, by demo:attest;
+                     mirrors apps/web/lib/flow.ts
 contracts/ainek/     Rust near-sdk-rs contract: key log (log_key, latest_keys, entry, entries_since, head), proof commits
                      (commit_proof, proof_commit, deposit_storage, storage_balance_of; SPEC §4.2), agents and policy
                      decisions (register_agent, propose_action, approve, reject, pause_agent; SPEC §4.3)

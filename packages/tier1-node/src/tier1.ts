@@ -1,4 +1,5 @@
-// The Tier-1 sequence from Node with a server-side API key, shared by `demo:live`, `demo:metrics` and the agent service.
+// The Tier-1 sequence from Node with a server-side API key, shared by `demo:live`, `demo:metrics` and the agent service;
+// `demo:attest` runs it up to the send with no key (`runPreflight`).
 // Mirror of apps/web/lib/flow.ts (same steps, same order, the step ids of TIER1_STEPS in @ainek/proof; keep the two in
 // sync): the model must support model attestation, gateway + model evidence verified here, the public log read meanwhile,
 // fail-closed check of the attested key, one E2EE request with the exact bytes kept, the signature, the SDK byte-exact
