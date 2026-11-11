@@ -87,7 +87,7 @@ console.log(`\nFrom Node ${process.version}, direct to NEAR AI (no relay), attes
 console.log(`| Metric | Value (${results.length} runs) |\n| --- | --- |`);
 console.log(`| Verified, attestation to proof (the on-chain commit is measured once, below) | ${count((r) => r.outcome === 'verified')} |`);
 console.log(`| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | ${count((r) => r.swappedRefused === true)} |`);
-console.log(`| Honest key refused (log window empty or key unlogged) | ${count((r) => r.outcome === 'refused')} |`);
+console.log(`| Honest request refused at the log check (window empty, key unlogged${cfg.requireLoggedDeployment ? ' or deployment unlogged' : '; deployment check off'}) | ${count((r) => r.outcome === 'refused')} |`);
 console.log(`| Runs that needed an SDK retry | ${count((r) => r.retries > 0)} |`);
 console.log(`| Attestation (gateway + model, re-fetched, in Node) | ${spread(of((r) => r.timings.attestation))} |`);
 const logViews = 1 + new Set(cfg.trustedVerifiers).size; // the model's window and one per trusted verifier (latestKeysFor sends at most six at once)

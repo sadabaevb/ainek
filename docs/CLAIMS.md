@@ -60,8 +60,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   the instance per request, and a verification is reused for 60 minutes, so another instance behind the same key may answer.
   The cost: a replica that appears, or returns after more than a day away, refuses the honest users routed to it until
   the verifier logs it. The verifier takes five reports every 15 minutes over fresh connections, so we expect minutes; we
-  have not measured that window. In the log's first eight days a compose showed up with no entry in the previous 24 hours nine
-  times (`docs/DEV-NOTES.md`, Nov 11). The chat's demo switch shows the refusal.
+  have not measured that window (`docs/DEV-NOTES.md`, Nov 11, has what the log shows). The chat's demo switch shows the refusal.
 - **A trustless read of the log.** The client reads `latest_keys` through one JSON-RPC endpoint (FastNear by default,
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested

@@ -246,7 +246,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });
     }
     const logEntry = proofEntryOf(verdict, attestedCompose);
-    onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')} (source: ${logSource})`, ms: logMs });
+    onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')}${cfg.requireLoggedDeployment ? ' with the attested deployment' : '; deployment check off'} (source: ${logSource})`, ms: logMs });
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(

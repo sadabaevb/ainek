@@ -52,8 +52,7 @@ As of Nov 10, 2026.
 - **Tier 2 is on testnet** and ran through the Telegram bot on Nov 7: what ran and what has not is under [Tier 2 flow](#tier-2-flow).
 - **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
   account still has a full-access key.
-- **On since Nov 11:** the deployment check. It can refuse an honest user for a few minutes when a replica appears that
-  the verifier has not logged yet ("What we do not claim").
+- **On since Nov 11:** the deployment check; its cost and its limits are under "What we do not claim".
 - **The log's first entries:** entry #0 was logged by hand from a report our code verified with the SDK; entries #1 and
   #2 are re-logs of that same recording by a stopgap script, since removed (same nonce and report hash, fresh
   `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh attestation each. No
@@ -92,7 +91,7 @@ TEE keys yet". [Independent monitoring](https://confidentialinference.net/attest
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
 3. **Agent over its mandate.** (Tier 2) An "urgent transfer to a new vendor, ignore limits" → the policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. A real one from testnet: action #4 on `/agent` (typed by the owner; a forwarded injection has not run live).
 
-A fourth, on since Nov 11: **unknown deployment → nothing is sent.** The key is real, but the instance that attests to the
+A fourth: **unknown deployment → nothing is sent.** The key is real, but the instance that attests to the
 client runs code no trusted verifier has logged in the last 24 hours. `/?tamper=deployment` shows the refusal; `/log` lists
 the compose hashes verifiers have seen behind the key. What it does not close: "What we do not claim".
 
@@ -107,8 +106,8 @@ the compose hashes verifiers have seen behind the key. What it does not close: "
 | ![The agent card: can it act, what its key may do, where the tokens are, policy hash, decision key, owner](docs/screenshots/agent.png) | ![Action 4 open: the four checks, the link to its proof, the record's fields](docs/screenshots/agent-action.png) |
 
 The card's compose hash comes from the attestation checked before sending, and its log entry is the newest one with that
-key and that compose; if the log window has none, it is the newest for the key and the card says so. See "What we do not
-claim".
+key and that compose; with the deployment check switched off and no such entry in the window, it is the newest for the
+key and the card says so. See "What we do not claim".
 
 ## How NEAR is used
 
@@ -224,8 +223,7 @@ not tested that refusal ourselves (see "Known issues we inherited" below).
   the instance per request, and a verification is reused for 60 minutes, so another instance behind the same key may answer.
   The cost: a replica that appears, or returns after more than a day away, refuses the honest users routed to it until
   the verifier logs it. The verifier takes five reports every 15 minutes over fresh connections, so we expect minutes; we
-  have not measured that window. In the log's first eight days a compose showed up with no entry in the previous 24 hours nine
-  times (`docs/DEV-NOTES.md`, Nov 11). The chat's demo switch shows the refusal.
+  have not measured that window (`docs/DEV-NOTES.md`, Nov 11, has what the log shows). The chat's demo switch shows the refusal.
 - **A trustless read of the log.** The client reads `latest_keys` through one JSON-RPC endpoint (FastNear by default,
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested
@@ -302,7 +300,8 @@ stop button: DeleteKey + pause_agent                                            
   through NEAR AI's proxy and checked against NVIDIA's keys). On the attested route our relay forwards only ciphertext; on
   the user-chosen Incognito route, plaintext, and the card says so. The relay code logs no bodies; on the hosted demo that is
   taken on trust.
-- The key log works as an allowlist of what verifiers saw: the client sends only to a key a trusted verifier logged, with the deployment it attested (what the verifier checked is the
+- The key log is an allowlist of what verifiers saw: the client sends only to a key a trusted verifier logged with the
+  deployment the client attested (what the verifier checked is the
   verifier's claim, which is why the client re-verifies the evidence itself). The client decides whom to trust:
   `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` set what the site offers, and a visitor can replace them on `/log`. Each
   trusted verifier's entries are read on their own as well, so another registered verifier cannot push them out of the
@@ -327,7 +326,7 @@ in the network steps. How each number was measured, and what it does not show: [
 | --- | --- |
 | Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
 | Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 50 of 50 |
-| Honest key refused (log window empty or key unlogged) | 0 of 50 |
+| Honest key refused (log window empty or key unlogged; taken Nov 10, before the deployment check was on) | 0 of 50 |
 | Runs that needed an SDK retry | 0 of 50 |
 | Attestation (gateway + model, re-fetched, in Node) | median 3.7 s, p90 5.8 s |
 | Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.7 s |
