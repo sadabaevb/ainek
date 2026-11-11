@@ -46,6 +46,7 @@ const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
 // The deployment check for the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables).
 // On since Nov 11 (DEV-NOTES 2026-11-11); `'0'` here and in `.env.example` turns it back off.
+// With `AINEK_LOG_SOURCE=sample` the default is off: that log is one recorded entry with one compose, and a live replica need not be that one.
 const REQUIRE_DEPLOYMENT_DEFAULT = '1';
 
 function list(value: string | undefined, fallback: string): string[] {
@@ -68,7 +69,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     logSource,
     trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
-    requireLoggedDeployment: !['0', 'false'].includes((env['AINEK_REQUIRE_DEPLOYMENT']?.trim() || REQUIRE_DEPLOYMENT_DEFAULT).toLowerCase()),
+    requireLoggedDeployment: !['0', 'false'].includes((env['AINEK_REQUIRE_DEPLOYMENT']?.trim() || (logSource === 'sample' ? '0' : REQUIRE_DEPLOYMENT_DEFAULT)).toLowerCase()),
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.

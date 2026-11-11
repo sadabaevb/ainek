@@ -243,3 +243,18 @@ export function freshCoverage(observedAtMs: readonly number[], from: number, to:
   const longestPauseMs = stretch.reduce((max, t, i) => (i === 0 ? 0 : Math.max(max, t - stretch[i - 1]!)), 0);
   return { holes, uncoveredMs: holes.reduce((sum, h) => sum + h.to - h.from, 0), unbrokenSince, longestPauseMs };
 }
+
+/**
+ * The log check over every model report that carries the key: the gateway may return several, and the one that signs the reply
+ * need not be the first. Returns the first refusal, else the verdict for the first compose. Pass `[undefined]` for the key alone.
+ */
+export function evaluateKeyLogForAll(entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, composes: readonly (string | undefined)[]): KeyLogVerdict {
+  const [first, ...rest] = (composes.length > 0 ? composes : [undefined]).map((composeHash) => evaluateKeyLog(entries, { ...query, composeHash }));
+  return [first as KeyLogVerdict, ...rest].find((v) => v.status !== 'ok') ?? (first as KeyLogVerdict);
+}
+
+/** The distinct compose hashes among reports that share `signingAddress`, in report order. */
+export function composesBehindKey(reports: readonly { signingAddress: string; composeHash: string }[], signingAddress: string): string[] {
+  const wanted = normalizeHex(signingAddress);
+  return [...new Set(reports.filter((r) => normalizeHex(r.signingAddress) === wanted).map((r) => normalizeHex(r.composeHash)))];
+}

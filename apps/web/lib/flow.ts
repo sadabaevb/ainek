@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLog, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -15,6 +15,7 @@ import {
   fetchSignature,
   prepareE2ee, transmitE2ee,
   sendPlain,
+  forgetDeployment,
   verifyDeployment,
   verifyGateway,
   type ChatMessage,
@@ -155,12 +156,16 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const entries = await runStep(emit, 'key-log', `reading the public key log (${log.source})`, () => keyLogPromise, (e) => `${e.length} entr${e.length === 1 ? 'y' : 'ies'} in window (source: ${log.source})`);
   const seenKey = tamper === 'key' ? DEMO_SWAPPED_KEY : modelAttestation.signer.signingAddress;
   const attestedCompose = composeHashOf(modelAttestation.deployment);
-  const seenCompose = tamper === 'deployment' ? DEMO_UNKNOWN_COMPOSE : cfg.requireLoggedDeployment ? attestedCompose : undefined;
+  // Every report that carries this key is checked: the one that signs the reply need not be the first (attestedCompose stays first).
+  const honestComposes = cfg.requireLoggedDeployment ? composesBehindKey(deployment.models.map((m) => ({ signingAddress: m.signer.signingAddress, composeHash: composeHashOf(m.deployment) })), modelAttestation.signer.signingAddress) : [undefined];
   const logPolicy = { model, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
-  const keyVerdict = evaluateKeyLog(entries, { ...logPolicy, signingAddress: seenKey, composeHash: seenCompose });
+  const keyVerdict = evaluateKeyLogForAll(entries, { ...logPolicy, signingAddress: seenKey }, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
+  const seenCompose = keyVerdict.deployment?.composeHash;
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    const honestWouldPass = tamper !== false && evaluateKeyLog(entries, { ...logPolicy, signingAddress: modelAttestation.signer.signingAddress, composeHash: cfg.requireLoggedDeployment ? attestedCompose : undefined }).status === 'ok';
+    const honestWouldPass = tamper !== false && evaluateKeyLogForAll(entries, { ...logPolicy, signingAddress: modelAttestation.signer.signingAddress }, honestComposes).status === 'ok';
+    // An honest refusal on the deployment: forget this verification, so the next try attests again and may reach a replica the log knows.
+    if (tamper === false && keyVerdict.reason === 'unknown-deployment') await forgetDeployment(model, policy);
     return { kind: 'refused', model, tampered: tamper, honestWouldPass, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, seenCompose };
   }
   // A demo value passed the check, so somebody logged it: the real key and deployment were never checked, and a demo must not send.

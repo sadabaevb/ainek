@@ -45,7 +45,7 @@ with your own key. That and the other checks (your own trust set, re-verifying a
 
 ## Status
 
-As of Nov 10, 2026.
+As of Nov 11, 2026.
 
 - **Tier 1 runs end to end:** the client, the proof package, the offline replay, `/verify`, `/log` and `/auditor`; the
   key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (`docs/DEPLOY.md`).

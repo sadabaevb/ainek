@@ -18,7 +18,7 @@ import {
 } from '@nearai/inference-sdk';
 import { parseChatCompletion, requireE2eeVersion, withRetry } from '@ainek/proof';
 import { chatRequest, relayAttestationClient, type ChatMessage } from './nearai-requests';
-import { getDeployment, putDeployment } from './store';
+import { deleteDeployment, getDeployment, putDeployment } from './store';
 
 export type { ChatMessage };
 
@@ -67,6 +67,9 @@ class Cache<T> {
   set(key: string, value: T, at = Date.now()): T {
     this.entries.set(key, { value, at });
     return value;
+  }
+  delete(key: string): void {
+    this.entries.delete(key);
   }
 }
 const metadataCache = new Cache<ModelMetadata>();
@@ -121,6 +124,12 @@ export async function verifyDeployment(model: string, policy: AttestationPolicy)
   const verified = deploymentCache.set(cacheKey, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
   putDeployment(model, policyKey, verified).catch(() => undefined); // best effort
   return verified;
+}
+
+/** Drops the cached verification of `model` (memory and IndexedDB), so the next message attests again over a new connection. */
+export async function forgetDeployment(model: string, policy: AttestationPolicy): Promise<void> {
+  deploymentCache.delete(`${model}|${policyKeyOf(policy)}`);
+  await deleteDeployment(model).catch(() => undefined); // best effort, like the write
 }
 
 /** Stable text for the policy a verification ran under; the cache treats a different policy as a miss. */

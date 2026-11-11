@@ -54,8 +54,8 @@ Day-of checklist (an hour before)
   60-minute cache.
 - A spare take of every scene exists from Nov 11. Notifications off.
 
-X posts, each within 280 characters (counted Nov 11; the reply counts its link as 23). The video is attached to the first.
+X posts, each within 280 characters by X's count (Nov 11; a link counts as 23, and arrows count double, so there are none). The video is attached to the first.
 
-- Tier 2 shipped (273): "Ainek, built at NEAR HACKATHON: a glass box for private AI agents on @NEARProtocol. TEE key not in the public log on NEAR → nothing is sent. 'Private' answer that skipped the TEE → red card. Agent talked into paying a new vendor → denied in Intel TDX. Demo ↓ #NEARHackathon"
-- Tier 1 only (279): "Ainek, built at NEAR HACKATHON: a glass box for private AI on @NEARProtocol. TEE key not in the public log on NEAR → nothing is sent. 'Private' answer that skipped the TEE → red card. Proofs you re-check in your browser; the offline replay needs no API key. Demo ↓ #NEARHackathon"
+- Tier 2 shipped (274): "Ainek, built at NEAR HACKATHON: a glass box for private AI agents on @NEARProtocol. TEE key not in the public log on NEAR: nothing is sent. 'Private' answer that skipped the TEE: red card. Agent talked into paying a new vendor: denied in Intel TDX. Demo below #NEARHackathon"
+- Tier 1 only (277): "Ainek, built at NEAR HACKATHON: a glass box for private AI on @NEARProtocol. TEE key not in the public log on NEAR: nothing is sent. 'Private' answer that skipped the TEE: red card. Proofs you re-check in your browser; the offline replay needs no key. Demo below #NEARHackathon"
 - Reply with the repo link (223 with the link): "Repo: <link>. You choose which verifiers count; today both are ours. Every proof re-checks in your browser, and `pnpm demo` replays the checks offline with no API key. What we do not claim is in the README."

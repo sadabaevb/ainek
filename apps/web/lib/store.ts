@@ -71,6 +71,10 @@ export async function putDeployment(model: string, policyKey: string, deployment
   await withStore(DEPLOYMENTS, 'readwrite', (s) => s.put(row));
 }
 
+export async function deleteDeployment(model: string): Promise<void> {
+  await withStore(DEPLOYMENTS, 'readwrite', (s) => s.delete(model));
+}
+
 export async function getDeployment(model: string, policyKey: string): Promise<VerifiedDeployment | undefined> {
   const row = await withStore(DEPLOYMENTS, 'readonly', (s) => s.get(model) as IDBRequest<Partial<DeploymentRow> | undefined>);
   if (!row || row.v !== DEPLOYMENT_ROW_VERSION || row.policyKey !== policyKey) return undefined;

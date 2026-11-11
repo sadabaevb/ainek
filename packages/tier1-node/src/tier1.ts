@@ -19,7 +19,7 @@ import {
   type TcbStatus,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, composeHashOf, evaluateKeyLog, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { buildCheckedModelProof, composeHashOf, evaluateKeyLogForAll, composesBehindKey, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
@@ -240,7 +240,9 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
     const { entries, source: logSource, ms: logMs } = log;
     timings['key-log'] = logMs;
     const attestedCompose = composeHashOf(modelAttestation.deployment);
-    const verdict = evaluateKeyLog(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum, composeHash: cfg.requireLoggedDeployment ? attestedCompose : undefined });
+    // Every report that carries this key is checked: the one that signs the reply need not be the first.
+    const composes = cfg.requireLoggedDeployment ? composesBehindKey(models.map((m) => ({ signingAddress: m.signer.signingAddress, composeHash: composeHashOf(m.deployment) })), modelAttestation.signer.signingAddress) : [undefined];
+    const verdict = evaluateKeyLogForAll(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, composes);
     if (verdict.status !== 'ok') {
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });
