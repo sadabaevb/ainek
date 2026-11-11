@@ -8,10 +8,11 @@ export function describeError(err: unknown): string {
 }
 
 /**
- * Does a failed step look like the upstream refusing our key rather than something being wrong with the evidence? The hosted
- * chat runs on one NEAR AI key with a spend limit, behind a relay with a rate limit; when either is hit, a visitor should hear
- * that it is the demo's budget and what still works without it. A guess from the status: the card says "may".
+ * Did the chat request itself come back as "out of credit" (402) or "too many requests" (429)? The chat runs on one NEAR AI key
+ * with a spend limit, behind a relay with a rate limit; when either is hit the visitor should hear that, and what works without
+ * the key. Only the status that `httpError` in nearai-browser.ts puts first counts: not a status quoted in a response body, not
+ * the RPC's, and not an SDK failure, which carries no status here.
  */
 export function looksLikeKeyLimit(reason: string): boolean {
-  return /\bHTTP (401|402|403|429)\b/.test(reason) || reason.includes('api.http_status');
+  return /^chat completion failed: HTTP (402|429)\b/.test(reason);
 }
