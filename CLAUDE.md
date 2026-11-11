@@ -44,7 +44,7 @@ apps/demo/           Node 24 CLI: `pnpm demo` replay / `demo:tamper` on docs/sam
 services/verifier/   Node 24 daemon: attestation -> KeyEntry -> contract.log_key    (services)
 services/agent/      Node 24 service: NL -> NEAR AI -> OutLayer -> contract         (services)
 packages/proof/      Shared TS: proof schema, canonical bytes, hashing, verify fns  (shared)
-packages/tier1-node/ Shared TS, Node only: the Tier-1 sequence for demo:live/metrics and the agent   (shared)
+packages/tier1-node/ Shared TS, Node only: the Tier-1 sequence for demo:live/attest/metrics and the agent   (shared)
 contracts/ainek/     Rust near-sdk-rs contract                                       (services)
 contracts/demo-token/ Plain NEP-141 token (near-contract-standards) for the Tier 2 demo and sandbox tests  (services)
 jobs/policy/         Rust OutLayer WASI job: evaluate policy, sign decision          (services)
@@ -112,6 +112,7 @@ Reference implementations to copy patterns from (not code wholesale; disclose an
 pnpm i                                   install everything
 pnpm demo                                offline replay of the Tier-1 checks on recorded evidence (no key, no network)
 pnpm demo:live                           the same checks live against NEAR AI and testnet (needs NEARAI_API_KEY)
+pnpm demo:attest                         demo:live up to the send: evidence verified, key looked up in the log (no key, needs network)
 pnpm -F web dev                          Next.js dev server
 pnpm -F verifier start                   verifier daemon
 pnpm -F agent start                      agent service

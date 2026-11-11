@@ -1,4 +1,5 @@
-// The Tier-1 sequence from Node with a server-side API key, shared by `demo:live`, `demo:metrics` and the agent service.
+// The Tier-1 sequence from Node with a server-side API key, shared by `demo:live`, `demo:metrics` and the agent service;
+// `demo:attest` runs it up to the send with no key (`runPreflight`).
 // Mirror of apps/web/lib/flow.ts (same steps, same order, the step ids of TIER1_STEPS in @ainek/proof; keep the two in
 // sync): the model must support model attestation, gateway + model evidence verified here, the public log read meanwhile,
 // fail-closed check of the attested key, one E2EE request with the exact bytes kept, the signature, the SDK byte-exact
@@ -17,6 +18,7 @@ import {
   type CompletionSignature,
   type InferenceChatCompletions,
   type TcbStatus,
+  type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
 import { buildCheckedModelProof, composeHashOf, evaluateKeyLogForAll, composesBehindKey, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
@@ -154,6 +156,17 @@ export interface Failed {
   unverifiedCompletion?: ChatCompletion;
 }
 export type Tier1Outcome = (Verified | Refused | Failed) & RunStats;
+/** Everything before the send passed: the evidence verified here and the key (with its deployment, when that check is on) is in the log. Nothing was sent. */
+export interface Ready {
+  kind: 'ready';
+  gateway: VerifiedGatewayAttestation;
+  /** The model report whose key was checked against the log (the name `Verified` uses). */
+  signer: VerifiedModelAttestation;
+  entries: KeyEntry[];
+  verdict: KeyLogVerdict;
+  logEntry: KeyEntry;
+}
+export type PreflightOutcome = (Ready | Refused | Failed) & RunStats;
 
 export interface Tier1Params {
   apiKey: string;
@@ -165,12 +178,29 @@ export interface Tier1Params {
 }
 
 /** One cold run of the Tier-1 sequence. Never throws: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
-export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep = () => undefined }: Tier1Params): Promise<Tier1Outcome> {
+export async function runTier1({ apiKey, chat, ...base }: Tier1Params): Promise<Tier1Outcome> {
+  return run(base, { apiKey, chat });
+}
+
+/**
+ * The same sequence up to the send, and no further: metadata, gateway and model evidence verified here, the public log read and
+ * checked. It needs no API key (NEAR AI serves metadata and attestation reports without one) and spends nothing.
+ */
+export async function runPreflight(base: RunBase): Promise<PreflightOutcome> {
+  return run(base);
+}
+
+type RunBase = Omit<Tier1Params, 'apiKey' | 'chat'>;
+type Send = Pick<Tier1Params, 'apiKey' | 'chat'>;
+// With something to send the run ends verified, refused or failed; without, it stops at `ready` after the log check.
+function run(base: RunBase, send: Send): Promise<Tier1Outcome>;
+function run(base: RunBase): Promise<PreflightOutcome>;
+async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBase, send?: Send): Promise<Tier1Outcome | PreflightOutcome> {
   const onStep = observed(rawOnStep);
   const { model, nearaiBaseUrl: baseUrl } = cfg;
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] }; // validated in ainekConfigFromEnv; same names as the SDK's
   // AttestationClient caches no evidence; staying off the SDK's InferenceClient (which caches attestation for 60 min) is what makes every run re-fetch and re-verify it. HTTP connections may still be reused between runs: its plain GETs go through the global fetch.
-  const client = new AttestationClient({ apiKey, baseUrl, headers: { [NO_ALIASING_HEADER]: 'true' } });
+  const client = new AttestationClient({ ...(send ? { apiKey: send.apiKey } : {}), baseUrl, headers: { [NO_ALIASING_HEADER]: 'true' } }); // metadata and reports are served without a key
   const timings: Timings = {};
   let retries = 0;
   // Once the run has returned, nothing of it may go on: no new retries of a leg still in flight, and the log read is abandoned.
@@ -188,7 +218,7 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
     onStep({ id, status: 'ok', detail: detail(value), ms: timings[id] });
     return value;
   };
-  const done = <O extends Verified | Refused | Failed>(outcome: O): O & RunStats => {
+  const done = <O extends Verified | Ready | Refused | Failed>(outcome: O): O & RunStats => {
     runOver.abort();
     return { ...outcome, timings, totalMs: performance.now() - t0, retries };
   };
@@ -249,6 +279,9 @@ export async function runTier1({ apiKey, cfg, chat, readLog, onStep: rawOnStep =
     }
     const logEntry = proofEntryOf(verdict, attestedCompose);
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')}${cfg.requireLoggedDeployment ? ' with the attested deployment' : '; deployment check off'} (source: ${logSource})`, ms: logMs });
+
+    if (!send) return done({ kind: 'ready', gateway, signer: modelAttestation, entries, verdict, logEntry });
+    const { apiKey, chat } = send;
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(
