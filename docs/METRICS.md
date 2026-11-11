@@ -54,14 +54,14 @@ NVIDIA verdict fetch, both through NEAR AI's proxies in the browser, makes it lo
 the same call in a browser connected through Meteor, with the function-call key added at sign-in and without a popup:
 [FLHbBzAv…](https://testnet.nearblocks.io/txns/FLHbBzAvaBN6jkmAQ1fnuAXAaViPZkgLi1XoWnhSiDnR).
 
-**Tier 2.** Not a benchmark. These are the ten actions the agent has on testnet, all proposed by us by Nov 7 and all
-decided under the current key and policy, as `pnpm -F demo check-agent` re-read them from the chain on Nov 10. Five
-came from the agent service with a real model answer (action 2 from `pnpm -F agent once`; 3, 4, 8 and 9 through the
+**Tier 2.** Not a benchmark. These are the twelve actions the agent has on testnet, all proposed by us (ten by Nov 7, two on Nov 11) and all
+decided under the current key and policy, as `pnpm -F demo check-agent` re-read them from the chain on Nov 11. Seven
+came from the agent service with a real model answer (action 2 from `pnpm -F agent once`; 3, 4, 8, 9, 10 and 11 through the
 Telegram bot); the other five (0, 1, 5, 6, 7) from scripts with a placeholder model proof (`docs/DEPLOY.md`). Times from
 message to transfer were not measured.
 
 The tally by decision and status is in the [README](../README.md#metrics).
 
 The script reads the contract's records, not the token's transfers. The totals agree with them: the contract holds
-8,794 AINEK, the 10,000 sent to it minus the 1,206 of the seven Executed actions. That does not rule out flows that
+8,394 AINEK, the 10,000 sent to it minus the 1,606 of the eight Executed actions. That does not rule out flows that
 cancel out.

@@ -15,6 +15,8 @@ const RUNS = [
   { actionId: 4, callId: 'f64a4ac3-8df7-4cff-a851-e7fcef7102bc', by: 'the Telegram bot' },
   { actionId: 8, callId: '2c57e3c3-8659-4f4d-a265-93e0cda27301', by: 'the Telegram bot' },
   { actionId: 9, callId: '7b1ddfce-c522-4801-84a9-4095e09d1df6', by: 'the Telegram bot' },
+  { actionId: 10, callId: '1a0d9273-caba-4a84-8797-3368e0469245', by: 'the Telegram bot' },
+  { actionId: 11, callId: 'a63f1df4-0d43-40ce-86a6-253b476290e9', by: 'the Telegram bot, a forwarded message' },
 ];
 
 const cfg = ainekConfigFromEnv({});
