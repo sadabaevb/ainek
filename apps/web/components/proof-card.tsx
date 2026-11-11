@@ -13,6 +13,7 @@ import { downloadJson } from '@/lib/encoding';
 import { looksLikeKeyLimit } from '@/lib/errors';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
+import { proofFragment } from '@/lib/proof-link';
 import { fill } from '@/lib/fill';
 import { CardHead, CheckList, Row } from './checks';
 import { RedCard } from './red-card';
@@ -75,7 +76,10 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   const commit = proof.commit ?? '';
   const chainText = { pending: t.chainCommitting, depositing: t.chainDepositing(DEPOSIT_NEAR), 'no-wallet': t.chainNoWallet, 'no-deposit': t.chainNoDeposit, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: t.chainCommittedElsewhere }[outcome.commit];
   const hint = (key: keyof typeof t.hints) => (explain ? t.hints[key] : undefined);
-  const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
+  const disclosure = () => toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody });
+  const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, disclosure());
+  // The same disclosure as the file, carried in the fragment of a /verify address.
+  const proofLink = () => proofFragment(JSON.stringify(disclosure())).then((fragment) => `${location.origin}/verify#${fragment}`);
 
   return (
     <section className="card">
@@ -103,6 +107,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
         <Link className="btn" href={`/verify?id=${encodeURIComponent(proof.completionId)}`}>{t.reverify}</Link>
         <a className="btn" href={vcUrl} target="_blank" rel="noreferrer">{t.openVc}</a>
         <button type="button" className="btn" onClick={disclose}>{t.disclose}</button>
+        <CopyButton text={proofLink} label={t.copyLink} doneLabel={t.linkCopied} failLabel={t.linkTooLong} className="btn" />
       </div>
       <p className="muted small">{fill(t.discloseHint, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
       <details>
