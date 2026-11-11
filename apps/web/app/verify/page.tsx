@@ -2,7 +2,7 @@
 // Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, from a disclosure file
 // (proof + raw bytes + log entry), or from a link that carries that file in its fragment (lib/proof-link.ts). Hashes are recomputed here; the log entry is re-read from the public log. An exchange
 // kept in this browser whose proof was never committed can be committed from here (SPEC §4.2), wallet connected on demand.
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
@@ -65,6 +65,8 @@ function VerifyInner() {
   const [commitStatus, setCommitStatus] = useState<Record<string, CommitStatus>>({}); // per exchange, what the previous click ended in: decides the button's label and what the next click may open
   const [missingId, setMissingId] = useState<string | null>(null); // ?id= not in this browser's store: worded at render, so it follows the language
   const [error, setError] = useState('');
+  const linkRead = useRef(0); // counts reads of the address fragment, so a stale one is dropped
+  const [badLink, setBadLink] = useState<string | null>(null); // a proof link that could not be read: worded at render, so it follows the language
   const [actionProof, setActionProof] = useState<unknown>(null); // an action proof has its own card: there is no exchange to re-hash
 
   useEffect(() => {
@@ -117,31 +119,52 @@ function VerifyInner() {
     }
   }
 
-  // /agent links here for the one action whose proof file is in the repository: the same text the button below pastes, checked at once.
-  useEffect(() => {
-    if (sample !== 'action') return;
-    const source = JSON.stringify(sampleAction, null, 2);
+  /** Text that arrived by itself (a query parameter, a link): shown in the box and checked at once, like a click on Verify. */
+  function load(source: string) {
     setText(source);
     check(source);
-    // `check` only sets state; the query parameter is the one thing this depends on.
+  }
+
+  // /agent links here for the one action whose proof file is in the repository: the same text the button below pastes.
+  useEffect(() => {
+    if (sample === 'action') load(JSON.stringify(sampleAction, null, 2));
+    // `load` only sets state; the query parameter is the one thing this depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sample]);
 
-  // A proof link: the disclosure travels in the fragment, which the browser keeps to itself. Checked like a pasted file.
+  /** The Verify button: what the box holds now. A proof link in the address would no longer describe the page, so it goes. */
+  function checkTyped(source: string) {
+    linkRead.current++; // a link still being read must not replace this
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    setBadLink(null);
+    check(source);
+  }
+
+  // A proof link: the disclosure travels in the fragment, which the browser keeps to itself. Checked like a dropped file.
+  // Only the newest read may land: an older link's inflate can finish after a newer one's, or after a click on Verify.
   useEffect(() => {
-    const read = () =>
+    const read = () => {
+      const mine = ++linkRead.current;
+      setBadLink(null);
       proofFromFragment(window.location.hash).then(
-        (source) => {
-          if (source === null) return;
-          setText(source);
-          check(source);
+        (source) => { if (mine === linkRead.current && source !== null) load(source); },
+        (e: unknown) => {
+          if (mine !== linkRead.current) return;
+          // A verdict left from the previous address would read as this link's.
+          setActionProof(null);
+          setInput(null);
+          setResult(null);
+          setBadLink(describeError(e));
         },
-        (e: unknown) => setError(tv.badLink(describeError(e))),
       );
-    void read();
+    };
+    read();
     window.addEventListener('hashchange', read);
-    return () => window.removeEventListener('hashchange', read);
-    // `check` only sets state; the fragment is the one thing this depends on.
+    return () => {
+      linkRead.current++;
+      window.removeEventListener('hashchange', read);
+    };
+    // `load` only sets state; the fragment is the one thing this depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -171,7 +194,7 @@ function VerifyInner() {
       <div className="controls">
         <JsonTextarea value={text} onChange={setText} onError={setError} placeholder={tv.placeholder} />
         <div className="actions">
-          <button type="button" className="btn primary" onClick={() => check(text)} disabled={!text.trim()}>{tv.verify}</button>
+          <button type="button" className="btn primary" onClick={() => checkTyped(text)} disabled={!text.trim()}>{tv.verify}</button>
           <LoadFileButton onText={setText} onError={setError} />
           <button type="button" className="btn" onClick={() => setText(JSON.stringify(sampleAction, null, 2))}>{tv.useActionSample}</button>
         </div>
@@ -189,6 +212,7 @@ function VerifyInner() {
       )}
 
       {missingId && <RedCard title={tv.noExchange(missingId)} />}
+      {badLink && <RedCard title={tv.badLink(badLink)} />}
       {error && <RedCard title={error} />}
 
       {actionProof !== null && <ActionProofCard value={actionProof} />}
