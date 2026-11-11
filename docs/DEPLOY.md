@@ -426,6 +426,10 @@ The agent's storage credit after these was 0.0189 NEAR, so `deposit_storage` add
   `approve` with their own key in tx `HBdadwY6J9bndBq79oXfxDELsCsDZQnPcZ9jgahNJV44`: events `action_approved`, `ft_transfer`,
   `action_executed`.
 
+After these the agent's storage credit was 0.0966 NEAR, about 7 more actions (the service wants 0.0153 NEAR free before each, and an
+action takes 0.011 to 0.013). The `storage_balance_of` view shows the current figure; top it up with `deposit_storage` before
+recording if retakes may use it up.
+
 On Nov 11, with the deployment check on and `1dastan.testnet` as the owner, the bot ran two more and the owner stopped the agent:
 
 - action 10, `NeedsApproval`, 400 AINEK to `aibek.ainek-dev-dastan.testnet`, proposed in tx
@@ -441,10 +445,8 @@ On Nov 11, with the deployment check on and `1dastan.testnet` as the owner, the 
   message to the bot ended with "Stopped at the policy step: this agent is paused on the contract": the service proposed
   nothing, so the network's refusal of the deleted key was not exercised.
 
-After these the agent's storage credit was 0.0966 NEAR, about 7 more actions (the service wants 0.0153 NEAR free before each, and an
-action takes 0.011 to 0.013). The `storage_balance_of` view shows the current figure; top it up with `deposit_storage` before
-recording if retakes may use it up. Not run live yet: a rejection through the bot, a reject from the `/agent` page, a commit
-failure recovered by the retry. Actions 10 and 11 took 0.0221 NEAR of that credit: 0.0745 NEAR was left on Nov 11, about 5 more actions.
+Actions 10 and 11 took 0.0221 NEAR of the storage credit: 0.0745 NEAR was left on Nov 11, about 4 more actions. Not run
+live yet: a rejection through the bot, a reject from the `/agent` page, a commit failure recovered by the retry.
 
 ## Locking the contract (Dastan; not done yet)
 
