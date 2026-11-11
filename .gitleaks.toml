@@ -1,0 +1,18 @@
+# `gitleaks git .` over this repository's history: the default rules, minus four kinds of public data they take for secrets.
+# Checked on Nov 11, 2026: 29 findings without this file, every one of them listed here; none is a credential.
+title = "Ainek"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Recorded attestation evidence: NVIDIA's NRAS tokens (signed verdicts about a GPU, not credentials) and the hex fields of a TDX report. The offline replay verifies these files."
+paths = ['''^docs/samples/nras-response\.json$''', '''^docs/samples/attestation-report\.json$''']
+
+[[allowlists]]
+description = "The vendored NEAR AI skill's curl examples: the bearer token is the literal text YOUR_API_KEY."
+paths = ['''^\.agents/skills/near-ai-cloud/references/specialized-endpoints\.md$''', '''^\.claude/skills/near-ai-cloud/references/specialized-endpoints\.md$''']
+
+[[allowlists]]
+description = "The model's public signing key (it is in the key log on NEAR) in a relay test, and a public transaction hash in the canonical-JSON test vectors."
+paths = ['''^apps/web/lib/relay-guard\.test\.ts$''', '''^docs/test-vectors/canonical\.json$''']
