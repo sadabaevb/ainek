@@ -54,12 +54,8 @@ Day-of checklist (an hour before)
   60-minute cache.
 - A spare take of every scene exists from Nov 11. Notifications off.
 
-X post, Tier 2 shipped: "We built Ainek at NEAR HACKATHON — a glass box for private AI agents on @NEARProtocol. It catches
-three things: a TEE key that is not in the public log on NEAR (nothing is sent; you choose which verifiers count), a
-'private' answer that went through a plain gateway (red card), and an agent talked into paying a new vendor (policy
-signed in Intel TDX, refused by a NEAR contract). Re-checkable proofs, an offline replay with no API key. Repo + 90s demo ↓ #NEARHackathon"
+X posts, each within 280 characters by X's count (Nov 11; a link counts as 23, and arrows count double, so there are none). The video is attached to the first.
 
-X post, Tier 1 only: "We built Ainek at NEAR HACKATHON — a glass box for private AI on @NEARProtocol. It catches two things:
-a TEE key that is not in the public log on NEAR (nothing is sent; you choose which verifiers count) and a 'private'
-answer that went through a plain gateway (red card). Proofs you re-check in your browser, an offline replay with no
-API key. Repo + 90s demo ↓ #NEARHackathon"
+- Tier 2 shipped (274): "Ainek, built at NEAR HACKATHON: a glass box for private AI agents on @NEARProtocol. TEE key not in the public log on NEAR: nothing is sent. 'Private' answer that skipped the TEE: red card. Agent talked into paying a new vendor: denied in Intel TDX. Demo below #NEARHackathon"
+- Tier 1 only (277): "Ainek, built at NEAR HACKATHON: a glass box for private AI on @NEARProtocol. TEE key not in the public log on NEAR: nothing is sent. 'Private' answer that skipped the TEE: red card. Proofs you re-check in your browser; the offline replay needs no key. Demo below #NEARHackathon"
+- Reply with the repo link (223 with the link): "Repo: <link>. You choose which verifiers count; today both are ours. Every proof re-checks in your browser, and `pnpm demo` replays the checks offline with no API key. What we do not claim is in the README."

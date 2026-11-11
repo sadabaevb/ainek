@@ -10,6 +10,7 @@ import { canCommitNow, commitAction, failurePhase, type ChatOutcome, type Verifi
 import { commitLabel } from '@/lib/commit-label';
 import { DEPOSIT_NEAR } from '@/lib/wallet';
 import { downloadJson } from '@/lib/encoding';
+import { looksLikeKeyLimit } from '@/lib/errors';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { proofFragment } from '@/lib/proof-link';
@@ -28,7 +29,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   if (outcome.kind === 'failed') {
     const phase = failurePhase(outcome.step);
     const [title, body] = phase === 'answered' ? [t.failedAfterSendTitle, t.failedAfterSendBody] : phase === 'sent' ? [t.failedSentTitle, t.failedSentBody] : [t.failedTitle, undefined];
-    return <RedCard title={title} body={body} lines={[`${outcome.step}: ${outcome.reason}`]} />;
+    return <RedCard title={title} body={body} {...(looksLikeKeyLimit(outcome.reason) ? { note: t.keyLimitNote } : {})} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
     // The decision is the same (nothing sent); the wording follows the verdict's reason, decided once in @ainek/proof.
@@ -37,7 +38,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
       <RedCard
         title={title}
         body={body}
-        note={[t.refusedConsequence[reason], outcome.tampered === 'deployment' && !cfg.requireLoggedDeployment ? t.deploymentDemoNote : null].filter(Boolean).join(' ')}
+        note={[t.refusedConsequence[reason], ...(outcome.tampered === 'deployment' ? [t.deploymentDemoNote, cfg.requireLoggedDeployment ? null : t.deploymentDemoOffNote] : [])].filter(Boolean).join(' ')}
         action={
           outcome.tampered && onRetry ? <button type="button" className="btn primary" onClick={onRetry}>{outcome.tampered === 'deployment' ? t.retryRealDeployment : t.retryHonest}</button>
           // A new tab, because the thread lives in this page; the choice reaches it through storage. Not on a split view: a disagreement is an alarm to read, not a list to edit.
@@ -85,7 +86,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
       <CardHead status="ok" when={utcMinute(exchange.sentAt)}>{t.cardVerified}</CardHead>
       <Row status="ok" label={t.rowModel} hint={hint('model')}>{proof.model}, {t.attested} (compose {short(composeHash)})</Row>
       <Row status="ok" label={t.rowHardware} hint={hint('hardware')}>Intel TDX {m.tcbStatus}, NVIDIA GPU {m.gpuEvidence} ({deployment.tookMs === 0 ? t.cached : `${t.checkedInBrowser}, ${seconds(deployment.tookMs)}`})</Row>
-      <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}{normalizeHex(logEntry.compose_hash) === composeHash ? '' : ` (${t.otherCompose})`}</Row>
+      <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}{` (${normalizeHex(logEntry.compose_hash) === composeHash ? t.sameCompose : t.otherCompose})`}</Row>
       <Row status="ok" label={t.rowHashes} hint={hint('hashes')}>{t.hashesOk}</Row>
       <Row status="ok" label={t.rowE2ee} hint={hint('e2ee')}>{t.e2eeYes}</Row>
       <Row status={proof.commitTx || outcome.commit === 'committed' ? 'ok' : 'skipped'} label={t.rowChain} hint={hint(proof.commitTx || outcome.commit === 'committed' ? 'chain' : 'chainPending')}>

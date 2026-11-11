@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deploymentStanding, deploymentsSeen, evaluateKeyLog, findSplitView, freshCoverage, proofEntryOf, resolveLogEntry } from './key-log.ts';
+import { composesBehindKey, deploymentStanding, deploymentsSeen, evaluateKeyLog, evaluateKeyLogForAll, findSplitView, freshCoverage, proofEntryOf, resolveLogEntry } from './key-log.ts';
 import type { KeyEntry } from './schema.ts';
 import { readRepoJson } from './fixtures.ts';
 
@@ -192,4 +192,18 @@ test('freshCoverage: the hours a fail-closed client would have had no fresh entr
   assert.equal(stale.unbrokenSince, 30 * H);
   // No entries at all: one hole over the whole span.
   assert.equal(freshCoverage([], 0, 5 * H, 24 * H).uncoveredMs, 5 * H);
+});
+
+test('several reports behind one key: one unlogged compose refuses, whatever its position; the key alone ignores them', () => {
+  const [composeA, composeB, unknown] = ['a0'.repeat(32), '5f'.repeat(32), 'cd'.repeat(32)];
+  const log = [logged({ index: 5, compose_hash: composeB }), logged({ index: 4, compose_hash: composeA })];
+  assert.equal(evaluateKeyLogForAll(log, base, [composeA, composeB]).status, 'ok');
+  assert.equal(evaluateKeyLogForAll(log, base, [composeA, composeB]).deployment?.composeHash, composeA, 'the verdict for the first report');
+  const refused = evaluateKeyLogForAll(log, base, [composeA, unknown]);
+  assert.equal(refused.reason, 'unknown-deployment');
+  assert.equal(refused.deployment?.composeHash, unknown);
+  assert.equal(evaluateKeyLogForAll(log, base, [undefined]).status, 'ok');
+  assert.equal(evaluateKeyLogForAll(log, base, []).deployment, undefined);
+  const reports = [{ signingAddress: entry.signing_address, composeHash: composeA }, { signingAddress: 'ee'.repeat(32), composeHash: unknown }, { signingAddress: entry.signing_address.toUpperCase(), composeHash: composeB }, { signingAddress: entry.signing_address, composeHash: composeA }];
+  assert.deepEqual(composesBehindKey(reports, entry.signing_address), [composeA, composeB]);
 });

@@ -364,9 +364,9 @@ The same two calls can be signed in a browser: `/agent` lists what waits, re-che
 "Approve" and "Reject" (100 TGas, 1 yoctoNEAR, the wallet signs). Use its own "Connect as the owner" button: it signs
 in without asking for a function-call key. Do not connect an owner account through "Connect wallet" in the navigation,
 which asks the wallet to add a function-call key for `commit_proof`: on the owner's account such a key can call
-`pause_agent`, and while the owner is the contract account itself (today) any key of that account can also call the
-`#[private]` methods. So the browser path is meant for after the owner role has moved to an account of its own (step 3
-of the lock below). It has unit tests and has not run on chain yet.
+`pause_agent`. The owner role moved to an account of its own on Nov 11 (`1dastan.testnet`), which is what the browser
+path was waiting for: while the contract account was the owner, any key of it could also call the `#[private]` methods.
+It has unit tests and has not run on chain yet.
 
 The stop button is the owner's `pause_agent` (the contract refuses the agent from then on) plus deleting the
 function-call key from the agent account.
@@ -375,7 +375,7 @@ function-call key from the agent account.
 
 | What | Value |
 |---|---|
-| contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash on chain `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The contract is its own owner, so owner calls are signed as `ainek-log-dastan.testnet` |
+| contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash on chain `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The owner is `1dastan.testnet` since Nov 11 (`owner()` on chain; before that the contract owned itself), so owner calls are signed as that account. The contract account still holds a full-access key and can replace the code |
 | demo token | `token.ainek-dev-dastan.testnet` (deploy tx `6PjJPBANBCQqhUy2uYcgvnvUdy7ejBpz6RkaeLER2zG7`); 1,000,000 AINEK minted to `ainek-dev-dastan.testnet`, 10,000 of them sent to the contract |
 | agent | `agent.ainek-dev-dastan.testnet`, created with 0.5 NEAR, of which 0.1 NEAR is prepaid as storage on the contract |
 | agent's function-call key | `ed25519:CeUWgrZ9N4CQe7NG6S9oJJYgWEx4xky1fzUB2tMmGx1E` since Nov 7 (the first was deleted when the stop button ran; to replace it, generate the pair where the bot runs and add only the public key, so the secret never travels): `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (less than the 1 NEAR that "Agent service" above asks for; five calls used 0.0018 NEAR, the two texts are not reconciled yet). The account also has the full-access key it was created with (in Dastan's keychain) |
@@ -433,7 +433,7 @@ failure recovered by the retry.
 
 ## Locking the contract (Dastan; not done yet)
 
-Today `ainek-log-dastan.testnet` owns itself and has one full-access key, so "append-only" rests on trusting whoever
+Today `ainek-log-dastan.testnet` has one full-access key (its owner role went to `1dastan.testnet` on Nov 11, step 3 below), so "append-only" rests on trusting whoever
 holds that key: they could deploy other code or rewrite the state. The lock removes that. It is the last step before
 submission, because after it nobody can fix a bug in the contract either.
 
@@ -462,7 +462,7 @@ Then, with every command ending in `network-config testnet sign-with-keychain se
    Docker). No `migrate`: `set_owner` did not change the stored layout.
 2. Check the deploy before anything irreversible: the account's `code_hash` equals the hash of the local reproducible
    wasm, and `contract_source_metadata` names the commit.
-3. Hand the owner role to a fresh account that keeps a full-access key (the owner still registers verifiers and
+3. Done on Nov 11: the owner is `1dastan.testnet`. Hand the owner role to a fresh account that keeps a full-access key (the owner still registers verifiers and
    agents and approves actions). Not `ainek-dev-dastan.testnet`: its full-access key sat on the server for three
    hours on Nov 6 and was not rotated. `set_owner` with `{"new_owner":"<owner>"}`, 1 yoctoNEAR, signed as the contract.
    Update `OWNER_ACCOUNT_ID` wherever it is set (`.env`, `.env.owner`, the agent's env: the bot prints
