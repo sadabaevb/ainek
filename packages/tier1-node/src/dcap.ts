@@ -19,3 +19,16 @@ export async function verifyPolicyRunAt(attestationUrl: string, x: { output: str
     await sleep(pollMs, undefined, { signal });
   }
 }
+
+/**
+ * A later re-check of a run whose input is not public: the quote is checked against the build, the output and the project, and the
+ * input line is skipped. Not for the agent, which must check its own input before it proposes. The attestation of an old run is
+ * fetched once: a 404 means it is gone, not that it is still on its way.
+ */
+export async function recheckPolicyRunAt(attestationUrl: string, x: { output: string; wasmHash: string; project: string; apiUrl: string; rpcUrl: string; network: 'testnet' | 'mainnet'; fetch?: typeof fetch; timeoutMs?: number }): Promise<Check[]> {
+  const { fetch: f = fetch, timeoutMs = 30_000, ...rest } = x;
+  const signal = AbortSignal.timeout(timeoutMs);
+  const res = await f(attestationUrl, { signal, redirect: 'error' });
+  if (!res.ok) throw new Error(`OutLayer attestation: HTTP ${res.status}`);
+  return verifyPolicyRun({ ...rest, input: null, run: PolicyRun.parse(await res.json()), verifyQuote: verifyTdxQuote, fetch: f, signal });
+}

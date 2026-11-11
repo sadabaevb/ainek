@@ -5,11 +5,12 @@
 // owner, Intel signed the quote, and the worker is one OutLayer's contract approves. Nothing here trusts OutLayer's own
 // "verified" flag.
 import { z } from 'zod';
+import { canonicalJson } from './canonical.ts';
 import { base64ToBytes } from './disclosure.ts';
 import { bytesToHex, concatBytes, sha256Hex, shortHex as short, utf8Bytes } from './hash.ts';
 import { viewFunction } from './near-view.ts';
 import { check } from './policy.ts';
-import { hex64 } from './schema.ts';
+import { hex64, type Decision } from './schema.ts';
 import type { Check } from './verify.ts';
 
 /** What `GET /attestations/...` answers. Fields we do not use are left alone. */
@@ -219,6 +220,17 @@ export function checkPolicyRun({ run, output, input, wasmHash, project, freshnes
   ];
 }
 
+/** OutLayer's contract that keeps the list of approved worker measurements. */
+export const outlayerWorkerOf = (network: 'testnet' | 'mainnet'): string => (network === 'mainnet' ? 'worker.outlayer.near' : 'worker.outlayer.testnet');
+
+/**
+ * The output jobs/policy prints for a decision, rebuilt from its parts (SPEC §6): the run's quote commits to the hash of exactly
+ * these bytes, so one definition serves every place that ties a recorded decision to a run.
+ */
+export function policyOutputOf(x: { decision: Decision; teePubkey: string; teeSignature: string; wasmHash: string }): string {
+  return canonicalJson({ decision: x.decision, pubkey: x.teePubkey, sig: x.teeSignature, wasm_hash: x.wasmHash });
+}
+
 /**
  * The same checks with the network parts done: Intel's collateral as OutLayer archived it for the run's moment, and OutLayer's list of approved
  * workers. A verdict comes back as checks; an outage throws, because "could not check" is a different thing to tell someone than "does not verify".
@@ -227,8 +239,7 @@ export async function verifyPolicyRun({ apiUrl, rpcUrl, network, verifyQuote, fe
   const { run } = evidence;
   const quote = await verifiedQuoteOf(run, apiUrl, verifyQuote, f, signal);
   if ('error' in quote) return checkPolicyRun({ ...evidence, quote });
-  const worker = network === 'mainnet' ? 'worker.outlayer.near' : 'worker.outlayer.testnet';
-  const approved = await viewFunction(rpcUrl, worker, 'is_measurements_approved', { measurements: quote.measurements }, signal);
+  const approved = await viewFunction(rpcUrl, outlayerWorkerOf(network), 'is_measurements_approved', { measurements: quote.measurements }, signal);
   return checkPolicyRun({ ...evidence, quote, measurementsApproved: approved === true });
 }
 

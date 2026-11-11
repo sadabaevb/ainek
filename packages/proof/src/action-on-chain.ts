@@ -4,7 +4,7 @@ import { canonicalJson } from './canonical.ts';
 import { actionStatusCheck, modelCommitCheck, readAction } from './agent-ledger.ts';
 import { checkProofCommit, readProofCommit } from './near-view.ts';
 import { check, verifyActionProof, type ActionReport } from './policy.ts';
-import { PolicyRun, verifyPolicyRun, type QuoteVerifier } from './policy-run.ts';
+import { PolicyRun, policyOutputOf, verifyPolicyRun, type QuoteVerifier } from './policy-run.ts';
 import { ActionProof } from './schema.ts';
 import { withChecks, type Check } from './verify.ts';
 
@@ -53,7 +53,7 @@ export async function actionRunChecks(proof: ActionProof, x: { apiUrl: string; p
     const res = await f(proof.attestationUrl, { redirect: 'error', signal });
     if (!res.ok) return skipped(`the attestation could not be fetched: HTTP ${res.status}`);
     const run = PolicyRun.parse(await res.json());
-    const output = canonicalJson({ decision: proof.decision, pubkey: proof.teePubkey, sig: proof.teeSignature, wasm_hash: proof.wasmHash });
+    const output = policyOutputOf(proof);
     return await verifyPolicyRun({ ...rest, verifyQuote: await loadQuoteVerifier(), fetch: f, signal, run, input: null, output });
   } catch (err) {
     return skipped(`the attestation could not be checked: ${describe(err)}`);

@@ -13,7 +13,8 @@
     "check-contract": "node scripts/check-contract.mjs",
     "check-agent": "node scripts/check-agent.mjs",
     "metrics": "node src/metrics.ts",
-    "policy": "node src/policy-run.ts"
+    "policy": "node src/policy-run.ts",
+    "record-policy-runs": "node scripts/record-policy-runs.mjs"
   },
   "dependencies": {
     "@ainek/proof": "workspace:*",

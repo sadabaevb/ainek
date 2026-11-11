@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
-import { ActionProof, PolicyInput, PolicyOutput, PolicyRun, actionCommitOf, actionRunChecks, base64ToBytes, checkPolicyRun, type PolicyRunEvidence } from '@ainek/proof';
+import { ActionProof, Decision, PolicyInput, PolicyOutput, PolicyRun, actionCommitOf, actionRunChecks, base64ToBytes, checkPolicyRun, policyOutputOf, sha256Hex, verifyDecisionSignature, type PolicyRunEvidence } from '@ainek/proof';
 import { verifyTdxQuote } from './dcap.ts';
 
 const read = (path: string) => JSON.parse(readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8'));
@@ -91,4 +91,42 @@ test('no quote check or no worker list is said plainly, never read as passing', 
   assert.equal(statusOf(evidence({ measurementsApproved: null }), 'run-worker'), 'skipped');
   assert.equal(statusOf(evidence({ measurementsApproved: false }), 'run-worker'), 'fail');
   assert.equal(statusOf(evidence({ run: { ...run, worker_measurement: 'ff'.repeat(48) } }), 'run-worker'), 'fail');
+});
+
+// ---- the agent's live actions (docs/samples/policy-runs.sample.json, `pnpm demo:policy`) ---------------
+const agentRuns = read('docs/samples/policy-runs.sample.json') as { published: { wasmHash: string; project: string }; collaterals: unknown[]; runs: Array<{ actionId: number; decision: unknown; teePubkey: string; teeSignature: string; attestation: unknown; collateral: number; measurementsApproved: boolean }> };
+/** Each run with its quote verified once: both tests below read the same result. */
+const verifiedAgentRuns = agentRuns.runs.map((r) => {
+  const attested = PolicyRun.parse(r.attestation);
+  const decision = Decision.parse(r.decision);
+  return { r, attested, decision, output: policyOutputOf({ decision, teePubkey: r.teePubkey, teeSignature: r.teeSignature, wasmHash: agentRuns.published.wasmHash }), quote: verifyTdxQuote(base64ToBytes(attested.tdx_quote), agentRuns.collaterals[r.collateral], attested.timestamp) };
+});
+const agentRunChecks = (v: (typeof verifiedAgentRuns)[number], over: Partial<PolicyRunEvidence> = {}) =>
+  checkPolicyRun({ run: v.attested, input: null, output: v.output, wasmHash: agentRuns.published.wasmHash, project: agentRuns.published.project, quote: v.quote, measurementsApproved: v.r.measurementsApproved, ...over });
+
+test('every recorded policy run behind a live action of the agent: Intel signed the quote, and it commits to the published build and to the decision on chain', () => {
+  assert.ok(agentRuns.runs.length > 0, 'the sample holds runs');
+  for (const v of verifiedAgentRuns) {
+    assert.deepEqual(agentRunChecks(v).map((c) => [c.id, c.status]), [['run-build', 'ok'], ['run-input', 'skipped'], ['run-output', 'ok'], ['run-quote', 'ok'], ['run-binding', 'ok'], ['run-worker', 'ok']], `action ${v.r.actionId}`);
+    assert.equal(verifyDecisionSignature(v.decision, v.r.teeSignature, v.r.teePubkey), true, `action ${v.r.actionId}: the decision is signed by the recorded key`);
+  }
+});
+
+test('a recorded agent run stops vouching for a changed verdict, even when the attestation\'s own hash of the output is changed to match', () => {
+  for (const v of verifiedAgentRuns) {
+    const edited = v.output.replace(/"verdict":"(Allow|Deny|NeedsApproval)"/, (_m, verdict: string) => `"verdict":"${verdict === 'Deny' ? 'Allow' : 'Deny'}"`);
+    assert.notEqual(edited, v.output);
+    // Editing the output alone trips the comparison with OutLayer's own record of the hash.
+    assert.equal(agentRunChecks(v, { output: edited }).find((c) => c.id === 'run-output')?.status, 'fail', `action ${v.r.actionId}`);
+    // Whoever serves the attestation can change that field too. Then only Intel's quote objects, and it does.
+    const served = agentRunChecks(v, { output: edited, run: { ...v.attested, output_hash: sha256Hex(edited) } });
+    assert.equal(served.find((c) => c.id === 'run-output')?.status, 'ok', `action ${v.r.actionId}`);
+    assert.equal(served.find((c) => c.id === 'run-binding')?.status, 'fail', `action ${v.r.actionId}`);
+  }
+});
+
+test('one action\'s decision does not pass under another action\'s run', () => {
+  const [first, second] = verifiedAgentRuns;
+  assert.ok(first && second);
+  assert.ok(agentRunChecks(first, { output: second.output }).some((c) => c.status === 'fail'));
 });
