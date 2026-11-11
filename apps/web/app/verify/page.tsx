@@ -1,6 +1,6 @@
 'use client';
-// Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, or from a disclosure file
-// (proof + raw bytes + log entry). Hashes are recomputed here; the log entry is re-read from the public log. An exchange
+// Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, from a disclosure file
+// (proof + raw bytes + log entry), or from a link that carries that file in its fragment (lib/proof-link.ts). Hashes are recomputed here; the log entry is re-read from the public log. An exchange
 // kept in this browser whose proof was never committed can be committed from here (SPEC §4.2), wallet connected on demand.
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -19,6 +19,7 @@ import { commitLabel } from '@/lib/commit-label';
 import type { Dict } from '@/lib/i18n';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
+import { proofFromFragment } from '@/lib/proof-link';
 import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
 import { walletCommitter } from '@/lib/wallet';
 import { useConfig, useT } from '../providers';
@@ -125,6 +126,24 @@ function VerifyInner() {
     // `check` only sets state; the query parameter is the one thing this depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sample]);
+
+  // A proof link: the disclosure travels in the fragment, which the browser keeps to itself. Checked like a pasted file.
+  useEffect(() => {
+    const read = () =>
+      proofFromFragment(window.location.hash).then(
+        (source) => {
+          if (source === null) return;
+          setText(source);
+          check(source);
+        },
+        (e: unknown) => setError(tv.badLink(describeError(e))),
+      );
+    void read();
+    window.addEventListener('hashchange', read);
+    return () => window.removeEventListener('hashchange', read);
+    // `check` only sets state; the fragment is the one thing this depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
   const proof = result?.stored?.proof ?? result?.report.proof;

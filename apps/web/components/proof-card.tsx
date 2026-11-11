@@ -12,6 +12,7 @@ import { DEPOSIT_NEAR } from '@/lib/wallet';
 import { downloadJson } from '@/lib/encoding';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
+import { proofFragment } from '@/lib/proof-link';
 import { fill } from '@/lib/fill';
 import { CardHead, CheckList, Row } from './checks';
 import { RedCard } from './red-card';
@@ -22,6 +23,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   const cfg = useConfig();
   const { signedAccountId } = useNearWallet(); // the button's label follows the wallet as it is now, not the turn's frozen status
   const [explain, setExplain] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const vcUrl = useMemo(() => (outcome.kind === 'verified' ? verificationCenterUrl(outcome.proof) : ''), [outcome]);
 
   if (outcome.kind === 'failed') {
@@ -74,7 +76,16 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   const commit = proof.commit ?? '';
   const chainText = { pending: t.chainCommitting, depositing: t.chainDepositing(DEPOSIT_NEAR), 'no-wallet': t.chainNoWallet, 'no-deposit': t.chainNoDeposit, 'not-deployed': t.chainPending, failed: t.chainFailed, committed: t.chainCommittedElsewhere }[outcome.commit];
   const hint = (key: keyof typeof t.hints) => (explain ? t.hints[key] : undefined);
-  const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody }));
+  const disclosure = () => toDisclosure({ proof, logEntry, requestBody: exchange.requestBody, responseBody: exchange.responseBody });
+  const disclose = () => downloadJson(`ainek-proof-${proof.completionId}.json`, disclosure());
+  // The same disclosure as the file, carried in the fragment of a /verify address. A denied clipboard leaves the label as it was.
+  const copyLink = () =>
+    proofFragment(JSON.stringify(disclosure()))
+      .then((fragment) => navigator.clipboard.writeText(`${location.origin}/verify#${fragment}`))
+      .then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 1500);
+      }, () => undefined);
 
   return (
     <section className="card">
@@ -102,6 +113,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
         <Link className="btn" href={`/verify?id=${encodeURIComponent(proof.completionId)}`}>{t.reverify}</Link>
         <a className="btn" href={vcUrl} target="_blank" rel="noreferrer">{t.openVc}</a>
         <button type="button" className="btn" onClick={disclose}>{t.disclose}</button>
+        <button type="button" className="btn" onClick={() => void copyLink()}>{linkCopied ? t.linkCopied : t.copyLink}</button>
       </div>
       <p className="muted small">{fill(t.discloseHint, { auditor: <Link href="/auditor">/auditor</Link> })}</p>
       <details>
