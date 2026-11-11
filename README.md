@@ -409,6 +409,8 @@ Tests:
 - A verifier anyone can run in one command (`docker run` / `npx ainek-verify`) and, in a next version of the contract, open
   verifier registration with a storage deposit, so the log stops depending on us. In this contract the owner registers verifiers.
 - A revoke entry in the log and a governed allowlist of compose hashes, so the card can compare measurements, not only show them.
+- (Tier 2) The contract checks the model key behind an action against the key log at `propose_action`; today it checks
+  only that the agent committed a proof hash.
 - A second provider in the same log (Venice): one public log for the whole private-inference industry, not one vendor.
 - Image provenance via Sigstore, so "attested deployment" also says which source built it.
 - Hidden settlement with NEAR Confidential Intents; the relay itself inside an attested OutLayer job.
