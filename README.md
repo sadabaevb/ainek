@@ -423,6 +423,9 @@ Tests:
   only that the agent committed a proof hash.
 - A second provider in the same log (Venice): one public log for the whole private-inference industry, not one vendor.
 - Image provenance via Sigstore, so "attested deployment" also says which source built it.
+- Starting the hardware check when the chat opens, so the first message does not wait three to four seconds for it. Written
+  and held back: the first proof card would then say "from the cache" where it now shows the check, and every visit would
+  reach NEAR AI and NVIDIA before the visitor sends anything.
 - Hidden settlement with NEAR Confidential Intents; the relay itself inside an attested OutLayer job.
 - Integrations: Sputnik DAO and Trezu as the human approver of agent actions.
 
