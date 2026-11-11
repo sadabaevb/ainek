@@ -10,7 +10,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   The client verifies the TDX quote and the GPU attestation itself (browser SDK; the NVIDIA verdict is fetched through
   NEAR AI's proxy and checked against NVIDIA's keys) and checks the signing key against a **public, append-only log on
   NEAR** written by verifiers (today: two, both ours; the log is designed for independent verifiers). If the key is not in the
-  log, the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
+  log, or (since Nov 11) is not logged together with the deployment the client attested, the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
   only sets the default.
 - Among the 26 hackathon entries whose code we read on Nov 6, 2026 (`docs/FIELD.md`), none combines a public log of TEE keys, a
   refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
@@ -52,16 +52,16 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **Protection from the server that serves the page.** The browser code that verifies, encrypts and checks the log is served
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
-- **A measurement allowlist.** Today the log works as a *key* allowlist: the client sends only to a key a trusted verifier
-  logged. Instances of a model share one signing key, so the signature alone does not say which deployment answered. A
-  check that narrows this (SPEC §7.1: the key must be logged together with the compose hash the client attested, otherwise
-  "Unknown deployment. Message not sent.") is written and tested, and is off by default (`AINEK_REQUIRE_DEPLOYMENT=0`) until
-  the verifier samples every instance behind the gateway on each round; with one sample per round a real rollout would
-  refuse honest users for hours. It narrows and does not close: the client attests one instance, the gateway picks the
-  instance per request, and a verification is reused for 60 minutes, so another instance behind the same key may answer.
-  Until the check is on, the browser and `demo:live` show the attested deployment on the card and say when the log has not
-  seen it; the offline replay already refuses. The chat's demo switch shows the refusal. Which compose hashes are
-  acceptable is not governed either: the log records what verifiers saw, not what should run (next steps).
+- **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
+  acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
+  which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
+  logged together with the compose hash the client attested, by a trusted verifier in the last 24 hours, otherwise
+  "Unknown deployment. Message not sent." It narrows and does not close: the client attests one instance, the gateway picks
+  the instance per request, and a verification is reused for 60 minutes, so another instance behind the same key may answer.
+  The cost: a replica that appears, or returns after more than a day away, refuses the honest users routed to it until
+  the verifier logs it. The verifier takes five reports every 15 minutes over fresh connections, so we expect minutes; we
+  have not measured that window. In the log's first eight days a compose showed up with no entry in the previous 24 hours nine
+  times (`docs/DEV-NOTES.md`, Nov 11). The chat's demo switch shows the refusal.
 - **A trustless read of the log.** The client reads `latest_keys` through one JSON-RPC endpoint (FastNear by default,
   `NEAR_RPC_URL`) with no light-client proof, so "checked against the public log" means "checked against what that endpoint
   says the log holds". A lying endpoint can pass an unlogged key or refuse a logged one; it cannot route you to an unattested

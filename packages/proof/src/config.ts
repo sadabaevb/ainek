@@ -44,9 +44,10 @@ export type EnvLike = Record<string, string | undefined>;
 // chat for everyone (SPEC §7.1). It joins once it has run on a schedule for a day; a visitor can add it on /log now.
 const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
-// One line to turn the deployment check on in the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables). Off until the
-// verifier samples every instance behind the gateway each round (DEV-NOTES 2026-11-10); `.env.example` carries the same value.
-const REQUIRE_DEPLOYMENT_DEFAULT = '0';
+// One line switches the deployment check in the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables).
+// On since Nov 11: the verifier takes five reports a round over fresh connections, so a replica that serves traffic is logged within
+// a round or two (DEV-NOTES 2026-11-11). `'0'` here and in `.env.example` turns it back off.
+const REQUIRE_DEPLOYMENT_DEFAULT = '1';
 
 function list(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback).split(',').map((s) => s.trim()).filter(Boolean);
