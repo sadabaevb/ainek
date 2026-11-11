@@ -26,15 +26,17 @@ const outcome = await runPreflight({
   },
 });
 
+let swappedRefused = false;
 if (outcome.kind === 'failed') {
   console.log(`\nResult: FAILED at ${outcome.step}. Nothing was sent.`);
 } else {
   // The rule the chat's first demo switch shows, applied to the same log read: a key nobody logged is refused.
   const swapped = evaluateKeyLog(outcome.entries, { model, signingAddress: DEMO_SWAPPED_KEY, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum });
+  swappedRefused = swapped.status !== 'ok';
   head('4. The same log read against a swapped key');
   line(swapped.status === 'ok' ? FAIL : OK, swapped.status === 'ok' ? `the demo key ${short(DEMO_SWAPPED_KEY)} is in the log: it must not be` : `${short(DEMO_SWAPPED_KEY)} would be refused: ${swapped.detail}`);
   if (outcome.kind === 'ready') {
-    const { modelAttestation: m, logEntry } = outcome;
+    const { signer: m, logEntry } = outcome;
     console.log('\n┌─ Ainek, before sending ─ live ──────────────────────────────────────');
     console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(composeHashOf(m.deployment))})`);
     console.log(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
@@ -45,5 +47,5 @@ if (outcome.kind === 'failed') {
     console.log(`\nResult: WOULD REFUSE. ${outcome.reason}. Nothing was sent.`);
   }
 }
-// A refusal is the rule working, not an error of this command: only a failed step exits non-zero.
-await exitFlushed(outcome.kind === 'failed' ? 1 : 0);
+// Zero only for WOULD SEND with the swapped key refused: a refusal of the live key means the log lacks it (as `demo:live` exits).
+await exitFlushed(outcome.kind === 'ready' && swappedRefused ? 0 : 1);

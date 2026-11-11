@@ -155,9 +155,7 @@ pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attes
                                  #   It retries what the SDK calls temporary (3 tries); if it still ends in
                                  #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again
 
-pnpm demo:attest                 # no key, needs network (~10 s): what demo:live does up to the send. Metadata, gateway and model
-                                 #   evidence verified here, the log read from the contract, the fail-closed rule applied to the
-                                 #   attested key and to a swapped one; exits non-zero only when a step fails, not on a refusal
+pnpm demo:attest                 # no key, needs network (~10 s): what demo:live does up to the send (above); exits 0 on WOULD SEND
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
 pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. The chat needs NEARAI_API_KEY

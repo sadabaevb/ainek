@@ -159,9 +159,9 @@ export type Tier1Outcome = (Verified | Refused | Failed) & RunStats;
 export interface Ready {
   kind: 'ready';
   gateway: VerifiedGatewayAttestation;
-  modelAttestation: VerifiedModelAttestation;
+  /** The model report whose key was checked against the log (the name `Verified` uses). */
+  signer: VerifiedModelAttestation;
   entries: KeyEntry[];
-  logSource: string;
   verdict: KeyLogVerdict;
   logEntry: KeyEntry;
 }
@@ -177,24 +177,29 @@ export interface Tier1Params {
 }
 
 /** One cold run of the Tier-1 sequence. Never throws: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
-export async function runTier1(params: Tier1Params): Promise<Tier1Outcome> {
-  return run(params) as Promise<Tier1Outcome>; // with a chat and a key the run never stops at `ready`
+export async function runTier1({ apiKey, chat, ...base }: Tier1Params): Promise<Tier1Outcome> {
+  return run(base, { apiKey, chat });
 }
 
 /**
  * The same sequence up to the send, and no further: metadata, gateway and model evidence verified here, the public log read and
  * checked. It needs no API key (NEAR AI serves metadata and attestation reports without one) and spends nothing.
  */
-export async function runPreflight(params: Omit<Tier1Params, 'apiKey' | 'chat'>): Promise<PreflightOutcome> {
-  return run(params) as Promise<PreflightOutcome>; // without a chat the run never reaches `verified`
+export async function runPreflight(base: RunBase): Promise<PreflightOutcome> {
+  return run(base);
 }
 
-async function run({ apiKey, cfg, chat, readLog, onStep: rawOnStep = () => undefined }: Omit<Tier1Params, 'apiKey' | 'chat'> & Partial<Pick<Tier1Params, 'apiKey' | 'chat'>>): Promise<Tier1Outcome | PreflightOutcome> {
+type RunBase = Omit<Tier1Params, 'apiKey' | 'chat'>;
+type Send = Pick<Tier1Params, 'apiKey' | 'chat'>;
+// With something to send the run ends verified, refused or failed; without, it stops at `ready` after the log check.
+function run(base: RunBase, send: Send): Promise<Tier1Outcome>;
+function run(base: RunBase): Promise<PreflightOutcome>;
+async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBase, send?: Send): Promise<Tier1Outcome | PreflightOutcome> {
   const onStep = observed(rawOnStep);
   const { model, nearaiBaseUrl: baseUrl } = cfg;
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses as TcbStatus[] }; // validated in ainekConfigFromEnv; same names as the SDK's
   // AttestationClient caches no evidence; staying off the SDK's InferenceClient (which caches attestation for 60 min) is what makes every run re-fetch and re-verify it. HTTP connections may still be reused between runs: its plain GETs go through the global fetch.
-  const client = new AttestationClient({ ...(apiKey ? { apiKey } : {}), baseUrl, headers: { [NO_ALIASING_HEADER]: 'true' } }); // an empty key is a 401; no key at all is served
+  const client = new AttestationClient({ ...(send ? { apiKey: send.apiKey } : {}), baseUrl, headers: { [NO_ALIASING_HEADER]: 'true' } }); // metadata and reports are served without a key
   const timings: Timings = {};
   let retries = 0;
   // Once the run has returned, nothing of it may go on: no new retries of a leg still in flight, and the log read is abandoned.
@@ -274,7 +279,8 @@ async function run({ apiKey, cfg, chat, readLog, onStep: rawOnStep = () => undef
     const logEntry = proofEntryOf(verdict, attestedCompose);
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')}${cfg.requireLoggedDeployment ? ' with the attested deployment' : '; deployment check off'} (source: ${logSource})`, ms: logMs });
 
-    if (!chat || !apiKey) return done({ kind: 'ready', gateway, modelAttestation, entries, logSource, verdict, logEntry });
+    if (!send) return done({ kind: 'ready', gateway, signer: modelAttestation, entries, verdict, logEntry });
+    const { apiKey, chat } = send;
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(
