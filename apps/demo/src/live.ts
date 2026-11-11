@@ -22,7 +22,7 @@ const discloseFile = typeof flags.disclose === 'string' ? path.resolve(process.e
 if (discloseFile && !existsSync(path.dirname(discloseFile))) usage(`--disclose: directory ${path.dirname(discloseFile)} does not exist`);
 
 const env = loadLiveEnv();
-const apiKey: string = env.apiKey ?? usage('NEARAI_API_KEY is not set (root .env). The offline replay needs no key: pnpm demo');
+const apiKey: string = env.apiKey ?? usage('NEARAI_API_KEY is not set (root .env). Without a key: pnpm demo:attest (the live checks up to the send) or pnpm demo (the offline replay)');
 const { cfg } = env;
 // A disclosure embeds the log entry as the chain returns it at that moment; sample mode never reads the chain.
 if (discloseFile && cfg.logSource === 'sample') usage('--disclose needs the contract log (AINEK_LOG_SOURCE=contract): the disclosure embeds the entry read from the chain');
