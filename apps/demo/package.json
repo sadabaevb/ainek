@@ -8,6 +8,7 @@
     "replay": "node src/replay.ts",
     "tamper": "node src/replay.ts --tamper",
     "live": "node src/live.ts",
+    "attest": "node src/attest.ts",
     "record": "node scripts/record-evidence.mjs",
     "typecheck": "tsc --noEmit",
     "check-contract": "node scripts/check-contract.mjs",

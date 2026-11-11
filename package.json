@@ -11,6 +11,7 @@
     "demo:tamper": "pnpm -F demo tamper",
     "demo:policy": "pnpm -F demo policy",
     "demo:live": "pnpm -F demo live",
+    "demo:attest": "pnpm -F demo attest",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

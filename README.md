@@ -37,6 +37,14 @@ pnpm demo:policy     # recorded policy runs on OutLayer, the agent's five live a
                      #   published build, the decision → "Result: VERIFIED"
 ```
 
+One more, live and still with no key (needs the network, about ten seconds):
+
+```bash
+pnpm demo:attest     # the model's evidence fetched now and verified here (Intel TDX, NVIDIA GPU), its key and deployment
+                     #   looked up in the log on NEAR → "Result: WOULD SEND", or "WOULD REFUSE" when the log does not have
+                     #   them. It stops before a message exists: nothing is encrypted, sent or signed
+```
+
 The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If it stops answering, run it locally
 with your own key. That and the other checks (your own trust set, re-verifying a proof, the non-TEE route) are under
 [Try it](#try-it-do-x--see-y).
@@ -147,6 +155,9 @@ pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attes
                                  #   It retries what the SDK calls temporary (3 tries); if it still ends in
                                  #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again
 
+pnpm demo:attest                 # no key, needs network (~10 s): what demo:live does up to the send. Metadata, gateway and model
+                                 #   evidence verified here, the log read from the contract, the fail-closed rule applied to the
+                                 #   attested key and to a swapped one; exits non-zero only when a step fails, not on a refusal
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
 pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. The chat needs NEARAI_API_KEY
@@ -361,7 +372,7 @@ in the network steps. How each number was measured, and what it does not show: [
 
 ```
 apps/web/            Next.js app: chat with the proof card, /verify, /log, /auditor, /agent, /trust; byte-exact relay to NEAR AI
-apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:live, demo:metrics, record / check-contract scripts
+apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:attest, demo:live, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
                      demo:live, demo:metrics and the Tier 2 agent service; mirrors apps/web/lib/flow.ts

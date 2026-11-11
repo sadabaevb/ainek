@@ -111,6 +111,7 @@ Reference implementations to copy patterns from (not code wholesale; disclose an
 ```
 pnpm i                                   install everything
 pnpm demo                                offline replay of the Tier-1 checks on recorded evidence (no key, no network)
+pnpm demo:attest                         the live checks up to the send: evidence verified, key looked up in the log (no key, needs network)
 pnpm demo:live                           the same checks live against NEAR AI and testnet (needs NEARAI_API_KEY)
 pnpm -F web dev                          Next.js dev server
 pnpm -F verifier start                   verifier daemon
