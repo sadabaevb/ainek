@@ -347,6 +347,12 @@ test('releaseMarksFor: marks only for a release every check held for, and what c
   asked.length = 0;
   assert.equal((await marksFor({ reads }, second)).marks.length, 2);
   assert.deepEqual([second.seen.paths, asked], [['/repos/nearai/cvm-compose-files/commits/v0.0.3'], []]);
+  // Two replicas of one release inspected at the same moment share the reads in flight: the file and each image once.
+  const together: ReleaseReads = new Map();
+  const both = fakeGitHub();
+  asked.length = 0;
+  await Promise.all([marksFor({ reads: together }, both), marksFor({ reads: together }, both)]);
+  assert.deepEqual([both.seen.paths.filter((p) => p.includes('/contents/')).length, both.seen.paths.filter((p) => p.includes('/commits/')).length, asked.length], [1, 2, 2]);
   // A check that failed is not kept: a build proof can be published later, and the next round asks again.
   const retried: ReleaseReads = new Map();
   assert.equal((await marksFor({ reads: retried, sdk: sdkWith(`sha256:${'3'.repeat(64)}`) })).marks.length, 0);

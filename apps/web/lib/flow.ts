@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, attestedLogsOf, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, withReleaseRule, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, withReleaseRule, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -162,7 +162,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const logPolicy = { model, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
   const keyOnly = evaluateKeyLogForAll(entries, { ...logPolicy, signingAddress: seenKey }, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
   // SPEC §7.5, when asked for: the action log of each attested report must be one the same verifiers checked and logged.
-  const keyVerdict = cfg.requireLoggedRelease ? withReleaseRule(keyOnly, entries, { ...logPolicy, signingAddress: seenKey }, attestedLogsOf(deployment.models, seenKey, cfg.requireLoggedDeployment)) : keyOnly;
+  const keyVerdict = cfg.requireLoggedRelease ? withReleaseRule(keyOnly, entries, { ...logPolicy, signingAddress: seenKey }, deployment.models, cfg.requireLoggedDeployment) : keyOnly;
   const seenCompose = keyVerdict.deployment?.composeHash;
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });

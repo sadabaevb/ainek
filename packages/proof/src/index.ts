@@ -43,7 +43,7 @@ export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entr
 export { toModelAttestation, toGatewayAttestation } from './report.ts';
 export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
 export { stripHexPrefix, normalizeHex } from './hash.ts';
-export { ainekConfigFromEnv, explorerAccountUrl, explorerTxUrl } from './config.ts';
+export { ainekConfigFromEnv, envFlag, explorerAccountUrl, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { actionRunChecks, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
 export { actionStatusCheck, agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readAgentState, readModelCommits, readOwner, readPendingIds } from './agent-ledger.ts';
@@ -60,8 +60,8 @@ export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, toke
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
-export { actionsHash, attestedLogsOf, evaluateRelease, logMark, marksOf, releaseMark, withReleaseRule } from './release-marks.ts';
-export type { AttestedLog, ReleaseLogStatus, ReleaseLogVerdict, ReleaseMarks } from './release-marks.ts';
+export { logMark, marksOf, releaseMark, releaseStanding, withReleaseRule } from './release-marks.ts';
+export type { ReleaseLogVerdict } from './release-marks.ts';
 export { checked } from './checked.ts';
 export type { Checked } from './checked.ts';
 export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf } from './release.ts';

@@ -195,20 +195,28 @@ async function provenanceOf(image: ImageRef, githubToken: string | undefined, sd
 
 /**
  * `load` made to run once per key: a second caller gets the first one's promise, its failure included. With `kept`, the
- * caller's own store: an answer goes into it only once it is there and `final` says it cannot change, so a failure or an
- * answer GitHub did not give is asked for again by the next inspection.
+ * caller's own store, a read is shared with every other inspection from the moment it starts, and it stays in the store
+ * only as an answer `final` says cannot change (any answer, when `final` is left out). A failure, or an answer GitHub did
+ * not give, is asked for again by the next inspection.
  */
-function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>, kept?: { reads: ReleaseReads; final: (value: T) => boolean }): (...args: A) => Promise<T> {
+function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>, kept?: { reads: ReleaseReads; final?: (value: T) => boolean }): (...args: A) => Promise<T> {
   const seen = new Map<string, Promise<T>>();
   return (...args) => {
     const key = keyOf(...args);
-    let loading = seen.get(key) ?? (kept?.reads.get(key) as Promise<T> | undefined);
-    if (!loading) {
-      loading = load(...args);
-      const started = loading;
-      if (kept) void started.then((value) => kept.final(value) && kept.reads.set(key, started), () => undefined);
-    }
+    const known = seen.get(key);
+    if (known) return known;
+    const shared = kept?.reads.get(key) as Promise<T> | undefined;
+    const loading = shared ?? load(...args);
     seen.set(key, loading);
+    if (kept && !shared) {
+      kept.reads.set(key, loading);
+      const forget = (): void => {
+        if (kept.reads.get(key) === loading) kept.reads.delete(key);
+      };
+      void loading.then((value) => {
+        if (kept.final && !kept.final(value)) forget();
+      }, forget);
+    }
     return loading;
   };
 }
@@ -232,7 +240,7 @@ function reader(model: string, githubToken: string | undefined, fetchImpl: typeo
           return { sha256, services: [], unreadable: whyOf(err) };
         }
       },
-      reads && { reads, final: () => true }, // a commit's file does not change
+      reads && { reads }, // a commit's file does not change
     ),
     /** The commit a tag name or a commit id of the compose repository resolves to. */
     commit: once(
@@ -468,15 +476,16 @@ export function verdictOf(inspection: ReleaseInspection): ReleaseVerdict {
  * as it always has.
  */
 export async function releaseMarksFor(params: InspectReleaseParams): Promise<{ marks: string[]; why?: string }> {
-  const inspection = await inspectRelease({ ...params, previous: false });
-  if (!inspection) return { marks: [], why: 'the report carries no action log' };
+  const log = params.deployment.composeManager;
+  const inspection = log && (await inspectRelease({ ...params, previous: false }));
+  if (!log || !inspection) return { marks: [], why: 'the report carries no action log' };
   const verdict = verdictOf(inspection);
   if (verdict.status !== 'ok') return { marks: [], why: verdict.failures[0] ?? inspection.unresolved ?? `not checked: ${verdict.unchecked.join('; ')}` };
   const { instance } = inspection.log;
   if (instance.status !== 'ok') return { marks: [], why: instance.why }; // for the compiler: an `ok` verdict has checked it
   // A model usually has one service; two that share a release are one mark.
   const releases = new Set(inspection.services.flatMap((s) => (s.file.status === 'ok' ? [releaseMark(s.release.file, s.file.value.sha256)] : [])));
-  return { marks: [logMark(instance.value, params.deployment.composeManager?.actions ?? []), ...releases] };
+  return { marks: [logMark(instance.value, log.actions), ...releases] };
 }
 
 /**

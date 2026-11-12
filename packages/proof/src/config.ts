@@ -52,11 +52,17 @@ export type EnvLike = Record<string, string | undefined>;
 const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
 // The deployment check for the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables).
-// On since Nov 11 (DEV-NOTES 2026-11-11); `'0'` here and in `.env.example` turns it back off.
+// On since Nov 11 (DEV-NOTES 2026-11-11); `false` here and `0` in `.env.example` turn it back off.
 // With `AINEK_LOG_SOURCE=sample` the default is off: that log is one recorded entry with one compose, and a live replica need not be that one.
-const REQUIRE_DEPLOYMENT_DEFAULT = '1';
+const REQUIRE_DEPLOYMENT_DEFAULT = true;
 /** Off until the verifiers that write to the log write release marks (DEV-NOTES 2026-11-12). */
-const REQUIRE_RELEASE_DEFAULT = '0';
+const REQUIRE_RELEASE_DEFAULT = false;
+
+/** A switch from the environment: blank means `fallback`, `0` or `false` is off, and anything else is on, so a typo cannot turn a check off. */
+export function envFlag(value: string | undefined, fallback: boolean): boolean {
+  const said = value?.trim().toLowerCase();
+  return said ? said !== '0' && said !== 'false' : fallback;
+}
 
 function list(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback).split(',').map((s) => s.trim()).filter(Boolean);
@@ -78,8 +84,8 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     logSource,
     trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
-    requireLoggedDeployment: !['0', 'false'].includes((env['AINEK_REQUIRE_DEPLOYMENT']?.trim() || (logSource === 'sample' ? '0' : REQUIRE_DEPLOYMENT_DEFAULT)).toLowerCase()),
-    requireLoggedRelease: !['0', 'false'].includes((env['AINEK_REQUIRE_RELEASE']?.trim() || REQUIRE_RELEASE_DEFAULT).toLowerCase()),
+    requireLoggedDeployment: envFlag(env['AINEK_REQUIRE_DEPLOYMENT'], logSource !== 'sample' && REQUIRE_DEPLOYMENT_DEFAULT),
+    requireLoggedRelease: envFlag(env['AINEK_REQUIRE_RELEASE'], REQUIRE_RELEASE_DEFAULT),
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.

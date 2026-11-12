@@ -10,16 +10,18 @@
 //     the signed builds. So the mark says "a verifier checked what this log deployed", for the log exactly as it stood.
 //
 //   release:<16 hex of sha256(file path)>:<sha256 of the file>
-//     Which release that was: the compose file that defines the model's service, as its latest `compose_up` read it. It
-//     names the release in the public log, with the time it first appeared there. The client's rule reads the log mark.
+//     Which release that was: the compose file that defines the model's service, as the latest `compose_up` of that
+//     service read it. It names the release in the public log, with the time it first appeared there. The client's rule
+//     reads the log mark only.
 //
 // The client's rule (`evaluateRelease`): the action log attested now must be exactly one that enough trusted verifiers
 // marked. An enclave deploys by appending to that log, so anything it did after a verifier looked is refused until a
 // verifier looks again. The rule does not interpret the actions, so it does not depend on knowing which of them change
 // what runs. And the log only grows: one that does not begin with what a verifier saw from the same instance was
 // rewritten. No network is needed: the action log comes with the attestation the client already verified.
-import type { Checked } from './checked.ts';
-import { sha256Hex, shortHex } from './hash.ts';
+import { canonicalJson } from './canonical.ts';
+import { checked, type Checked } from './checked.ts';
+import { normalizeHex, sha256Hex, shortHex } from './hash.ts';
 import { composeHashOf } from './key-entry.ts';
 import { evaluateKeyLog, type KeyLogQuery, type KeyLogVerdict, type ReleaseRefusal } from './key-log.ts';
 import { sameInstance, type ManagerAction } from './release.ts';
@@ -28,24 +30,13 @@ import type { KeyEntry } from './schema.ts';
 const RELEASE = /^release:([0-9a-f]{16}):([0-9a-f]{64})$/;
 const LOG = /^log:([0-9a-f]{16}):(\d{1,7}):([0-9a-f]{64})$/;
 
-const utf8 = new TextEncoder();
-/** Order of two strings by their UTF-8 bytes, as the SDK orders the fields of an action. */
-function byBytes(a: string, b: string): number {
-  const x = utf8.encode(a);
-  const y = utf8.encode(b);
-  for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return (x[i] ?? 0) - (y[i] ?? 0);
-  return x.length - y.length;
-}
-
 /**
  * sha256 of an action log in the form the enclave quotes it and the SDK checks: a JSON array of objects, the fields of
- * each sorted by their UTF-8 bytes, no spaces. For the whole log this is the `actions_hash` of the report.
+ * each sorted by their UTF-8 bytes, no spaces. For what the SDK lets an action hold, strings and arrays of strings, that
+ * is this package's canonical JSON. For the whole log this is the `actions_hash` of the report.
  */
 export function actionsHash(actions: readonly ManagerAction[]): string {
-  const json = `[${actions
-    .map((action) => `{${Object.entries(action).sort(([a], [b]) => byBytes(a, b)).map(([key, value]) => `${JSON.stringify(key)}:${JSON.stringify(value)}`).join(',')}}`)
-    .join(',')}]`;
-  return sha256Hex(json);
+  return sha256Hex(canonicalJson(actions));
 }
 
 /** The short name a mark gives a compose file: paths can be longer than a mark may be. */
@@ -53,7 +44,7 @@ const fileIdOf = (file: string): string => sha256Hex(file).slice(0, 16);
 /** The short name a mark gives a CVM instance: the start of its dstack instance id. */
 const instanceIdOf = (instance: string): string => instance.toLowerCase().slice(0, 16);
 
-/** The mark for one compose file as the action log last deployed it. */
+/** The mark for a release: a compose file in the state a `compose_up` read it. */
 export function releaseMark(file: string, fileSha256: string): string {
   return `release:${fileIdOf(file)}:${fileSha256.toLowerCase()}`;
 }
@@ -64,18 +55,21 @@ export function logMark(instance: string, actions: readonly ManagerAction[]): st
 }
 
 export interface ReleaseMarks {
+  /** Everything that is not a mark: the launcher's image digests. */
+  digests: string[];
   releases: { fileId: string; fileSha256: string }[];
   logs: { instance: string; length: number; hash: string }[];
 }
 
-/** The marks among the `image_digests` of an entry. Anything else there (the launcher's image digests) is passed over. */
+/** The `image_digests` of an entry, sorted into the marks a verifier added and the digests it has always carried. */
 export function marksOf(imageDigests: readonly string[]): ReleaseMarks {
-  const marks: ReleaseMarks = { releases: [], logs: [] };
+  const marks: ReleaseMarks = { digests: [], releases: [], logs: [] };
   for (const value of imageDigests) {
     const release = RELEASE.exec(value);
-    if (release?.[1] && release[2]) marks.releases.push({ fileId: release[1], fileSha256: release[2] });
     const log = LOG.exec(value);
-    if (log?.[1] && log[2] && log[3]) marks.logs.push({ instance: log[1], length: Number(log[2]), hash: log[3] });
+    if (release?.[1] && release[2]) marks.releases.push({ fileId: release[1], fileSha256: release[2] });
+    else if (log?.[1] && log[2] && log[3]) marks.logs.push({ instance: log[1], length: Number(log[2]), hash: log[3] });
+    else marks.digests.push(value);
   }
   return marks;
 }
@@ -97,16 +91,16 @@ export interface ReleaseLogVerdict {
 
 /**
  * Checks the action log a client was attested against the marks of key-log entries. `entries` are the ones the key check
- * accepted: from trusted verifiers, fresh, for this key and this launcher. `instance` is the dstack instance id both the
- * key's quote and the log's quote name; without one the log cannot be matched to a mark, and nothing vouches for it.
+ * accepted: from trusted verifiers, fresh, for this key and this launcher. `instance` is the dstack instance id that both
+ * the key's quote and the log's quote name; a log that cannot be tied to that instance matches no mark.
  */
-export function evaluateRelease(entries: readonly KeyEntry[], attested: { actions: readonly ManagerAction[]; instance?: string | undefined }, quorum = 1): ReleaseLogVerdict {
+export function evaluateRelease(entries: readonly KeyEntry[], attested: { actions: readonly ManagerAction[]; instance: Checked<string> }, quorum = 1): ReleaseLogVerdict {
   const { actions } = attested;
   const refused = (status: ReleaseRefusal, detail: string, confirmedBy: string[] = []): ReleaseLogVerdict => ({ status, confirmedBy, detail });
   const marks = entries.flatMap((entry) => marksOf(entry.image_digests).logs.map((seen) => ({ entry, seen })));
   if (marks.length === 0) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher records a check of the enclave's action log`);
-  if (attested.instance === undefined) return refused('unknown-release', "the enclave's event log names no instance id, so no logged action log can be matched to it");
-  const instance = instanceIdOf(attested.instance);
+  if (attested.instance.status !== 'ok') return refused('unknown-release', `the action log cannot be tied to the enclave that holds the key: ${attested.instance.why}`);
+  const instance = instanceIdOf(attested.instance.value);
 
   const prefixes = new Map<number, string>(); // the hash of the first n actions, computed once per n
   const hashOfFirst = (n: number): string => {
@@ -133,45 +127,39 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
   return refused('unknown-release', `the enclave's action log has ${since} action${since === 1 ? '' : 's'} since entry #${latest.entry.index} by ${latest.entry.verifier} saw it (the latest: ${last?.action ?? '?'} at ${last?.timestamp ?? '?'}); no trusted verifier has checked the log as it stands`);
 }
 
-/** One attested report behind a key: its launcher, its action log and the instance that quoted both. */
-export interface AttestedLog {
-  /** Undefined when the client does not ask for the launcher to be logged: then every entry for the key may vouch. */
-  composeHash?: string | undefined;
-  actions: readonly ManagerAction[];
-  /** The instance id the key's quote and the log's quote both name; failed when they name two, skipped when one names none. */
-  instance: Checked<string>;
+/** A verified model report as the release rule reads it. Structural, so this package needs no SDK import. */
+export interface AttestedReport {
+  signer: { signingAddress: string };
+  deployment: { appCompose: string; composeManager?: { actions: readonly ManagerAction[] } | undefined };
+  report: { eventLog?: unknown; composeManagerAttestation?: { eventLog?: unknown } | undefined };
 }
 
-/** The verified model reports that carry `signingAddress`, as the release rule reads them. Structural, so no SDK import. */
-export function attestedLogsOf(
-  reports: readonly {
-    signer: { signingAddress: string };
-    deployment: { appCompose: string; composeManager?: { actions: readonly ManagerAction[] } | undefined };
-    report: { eventLog?: unknown; composeManagerAttestation?: { eventLog?: unknown } | undefined };
-  }[],
-  signingAddress: string,
-  withLauncher: boolean,
-): AttestedLog[] {
-  return reports
-    .filter((r) => r.signer.signingAddress.toLowerCase() === signingAddress.toLowerCase())
-    .map((r) => ({ composeHash: withLauncher ? composeHashOf(r.deployment) : undefined, actions: r.deployment.composeManager?.actions ?? [], instance: sameInstance(r.report.eventLog, r.report.composeManagerAttestation?.eventLog) }));
+/**
+ * What the release rule says about one verified report: the entries that vouch for its key, and for its launcher when
+ * `withLauncher` (the client asks for the launcher to be logged), against the action log the report attests.
+ */
+export function releaseStanding(entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, { deployment, report }: AttestedReport, withLauncher: boolean): ReleaseLogVerdict {
+  const vouching = evaluateKeyLog(entries, { ...query, composeHash: withLauncher ? composeHashOf(deployment) : undefined }).matching;
+  const log = deployment.composeManager;
+  // Both quotes are verified by now. When they name two instances the log is another replica's record, not this enclave's.
+  const instance = log ? sameInstance(report.eventLog, report.composeManagerAttestation?.eventLog) : checked.skipped('the attested report carries no action log');
+  return evaluateRelease(vouching, { actions: log?.actions ?? [], instance }, query.quorum);
 }
 
 /**
  * The release rule on top of a key verdict that passed: for every attested report behind the key, the entries that vouch
- * for its key and launcher must also carry its action log exactly as it stands. A key whose enclave did something no
- * verifier has looked at is refused like a key nobody logged. A verdict that did not pass is returned as it is.
+ * for it must also carry its action log exactly as it stands. A key whose enclave did something no verifier has looked at
+ * is refused like a key nobody logged. A verdict that did not pass is returned as it is.
  */
-export function withReleaseRule(verdict: KeyLogVerdict, entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, reports: readonly AttestedLog[]): KeyLogVerdict {
+export function withReleaseRule(verdict: KeyLogVerdict, entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, reports: readonly AttestedReport[], withLauncher: boolean): KeyLogVerdict {
   if (verdict.status !== 'ok') return verdict;
   const refused = (reason: ReleaseRefusal, detail: string, confirmedBy: string[] = []): KeyLogVerdict => ({ ...verdict, status: 'not-logged', reason, confirmedBy, detail: `${detail}: not sent (fail-closed)` });
-  if (reports.length === 0) return refused('unlogged-release', 'no attested report behind this key carries an action log');
-  for (const report of reports) {
-    // Both quotes verified and they name two instances: the log is another replica's record, not this enclave's.
-    if (report.instance.status === 'fail') return refused('unknown-release', report.instance.why);
-    const vouching = evaluateKeyLog(entries, { ...query, composeHash: report.composeHash }).matching;
-    const release = evaluateRelease(vouching, { actions: report.actions, instance: report.instance.status === 'ok' ? report.instance.value : undefined }, verdict.quorum);
-    if (release.status !== 'ok') return refused(release.status, release.detail, release.confirmedBy);
+  const key = normalizeHex(query.signingAddress);
+  const behindKey = reports.filter((r) => normalizeHex(r.signer.signingAddress) === key);
+  if (behindKey.length === 0) return refused('unlogged-release', 'no attested report carries this key, so there is no action log to check');
+  for (const report of behindKey) {
+    const standing = releaseStanding(entries, query, report, withLauncher);
+    if (standing.status !== 'ok') return refused(standing.status, standing.detail, standing.confirmedBy);
   }
   return verdict;
 }

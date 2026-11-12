@@ -1,7 +1,7 @@
 // Build the KeyEntryInput (SPEC §4.1) a verifier logs after `verifyModelAttestation` succeeded. One implementation
 // for every verifier instance, so field conventions (digest prefix, hex form, hashes) cannot drift. Conventions
 // are listed in SPEC §4.1 under "Соглашения верификатора".
-import { normalizeHex, sha256Hex } from './hash.ts';
+import { normalizeHex, sha256Hex, utf8Bytes } from './hash.ts';
 import { KeyEntryInput, type SigningAlgo } from './schema.ts';
 
 /** Structural subset of the SDK's `VerifiedModelAttestation`; no SDK import so this package stays light. */
@@ -88,7 +88,7 @@ export function buildKeyEntryInput(p: BuildKeyEntryInputParams): KeyEntryInput {
   if (imageDigests.length === 0) throw new Error(`compose file of ${p.model} pins no image by digest: refusing to log an entry without image_digests`);
   // Marks come after the digests and never at their cost: the contract rejects a whole entry over one value too many.
   const marked = [...imageDigests, ...(p.marks ?? [])];
-  const fits = marked.length <= MAX_IMAGE_DIGESTS && marked.every((value) => new TextEncoder().encode(value).length <= MAX_FIELD_BYTES);
+  const fits = marked.length <= MAX_IMAGE_DIGESTS && marked.every((value) => utf8Bytes(value).length <= MAX_FIELD_BYTES);
   const observedAt = p.observedAtMs ?? Date.now();
   if (!Number.isSafeInteger(observedAt) || observedAt < 0) throw new Error(`observedAtMs must be a non-negative integer of unix milliseconds, got ${String(p.observedAtMs)}`);
   return KeyEntryInput.parse({
