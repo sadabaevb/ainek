@@ -561,8 +561,8 @@ Tests:
 - Libraries: `@nearai/inference-sdk` 0.3.0 (attestation and signature verification, E2EE), `@hot-labs/near-connect` +
   `near-connect-hooks` (wallet), `near-api-js` 7 (RPC error types), `zod` (schemas), `tweetnacl` (ed25519), `ethers`
   (sha256, EIP-191 recovery for ecdsa signatures), `@phala/dcap-qvl` (checks the TDX quote of a policy run; with `jose`, offline replay of Intel and NVIDIA
-  evidence), Next.js 16 / React 19, the Inter font self-hosted under `apps/web/public/fonts` (SIL OFL 1.1, licence
-  alongside); Rust: `near-sdk` 5, `near-contract-standards` 5 (the demo token), `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
+  evidence), Next.js 16 / React 19, the IBM Plex fonts (Sans, Serif, Mono) self-hosted under `apps/web/public/fonts`, copied from
+  `@fontsource/ibm-plex-*` 5.3.0 (SIL OFL 1.1, licences alongside); Rust: `near-sdk` 5, `near-contract-standards` 5 (the demo token), `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
 - Copied pattern: `contracts/demo-token/src/lib.rs` wires up `near-contract-standards` the way the official
   `near-examples/FT` example does (the token logic itself is that library).
 - Reference material followed (no other code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
