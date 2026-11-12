@@ -10,10 +10,10 @@
 import { parseArgs } from 'node:util';
 import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, shortHex as short } from '@ainek/proof';
 import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
-import { inspectRelease, leadTimes } from '@ainek/tier1-node/release';
+import { failedChecks, inspectRelease, leadTimes } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
 import { printLeadTimes, printRelease } from './release-report.ts';
-import { FAIL, NA, OK, exitFlushed, head, line, seconds } from './term.ts';
+import { FAIL, NA, OK, exitFlushed, head, line, out, seconds } from './term.ts';
 
 const flags = (() => {
   try {
@@ -68,18 +68,20 @@ if (outcome.kind === 'failed') {
     // The code behind the key. Informational for the send decision, which rests on the key and the launcher's compose hash;
     // a check here that fails still fails this command.
     const inspection = await inspectRelease({ deployment: m.deployment, report: m.report, model, githubToken });
-    const code = printRelease(inspection, { model, logEntryIndex: logEntry.index });
-    codeFailed = code.failed;
+    const summary = printRelease(inspection, { model, logEntryIndex: logEntry.index });
+    const failures = inspection ? failedChecks(inspection) : [];
+    codeFailed = failures.length > 0;
     const releaseFile = inspection?.file;
-    if (flags.history && inspection && releaseFile && m.deployment.composeManager) printLeadTimes(releaseFile, await leadTimes(m.deployment.composeManager.actions, releaseFile, { githubToken }));
+    if (flags.history && releaseFile && m.deployment.composeManager) printLeadTimes(releaseFile, await leadTimes(m.deployment.composeManager.actions, releaseFile, { githubToken }));
+    // The card repeats names read from the log and from GitHub, so each of its lines goes through `out`.
     console.log('\n┌─ Ainek, before sending ─ live ──────────────────────────────────────');
-    console.log(`│ ${OK} Model: ${model}, attested deployment (launcher compose ${short(compose)})`);
-    console.log(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
-    console.log(`│ ${OK} Key ${short(m.signer.signingAddress)} is in the public log: entry #${logEntry.index} by ${outcome.verdict.confirmedBy.join(', ')}${normalizeHex(logEntry.compose_hash) === normalizeHex(compose) ? ", with this launcher's compose hash" : '; this entry has another compose, the attested one is not in the log window'}`);
-    if (code.summary) console.log(`│ ${codeFailed ? FAIL : OK} Code: ${code.summary} (step 5)`);
-    else console.log(`│ ${NA} Code: the release behind the key was not resolved (step 5)`);
-    console.log(`│ ${NA} Not checked here: an answer. No message was written, so nothing was encrypted, sent or signed (pnpm demo:live)`);
-    console.log(codeFailed ? `└─ Result: WOULD SEND by the client's rule, but a check of the code behind the key failed (step 5). Nothing was sent.` : `└─ Result: WOULD SEND. Hardware and log checked in ${seconds(outcome.totalMs)}; nothing was sent.`);
+    out(`│ ${OK} Model: ${model}, attested deployment (launcher compose ${short(compose)})`);
+    out(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
+    out(`│ ${OK} Key ${short(m.signer.signingAddress)} is in the public log: entry #${logEntry.index} by ${outcome.verdict.confirmedBy.join(', ')}${normalizeHex(logEntry.compose_hash) === compose ? ", with this launcher's compose hash" : '; this entry has another compose, the attested one is not in the log window'}`);
+    if (codeFailed) out(`│ ${FAIL} Code: ${failures.length === 1 ? '' : `${failures.length} checks failed, the first: `}${failures[0]} (step 5)`);
+    else out(summary ? `│ ${OK} Code: ${summary} (step 5)` : `│ ${NA} Code: the release behind the key was not resolved (step 5)`);
+    out(`│ ${NA} Not checked here: an answer. No message was written, so nothing was encrypted, sent or signed (pnpm demo:live)`);
+    out(codeFailed ? `└─ Result: WOULD SEND by the client's rule, but a check of the code behind the key failed (step 5). Nothing was sent.` : `└─ Result: WOULD SEND. Hardware and log checked in ${seconds(outcome.totalMs)}; nothing was sent.`);
   }
 }
 // Zero only for WOULD SEND with the swapped key refused and no failed code check: a refusal of the live key means the log lacks it.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, spanText, timeOf, type ManagerAction } from './release.ts';
+import { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf, type ManagerAction } from './release.ts';
 
 const FILE = 'prod/models.yaml';
 const up = (timestamp: string, commit: string, services?: string[], extra: Partial<ManagerAction> = {}): ManagerAction => ({ action: 'compose_up', timestamp, commit, file: FILE, tag: `v-${commit}`, file_sha256: commit.repeat(8).slice(0, 64).toUpperCase(), ...(services ? { services } : {}), ...extra });
@@ -20,10 +20,10 @@ const LOG: ManagerAction[] = [
 
 test('releasesFor: one release per run of a commit that covered the service; other services and files do not split or join it', () => {
   const releases = releasesFor(LOG, { file: FILE, service: 'proxy-a' });
-  assert.deepEqual(releases.map((r) => [r.commit, r.ups, r.deployedAt.slice(0, 10)]), [
-    ['aaaaaaaa', 3, '2026-10-21'],
-    ['cccccccc', 1, '2026-11-01'],
-    ['aaaaaaaa', 1, '2026-11-03'],
+  assert.deepEqual(releases.map((r) => [r.commit, r.deployedAt.slice(0, 10)]), [
+    ['aaaaaaaa', '2026-10-21'], // three compose_up actions of this commit in a row: one release, dated by the first
+    ['cccccccc', '2026-11-01'],
+    ['aaaaaaaa', '2026-11-03'],
   ]);
   assert.equal(releases[0]?.tag, 'v-aaaaaaaa');
   assert.equal(releases[0]?.fileSha256, 'aaaaaaaa'.repeat(8), 'the recorded hash, lower-cased');
@@ -66,7 +66,7 @@ test('isCommitId, isRepoPath, isPlainTag: what the log names is checked before i
 
 test('firstDeployments: every commit of the file once, at its first compose_up, whatever services it named', () => {
   const firsts = firstDeployments(LOG, FILE);
-  assert.deepEqual(firsts.map((r) => [r.commit, r.deployedAt.slice(0, 10), r.ups]), [['aaaaaaaa', '2026-10-21', 4], ['bbbbbbbb', '2026-10-24', 1], ['cccccccc', '2026-11-01', 1]]);
+  assert.deepEqual(firsts.map((r) => [r.commit, r.deployedAt.slice(0, 10)]), [['aaaaaaaa', '2026-10-21'], ['bbbbbbbb', '2026-10-24'], ['cccccccc', '2026-11-01']]);
   assert.deepEqual(firstDeployments(LOG, 'prod/none.yaml'), []);
 });
 
@@ -84,4 +84,12 @@ test('firstRuntimeEvent: the first RTMR3 runtime event of a name, from an array 
   assert.equal(firstRuntimeEvent(log, 'system-ready'), '');
   assert.equal(firstRuntimeEvent(log, 'os-image-hash'), undefined);
   for (const none of [undefined, null, 'not json', '{}', [null, 7, 'x']]) assert.equal(firstRuntimeEvent(none, 'instance-id'), undefined);
+});
+
+test('sameInstance: the log must be quoted by the CVM instance that quoted the signing key, not by another replica', () => {
+  const events = (instance: string) => [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: instance }];
+  assert.deepEqual(sameInstance(events('a8a2'), JSON.stringify(events('A8A2'))), { status: 'ok', value: 'a8a2' });
+  assert.deepEqual(sameInstance(events('a8a2'), events('b7b1')), { status: 'fail', why: 'the log was quoted by instance b7b1, the signing key by instance a8a2' });
+  assert.equal(sameInstance(events('a8a2'), undefined).status, 'skipped');
+  assert.equal(sameInstance([], events('a8a2')).status, 'skipped');
 });

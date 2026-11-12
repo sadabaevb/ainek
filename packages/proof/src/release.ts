@@ -8,6 +8,7 @@
 // code that decrypts prompts changes: the action log is where that change shows.
 //
 // These helpers read that log. They are pure: fetching the compose file and its build provenance is the caller's job.
+import { checked, type Checked } from './checked.ts';
 
 /** One entry of the action log, with the wire names Compose Manager signs. Unknown fields are kept. */
 export interface ManagerAction {
@@ -22,23 +23,33 @@ export interface ManagerAction {
   readonly [field: string]: string | readonly string[] | undefined;
 }
 
-/** One deployment of a service: every consecutive `compose_up` of one commit of one file that covered the service. */
+/** One deployment: the `compose_up` that first ran a commit of a compose file. */
 export interface Release {
   /** The tag Compose Manager checked out, when the action carries one. */
   tag?: string;
-  /** Commit of the compose repository. */
+  /** Commit of the compose repository, lower-cased. */
   commit: string;
   /** Path of the compose file in that repository. */
   file: string;
-  /** sha256 of the file as Compose Manager read it; older actions do not carry it. */
+  /** sha256 of the file as Compose Manager read it, lower-cased; older actions do not carry it. */
   fileSha256?: string;
-  /** The first `compose_up` of this run, as Compose Manager's clock wrote it (ISO 8601). */
+  /** When that `compose_up` ran, as Compose Manager's clock wrote it (ISO 8601). */
   deployedAt: string;
-  /** How many `compose_up` actions of this run covered the service. */
-  ups: number;
 }
 
 const str = (v: string | readonly string[] | undefined): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined);
+
+/** Every `compose_up` that names a commit and a file, as the release it started and the services it named. */
+function* composeUps(actions: readonly ManagerAction[]): Generator<{ release: Release; services: readonly string[] }> {
+  for (const a of actions) {
+    const commit = str(a.commit);
+    const file = str(a.file);
+    if (a.action !== 'compose_up' || !commit || !file) continue;
+    const tag = str(a.tag);
+    const fileSha256 = str(a.file_sha256);
+    yield { release: { ...(tag ? { tag } : {}), commit: commit.toLowerCase(), file, ...(fileSha256 ? { fileSha256: fileSha256.toLowerCase() } : {}), deployedAt: a.timestamp }, services: a.services ?? [] };
+  }
+}
 
 /**
  * The releases that deployed `service` from `file`, oldest first. A `compose_up` covers the service when it names it, or names
@@ -47,54 +58,29 @@ const str = (v: string | readonly string[] | undefined): string | undefined => (
  */
 export function releasesFor(actions: readonly ManagerAction[], target: { file: string; service: string }): Release[] {
   const releases: Release[] = [];
-  for (const a of actions) {
-    if (a.action !== 'compose_up' || a.file !== target.file) continue;
-    const commit = str(a.commit);
-    if (!commit) continue;
-    const services = a.services ?? [];
-    if (services.length > 0 && !services.includes(target.service)) continue;
-    const last = releases.at(-1);
-    if (last && last.commit === commit) {
-      last.ups += 1;
-      continue;
-    }
-    const tag = str(a.tag);
-    const fileSha256 = str(a.file_sha256);
-    releases.push({ ...(tag ? { tag } : {}), commit, file: target.file, ...(fileSha256 ? { fileSha256: fileSha256.toLowerCase() } : {}), deployedAt: a.timestamp, ups: 1 });
+  for (const { release, services } of composeUps(actions)) {
+    if (release.file !== target.file || (services.length > 0 && !services.includes(target.service))) continue;
+    if (releases.at(-1)?.commit !== release.commit) releases.push(release);
   }
   return releases;
 }
 
 /**
- * Every commit of `file` the log deployed, oldest first, each with its first `compose_up` whatever services that one named:
+ * Every commit of `file` the log deployed, oldest first, each at its first `compose_up` whatever services that one named:
  * the moment that commit first ran in the enclave. For "how long was this commit public before it served".
  */
 export function firstDeployments(actions: readonly ManagerAction[], file: string): Release[] {
   const first = new Map<string, Release>();
-  for (const a of actions) {
-    const commit = str(a.commit);
-    if (a.action !== 'compose_up' || a.file !== file || !commit) continue;
-    const seen = first.get(commit);
-    if (seen) {
-      seen.ups += 1;
-      continue;
-    }
-    const tag = str(a.tag);
-    const fileSha256 = str(a.file_sha256);
-    first.set(commit, { ...(tag ? { tag } : {}), commit, file, ...(fileSha256 ? { fileSha256: fileSha256.toLowerCase() } : {}), deployedAt: a.timestamp, ups: 1 });
-  }
+  for (const { release } of composeUps(actions)) if (release.file === file && !first.has(release.commit)) first.set(release.commit, release);
   return [...first.values()];
 }
 
-/** Compose files the log deployed from, the most recently used first, each with the commit of its latest `compose_up`. */
-export function composeFilesOf(actions: readonly ManagerAction[]): { file: string; commit: string; fileSha256?: string }[] {
-  const latest = new Map<string, { file: string; commit: string; fileSha256?: string }>();
-  for (const a of actions) {
-    const commit = str(a.commit);
-    if (a.action !== 'compose_up' || !a.file || !commit) continue;
-    const fileSha256 = str(a.file_sha256);
-    latest.delete(a.file); // re-insert, so the map keeps the order of last use
-    latest.set(a.file, { file: a.file, commit, ...(fileSha256 ? { fileSha256: fileSha256.toLowerCase() } : {}) });
+/** The latest `compose_up` of every compose file the log deployed from, the most recently used file first. */
+export function composeFilesOf(actions: readonly ManagerAction[]): Release[] {
+  const latest = new Map<string, Release>();
+  for (const { release } of composeUps(actions)) {
+    latest.delete(release.file); // re-insert, so the map keeps the order of last use
+    latest.set(release.file, release);
   }
   return [...latest.values()].reverse();
 }
@@ -131,6 +117,18 @@ export function firstRuntimeEvent(eventLog: unknown, name: string): string | und
     if (e && e.imr === 3 && e.event_type === RUNTIME_EVENT_TYPE && e.event === name) return typeof e.event_payload === 'string' ? e.event_payload.toLowerCase() : undefined;
   }
   return undefined;
+}
+
+/**
+ * Whether the quote behind an action log and the quote behind the signing key name one dstack instance id, given the event
+ * log of each. The SDK checks that both booted from the same app compose, which every replica of a model does; this ties the
+ * log to the replica that attested the key. It rules out a mix-up between replicas, not a host that runs two CVMs under one id.
+ */
+export function sameInstance(keyEventLog: unknown, logEventLog: unknown): Checked<string> {
+  const key = firstRuntimeEvent(keyEventLog, 'instance-id');
+  const log = firstRuntimeEvent(logEventLog, 'instance-id');
+  if (!key || !log) return checked.skipped('an event log names no instance id');
+  return key === log ? checked.ok(key) : checked.failed(`the log was quoted by instance ${log}, the signing key by instance ${key}`);
 }
 
 // The log is authenticated and still input from outside. What it names goes into GitHub URLs, so a caller checks the shape

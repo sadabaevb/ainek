@@ -12,8 +12,8 @@
 // measurement: the quote behind it says it came from inside this CVM, not from which container, and the serving containers
 // the log describes hold the same quote socket. So the log is as good as the code that has run in that CVM.
 import { fetchImageProvenance, verifyImageProvenance, type ImageProvenancePolicy, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
-import { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sha256Hex, timeOf, type ManagerAction, type Release } from '@ainek/proof';
-import { MAX_COMPOSE_BYTES, managerDefinition, modelServices, parseImage, type ComposeValue, type EngineService, type ImageRef, type ModelService } from '@ainek/proof/compose-file';
+import { checked, composeFilesOf, firstDeployments, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, sha256Hex, timeOf, type Checked, type ManagerAction, type Release } from '@ainek/proof';
+import { MAX_COMPOSE_BYTES, launcherSettings, modelServices, parseImage, type EngineService, type ImageRef, type LauncherSettings, type MeasuredSetting, type ModelService } from '@ainek/proof/compose-file';
 import { describeSdkError as whyOf } from './errors.ts';
 
 /** Where NEAR AI keeps the compose files Compose Manager deploys (the SDK's default too). */
@@ -28,8 +28,8 @@ export const IMAGE_POLICIES: Readonly<Record<string, ImageProvenancePolicy>> = {
   'nearaidev/compose-manager': { repository: 'nearai/compose-manager', workflow: '.github/workflows/build.yml' },
 };
 
-/** A check that passed with a value, could not be made (network, rate limit, nothing to check), or failed. */
-export type Checked<T> = { status: 'ok'; value: T } | { status: 'skipped'; why: string } | { status: 'fail'; why: string };
+/** How many earlier releases are opened while looking for the previous build of a service's image. */
+const LOOK_BACK = 3;
 
 export interface Provenance {
   repository: string;
@@ -47,16 +47,11 @@ export interface SourceChange {
   files: number;
   url: string;
 }
-/** A value read from the measured launcher compose, and whether the operator can set the variable in it. */
-export interface MeasuredSetting extends ComposeValue {
-  /** True when the variable is among the app compose's `allowed_envs`: its value then comes from the operator, unmeasured. */
-  settable: boolean;
-}
 export interface ServiceRelease {
   service: string;
   /** Every release of this service the log holds, oldest first. */
   history: Release[];
-  /** The latest one: what the log says serves the model. */
+  /** The latest of them (`history.at(-1)`): what the log says serves the model. */
   release: Release;
   /** The public file at the release's commit hashes to what the enclave recorded. */
   file: Checked<{ sha256: string }>;
@@ -64,10 +59,11 @@ export interface ServiceRelease {
   tag: Checked<string>;
   /** The service's image: on NEAR AI the proxy that decrypts the prompt and signs the answer. */
   proxy?: ImageCheck;
+  /** The engines the service forwards to, as the file names them; empty when it names none this reads. */
   engines: EngineService[];
   /** When the release's commit was made, by GitHub's record (for a merged pull request, the time of the merge). */
   committedAt: Checked<string>;
-  /** The most recent earlier release that ran another build of the service's image, within the look-back. */
+  /** The most recent earlier release that ran another build of the service's image, among the last few. */
   previousBuild?: { release: Release; proxy: ImageCheck; change: Checked<SourceChange> };
 }
 export interface ReleaseInspection {
@@ -76,20 +72,17 @@ export interface ReleaseInspection {
     since: string;
     until: string;
     tcbStatus: string;
-    /**
-     * The quote behind the log and the quote behind the signing key name one dstack instance id. The SDK checks that both
-     * booted from the same app compose, which every replica of a model does; this ties the log to the replica that attested
-     * the key. It rules out a mix-up between replicas, not a host that runs two CVMs under one id.
-     */
+    /** The quote behind the log and the quote behind the signing key name one dstack instance id (`sameInstance`). */
     instance: Checked<string>;
   };
+  /** What the measured app compose says about Compose Manager, or why it was not read. */
+  launcher: Checked<LauncherSettings>;
   /**
-   * The image Compose Manager says it last started as. `boot` is the image the measured compose starts it as, and whether
-   * the two are the same: when they are, the manager's image is part of the compose hash and not only the log's own word.
+   * The image Compose Manager says it last started as. `boot` is the image the measured compose starts it as, when it
+   * names one, and whether the two are the same: when they are, the manager's image is part of the compose hash and not
+   * only the log's own word.
    */
-  manager?: ImageCheck & { startedAt: string; boot?: { image: ImageRef; variable?: string; settable: boolean; same: boolean } };
-  /** The minimum age Compose Manager is told to demand of a tag, as the measured compose writes it. */
-  minTagAge?: MeasuredSetting;
+  manager?: ImageCheck & { startedAt: string; boot?: MeasuredSetting & { image: ImageRef; same: boolean } };
   /** The compose file the model's service was found in. */
   file?: string;
   services: ServiceRelease[];
@@ -99,8 +92,8 @@ export interface ReleaseInspection {
 export interface LeadTime {
   release: Release;
   committedAt: Checked<string>;
-  /** Milliseconds from the commit to its first `compose_up`, when both are known. */
-  leadMs?: number;
+  /** Milliseconds from the commit to its first `compose_up`; undefined when a time is missing or does not parse. */
+  leadMs: number | undefined;
 }
 
 export interface InspectReleaseParams {
@@ -110,19 +103,14 @@ export interface InspectReleaseParams {
   model: string;
   /** Optional: raises GitHub's anonymous limit of 60 requests an hour. Sent to api.github.com only. */
   githubToken?: string | undefined;
-  /** How many earlier releases to open while looking for the previous build of the service's image. */
-  lookBack?: number;
   fetch?: typeof globalThis.fetch;
 }
 
 const GITHUB_API = 'https://api.github.com';
-const ok = <T>(value: T): Checked<T> => ({ status: 'ok', value });
-const skipped = (why: string): Checked<never> => ({ status: 'skipped', why });
-const failed = (why: string): Checked<never> => ({ status: 'fail', why });
 
 /**
  * The GitHub reads this needs. Public data; the token is optional. Commits, paths and tags come from the action log, so
- * each is checked for its shape before it reaches a URL: a path with `..` would read another repository under this one's name.
+ * each is checked for its shape here, where it reaches a URL: a path with `..` would read another repository under this one's name.
  */
 function github(token: string | undefined, fetchImpl: typeof globalThis.fetch) {
   const get = async (path: string, accept: string): Promise<Response> => {
@@ -149,11 +137,16 @@ function github(token: string | undefined, fetchImpl: typeof globalThis.fetch) {
       if (bytes.length > MAX_COMPOSE_BYTES) throw new Error(`${file} at ${commit} is larger than ${MAX_COMPOSE_BYTES} bytes`);
       return bytes;
     },
-    /** The commit a commit id or a tag name resolves to in a repository, and when it was committed. */
+    /**
+     * The commit a commit id or a tag name resolves to in a repository, and when it was committed. A commit id is read as a
+     * git object, about 1 KB; a tag name needs the commits endpoint to resolve it, whose answer carries the patches too.
+     */
     async commit(repository: string, ref: string): Promise<{ sha: string | undefined; date: string | undefined }> {
-      if (!isCommitId(ref) && !isPlainTag(ref)) throw new Error('the action log names a malformed commit or tag');
-      const body = (await (await get(`/repos/${repository}/commits/${ref}`, 'application/vnd.github+json')).json()) as { sha?: unknown; commit?: { committer?: { date?: unknown } } };
-      const date = body.commit?.committer?.date;
+      const byId = isCommitId(ref);
+      if (!byId && !isPlainTag(ref)) throw new Error('the action log names a malformed commit or tag');
+      const res = await get(`/repos/${repository}/${byId ? 'git/commits' : 'commits'}/${ref}`, 'application/vnd.github+json');
+      const body = (await res.json()) as { sha?: unknown; committer?: { date?: unknown }; commit?: { committer?: { date?: unknown } } };
+      const date = (byId ? body.committer : body.commit?.committer)?.date;
       return { sha: typeof body.sha === 'string' ? body.sha.toLowerCase() : undefined, date: typeof date === 'string' ? date : undefined };
     },
     /** How many commits and files lie between two commits of a repository. */
@@ -165,178 +158,213 @@ function github(token: string | undefined, fetchImpl: typeof globalThis.fetch) {
   };
 }
 
-/**
- * What the measured app compose says about Compose Manager: the image it is started as and the minimum tag age it is given.
- * This text is the one the quote's compose hash covers (the SDK checked that), so it is measured, unlike the action log.
- */
-function launcherOf(appCompose: string): { image?: MeasuredSetting; minTagAge?: MeasuredSetting } | undefined {
+/** Build provenance of one image, by the policy for its repository. Never rejects. */
+async function provenanceOf(image: ImageRef, githubToken: string | undefined): Promise<Checked<Provenance>> {
+  const policy = Object.hasOwn(IMAGE_POLICIES, image.repository) ? IMAGE_POLICIES[image.repository] : undefined;
+  if (!policy) return checked.skipped('no build policy for this image');
+  if (!image.digest) return checked.failed('the image is not pinned by a sha256 digest');
+  let bundles: readonly string[];
   try {
-    const app = JSON.parse(appCompose) as { docker_compose_file?: unknown; allowed_envs?: unknown };
-    if (typeof app.docker_compose_file !== 'string') return undefined;
-    const manager = managerDefinition(app.docker_compose_file);
-    if (!manager) return undefined;
-    const allowed = new Set(Array.isArray(app.allowed_envs) ? app.allowed_envs.filter((name): name is string => typeof name === 'string') : []);
-    const measured = (value: ComposeValue): MeasuredSetting => ({ ...value, settable: value.variable !== undefined && allowed.has(value.variable) });
-    return { ...(manager.image ? { image: measured(manager.image) } : {}), ...(manager.minTagAge ? { minTagAge: measured(manager.minTagAge) } : {}) };
-  } catch {
-    return undefined; // not an app compose this reads: the lines that depend on it are left out
+    bundles = await fetchImageProvenance({ repository: policy.repository, digest: image.digest, ...(githubToken ? { githubToken } : {}) });
+  } catch (err) {
+    return checked.skipped(`build proofs could not be fetched: ${whyOf(err)}`);
+  }
+  try {
+    const p = await verifyImageProvenance({ bundles, digest: image.digest, policy });
+    return checked.ok({ repository: p.repository, commit: p.commit, ref: p.ref, workflow: p.workflow });
+  } catch (err) {
+    return checked.failed(whyOf(err));
   }
 }
 
-/**
- * Follows the action log of a verified model deployment to the release that serves `model`. Returns undefined when the
- * report carried no action log. Never throws for something GitHub or Sigstore did: such a check comes back `skipped`.
- */
-export async function inspectRelease({ deployment, report, model, githubToken, lookBack = 3, fetch: fetchImpl = globalThis.fetch }: InspectReleaseParams): Promise<ReleaseInspection | undefined> {
-  const manager = deployment.composeManager;
-  if (!manager) return undefined;
-  const actions: readonly ManagerAction[] = manager.actions;
+/** `load` made to run once per key: a second caller gets the first one's promise, its failure included. */
+function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>): (...args: A) => Promise<T> {
+  const seen = new Map<string, Promise<T>>();
+  return (...args) => {
+    const key = keyOf(...args);
+    let loading = seen.get(key);
+    if (!loading) seen.set(key, (loading = load(...args)));
+    return loading;
+  };
+}
+
+/** The reads of one inspection, each made once: the services of a model often share a commit, a tag and an image. */
+function reader(model: string, githubToken: string | undefined, fetchImpl: typeof globalThis.fetch) {
   const gh = github(githubToken, fetchImpl);
-  const launcher = launcherOf(deployment.appCompose);
-  const keyInstance = firstRuntimeEvent(report?.eventLog, 'instance-id');
-  const logInstance = firstRuntimeEvent(report?.composeManagerAttestation?.eventLog, 'instance-id');
-  const instance: Checked<string> = !keyInstance || !logInstance ? skipped('an event log names no instance id') : keyInstance === logInstance ? ok(keyInstance) : failed(`the log was quoted by instance ${logInstance}, the signing key by instance ${keyInstance}`);
-  const inspection: ReleaseInspection = {
-    log: { actions: actions.length, since: actions[0]?.timestamp ?? '', until: actions.at(-1)?.timestamp ?? '', tcbStatus: manager.tcbStatus, instance },
-    ...(launcher?.minTagAge ? { minTagAge: launcher.minTagAge } : {}),
-    services: [],
-  };
-
-  /** Build provenance of one image, by the policy for its repository. */
-  const checkImage = async (image: ImageRef): Promise<ImageCheck> => {
-    const policy = Object.hasOwn(IMAGE_POLICIES, image.repository) ? IMAGE_POLICIES[image.repository] : undefined;
-    if (!policy) return { image, provenance: skipped('no build policy for this image') };
-    if (!image.digest) return { image, provenance: failed('the image is not pinned by a sha256 digest') };
-    let bundles: readonly string[];
-    try {
-      bundles = await fetchImageProvenance({ repository: policy.repository, digest: image.digest, ...(githubToken ? { githubToken } : {}) });
-    } catch (err) {
-      return { image, provenance: skipped(`build proofs could not be fetched: ${whyOf(err)}`) };
-    }
-    try {
-      const p = await verifyImageProvenance({ bundles, digest: image.digest, policy });
-      return { image, provenance: ok({ repository: p.repository, commit: p.commit, ref: p.ref, workflow: p.workflow }) };
-    } catch (err) {
-      return { image, provenance: failed(whyOf(err)) };
-    }
-  };
-
-  const started = managerStartOf(actions);
-  if (started) {
-    const check = await checkImage(parseImage(started.image));
-    const boot = launcher?.image;
-    const bootImage = boot ? parseImage(boot.fallback ?? boot.raw) : undefined;
-    inspection.manager = {
-      ...check,
-      startedAt: started.startedAt,
-      ...(boot && bootImage ? { boot: { image: bootImage, ...(boot.variable ? { variable: boot.variable } : {}), settable: boot.settable, same: bootImage.digest !== undefined && bootImage.digest === check.image.digest && bootImage.repository === check.image.repository } } : {}),
-    };
-  }
-
-  // The compose file at a commit, fetched once: its hash, and the model's services in it. A file the log deployed need not
-  // be a compose file (a token rotation job, say), so text that does not parse has no services and keeps the reason.
-  const files = new Map<string, Promise<{ sha256: string; services: ModelService[]; unreadable?: string }>>();
-  const fileAt = (file: string, commit: string) => {
-    const key = `${file}@${commit}`;
-    let loading = files.get(key);
-    if (!loading) {
-      loading = gh.raw(COMPOSE_REPOSITORY, file, commit).then((bytes) => {
+  return {
+    /**
+     * The compose file at a commit: its hash and the model's services in it. A file the log deployed need not be a
+     * compose file (a token rotation job, say), so text that does not parse has no services and keeps the reason.
+     */
+    fileAt: once(
+      (file: string, commit: string) => `${file}@${commit}`,
+      async (file, commit): Promise<{ sha256: string; services: ModelService[]; unreadable?: string }> => {
+        const bytes = await gh.raw(COMPOSE_REPOSITORY, file, commit);
         const sha256 = sha256Hex(bytes);
         try {
           return { sha256, services: modelServices(new TextDecoder().decode(bytes), model) };
         } catch (err) {
           return { sha256, services: [], unreadable: whyOf(err) };
         }
-      });
-      files.set(key, loading);
-    }
-    return loading;
+      },
+    ),
+    /** The commit a tag name or a commit id of the compose repository resolves to. */
+    commit: once(
+      (ref: string) => ref,
+      (ref) => gh.commit(COMPOSE_REPOSITORY, ref),
+    ),
+    image: once(
+      (image: ImageRef) => image.raw,
+      async (image): Promise<ImageCheck> => ({ image, provenance: await provenanceOf(image, githubToken) }),
+    ),
+    compare: gh.compare,
   };
+}
+type Reader = ReturnType<typeof reader>;
 
-  // Which file holds the model's service: the most recently deployed one that names it.
-  let found: { file: string; names: string[] } | undefined;
+/** Which compose file holds the model's service: the most recently deployed one that names it. */
+async function findModelFile(actions: readonly ManagerAction[], model: string, read: Reader): Promise<{ file: string; names: string[] } | { unresolved: string }> {
   const unreadable: string[] = [];
   try {
     for (const candidate of composeFilesOf(actions)) {
-      const at = await fileAt(candidate.file, candidate.commit);
+      const at = await read.fileAt(candidate.file, candidate.commit);
       if (at.unreadable) unreadable.push(`${candidate.file}: ${at.unreadable}`);
-      if (at.services.length > 0) {
-        found = { file: candidate.file, names: at.services.map((s) => s.service) };
-        break;
-      }
+      if (at.services.length > 0) return { file: candidate.file, names: at.services.map((s) => s.service) };
     }
   } catch (err) {
-    inspection.unresolved = whyOf(err);
-    return inspection;
+    return { unresolved: whyOf(err) };
   }
-  if (!found) {
-    inspection.unresolved = `no compose file the log deployed has a service with MODEL_NAME=${model}${unreadable.length > 0 ? `; not read as a compose file: ${unreadable.join('; ')}` : ''}`;
-    return inspection;
-  }
-  inspection.file = found.file;
+  return { unresolved: `no compose file the log deployed has a service with MODEL_NAME=${model}${unreadable.length > 0 ? `; not read as a compose file: ${unreadable.join('; ')}` : ''}` };
+}
 
-  for (const service of found.names) {
-    const history = releasesFor(actions, { file: found.file, service });
-    const release = history.at(-1);
-    if (!release) continue; // defined in the file, never brought up by this log
-    const entry: ServiceRelease = { service, history, release, file: skipped('not checked'), tag: skipped('not checked'), engines: [], committedAt: skipped('not checked') };
-    try {
-      const at = await fileAt(release.file, release.commit);
-      entry.file = !release.fileSha256 ? skipped('the action records no file hash') : at.sha256 === release.fileSha256 ? ok({ sha256: at.sha256 }) : failed(`the public file hashes to ${at.sha256}, the enclave recorded ${release.fileSha256}`);
-      const definition = at.services.find((s) => s.service === service);
-      if (definition) {
-        entry.engines = definition.engines;
-        if (definition.image) entry.proxy = await checkImage(definition.image);
-      }
-    } catch (err) {
-      entry.file = skipped(whyOf(err));
-    }
-    // The tag, resolved in the repository itself. A commit id alone does not show that the commit is the repository's own:
-    // GitHub serves a commit pushed to any fork under the parent's name. A tag is set by those who can write to the
-    // repository. The same answer carries the commit's time; without a tag the commit is asked for directly.
-    const tag = release.tag !== undefined && isPlainTag(release.tag) ? release.tag : undefined;
-    if (!tag) entry.tag = skipped(release.tag === undefined ? 'the action names no tag' : 'the tag is not a name this looks up');
-    try {
-      const at = await gh.commit(COMPOSE_REPOSITORY, tag ?? release.commit);
-      const same = at.sha === release.commit.toLowerCase();
-      if (tag) entry.tag = same ? ok(tag) : failed(`tag ${tag} of ${COMPOSE_REPOSITORY} points at ${at.sha ?? 'no commit'}, the enclave recorded ${release.commit}`);
-      entry.committedAt = !same ? skipped('GitHub resolved another commit') : at.date ? ok(at.date) : skipped('GitHub returned no commit date');
-    } catch (err) {
-      const why = whyOf(err);
-      if (tag) entry.tag = skipped(why);
-      entry.committedAt = skipped(why);
-    }
-    // The previous build: walk back through earlier releases until the image differs.
-    if (entry.proxy?.image.digest) {
-      for (const earlier of history.slice(0, -1).reverse().slice(0, lookBack)) {
-        let image: ImageRef | undefined;
-        try {
-          image = (await fileAt(earlier.file, earlier.commit)).services.find((s) => s.service === service)?.image;
-        } catch {
-          break; // GitHub stopped answering: the previous build stays unknown
-        }
-        if (!image?.digest || image.digest === entry.proxy.image.digest) continue;
-        const proxy = await checkImage(image);
-        entry.previousBuild = { release: earlier, proxy, change: await sourceChange(gh, proxy.provenance, entry.proxy.provenance) };
-        break;
-      }
-    }
-    inspection.services.push(entry);
+/** The release's file against the recorded hash, and the service's image and engines as that file defines them. */
+async function releaseFile(service: string, release: Release, read: Reader): Promise<Pick<ServiceRelease, 'file' | 'proxy' | 'engines'>> {
+  try {
+    const at = await read.fileAt(release.file, release.commit);
+    const file = !release.fileSha256 ? checked.skipped('the action records no file hash') : at.sha256 === release.fileSha256 ? checked.ok({ sha256: at.sha256 }) : checked.failed(`the public file hashes to ${at.sha256}, the enclave recorded ${release.fileSha256}`);
+    const definition = at.services.find((s) => s.service === service);
+    return { file, engines: definition?.engines ?? [], ...(definition?.image ? { proxy: await read.image(definition.image) } : {}) };
+  } catch (err) {
+    return { file: checked.skipped(whyOf(err)), engines: [] };
   }
-  if (inspection.services.length === 0) inspection.unresolved = `the log never brought up the service of ${model} from ${found.file}`;
-  return inspection;
+}
+
+/**
+ * The release's tag, resolved in the repository itself, and the commit's time. A commit id alone does not show that the
+ * commit is the repository's own: GitHub serves a commit pushed to any fork under the parent's name. A tag is set by those
+ * who can write to the repository. The answer for the tag carries the commit's time; without a tag the commit is asked for.
+ */
+async function releaseTag(release: Release, read: Reader): Promise<Pick<ServiceRelease, 'tag' | 'committedAt'>> {
+  const tag = release.tag !== undefined && isPlainTag(release.tag) ? release.tag : undefined;
+  const untagged = checked.skipped(release.tag === undefined ? 'the action names no tag' : 'the tag is not a name this looks up');
+  try {
+    const at = await read.commit(tag ?? release.commit);
+    const same = at.sha === release.commit;
+    return {
+      tag: !tag ? untagged : same ? checked.ok(tag) : checked.failed(`tag ${tag} of ${COMPOSE_REPOSITORY} points at ${at.sha ?? 'no commit'}, the enclave recorded ${release.commit}`),
+      committedAt: !same ? checked.skipped('GitHub resolved another commit') : at.date ? checked.ok(at.date) : checked.skipped('GitHub returned no commit date'),
+    };
+  } catch (err) {
+    const unanswered = checked.skipped(whyOf(err));
+    return { tag: tag ? unanswered : untagged, committedAt: unanswered };
+  }
+}
+
+/** The most recent earlier release that ran another build of the service's image, among the last `LOOK_BACK`. */
+async function previousBuild(service: string, history: Release[], current: ImageCheck, read: Reader): Promise<ServiceRelease['previousBuild']> {
+  for (const earlier of history.slice(-1 - LOOK_BACK, -1).reverse()) {
+    let image: ImageRef | undefined;
+    try {
+      image = (await read.fileAt(earlier.file, earlier.commit)).services.find((s) => s.service === service)?.image;
+    } catch {
+      return undefined; // GitHub stopped answering: the previous build stays unknown
+    }
+    if (!image?.digest || image.digest === current.image.digest) continue;
+    const proxy = await read.image(image);
+    return { release: earlier, proxy, change: await sourceChange(read, proxy.provenance, current.provenance) };
+  }
+  return undefined;
 }
 
 /** How much source lies between two builds of one repository, by GitHub's compare. */
-async function sourceChange(gh: ReturnType<typeof github>, from: Checked<Provenance>, to: Checked<Provenance>): Promise<Checked<SourceChange>> {
-  if (from.status !== 'ok' || to.status !== 'ok') return skipped('one of the two builds has no verified source commit');
-  if (from.value.repository !== to.value.repository) return skipped('the two builds come from different repositories');
+async function sourceChange(read: Reader, from: Checked<Provenance>, to: Checked<Provenance>): Promise<Checked<SourceChange>> {
+  if (from.status !== 'ok' || to.status !== 'ok') return checked.skipped('one of the two builds has no verified source commit');
+  if (from.value.repository !== to.value.repository) return checked.skipped('the two builds come from different repositories');
   try {
-    const cmp = await gh.compare(to.value.repository, from.value.commit, to.value.commit);
-    return cmp ? ok({ ...cmp, url: `https://github.com/${to.value.repository}/compare/${from.value.commit.slice(0, 10)}...${to.value.commit.slice(0, 10)}` }) : skipped('GitHub returned no comparison');
+    const cmp = await read.compare(to.value.repository, from.value.commit, to.value.commit);
+    return cmp ? checked.ok({ ...cmp, url: `https://github.com/${to.value.repository}/compare/${from.value.commit.slice(0, 10)}...${to.value.commit.slice(0, 10)}` }) : checked.skipped('GitHub returned no comparison');
   } catch (err) {
-    return skipped(whyOf(err));
+    return checked.skipped(whyOf(err));
   }
+}
+
+/** One service of the model: its latest release checked against the public file and tag, its image, the build before it. */
+async function inspectService(service: string, history: Release[], release: Release, read: Reader): Promise<ServiceRelease> {
+  // The file and the tag do not depend on each other.
+  const [fromFile, fromTag] = await Promise.all([releaseFile(service, release, read), releaseTag(release, read)]);
+  const previous = fromFile.proxy?.image.digest ? await previousBuild(service, history, fromFile.proxy, read) : undefined;
+  return { service, history, release, ...fromFile, ...fromTag, ...(previous ? { previousBuild: previous } : {}) };
+}
+
+/** The image the log says the manager last started as, checked, next to the image the measured compose starts it as. */
+async function managerOf(actions: readonly ManagerAction[], launcher: Checked<LauncherSettings>, read: Reader): Promise<ReleaseInspection['manager']> {
+  const started = managerStartOf(actions);
+  if (!started) return undefined;
+  const check = await read.image(parseImage(started.image));
+  const setting = launcher.status === 'ok' ? launcher.value.image : undefined;
+  if (!setting) return { ...check, startedAt: started.startedAt };
+  const image = parseImage(setting.fallback ?? setting.raw);
+  return { ...check, startedAt: started.startedAt, boot: { ...setting, image, same: image.digest !== undefined && image.digest === check.image.digest && image.repository === check.image.repository } };
+}
+
+/**
+ * Follows the action log of a verified model deployment to the release that serves `model`. Returns undefined when the
+ * report carried no action log. Never throws for something GitHub or Sigstore did: such a check comes back `skipped`.
+ */
+export async function inspectRelease({ deployment, report, model, githubToken, fetch: fetchImpl = globalThis.fetch }: InspectReleaseParams): Promise<ReleaseInspection | undefined> {
+  const log = deployment.composeManager;
+  if (!log) return undefined;
+  const actions: readonly ManagerAction[] = log.actions;
+  const read = reader(model, githubToken, fetchImpl);
+  const launcher = launcherSettings(deployment.appCompose);
+  const managerCheck = managerOf(actions, launcher, read); // does not depend on the release: started now, awaited below
+  const found = await findModelFile(actions, model, read);
+  const services: ServiceRelease[] = [];
+  if ('file' in found) {
+    const inspected = await Promise.all(
+      found.names.map((service) => {
+        const history = releasesFor(actions, { file: found.file, service });
+        const release = history.at(-1);
+        return release ? inspectService(service, history, release, read) : undefined; // defined in the file, never brought up by this log
+      }),
+    );
+    services.push(...inspected.filter((s) => s !== undefined));
+  }
+  const manager = await managerCheck;
+  const unresolved = 'unresolved' in found ? found.unresolved : services.length === 0 ? `the log never brought up the service of ${model} from ${found.file}` : undefined;
+  return {
+    log: { actions: actions.length, since: actions[0]?.timestamp ?? '', until: actions.at(-1)?.timestamp ?? '', tcbStatus: log.tcbStatus, instance: sameInstance(report?.eventLog, report?.composeManagerAttestation?.eventLog) },
+    launcher,
+    ...(manager ? { manager } : {}),
+    ...('file' in found ? { file: found.file } : {}),
+    services,
+    ...(unresolved ? { unresolved } : {}),
+  };
+}
+
+/**
+ * Every check of an inspection that was made and did not hold, one line each. A check that could not be made is not among
+ * them. The rule lives here, next to the result, so that whoever shows an inspection cannot print a failure and miss it.
+ */
+export function failedChecks(inspection: ReleaseInspection): string[] {
+  const all: [what: string, check: Checked<unknown>][] = [['the instance behind the action log', inspection.log.instance]];
+  if (inspection.manager) all.push(["the manager image's build provenance", inspection.manager.provenance]);
+  for (const s of inspection.services) {
+    all.push([`${s.service}: the release's file`, s.file], [`${s.service}: the release's tag`, s.tag]);
+    if (s.proxy) all.push([`${s.service}: the image's build provenance`, s.proxy.provenance]);
+    if (s.previousBuild) all.push([`${s.service}: the previous image's build provenance`, s.previousBuild.proxy.provenance]);
+  }
+  return all.flatMap(([what, check]) => (check.status === 'fail' ? [`${what}: ${check.why}`] : []));
 }
 
 /**
@@ -349,18 +377,19 @@ export async function leadTimes(actions: readonly ManagerAction[], file: string,
   const out: LeadTime[] = [];
   let unavailable: string | undefined; // after GitHub refuses once, stop asking
   for (const release of firstDeployments(actions, file)) {
-    if (unavailable || !isCommitId(release.commit)) {
-      out.push({ release, committedAt: skipped(unavailable ?? 'the action names a malformed commit') });
-      continue;
+    let committedAt: Checked<string>;
+    if (unavailable) committedAt = checked.skipped(unavailable);
+    else if (!isCommitId(release.commit)) committedAt = checked.skipped('the action names a malformed commit'); // its own entry, not a reason to stop
+    else {
+      try {
+        const { date } = await gh.commit(COMPOSE_REPOSITORY, release.commit);
+        committedAt = date ? checked.ok(date) : checked.skipped('GitHub returned no commit date');
+      } catch (err) {
+        committedAt = checked.skipped((unavailable = whyOf(err)));
+      }
     }
-    try {
-      const { date } = await gh.commit(COMPOSE_REPOSITORY, release.commit);
-      const leadMs = date ? timeOf(release.deployedAt) - timeOf(date) : Number.NaN;
-      out.push({ release, committedAt: date ? ok(date) : skipped('GitHub returned no commit date'), ...(Number.isFinite(leadMs) ? { leadMs } : {}) });
-    } catch (err) {
-      unavailable = whyOf(err);
-      out.push({ release, committedAt: skipped(unavailable) });
-    }
+    const leadMs = committedAt.status === 'ok' ? timeOf(release.deployedAt) - timeOf(committedAt.value) : Number.NaN;
+    out.push({ release, committedAt, leadMs: Number.isFinite(leadMs) ? leadMs : undefined });
   }
   return out;
 }

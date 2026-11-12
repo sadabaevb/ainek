@@ -9,7 +9,7 @@ import { buildCheckedModelProof, composeHashOf, normalizeHex, shortHex as short,
 import { contractLog, nothingSent, replyOf, runTier1, type StepId, type Verified } from '@ainek/tier1-node';
 import { loadLiveEnv } from './env.ts';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
-import { FAIL, NA, OK, exitFlushed, head, line, markOf, seconds } from './term.ts';
+import { FAIL, NA, OK, exitFlushed, head, line, markOf, out, seconds } from './term.ts';
 
 const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, disclose: { type: 'string' }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
 const record = flags.record === true;
@@ -62,13 +62,13 @@ function printVerified(v: Verified & { totalMs: number }): void {
   const { signer, logEntry, logSource, proof } = v;
   console.log('\n┌─ Ainek proof card ─ live ───────────────────────────────────────────');
   const compose = composeHashOf(signer.deployment);
-  console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(compose)})`);
-  console.log(`│ ${OK} Hardware: Intel TDX ${signer.tcbStatus}, NVIDIA GPU ${signer.gpuEvidence}; chat request pinned to the attested gateway`);
-  console.log(`│ ${OK} Key #${logEntry.index} in the public log, logged by ${logEntry.verifier} (${logSource})${normalizeHex(logEntry.compose_hash) === compose ? '' : '; this entry has another compose, the attested one is not in the log window'}`);
-  console.log(`│ ${OK} Request and response: hashes match the signature made inside the model TEE`);
-  console.log(`│ ${OK} End-to-end encryption: yes, encrypted to the attested model key`);
-  console.log(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);
-  console.log(`└─ Result: VERIFIED in ${seconds(v.totalMs)}`);
+  out(`│ ${OK} Model: ${model}, attested deployment (compose ${short(compose)})`);
+  out(`│ ${OK} Hardware: Intel TDX ${signer.tcbStatus}, NVIDIA GPU ${signer.gpuEvidence}; chat request pinned to the attested gateway`);
+  out(`│ ${OK} Key #${logEntry.index} in the public log, logged by ${logEntry.verifier} (${logSource})${normalizeHex(logEntry.compose_hash) === compose ? '' : '; this entry has another compose, the attested one is not in the log window'}`);
+  out(`│ ${OK} Request and response: hashes match the signature made inside the model TEE`);
+  out(`│ ${OK} End-to-end encryption: yes, encrypted to the attested model key`);
+  out(`│ ${NA} On NEAR: commit ${short(proof.commit ?? '')} computed, not sent in this mode`);
+  out(`└─ Result: VERIFIED in ${seconds(v.totalMs)}`);
   if (record) recordSamples(v);
   if (discloseFile) {
     writeJson(discloseFile, toDisclosure({ proof, logEntry, requestBody: v.requestBody, responseBody: v.responseBody }));

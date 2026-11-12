@@ -10,7 +10,8 @@ export interface VerifiedModelEvidence {
   /** Quote-bound E2EE public key; equals `signingAddress` for ed25519. */
   signingPublicKey?: string;
   tcbStatus: string;
-  deployment: { appCompose: string; runtimeMeasurements: { composeHash?: string } };
+  /** `runtimeMeasurements` is not read (see `composeHashOf`); it is here so an SDK result fits without a cast. */
+  deployment: { appCompose: string; runtimeMeasurements?: { composeHash?: string } };
   /** The original report; its nonce was checked by the SDK against the one the verifier sent. */
   report: { nonce: string };
 }
@@ -39,18 +40,26 @@ export interface BuildKeyEntryInputParams {
 }
 
 /**
+ * The two parts of a dstack `app_compose` JSON this package reads: the compose file it carries and the names of the
+ * environment variables the deployer may set (dstack passes a CVM no others). Undefined for text that is not that JSON.
+ */
+export function readAppCompose(appCompose: string): { composeFile: string; allowedEnvs: string[] } | undefined {
+  try {
+    const parsed = JSON.parse(appCompose) as { docker_compose_file?: unknown; allowed_envs?: unknown } | null;
+    if (typeof parsed?.docker_compose_file !== 'string') return undefined;
+    return { composeFile: parsed.docker_compose_file, allowedEnvs: Array.isArray(parsed.allowed_envs) ? parsed.allowed_envs.filter((name): name is string => typeof name === 'string') : [] };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * `sha256:<hex>` digests of the images the compose file runs, in order of first appearance, deduplicated.
  * Only `image:` lines count, so a checksum in a script or a comment is not mistaken for a deployment image.
  * Accepts the dstack `app_compose` JSON (uses its `docker_compose_file`) or compose YAML text directly.
  */
 export function imageDigestsOf(appCompose: string): string[] {
-  let yaml = appCompose;
-  try {
-    const parsed = JSON.parse(appCompose) as { docker_compose_file?: unknown };
-    if (typeof parsed.docker_compose_file === 'string') yaml = parsed.docker_compose_file;
-  } catch {
-    // not JSON: treat the input as compose YAML
-  }
+  const yaml = readAppCompose(appCompose)?.composeFile ?? appCompose; // not the dstack JSON: treat the input as compose YAML
   const digests = new Set<string>();
   for (const line of yaml.split('\n')) {
     const match = /^\s*(?:-\s*)?image:\s*.*@sha256:([0-9a-fA-F]{64})\b/.exec(line);

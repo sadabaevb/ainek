@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildKeyEntryInput, composeHashOf, imageDigestsOf, type BuildKeyEntryInputParams } from './key-entry.ts';
+import { buildKeyEntryInput, composeHashOf, imageDigestsOf, readAppCompose, type BuildKeyEntryInputParams } from './key-entry.ts';
 import { entryHashOf } from './commit.ts';
 import { sha256Hex } from './hash.ts';
 import { readRepoFile, readRepoJson } from './fixtures.ts';
@@ -85,4 +85,10 @@ test('imageDigestsOf reads image: lines only, keeps first-appearance order, dedu
   assert.deepEqual(imageDigestsOf(JSON.stringify({ docker_compose_file: yaml, pre_launch_script: `curl … | sha256sum -c sha256:${'ff'.repeat(32)}` })), [`sha256:${d}`, `sha256:${e}`]);
   assert.equal(imageDigestsOf(m.info.tcb_info.app_compose).length, 4);
   assert.deepEqual(imageDigestsOf(m.info.tcb_info.app_compose), expectedInput.image_digests);
+});
+
+test('readAppCompose: the compose file and the allowed variable names of a dstack app compose; anything else is not one', () => {
+  assert.deepEqual(readAppCompose(JSON.stringify({ docker_compose_file: 'services: {}', allowed_envs: ['A', 1, 'B'] })), { composeFile: 'services: {}', allowedEnvs: ['A', 'B'] });
+  assert.deepEqual(readAppCompose(JSON.stringify({ docker_compose_file: 'services: {}' })), { composeFile: 'services: {}', allowedEnvs: [] });
+  for (const not of ['services: {}', '{}', 'null', '[]', '{"docker_compose_file": 5}']) assert.equal(readAppCompose(not), undefined, not);
 });

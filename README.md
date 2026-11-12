@@ -80,6 +80,9 @@ answers you):
   Nov 8, Nov 12), each build with valid provenance from `nearai/inference-proxy`. The signing key did not change.
 - **Our deployment check did not see it.** It compares the launcher's compose hash. After that CVM's hash first appeared
   in our log (Nov 8, 11:20 UTC) the proxy changed twice, and the client would have refused neither.
+- **Each replica has a log of its own.** The same command three hours later was answered by another replica (launcher
+  `c900dc73…e2d0`): 271 actions since Sep 11, the model served from another compose file, by a release deployed 26
+  minutes earlier.
 
 The evidence is NEAR AI's own and public by design: the action log, the compose repository and the signed builds are
 theirs, and the SDK can authenticate them. What we add is a client that reads them. The log is a record, not a
@@ -195,7 +198,7 @@ pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attes
                                  #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again
 
 pnpm demo:attest                 # no key, needs network (~15 s): what demo:live does up to the send, then the code behind the
-                                 #   key (above; eight anonymous GitHub API requests on Nov 12, of the 60 an hour allowed;
+                                 #   key (above; seven or eight anonymous GitHub API requests on Nov 12, of the 60 an hour allowed;
                                  #   GITHUB_TOKEN raises that). --history adds every release in the log, one request each;
                                  #   exits 0 on WOULD SEND with no failed check
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sha256Hex, type ManagerAction } from '@ainek/proof';
-import { inspectRelease, leadTimes, type InspectReleaseParams } from './release.ts';
+import { failedChecks, inspectRelease, leadTimes, type InspectReleaseParams } from './release.ts';
 
 // A compose repository of two commits, served by a fake GitHub. The images have no build policy, so no test reaches Sigstore.
 const FILE = 'prod/models.yaml';
@@ -51,11 +51,14 @@ function fakeGitHub(over: (path: string) => Response | undefined = () => undefin
       if (decodeURIComponent(contents[1] ?? '') === 'prod/rotate-token.yaml') return new Response('job: rotate', { status: 200 });
       return commit ? new Response(commit.text, { status: 200 }) : new Response('{}', { status: 404 });
     }
-    const ref = /^\/repos\/nearai\/cvm-compose-files\/commits\/([\w.-]+)$/.exec(path)?.[1];
-    if (ref) {
-      const sha = tags[ref] ?? Object.keys(COMMITS).find((id) => id === ref || COMMITS[id]?.tag === ref);
+    // A tag name is resolved by the commits endpoint; a commit id is read as a git object, a smaller answer of another shape.
+    const tag = /^\/repos\/nearai\/cvm-compose-files\/commits\/([\w.-]+)$/.exec(path)?.[1];
+    if (tag) {
+      const sha = tags[tag] ?? Object.keys(COMMITS).find((id) => COMMITS[id]?.tag === tag);
       return sha ? Response.json({ sha, commit: { committer: { date: COMMITS[sha]?.date } } }) : new Response('{}', { status: 422 });
     }
+    const id = /^\/repos\/nearai\/cvm-compose-files\/git\/commits\/(\w+)$/.exec(path)?.[1];
+    if (id) return COMMITS[id] ? Response.json({ sha: id, committer: { date: COMMITS[id].date } }) : new Response('{}', { status: 404 });
     return new Response('{}', { status: 404 });
   }) as typeof globalThis.fetch;
   return { fetch, seen };
@@ -118,7 +121,7 @@ test('inspectRelease: a tag that points at another commit is a failure; a tag th
   const hexTag = await inspectRelease({ deployment: deploymentOf(ACTIONS.map((a) => (a.commit === B ? { ...a, tag: B } : a))), model: MODEL, fetch });
   assert.deepEqual(hexTag?.services[0]?.tag, { status: 'skipped', why: 'the tag is not a name this looks up' });
   assert.equal(hexTag?.services[0]?.committedAt.status, 'ok', 'the commit time is still read, by commit id');
-  assert.deepEqual(seen.paths.filter((p) => p.includes('/commits/')), [`/repos/nearai/cvm-compose-files/commits/${B}`]);
+  assert.deepEqual(seen.paths.filter((p) => p.includes('/commits/')), [`/repos/nearai/cvm-compose-files/git/commits/${B}`]);
   // No tag at all: said so, and a GitHub failure afterwards does not replace that reason.
   const untagged = ACTIONS.map(({ tag: _tag, ...rest }) => rest as ManagerAction);
   const down = await inspectRelease({ deployment: deploymentOf(untagged), model: MODEL, fetch: fakeGitHub((path) => (path.includes('/commits/') ? new Response('{}', { status: 500 }) : undefined)).fetch });
@@ -138,17 +141,17 @@ test('inspectRelease: a path or commit that would leave the repository never rea
 
 test('inspectRelease: the manager the log names against the image the measured compose starts it as; the tag age it is given', async () => {
   const same = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub().fetch });
-  assert.deepEqual(same?.manager?.boot, { image: { repository: 'org/manager', digest: `sha256:${'c'.repeat(64)}`, raw: MANAGER }, variable: 'MANAGER_IMAGE', settable: false, same: true });
-  assert.deepEqual(same?.minTagAge, { raw: '${CM_MIN_TAG_AGE_HOURS:-0}', variable: 'CM_MIN_TAG_AGE_HOURS', fallback: '0', settable: true });
+  assert.deepEqual(same?.manager?.boot, { raw: `\${MANAGER_IMAGE:-${MANAGER}}`, variable: 'MANAGER_IMAGE', fallback: MANAGER, settable: false, image: { repository: 'org/manager', digest: `sha256:${'c'.repeat(64)}`, raw: MANAGER }, same: true });
+  assert.deepEqual(same?.launcher.status === 'ok' ? same.launcher.value.minTagAge : undefined, { raw: '${CM_MIN_TAG_AGE_HOURS:-0}', variable: 'CM_MIN_TAG_AGE_HOURS', fallback: '0', settable: true });
   // Replaced after boot: the log names an image the compose hash does not cover.
   const swapped = await inspectRelease({ deployment: deploymentOf(ACTIONS, `org/manager@sha256:${'d'.repeat(64)}`), model: MODEL, fetch: fakeGitHub().fetch });
   assert.equal(swapped?.manager?.boot?.same, false);
   // The operator may set the image variable: the fallback is then only a default.
   const settable = await inspectRelease({ deployment: deploymentOf(ACTIONS, MANAGER, ['MANAGER_IMAGE']), model: MODEL, fetch: fakeGitHub().fetch });
-  assert.deepEqual([settable?.manager?.boot?.same, settable?.manager?.boot?.settable, settable?.minTagAge?.settable], [true, true, false]);
-  // An app compose this cannot read leaves both out and resolves the release all the same.
+  assert.deepEqual([settable?.manager?.boot?.same, settable?.manager?.boot?.settable], [true, true]);
+  // An app compose this cannot read says so, and the release is resolved all the same.
   const opaque = await inspectRelease({ deployment: { ...deploymentOf(ACTIONS), appCompose: '{}' }, model: MODEL, fetch: fakeGitHub().fetch });
-  assert.deepEqual([opaque?.manager?.boot, opaque?.minTagAge, opaque?.services.length], [undefined, undefined, 1]);
+  assert.deepEqual([opaque?.manager?.boot, opaque?.launcher, opaque?.services.length], [undefined, { status: 'skipped', why: 'the app compose is not JSON with a docker_compose_file' }, 1]);
 });
 
 test('inspectRelease: the log must be quoted by the CVM instance that quoted the signing key, not by another replica', async () => {
@@ -158,6 +161,26 @@ test('inspectRelease: the log must be quoted by the CVM instance that quoted the
   assert.deepEqual(await run(reportOf('a8a2', 'a8a2')), { status: 'ok', value: 'a8a2' });
   assert.deepEqual(await run(reportOf('a8a2', 'b7b1')), { status: 'fail', why: 'the log was quoted by instance b7b1, the signing key by instance a8a2' });
   assert.equal((await run({ eventLog: events('a8a2') }))?.status, 'skipped');
+});
+
+test('failedChecks: what was checked and did not hold, and nothing that could not be checked', async () => {
+  const clean = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub().fetch });
+  assert.ok(clean);
+  assert.deepEqual(failedChecks(clean), [], 'no build policy and no event logs: not checked is not failed');
+  // A file that does not match, a tag moved elsewhere and a log from another replica: three failures, each named.
+  const events = (instance: string) => [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: instance }];
+  const bad = await inspectRelease({
+    deployment: deploymentOf(ACTIONS.map((a) => (a.commit === B ? { ...a, file_sha256: 'f'.repeat(64) } : a))),
+    report: { eventLog: events('a8a2'), composeManagerAttestation: { eventLog: events('b7b1') } },
+    model: MODEL,
+    fetch: fakeGitHub(undefined, { 'v0.0.2': A }).fetch,
+  });
+  assert.ok(bad);
+  assert.deepEqual(failedChecks(bad).map((f) => f.split(':').slice(0, -1).join(':').replace(/: (the public file|tag v).*$/, '')), ['the instance behind the action log', "proxy-a: the release's file", "proxy-a: the release's tag"]);
+  // GitHub refusing everything fails nothing: the checks were not made.
+  const refused = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub(() => new Response('{}', { status: 500 })).fetch });
+  assert.ok(refused);
+  assert.deepEqual(failedChecks(refused), []);
 });
 
 test('inspectRelease: without an action log there is nothing to inspect; a model no file names stays unresolved', async () => {

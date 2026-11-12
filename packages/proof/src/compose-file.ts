@@ -7,6 +7,8 @@
 // still input from outside: the parser's alias limit stays on (raised, see MAX_ALIASES), and nothing in the file is executed
 // or interpolated.
 import { parse } from 'yaml';
+import { checked, type Checked } from './checked.ts';
+import { readAppCompose } from './key-entry.ts';
 
 /** Compose files are capped before parsing, as the SDK does (8 MiB). */
 export const MAX_COMPOSE_BYTES = 8 * 1024 * 1024;
@@ -55,6 +57,18 @@ export interface ManagerDefinition {
   image?: ComposeValue;
   /** `MIN_TAG_AGE_HOURS` as written. Compose Manager's own default, when the variable is absent, is 48. */
   minTagAge?: ComposeValue;
+}
+
+/** A value read from a measured app compose, and whether the deployer can set the variable in it. */
+export interface MeasuredSetting extends ComposeValue {
+  /** True when the variable is among the app compose's `allowed_envs`: its value then comes from the operator, unmeasured. */
+  settable: boolean;
+}
+
+/** Compose Manager's settings in a measured app compose. */
+export interface LauncherSettings {
+  image?: MeasuredSetting;
+  minTagAge?: MeasuredSetting;
 }
 
 type Dict = Record<string, unknown>;
@@ -166,4 +180,23 @@ export function managerDefinition(composeYaml: string, service = 'compose-manage
   const image = manager['image'];
   const minTagAge = envOf(manager).get('MIN_TAG_AGE_HOURS');
   return { ...(typeof image === 'string' && image.trim() !== '' ? { image: composeValue(image) } : {}), ...(minTagAge !== undefined ? { minTagAge: composeValue(minTagAge) } : {}) };
+}
+
+/**
+ * What a measured app compose (dstack's JSON) says about Compose Manager, or why that could not be read: a launcher whose
+ * manager is no longer the service this looks for must read as "not read", not as "nothing to say". The caller must hold
+ * an app compose the quote's compose hash covers; then these values are measured, unlike the action log.
+ */
+export function launcherSettings(appCompose: string): Checked<LauncherSettings> {
+  const app = readAppCompose(appCompose);
+  if (!app) return checked.skipped('the app compose is not JSON with a docker_compose_file');
+  let manager: ManagerDefinition | undefined;
+  try {
+    manager = managerDefinition(app.composeFile);
+  } catch (err) {
+    return checked.skipped(`its compose file was not read: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (!manager) return checked.skipped('its compose file has no compose-manager service');
+  const measured = (value: ComposeValue): MeasuredSetting => ({ ...value, settable: value.variable !== undefined && app.allowedEnvs.includes(value.variable) });
+  return checked.ok({ ...(manager.image ? { image: measured(manager.image) } : {}), ...(manager.minTagAge ? { minTagAge: measured(manager.minTagAge) } : {}) });
 }

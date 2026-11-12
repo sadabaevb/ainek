@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { composeValue, managerDefinition, modelServices, parseImage } from './compose-file.ts';
+import { composeValue, launcherSettings, managerDefinition, modelServices, parseImage } from './compose-file.ts';
 
 const D1 = 'a'.repeat(64);
 const D2 = 'b'.repeat(64);
@@ -99,4 +99,21 @@ services:
   assert.deepEqual(managerDefinition(launcher, 'sidecar'), { image: { raw: `org/sidecar@sha256:${D2}` } }, 'no tag age set: the manager\'s own default applies');
   assert.equal(managerDefinition(launcher, 'absent'), undefined);
   assert.equal(managerDefinition(launcher, '__proto__'), undefined);
+});
+
+test('launcherSettings: the manager\'s image and tag age from a measured app compose, each with whether the operator may set it; or the reason', () => {
+  const composeFile = `services:\n  compose-manager:\n    image: \${MANAGER_IMAGE:-org/manager@sha256:${D1}}\n    environment:\n      - MIN_TAG_AGE_HOURS=\${CM_MIN_TAG_AGE_HOURS:-0}\n`;
+  const read = launcherSettings(JSON.stringify({ docker_compose_file: composeFile, allowed_envs: ['CM_MIN_TAG_AGE_HOURS', 7] }));
+  assert.deepEqual(read, {
+    status: 'ok',
+    value: {
+      image: { raw: `\${MANAGER_IMAGE:-org/manager@sha256:${D1}}`, variable: 'MANAGER_IMAGE', fallback: `org/manager@sha256:${D1}`, settable: false },
+      minTagAge: { raw: '${CM_MIN_TAG_AGE_HOURS:-0}', variable: 'CM_MIN_TAG_AGE_HOURS', fallback: '0', settable: true },
+    },
+  });
+  // A launcher this does not recognise reads as "not read", with the reason, never as "nothing to say".
+  assert.deepEqual(launcherSettings('{}'), { status: 'skipped', why: 'the app compose is not JSON with a docker_compose_file' });
+  assert.deepEqual(launcherSettings('services: {}'), { status: 'skipped', why: 'the app compose is not JSON with a docker_compose_file' });
+  assert.deepEqual(launcherSettings(JSON.stringify({ docker_compose_file: 'services:\n  manager-v2:\n    image: x\n' })), { status: 'skipped', why: 'its compose file has no compose-manager service' });
+  assert.match(JSON.stringify(launcherSettings(JSON.stringify({ docker_compose_file: 'just: text' }))), /its compose file was not read: not a compose file/);
 });

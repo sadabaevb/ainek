@@ -1,4 +1,5 @@
 // Terminal output shared by the replay and live modes.
+import { oneLine } from '@ainek/proof';
 export { describeSdkError as describe } from '@ainek/tier1-node/errors'; // the subpath: the offline replay must not load the runner
 
 export const OK = '✓';
@@ -10,20 +11,22 @@ export function markOf(status: 'ok' | 'fail' | 'skipped' | string): string {
 }
 
 /**
- * Text from outside (a log entry, a tag, a file or image name, a server's error) with its control characters replaced, so it
- * cannot move the cursor or recolour a line: an escape sequence in a tag must not be able to draw a check mark.
+ * Prints one line that may carry text from outside: a log entry, a verifier's name, a tag, an image name, a server's error.
+ * Control characters in it become spaces (`oneLine`), so an escape sequence in a tag cannot move the cursor, recolour a
+ * line or draw a check mark. Space at either end is dropped.
  */
-export function plain(text: string): string {
-  return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?');
+export function out(text: string): void {
+  console.log(oneLine(text, Infinity));
 }
 
 export function head(title: string): void {
-  console.log(`\n${plain(title)}`);
+  console.log();
+  out(title);
 }
 
 /** Prints one check line and tells the caller whether it was a failure (modes count failures differently). */
 export function line(mark: string, text: string): boolean {
-  console.log(`  ${mark} ${plain(text)}`);
+  console.log(`  ${mark} ${oneLine(text, Infinity)}`);
   return mark === FAIL;
 }
 

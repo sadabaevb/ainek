@@ -38,7 +38,7 @@ export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
 export type { DisclosedExchange, ParsedDisclosure } from './disclosure.ts';
-export { buildKeyEntryInput, composeHashOf, imageDigestsOf } from './key-entry.ts';
+export { buildKeyEntryInput, composeHashOf, imageDigestsOf, readAppCompose } from './key-entry.ts';
 export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entry.ts';
 export { toModelAttestation, toGatewayAttestation } from './report.ts';
 export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
@@ -60,5 +60,7 @@ export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, toke
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
-export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, spanText, timeOf } from './release.ts';
+export { checked } from './checked.ts';
+export type { Checked } from './checked.ts';
+export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf } from './release.ts';
 export type { ManagerAction, Release } from './release.ts';
