@@ -124,8 +124,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   its file is missing or unreadable. The rule speaks for the moment of attestation, which is why the browser attests again
   for every message while the rule is on. It checks the replica that attested, and the gateway picks the replica per
   connection. Its cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the
-  two logs we hold that is about two windows a day for each replica; we have not measured it live. As of Nov 12 the
-  verifier that writes to our log does not write marks yet, so with the rule on the client refuses every message.
+  two logs we hold that is about two windows a day for each replica. Live we have two entries and one run: entries #73
+  and #74 (Nov 12, 17:10 and 17:30 UTC) carry marks, one from each verifier, and with the rule on `pnpm demo:attest`
+  reported that it would send, for the one replica that answered. How often the rule refuses over a day we have not
+  measured.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be

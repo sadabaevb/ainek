@@ -135,8 +135,10 @@ The cost is refusals: after every action in an enclave, until a verifier has see
 logs we hold (22 and 47 days) that is about two windows a day for each replica. The limits are the ones above and one
 more. The action log is a record, so the rule holds an enclave to what its own record said. A mark means a verifier
 followed the release that serves the model to public sources, not that anybody read the code, and not that the verifier
-followed everything that log deployed: the log does not say which earlier services a later deployment replaced. As of
-Nov 12 the verifier that writes to our log has not been restarted with marks, so the rule stays off.
+followed everything that log deployed: the log does not say which earlier services a later deployment replaced. The
+first marks are in the live log: entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC), one from each verifier. With the
+rule switched on, `pnpm demo:attest` then reported that it would send, for the one replica that answered. The rule
+still ships off: two marked entries are not the day of them we said we would wait for.
 
 ## Status
 
@@ -150,8 +152,8 @@ As of Nov 12, 2026.
 - **On since Nov 11:** the deployment check. On Nov 12 we found that it sees the enclave's launcher, not the release
   that serves the model. `pnpm demo:attest` follows that release to a source commit, and so does the browser when asked
   (the proof card, `/log`). A verifier can now log what it checked behind a key, and the client can refuse an enclave
-  whose action log no trusted verifier logged (`AINEK_REQUIRE_RELEASE`, off by default). The verifier on our server does
-  not write those marks yet, and a proof does not record a release
+  whose action log no trusted verifier logged (`AINEK_REQUIRE_RELEASE`, off by default). The first two entries with
+  those marks, one from each verifier, are in the log since Nov 12 (17:10 and 17:30 UTC); a proof does not record a release
   ([The release in the key log](#the-release-in-the-key-log)).
 - **The log's first entries:** entry #0 was logged by hand from a report our code verified with the SDK; entries #1 and
   #2 are re-logs of that same recording by a stopgap script, since removed (same nonce and report hash, fresh
@@ -368,8 +370,10 @@ inherited" below).
   its file is missing or unreadable. The rule speaks for the moment of attestation, which is why the browser attests again
   for every message while the rule is on. It checks the replica that attested, and the gateway picks the replica per
   connection. Its cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the
-  two logs we hold that is about two windows a day for each replica; we have not measured it live. As of Nov 12 the
-  verifier that writes to our log does not write marks yet, so with the rule on the client refuses every message.
+  two logs we hold that is about two windows a day for each replica. Live we have two entries and one run: entries #73
+  and #74 (Nov 12, 17:10 and 17:30 UTC) carry marks, one from each verifier, and with the rule on `pnpm demo:attest`
+  reported that it would send, for the one replica that answered. How often the rule refuses over a day we have not
+  measured.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
@@ -572,8 +576,9 @@ Tests:
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   <!-- TODO link compare pre-hackathon...hackathon-submission -->
-- Other projects by the same people in this hackathon: Dastan also submits a separate project, shashpai, built apart from
-  this one. <!-- TODO before submission: its link, and the exact spelling of the name (each README has to name the other) -->
+- Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
+  project of his own, built apart from this one: nearby (Dastan) and ushak (Bektur).
+  <!-- TODO before submission: links and exact spelling of both names; drop any not submitted -->
 
 ## Next steps
 
