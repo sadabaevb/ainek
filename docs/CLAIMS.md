@@ -43,7 +43,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   rule compares one record with another and reads no action, so it needs no network; in the browser it attests again for
   every message, because a verification kept for an hour says nothing about that hour. A client may also wait
   (`AINEK_RELEASE_WAIT_MIN`): it then sends only when the log has been marked as it stands for that many minutes by a
-  quorum, so anything the enclave does starts the wait again. `pnpm -F verifier dry-run` prints
+  quorum, so anything added to the log starts the wait again. `pnpm -F verifier dry-run` prints
   the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers. As of
   Nov 12 the verifier that writes to our log has not been restarted with marks. What a mark does not say is under "We do
   not claim".

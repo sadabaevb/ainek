@@ -117,8 +117,9 @@ Reading a release is not refusing one. Since Nov 12 both ends of a rule exist, a
   of that attestation, so with the rule on the browser attests again for every message instead of reusing one for an hour.
 - **The client can wait** (`AINEK_RELEASE_WAIT_MIN`, no wait by default). On the CVM we looked at, a commit first ran
   in the enclave a median of 12 minutes after it was made. With a wait of, say, 60 minutes the client sends only when
-  the action log has been marked as it stands for an hour, by as many verifiers as its quorum. Anything the enclave does
-  starts the wait again: a release, a deployment from another file, a new manager image.
+  the action log has been marked as it stands for an hour, by as many verifiers as its quorum. Anything added to that log
+  starts the wait again: a release, a deployment from another file, a new manager image. The wait is on the marks, so it
+  says how long a state has been in the public log, not how long the code has existed.
 
 ```bash
 pnpm -F verifier dry-run   # no account, sends nothing: the entry a verifier would log, with its two marks
