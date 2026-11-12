@@ -20,6 +20,12 @@ export interface VerifierConfig extends AinekConfig {
   dedupWindowNs: string;
   /** `--dry-run`: attest and print the entry, send nothing. Needs no account or key. */
   dryRun: boolean;
+  /** Follow the release behind each verified key to public sources and log release marks with it (SPEC §7.5). On unless
+   *  `VERIFIER_RELEASE_MARKS` is 0 or false: then entries are logged as they were before marks. */
+  releaseMarks: boolean;
+  /** Optional, for the release check only: raises GitHub's anonymous limit of 60 requests an hour. Sent to api.github.com
+   *  and nowhere else. Never logged. */
+  githubToken: string | undefined;
 }
 
 export const SIX_HOURS_NS = String(6n * 3600n * 1_000_000_000n);
@@ -67,5 +73,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { dryRun?
     reportsDir: env['VERIFIER_DATA_DIR'] || path.resolve(import.meta.dirname, '../data/reports'),
     dedupWindowNs: SIX_HOURS_NS,
     dryRun,
+    // Blank means the default, as for the shared AINEK_* switches.
+    releaseMarks: !['0', 'false'].includes((env['VERIFIER_RELEASE_MARKS']?.trim() || '1').toLowerCase()),
+    githubToken: env['GITHUB_TOKEN']?.trim() || undefined,
   };
 }
