@@ -16,7 +16,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
   of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
   On Nov 10 we also read two later entries (posts, READMEs, parts of the code; `docs/PRIOR-ART.md`). CIPHERWORK refuses before sending and encrypts to the attested model key, with no public key log: it trusts one verifier key of its own. Provable AI Compliance refuses and encrypts at another layer, to an attested OutLayer enclave that then reaches the model over TLS; it has no key log, and when the model's evidence fails a check it records that and still delivers the answer. It binds its gateway's code, input, output and caller into one Intel quote per run, where our Tier 2 has two artifacts joined by hashes.
-- (Node, `pnpm demo:attest`, no key) The **release behind the key is followed to a source commit.** The action log the
+- (`pnpm demo:attest` with no key; in the browser on request, from the proof card and `/log`) The **release behind the
+  key is followed to a source commit.** The action log the
   model's enclave attests, which the SDK authenticates against a TDX quote of its own, names the latest `compose_up` for the
   model's service. The file at that commit in `nearai/cvm-compose-files` is fetched and hashes to the sha256 the enclave
   recorded, and the repository's tag of the recorded name points at that commit (a commit id alone could be a fork's:
@@ -78,9 +79,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   key nor that hash. Compose Manager records each such action in a log the enclave attests with a TDX quote of its own. On
   the CVM that answered us on Nov 12, 2026 that log held 21 releases of the model's compose file since Oct 21, and the image
   of the proxy for `z-ai/glm-5.3-flash` had changed five times, twice after our log first held that CVM's compose hash: the
-  client would have refused neither. `pnpm demo:attest` reads this log since Nov 12 and follows the release to a source
-  commit; the browser, the key log and the proofs do not yet. So a proof says which key signed and which launcher was
-  attested, not which release answered.
+  client would have refused neither. Since Nov 12 `pnpm demo:attest` reads this log and follows the release to a source
+  commit, and the browser does the same when the visitor asks (the proof card, `/log`). That is a reading, not a rule: the
+  client does not refuse on a release, the key log does not record one, and a proof says which key signed and which
+  launcher was attested, not which release answered.
 - **That the action log is a measurement.** A release leaves the enclave's measurements as they were. The log is Compose
   Manager's own record, and the TDX quote behind it says the log came from inside that CVM, not from which container. The
   serving containers the log describes run privileged and hold the same quote socket, so a dishonest release could present

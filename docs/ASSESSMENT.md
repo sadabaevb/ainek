@@ -71,7 +71,8 @@ Are the recipient of the prompt, the key the reply is encrypted to, and the fres
 
 Does what was measured resolve to source somebody can read, and is it the code that serves the model?
 
-- **Checked.** In Node only, `pnpm demo:attest` step 5. The launcher's compose hash is taken from the app compose the
+- **Checked.** `pnpm demo:attest` step 5, and the same chain in the browser when the visitor asks (the proof card,
+  `/log`). The launcher's compose hash is taken from the app compose the
   quote's MRCONFIGID binds. The enclave's action log is authenticated against a quote of its own, and that quote must name
   the same CVM instance as the key's. The latest release for the model's service is followed to a file in
   `nearai/cvm-compose-files` (sha256 compared), to the repository's tag, and to the signed build provenance of the proxy
@@ -83,7 +84,8 @@ Does what was measured resolve to source somebody can read, and is it the code t
   of another replica; a path that would leave the repository.
 - **Open.** Signed provenance is not a reproducible build. The engine image has no build policy and the weights are only
   named. The action log is a record, not a measurement: a release leaves the measurements as they were, and the proxy
-  holds the socket that quotes the log. The browser, the key log and the proofs do not read the action log yet.
+  holds the socket that quotes the log. The chain is a reading: the client does not refuse on a release, and the key log
+  and the proofs do not record one.
   Nobody approves a release: the most a log could say is that verifiers saw it.
 
 ## 4. Operator access
@@ -132,6 +134,6 @@ Can the client refuse a change until somebody it trusts has approved it?
 
 In the order we would take them: the release in the key log and a client that refuses one no trusted verifier logged; a
 minimum public age for a release, set by the viewer; the action log's length and hash in the key log, so that a later log
-can be checked to continue an earlier one; the same chain in the browser; a proof that names the release that answered.
+can be checked to continue an earlier one; a proof that names the release that answered.
 None of that makes the action log a measurement. That needs the releases in the enclave's measurements, which is NEAR
 AI's to build.

@@ -93,8 +93,13 @@ answers you):
 The evidence is NEAR AI's own and public by design: the action log, the compose repository and the signed builds are
 theirs, and the SDK can authenticate them. What we add is a client that reads them. The log is a record, not a
 measurement: a release leaves the enclave's measurements as they were, and the log is as good as the code that has run in
-that CVM. That limit, the others, and what the browser does not do yet are under "What we do not claim"; the method is in
-`docs/DEV-NOTES.md` (Nov 12).
+that CVM. That limit and the others are under "What we do not claim"; the method is in `docs/DEV-NOTES.md` (Nov 12).
+
+The same chain runs in the browser, on request: the proof card has a line "Code behind the key" with a button, and `/log`
+has a section of the same name that also lists the releases in the replica's log. The check asks GitHub and Sigstore
+from the visitor's own address, so it never starts by itself. It shows the release; the client does not refuse on it.
+
+![The code behind the key on /log: the release, each check and the releases in the replica's action log](docs/screenshots/code-behind-the-key.png)
 
 ## Status
 
@@ -106,8 +111,9 @@ As of Nov 12, 2026.
 - **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
   account still has a full-access key.
 - **On since Nov 11:** the deployment check. On Nov 12 we found that it sees the enclave's launcher, not the release
-  that serves the model. `pnpm demo:attest` follows that release to a source commit; the browser, the key log and the
-  proofs do not yet ([The code behind the key](#the-code-behind-the-key)).
+  that serves the model. `pnpm demo:attest` follows that release to a source commit, and so does the browser when asked
+  (the proof card, `/log`). The client does not refuse on a release, and the key log and the proofs do not record one
+  ([The code behind the key](#the-code-behind-the-key)).
 - **The log's first entries:** entry #0 was logged by hand from a report our code verified with the SDK; entries #1 and
   #2 are re-logs of that same recording by a stopgap script, since removed (same nonce and report hash, fresh
   `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh attestation each. No
@@ -171,7 +177,7 @@ key and the card says so. See "What we do not claim".
 | Inference in TEE, attestation, response signatures, E2EE, JS SDK | NEAR AI Cloud, `@nearai/inference-sdk` | used as-is, in the browser: the SDK's TDX + GPU checks (NVIDIA's verdict fetched through NEAR AI's proxy and checked against NVIDIA's keys) and `prepareE2eeChatRequest` |
 | Verifying an answer | Verification Center (signature + fresh attestation; cannot recompute hashes; no allowlist) | local hash recomputation over the exact bytes; check against a **public log**, not the vendor's current answer; a card a non-technical user can read; `/verify` and `/auditor`; an offline replay (`pnpm demo`) that needs no key |
 | Key & measurement log | none (TEE Receipts: owner-registered signer list) | append-only, hash-chained log in a NEAR contract designed for independent verifiers (today: two, both ours; registration is owner-gated); fail-closed client with a configurable trust set and quorum; split-view detection |
-| Deployment history | an action log in the model report, bound to a TDX quote; a public compose repository; signed image builds. The SDK authenticates the log and has provenance helpers, off by default | `pnpm demo:attest` follows the log to the release that serves the model and to the source commit of its proxy, and measures how long a release existed before it ran. The browser, the key log and the proofs do not yet |
+| Deployment history | an action log in the model report, bound to a TDX quote; a public compose repository; signed image builds. The SDK authenticates the log and has provenance helpers, off by default | `pnpm demo:attest` follows the log to the release that serves the model and to the source commit of its proxy, and measures how long a release existed before it ran. The browser runs the same checks on request (the proof card, `/log`). The client does not refuse on a release, and the key log and the proofs do not record one |
 | Agents in TEE | IronClaw runtime (no policies, limits or proofs); Shade Agents (deprecated Apr 2026) | (Tier 2) agent mandate + policy; decision signed inside TDX (OutLayer); contract executes; public proof without details; stop button |
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
 | NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | sign-in asks the wallet for a function-call key limited to `commit_proof` (the wallet may widen it, see [What we do not claim](#what-we-do-not-claim)), so commits are signed without a popup; only the storage prepayment (`deposit_storage`, 0.1 NEAR for 50 to 68 commits depending on the account name, topped up when it runs out) goes through the wallet dialog |
@@ -293,9 +299,10 @@ inherited" below).
   key nor that hash. Compose Manager records each such action in a log the enclave attests with a TDX quote of its own. On
   the CVM that answered us on Nov 12, 2026 that log held 21 releases of the model's compose file since Oct 21, and the image
   of the proxy for `z-ai/glm-5.3-flash` had changed five times, twice after our log first held that CVM's compose hash: the
-  client would have refused neither. `pnpm demo:attest` reads this log since Nov 12 and follows the release to a source
-  commit; the browser, the key log and the proofs do not yet. So a proof says which key signed and which launcher was
-  attested, not which release answered.
+  client would have refused neither. Since Nov 12 `pnpm demo:attest` reads this log and follows the release to a source
+  commit, and the browser does the same when the visitor asks (the proof card, `/log`). That is a reading, not a rule: the
+  client does not refuse on a release, the key log does not record one, and a proof says which key signed and which
+  launcher was attested, not which release answered.
 - **That the action log is a measurement.** A release leaves the enclave's measurements as they were. The log is Compose
   Manager's own record, and the TDX quote behind it says the log came from inside that CVM, not from which container. The
   serving containers the log describes run privileged and hold the same quote socket, so a dishonest release could present
