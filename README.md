@@ -158,6 +158,9 @@ pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attes
 pnpm demo:attest                 # no key, needs network (~10 s): what demo:live does up to the send (above); exits 0 on WOULD SEND
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
+pnpm demo:reply-key              # needs NEARAI_API_KEY: a negative control. One normal exchange, then the same client behind a
+                                 #   hop that swaps the reply key in transit, and once more with the version header rewritten
+                                 #   from 3 to 2: both must get no reply; exits 0 on "Result: REFUSED"
 pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. The chat needs NEARAI_API_KEY
                                  #   (server-side only); /log, /verify, /auditor, /agent and /trust work without it. Send "hello" → the
                                  #   browser verifies the TEE evidence itself (a few seconds cold, longer when the attestation
@@ -207,8 +210,9 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 | Auditor | one disclosed proof, its salt and the ciphertext bytes | the plaintext, the other exchanges | selective disclosure (`/auditor`) |
 
 The "does not see" column holds for requests. For replies it rests on E2EE v3 (SDK 0.3.0, since Nov 10): the reply
-key is bound into every encrypted request field, and NEAR AI's proxy should refuse a swapped one before inference. We have
-not tested that refusal ourselves (see "Known issues we inherited" below).
+key is bound into every encrypted request field, and NEAR AI's proxy refuses a request whose reply key was swapped in
+transit. We tested that refusal on Nov 12 with a request of our own (`pnpm demo:reply-key`; see "Known issues we
+inherited" below).
 
 ## What we do not claim
 
@@ -287,8 +291,11 @@ Known issues we inherited (and say so):
   ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)). This repo has used 0.3.0 since Nov 10: the SDK
   sends `X-Encryption-Version: 3` with no fallback, the client refuses to send an encrypted request not marked v3, and our
   relay refuses one to the attested model. Live exchanges passed on Nov 10 from Node (`pnpm demo:live`, straight to NEAR AI)
-  and from the hosted chat through our relay, so production accepts v3. We did not send a swapped
-  reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
+  and from the hosted chat through our relay, so production accepts v3. On Nov 12 we sent the control
+  (`pnpm demo:reply-key`, recorded in `docs/samples/reply-key-control.json`): the exchange verified as usual; the same
+  client behind a hop that swapped the reply key in transit got HTTP 400 `Decryption failed` where a reply would have been,
+  and so did the swap with the version header rewritten from 3 to 2. That is one model on one day with SDK 0.3.0, not a
+  promise about other routes or later builds of the proxy. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one on a server since Nov 6, trusted by the site's default, and a second account
@@ -376,7 +383,7 @@ measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 
 ```
 apps/web/            Next.js app: chat with the proof card, /verify, /log, /auditor, /agent, /trust; byte-exact relay to NEAR AI
-apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:attest, demo:live, demo:metrics, record / check-contract scripts
+apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:attest, demo:live, demo:reply-key, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
                      demo:live, demo:metrics and the Tier 2 agent service, and up to the send, with no key, by demo:attest;

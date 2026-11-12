@@ -19,7 +19,7 @@ Honest limitations won prizes at previous NEAR hackathons.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
-  E2EE v3 and on NEAR AI's proxy refusing a swapped reply key, which we have not tested: see the first item under "Known issues we inherited".
+  E2EE v3 and on NEAR AI's proxy refusing a swapped reply key, which we tested once, on Nov 12, with a request of our own: see the first item under "Known issues we inherited".
 - Every response is **signed inside the enclave** over `sha256(request)` and `sha256(response)`. We keep the
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
 - Only a **salted hash** of each proof goes on-chain (`commit_proof`, paid from storage the committing account prepays and
@@ -115,8 +115,11 @@ Honest limitations won prizes at previous NEAR hackathons.
   ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)). This repo has used 0.3.0 since Nov 10: the SDK
   sends `X-Encryption-Version: 3` with no fallback, the client refuses to send an encrypted request not marked v3, and our
   relay refuses one to the attested model. Live exchanges passed on Nov 10 from Node (`pnpm demo:live`, straight to NEAR AI)
-  and from the hosted chat through our relay, so production accepts v3. We did not send a swapped
-  reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
+  and from the hosted chat through our relay, so production accepts v3. On Nov 12 we sent the control
+  (`pnpm demo:reply-key`, recorded in `docs/samples/reply-key-control.json`): the exchange verified as usual; the same
+  client behind a hop that swapped the reply key in transit got HTTP 400 `Decryption failed` where a reply would have been,
+  and so did the swap with the version header rewritten from 3 to 2. That is one model on one day with SDK 0.3.0, not a
+  promise about other routes or later builds of the proxy. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one on a server since Nov 6, trusted by the site's default, and a second account
