@@ -111,7 +111,7 @@ Reference implementations to copy patterns from (not code wholesale; disclose an
 ```
 pnpm i                                   install everything
 pnpm demo                                offline replay of the Tier-1 checks on recorded evidence (no key, no network)
-pnpm demo:controls                       negative controls on that recording: 14 changes, each must be refused (no key, no network)
+pnpm demo:controls                       negative controls on that recording: 15 changes, each must be refused for its own reason (no key, no network)
 pnpm demo:live                           the same checks live against NEAR AI and testnet (needs NEARAI_API_KEY)
 pnpm demo:reply-key                      negative control: a hop swaps the reply key in transit and must get no reply (needs NEARAI_API_KEY)
 pnpm demo:attest                         demo:live up to the send, then the code behind the key down to a source commit (no key, needs network)

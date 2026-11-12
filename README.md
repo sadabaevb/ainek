@@ -51,7 +51,7 @@ with your own key. That and the other checks (your own trust set, re-verifying a
 [Try it](#try-it-do-x--see-y).
 
 **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
-What must be refused, and is: `pnpm demo:controls` (offline, no key) changes the recorded evidence in 14 ways and each one
+What must be refused, and is: `pnpm demo:controls` (offline, no key) changes the recorded evidence in 15 ways and each one
 has to fail; [docs/ASSESSMENT.md](docs/ASSESSMENT.md) puts the client through the six obligations of Private Inference Beat.
 
 ## The code behind the key
@@ -196,9 +196,10 @@ Docker only for the reproducible wasm builds (`docs/REVIEW.md`). Each step says 
 # offline, no key
 pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
                                  #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
-pnpm demo:controls               # negative controls on the recording `pnpm demo` accepts: 14 changes (a byte of the quote,
+pnpm demo:controls               # negative controls on the recording `pnpm demo` accepts: 15 changes (a byte of the quote,
                                  #   the nonce, the key, the launcher, the event log, the action log, the answer), each of
-                                 #   which must be refused → "Result: REFUSED. 14 of 14 changes were refused."
+                                 #   which must be refused for its own reason → "Result: REFUSED. 15 of 15 changes were refused,
+                                 #   each for its own reason." The same table runs in `pnpm test`
 
 # needs the network; demo:live and the chat also need NEARAI_API_KEY in .env (cp .env.example .env; cloud.near.ai → API Keys)
 pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attests the model with a fresh nonce, verifies the TDX + GPU

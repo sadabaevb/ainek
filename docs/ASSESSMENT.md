@@ -12,14 +12,16 @@ and what stays open. Nothing here is audited.
 Versions: `@nearai/inference-sdk` 0.3.0, E2EE v3, model `z-ai/glm-5.3-flash`, as run on Nov 12, 2026.
 
 ```bash
-pnpm demo:controls     # offline, no key: 14 changes to the recorded evidence, each of which must be refused
+pnpm demo:controls     # offline, no key: 15 changes to the recorded evidence, each of which must be refused
 pnpm demo:attest       # network, no key: the live evidence, the key log, the release behind the key
 pnpm demo:reply-key    # needs NEARAI_API_KEY: a hop swaps the reply key in transit and must get no reply
 pnpm test              # the unit tests named below
 ```
 
-`pnpm demo:controls` prints one line per change, under the same six headings, and exits 0 only when every change was
-refused and the unchanged recording was accepted.
+`pnpm demo:controls` prints one line per change, under the same six headings, and exits 0 only when the unchanged
+recording was accepted and every change was refused for the reason its control names. The same table runs as tests
+(`apps/demo/src/controls.test.ts`). The lines it marks "—" are not controls: they say where the control for that part
+is, or that there is none.
 
 ## 1. Hardware
 
@@ -45,8 +47,9 @@ Are the recipient of the prompt, the key the reply is encrypted to, and the fres
   verifiers the viewer trusts, or nothing is sent. E2EE v3 binds the reply key into every encrypted request field. From
   Node the request goes over a connection pinned to the attested gateway's TLS key.
 - **Shown by.** `pnpm demo:live`; the chat.
-- **Must be refused.** `pnpm demo:controls`, section 2: a report replayed for another nonce; another signing key than the
-  quote binds; a key no trusted verifier logged (also `pnpm demo:tamper` and `/?tamper=1`). Live, `pnpm demo:reply-key`: a
+- **Must be refused.** `pnpm demo:controls`, section 2: a report served again to a client that sent another nonce; an
+  old quote under a report that names the new nonce; another signing key than the quote binds; a key no trusted verifier
+  logged (also `pnpm demo:tamper` and `/?tamper=1`). Live, `pnpm demo:reply-key`: a
   hop that swaps the reply key in transit got HTTP 400 `Decryption failed` on Nov 12, with and without the version header
   rewritten to 2 (`docs/samples/reply-key-control.json`). Our relay refuses a request to the attested model that is not
   complete E2EE v3 (`relay-guard.test.ts`).

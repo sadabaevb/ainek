@@ -1,6 +1,6 @@
 // Loads the recording in docs/samples. Everything here is public: attestation reports, Intel collateral,
 // NVIDIA's verdict and keys, the raw bytes of one chat and its signature. No API key anywhere.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import type { KeyEntry, ModelProof, RawReport } from '@ainek/proof';
 
 export type { RawReport } from '@ainek/proof';
@@ -89,4 +89,28 @@ export function loadRecording(): Recording {
       e2eeExchange(),
     ],
   };
+}
+
+/** One run of the reply-key control as recorded: what it showed, the HTTP status when a response arrived, the service's words. */
+export interface RecordedHop {
+  kind: string;
+  status?: number | undefined;
+  detail: string;
+}
+/** What `pnpm demo:reply-key --record` writes: docs/samples/reply-key-control.json. */
+export interface ReplyKeyControl {
+  recordedAt: string;
+  model: string;
+  sdk: string;
+  encryptionVersion: number;
+  verdict: string;
+  /** The unmodified exchange, named by what anyone can look up. */
+  honest: { kind: string; completionId: string; signingKey: string; logEntry: number };
+  swapped: RecordedHop | undefined;
+  swappedAndDowngraded: RecordedHop | undefined;
+}
+export const REPLY_KEY_CONTROL = 'reply-key-control.json';
+/** The recorded reply-key control, when the repository holds one. */
+export function loadReplyKeyControl(): ReplyKeyControl | undefined {
+  return existsSync(new URL(REPLY_KEY_CONTROL, samplesDir)) ? readJson<ReplyKeyControl>(REPLY_KEY_CONTROL) : undefined;
 }

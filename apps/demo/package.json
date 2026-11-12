@@ -13,7 +13,7 @@
     "reply-key": "node src/reply-key.ts",
     "record": "node scripts/record-evidence.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node src/controls.ts",
+    "test": "node --test 'src/**/*.test.ts'",
     "check-contract": "node scripts/check-contract.mjs",
     "check-agent": "node scripts/check-agent.mjs",
     "metrics": "node src/metrics.ts",

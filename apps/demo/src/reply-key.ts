@@ -16,7 +16,7 @@ import { E2EE_VERSION, oneLine } from '@ainek/proof';
 import { contractLog, runTier1, type Tier1Outcome } from '@ainek/tier1-node';
 import { readHopOutcome, swapReplyKey, type HopResult } from '@ainek/tier1-node/hop';
 import { loadLiveEnv } from './env.ts';
-import { samplesDir } from './evidence.ts';
+import { REPLY_KEY_CONTROL, samplesDir, type ReplyKeyControl } from './evidence.ts';
 import { FAIL, NA, OK, exitFlushed, head, line, seconds } from './term.ts';
 
 const usage = (problem: string): never => {
@@ -84,9 +84,9 @@ if (flags.record) {
     const [swapped, swappedAndDowngraded] = controls; // each as it came: the kind, the HTTP status and the service's own words
     // The honest run is named by what anyone can look up: its completion id, the model's public signing key and the log entry it was checked against.
     const honestRecord = { kind: honestRun.kind, completionId: honestRun.completion.id, signingKey: honestRun.signer.signer.signingAddress, logEntry: honestRun.logEntry.index };
-    const recorded = { recordedAt: new Date().toISOString(), model: cfg.model, sdk: `@nearai/inference-sdk ${sdkVersion}`, encryptionVersion: Number(E2EE_VERSION), verdict, honest: honestRecord, swapped, swappedAndDowngraded };
-    writeFileSync(new URL('reply-key-control.json', samplesDir), `${JSON.stringify(recorded, null, 2)}\n`);
-    console.log('recorded: docs/samples/reply-key-control.json');
+    const recorded: ReplyKeyControl = { recordedAt: new Date().toISOString(), model: cfg.model, sdk: `@nearai/inference-sdk ${sdkVersion}`, encryptionVersion: Number(E2EE_VERSION), verdict, honest: honestRecord, swapped, swappedAndDowngraded };
+    writeFileSync(new URL(REPLY_KEY_CONTROL, samplesDir), `${JSON.stringify(recorded, null, 2)}\n`);
+    console.log(`recorded: docs/samples/${REPLY_KEY_CONTROL}`);
   }
 }
 await exitFlushed(verdict === 'REFUSED' ? 0 : 1);
