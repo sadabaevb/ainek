@@ -2,21 +2,30 @@
 // The "Code behind the key" line of the proof card and of /log. The other lines of a card were checked before the
 // message left; this one is checked when the visitor asks, because it sends requests from their browser to GitHub and
 // Sigstore (lib/release.ts, loaded on the click).
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { getSdkError, isVerificationError, type VerifiedModelAttestation } from '@nearai/inference-sdk';
 import { useT } from '@/app/providers';
 import { describeError } from '@/lib/errors';
-import type { ReleaseCheck } from '@/lib/release';
+import type { KeyLogContext, ReleaseCheck } from '@/lib/release';
 import { Row, mark } from './checks';
 
-/** `failed` on an error: the hardware evidence itself did not verify. Anything else thrown is a check that could not be made. */
-type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck } | { kind: 'error'; why: string; failed: boolean };
+/**
+ * `failed` on an error: the hardware evidence itself did not verify. Anything else thrown is a check that could not be made.
+ * A finished check keeps the report it read and the function that reads the key log against it, so that the key-log line
+ * follows the log and the viewer's trust set as they change, without checking the release again.
+ */
+type State =
+  | { kind: 'idle' }
+  | { kind: 'running' }
+  | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation; withKeyLog: typeof import('@/lib/release').withKeyLog }
+  | { kind: 'error'; why: string; failed: boolean };
 
 /**
  * `attest` gives the verified report to read: the card hands over the one it already holds, /log verifies one when asked.
- * `history` adds the list of the service's releases under the line.
+ * `history` adds the list of the service's releases under the line. `keyLog` adds, to the lines, where the public key log
+ * stands on that report's action log: /log has the entries at hand, a card shown later does not.
  */
-export function ReleaseRow({ attest, model, hint, history = false }: { attest: () => Promise<VerifiedModelAttestation>; model: string; hint?: string | undefined; history?: boolean }) {
+export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { attest: () => Promise<VerifiedModelAttestation>; model: string; hint?: string | undefined; history?: boolean; keyLog?: KeyLogContext | undefined }) {
   const { t } = useT();
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [open, setOpen] = useState(false);
@@ -24,15 +33,15 @@ export function ReleaseRow({ attest, model, hint, history = false }: { attest: (
   const run = async () => {
     setState({ kind: 'running' });
     try {
-      const [{ checkRelease }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
-      setState({ kind: 'done', check: await checkRelease(attestation, model) });
+      const [{ checkRelease, withKeyLog }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
+      setState({ kind: 'done', check: await checkRelease(attestation, model), attestation, withKeyLog });
     } catch (err) {
       const refused = getSdkError(err);
       setState({ kind: 'error', why: describeError(err), failed: isVerificationError(refused) && !refused.retryable });
     }
   };
 
-  const check = state.kind === 'done' ? state.check : undefined;
+  const check = useMemo(() => (state.kind !== 'done' ? undefined : keyLog ? state.withKeyLog(state.check, state.attestation, model, keyLog) : state.check), [state, keyLog, model]);
   const status = check ? check.status : state.kind === 'running' ? 'running' : state.kind === 'error' && state.failed ? 'fail' : 'skipped';
   const again = <button type="button" className="btn small" onClick={run}>{t.codeAgain}</button>;
   const detail = check && (

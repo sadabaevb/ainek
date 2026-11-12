@@ -2,8 +2,8 @@
 // It only prints. The words are `describeRelease` of @ainek/proof/release-chain, which the proof card shows too, and which
 // checks failed is `failedChecks` there: a line is marked failed, not checked or fine by the same `Checked` values.
 import { spanText, type ReleaseLogVerdict } from '@ainek/proof';
-import { countText as count, describeRelease, utcText as utc, type LeadTime, type ReleaseInspection } from '@ainek/tier1-node/release';
-import { FAIL, NA, OK, head, line, markOf } from './term.ts';
+import { countText as count, describeRelease, releaseInLogLine, utcText as utc, type LeadTime, type ReleaseInspection } from '@ainek/tier1-node/release';
+import { NA, head, line, markOf } from './term.ts';
 
 /**
  * Prints the code section and returns one line for the summary card, or undefined when no release was resolved.
@@ -17,17 +17,8 @@ export function printRelease(inspection: ReleaseInspection | undefined, { model,
     return undefined;
   }
   const { lines, summary } = describeRelease(inspection, { model, now });
-  for (const l of lines) line(markOf(l.status), l.text);
-  printReleaseInLog(inLog, enforced);
+  for (const l of [...lines, releaseInLogLine(inLog, enforced)]) line(markOf(l.status), l.text);
   return summary;
-}
-
-/** Where the key log stands on the enclave's action log, in the words of the rule that decides it (release-marks.ts). */
-function printReleaseInLog(inLog: ReleaseLogVerdict, enforced: boolean): void {
-  if (inLog.status === 'ok') line(OK, `key log: ${inLog.detail}`);
-  // A log that does not continue what a verifier saw is not a matter of a setting.
-  else if (inLog.status === 'rewritten-log') line(FAIL, `key log: the enclave's action log was rewritten: ${inLog.detail}`);
-  else line(NA, `key log: ${inLog.detail} (${enforced ? 'AINEK_REQUIRE_RELEASE is on' : 'AINEK_REQUIRE_RELEASE is off, so this client sends all the same; with it on it would not'})`);
 }
 
 /** The nearest thing to a typical value that is itself one of the measurements or the mean of the middle two. */

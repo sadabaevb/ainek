@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { checked, type Checked } from './checked.ts';
 import { readRepoJson } from './fixtures.ts';
 import { evaluateKeyLog } from './key-log.ts';
+import { releaseInLogLine } from './release-lines.ts';
 import { actionsHash, evaluateRelease, logMark, marksOf, releaseMark, releaseStanding, withReleaseRule, type AttestedReport } from './release-marks.ts';
 import type { ManagerAction } from './release.ts';
 import type { KeyEntry, RawReport } from './index.ts';
@@ -241,3 +242,19 @@ test('withReleaseRule: on top of a key that passed, for every report that carrie
   const absent = evaluateKeyLog(entries, { ...query, signingAddress: 'ab'.repeat(32) });
   assert.equal(withReleaseRule(absent, entries, query, [reportOf(LOG)], { withLauncher: true }), absent);
 });
+
+test('releaseInLogLine: what the rule says in one line, the same in the terminal and on /log', () => {
+  const seen = [entry(7, 'v1.testnet', [logMark(INSTANCE, LOG)])];
+  // Marked as it stands: a check mark, whatever the setting.
+  assert.deepEqual(releaseInLogLine(evaluateRelease(seen, at(LOG), { now: T0 }), false), { status: 'ok', text: 'key log: the action log as it stands (3 actions) is marked by v1.testnet since 2026-11-12 08:00 UTC' });
+  // Not marked: only said when the client does not refuse by the rule, and said to be a refusal when it does.
+  const added = evaluateRelease(seen, at([...LOG, up('2026-11-12T09:00:00Z', H2)]));
+  assert.deepEqual([releaseInLogLine(added, false).status, releaseInLogLine(added, true).status], ['skipped', 'skipped']);
+  assert.match(releaseInLogLine(added, false).text, /^key log: the enclave's action log has 1 action since entry #7 .* \(AINEK_REQUIRE_RELEASE is off, so this client sends all the same; with it on it would not\)$/);
+  assert.match(releaseInLogLine(added, true).text, /\(AINEK_REQUIRE_RELEASE is on\)$/);
+  // A rewritten log is a failure, and no setting is quoted next to it.
+  const edited = evaluateRelease(seen, at([LOG[0] as ManagerAction, up('2026-11-01T10:00:00Z', H2), LOG[2] as ManagerAction]));
+  assert.deepEqual([releaseInLogLine(edited, false).status, /AINEK_REQUIRE_RELEASE/.test(releaseInLogLine(edited, false).text)], ['fail', false]);
+  assert.match(releaseInLogLine(edited, false).text, /^key log: the enclave's action log was rewritten: the first 3 actions/);
+});
+

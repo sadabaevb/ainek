@@ -4,6 +4,7 @@
 import type { Checked } from './checked.ts';
 import { shortHex } from './hash.ts';
 import { COMPOSE_REPOSITORY, spanText, timeOf, type Release } from './release.ts';
+import type { ReleaseLogVerdict } from './release-marks.ts';
 import type { ImageCheck, ReleaseInspection, ServiceRelease, SourceChange } from './release-types.ts';
 
 /** One fact of an inspection: `ok` was checked and held, `fail` was checked and did not, `skipped` was not checked or is only a reading. */
@@ -123,3 +124,16 @@ export function describeRelease(inspection: ReleaseInspection, { model, now = Da
   const built = served.proxy?.provenance.status === 'ok' ? `, proxy built from ${served.proxy.provenance.value.repository}@${served.proxy.provenance.value.commit.slice(0, 10)}` : '';
   return { lines, summary: `release ${releaseName(served.release)} deployed ${utcText(served.release.deployedAt)}${built}` };
 }
+
+/**
+ * Where the public key log stands on the enclave's action log, in the words of the rule that decides it
+ * (`releaseStanding` in release-marks.ts): one line, the same in `pnpm demo:attest` and on /log. `enforced` says whether
+ * this client refuses by the rule or only shows what it would say.
+ */
+export function releaseInLogLine(inLog: ReleaseLogVerdict, enforced: boolean): ReleaseLine {
+  if (inLog.status === 'ok') return { status: 'ok', text: `key log: ${inLog.detail}` };
+  // A log that does not continue what a verifier saw is not a matter of a setting.
+  if (inLog.status === 'rewritten-log') return { status: 'fail', text: `key log: the enclave's action log was rewritten: ${inLog.detail}` };
+  return { status: 'skipped', text: `key log: ${inLog.detail} (${enforced ? 'AINEK_REQUIRE_RELEASE is on' : 'AINEK_REQUIRE_RELEASE is off, so this client sends all the same; with it on it would not'})` };
+}
+

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sha256Hex } from '@ainek/proof';
-import { checkRelease } from './release.ts';
+import { logMark, sha256Hex, type KeyEntry } from '@ainek/proof';
+import { checkRelease, withKeyLog, type KeyLogContext } from './release.ts';
 
 // The chain itself is tested in @ainek/tier1-node. Here: what the page makes of it. The images are ones no build policy
 // covers, so nothing reaches Sigstore, and GitHub is a fake.
@@ -69,3 +69,30 @@ test('checkRelease: a file that does not match is a failure; a report without an
   const none = await checkRelease({ deployment: { appCompose: '{}' }, report: {} } as unknown as Parameters<typeof checkRelease>[0], MODEL, github);
   assert.deepEqual([none.status, none.release, none.unresolved, none.retry], ['skipped', undefined, 'this model report carries no action log', false]);
 });
+
+test('withKeyLog: the key log\'s standing is one more line; a rewritten log fails the check whatever the setting', async () => {
+  const KEY = 'ab'.repeat(32);
+  const INSTANCE = '19aea1693533dc2d529db03e3f725f20bde8d66d';
+  const events = [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: INSTANCE }];
+  const actions = [up('2026-11-01T12:00:00Z', A, 'v0.0.1'), up('2026-11-03T10:00:00Z', B, 'v0.0.2')];
+  const report = { signer: { signingAddress: KEY }, deployment: { appCompose: '{}', composeManager: { actions, tcbStatus: 'UpToDate' } }, report: { eventLog: events, composeManagerAttestation: { eventLog: events } } } as unknown as Parameters<typeof withKeyLog>[1];
+  const check = await checkRelease(report, MODEL, github);
+  const entry = (marks: string[]): KeyEntry => ({ index: 7, model: MODEL, verifier: 'v1.testnet', signing_address: KEY, compose_hash: 'c0'.repeat(32), observed_at: String(Date.parse('2026-11-12T08:00:00Z')), image_digests: [`sha256:${'d'.repeat(64)}`, ...marks] }) as unknown as KeyEntry;
+  const log = (entries: KeyEntry[], enforced = false): KeyLogContext => ({ entries, trustedVerifiers: ['v1.testnet'], quorum: 1, withLauncher: false, waitMs: 0, enforced });
+
+  // Today's log: the key is there, no entry marks an action log. The line says so, and the check's own verdict stands.
+  const unmarked = withKeyLog(check, report, MODEL, log([entry([])]));
+  assert.equal(unmarked.lines.length, check.lines.length + 1);
+  assert.match(unmarked.lines.at(-1)?.text ?? '', /^key log: none of the 1 log entry for this key and launcher carries a mark of the enclave's action log \(AINEK_REQUIRE_RELEASE is off/);
+  assert.deepEqual([unmarked.status, unmarked.failures], [check.status, check.failures]);
+  // A verifier that writes marks, and the log as it stood then: a check mark on the line.
+  const marked = withKeyLog(check, report, MODEL, log([entry([logMark(INSTANCE, actions)])]));
+  assert.deepEqual([marked.lines.at(-1)?.status, marked.lines.at(-1)?.text], ['ok', 'key log: the action log as it stands (2 actions) is marked by v1.testnet since 2026-11-12 08:00 UTC']);
+  // The verifier saw another first action than the one attested now: the row turns red even with the rule off.
+  const rewritten = withKeyLog(check, report, MODEL, log([entry([logMark(INSTANCE, [up('2026-10-30T00:00:00Z', B, 'v0.0.2')])])]));
+  assert.equal(rewritten.status, 'fail');
+  assert.match(rewritten.failures.at(-1) ?? '', /^key log: the enclave's action log was rewritten: /);
+  // Entries of a verifier the viewer does not trust say nothing here.
+  assert.match(withKeyLog(check, report, MODEL, { ...log([entry([logMark(INSTANCE, actions)])]), trustedVerifiers: ['someone-else.testnet'] }).lines.at(-1)?.text ?? '', /^key log: none of the 0 log entries/);
+});
+

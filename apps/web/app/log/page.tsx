@@ -84,6 +84,11 @@ export default function LogPage() {
     if (!report) throw new Error('no model attestation returned');
     return report;
   }, [cfg.model, cfg.acceptedTcbStatuses]);
+  // The chat's release rule (SPEC §7.5) on the entries this page read: shown under the release check, enforced only by the chat.
+  const keyLog = useMemo(
+    () => (log ? { entries: log.entries, trustedVerifiers: trust.verifiers, quorum: trust.quorum, withLauncher: cfg.requireLoggedDeployment, waitMs: cfg.releaseWaitMs, enforced: cfg.requireLoggedRelease } : undefined),
+    [log, trust, cfg.requireLoggedDeployment, cfg.releaseWaitMs, cfg.requireLoggedRelease],
+  );
   const deployments = useMemo(() => deploymentsSeen(log?.all ?? [], cfg.model), [log?.all, cfg.model]);
   // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.
   const standing = useMemo(() => new Map(deployments.map((d) => [d.composeHash, deploymentStanding(log?.entries ?? [], d, { model: cfg.model, trustedVerifiers: trust.verifiers, quorum: trust.quorum })])), [deployments, log?.entries, cfg.model, trust]);
@@ -142,7 +147,7 @@ export default function LogPage() {
         <h2>{tl.code.title}</h2>
         <p className="muted small">{tl.code.intro}</p>
         <div className="card">
-          <ReleaseRow attest={attestNow} model={cfg.model} history />
+          <ReleaseRow attest={attestNow} model={cfg.model} history keyLog={keyLog} />
         </div>
       </section>
 
