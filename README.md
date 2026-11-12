@@ -115,9 +115,10 @@ Reading a release is not refusing one. Since Nov 12 both ends of a rule exist, a
   of its manager. A log that no longer begins with what a verifier saw from the same instance is refused as rewritten.
   The rule needs no network: the log comes with the attestation the client has already verified. It speaks for the moment
   of that attestation, so with the rule on the browser attests again for every message instead of reusing one for an hour.
-- **The client can make a release wait** (`AINEK_MIN_RELEASE_AGE_MIN`, no wait by default). On the CVM we looked at, a
-  commit first ran in the enclave a median of 12 minutes after it was made. With a wait of, say, 60 minutes the client
-  refuses a release until an hour has passed since a trusted verifier first marked it in the public log.
+- **The client can wait** (`AINEK_RELEASE_WAIT_MIN`, no wait by default). On the CVM we looked at, a commit first ran
+  in the enclave a median of 12 minutes after it was made. With a wait of, say, 60 minutes the client sends only when
+  the action log has been marked as it stands for an hour, by as many verifiers as its quorum. Anything the enclave does
+  starts the wait again: a release, a deployment from another file, a new manager image.
 
 ```bash
 pnpm -F verifier dry-run   # no account, sends nothing: the entry a verifier would log, with its two marks
@@ -347,10 +348,11 @@ inherited" below).
   that, at one state of an enclave's action log, a verifier followed the release that serves the model to public sources:
   the latest release of the model's service in the compose file the log most recently deployed for it, the signed build
   of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release. A client may
-  ask a release to wait (`AINEK_MIN_RELEASE_AGE_MIN`, no wait by default): that wait counts from the first mark a trusted
-  verifier wrote for the release, by that verifier's clock and the client's, not from when the code became public, and a
-  rollback to a release marked earlier does not wait again. The verifier does not follow the engine image, or anything
-  else that log brought up. The log does
+  wait (`AINEK_RELEASE_WAIT_MIN`, no wait by default): it then sends only when the action log has been marked as it
+  stands for that many minutes, by as many verifiers as its quorum. That time counts from the verifiers' marks, not from
+  when the code became public; it is read off the verifiers' clocks and the client's, and off the day of the log the
+  client reads, so after a verifier has been away, or just after marks are turned on, a state that is days old waits
+  again. The verifier does not follow the engine image, or anything else that log brought up. The log does
   not record the Compose project of a deployment, so it does not show which earlier services a later one replaced, and in
   one of our recordings nine compose files in a single log define a service for this model. The rule
   (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own record: the action log it attests must be exactly
@@ -576,8 +578,8 @@ Tests:
   only that the agent committed a proof hash.
 - A second provider in the same log (Venice): one public log for the whole private-inference industry, not one vendor.
 - The release rule on by default: release marks from every verifier a client trusts, measured refusal windows, and a
-  proof that names the release that answered. The marks, the rule and the wait a client may ask of a release are
-  written (`AINEK_REQUIRE_RELEASE`, `AINEK_MIN_RELEASE_AGE_MIN`); the rule is off until the verifiers write marks.
+  proof that names the release that answered. The marks, the rule and the wait a client may ask for are written
+  (`AINEK_REQUIRE_RELEASE`, `AINEK_RELEASE_WAIT_MIN`); the rule is off until the verifiers write marks.
 - Starting the hardware check when the chat opens, so the first message does not wait three to four seconds for it. Written
   and held back: the first proof card would then say "from the cache" where it now shows the check, and every visit would
   reach NEAR AI and NVIDIA before the visitor sends anything.

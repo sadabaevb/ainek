@@ -126,21 +126,22 @@ Can the client refuse a change until somebody it trusts has approved it?
   Nov 11. Who counts is the viewer's choice on `/log`: the trust set and the quorum, not ours. With
   `AINEK_REQUIRE_RELEASE=1`, off by default, the same holds for what the enclave deployed: the action log it attests must
   be exactly one a trusted verifier checked and logged, so anything deployed, restarted or stopped after the last check is
-  refused until a verifier looks again. With `AINEK_MIN_RELEASE_AGE_MIN` on top of that, a release whose first mark in
-  the public log is younger than the client's wait is refused too.
+  refused until a verifier looks again. With `AINEK_RELEASE_WAIT_MIN` on top of that, a state of the log that a
+  quorum has marked for less than the client's wait is refused too.
 - **Must be refused.** `pnpm demo:controls`, section 6, and `/?tamper=deployment`: the right key, logged with another
   launcher than the one attested. `key-log.test.ts` (`unknown deployment`). For the release rule, `pnpm test`
   (`release-marks.test.ts`): an action added after the verifier's mark, whether a release of the model's file, a deployment
   from another file or a restart of the manager; a log whose beginning was edited; a log shorter than one a verifier saw,
   also when that verifier saw it under another launcher; a log quoted by another instance than the key; one verifier
-  where two are required; a release first marked ten minutes ago, for a client that waits an hour.
+  where two are required; a state marked ten minutes ago, for a client that waits an hour, and one that only one of two required verifiers has
+  marked for long enough.
 - **Open.** A new release of the serving containers behind the same launcher is not refused by default: this is the
   finding of Nov 12. The rule that refuses it is off until the verifiers a client trusts write release marks, and on
   Nov 12 the verifier that writes to our log does not yet. Its controls are unit tests, not a run against the live
   service. A mark covers the release that serves the model, not everything the same log deployed: the log does not
   record which earlier services a later deployment replaced. A rollback is marked like any other release once a verifier
-  has followed it, and does not wait again. The wait counts from a verifier's first mark, by its clock and the client's,
-  not from when the code became public, and no wait is the default. "Marked by a verifier" means followed to public
+  has followed it. The wait counts from the verifiers' marks, by their clocks and the client's, not from when the code
+  became public; it sees a day of the log, and no wait is the default. "Marked by a verifier" means followed to public
   sources, not reviewed.
 
 ## What would close the open items
