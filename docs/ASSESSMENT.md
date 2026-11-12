@@ -130,8 +130,9 @@ Can the client refuse a change until somebody it trusts has approved it?
 - **Must be refused.** `pnpm demo:controls`, section 6, and `/?tamper=deployment`: the right key, logged with another
   launcher than the one attested. `key-log.test.ts` (`unknown deployment`). For the release rule, `pnpm test`
   (`release-marks.test.ts`): an action added after the verifier's mark, whether a release of the model's file, a deployment
-  from another file or a restart of the manager; a log whose beginning was edited; a log shorter than one a verifier saw;
-  a log quoted by another instance than the key; one verifier where two are required.
+  from another file or a restart of the manager; a log whose beginning was edited; a log shorter than one a verifier saw,
+  also when that verifier saw it under another launcher; a log quoted by another instance than the key; one verifier
+  where two are required.
 - **Open.** A new release of the serving containers behind the same launcher is not refused by default: this is the
   finding of Nov 12. The rule that refuses it is off until the verifiers a client trusts write release marks, and on
   Nov 12 the verifier that writes to our log does not yet. Its controls are unit tests, not a run against the live
