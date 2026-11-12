@@ -51,6 +51,8 @@ with your own key. That and the other checks (your own trust set, re-verifying a
 [Try it](#try-it-do-x--see-y).
 
 **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
+What must be refused, and is: `pnpm demo:controls` (offline, no key) changes the recorded evidence in 14 ways and each one
+has to fail; [docs/ASSESSMENT.md](docs/ASSESSMENT.md) puts the client through the six obligations of Private Inference Beat.
 
 ## The code behind the key
 
@@ -194,6 +196,9 @@ Docker only for the reproducible wasm builds (`docs/REVIEW.md`). Each step says 
 # offline, no key
 pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
                                  #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
+pnpm demo:controls               # negative controls on the recording `pnpm demo` accepts: 14 changes (a byte of the quote,
+                                 #   the nonce, the key, the launcher, the event log, the action log, the answer), each of
+                                 #   which must be refused → "Result: REFUSED. 14 of 14 changes were refused."
 
 # needs the network; demo:live and the chat also need NEARAI_API_KEY in .env (cp .env.example .env; cloud.near.ai → API Keys)
 pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attests the model with a fresh nonce, verifies the TDX + GPU
@@ -458,7 +463,7 @@ measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 
 ```
 apps/web/            Next.js app: chat with the proof card, /verify, /log, /auditor, /agent, /trust; byte-exact relay to NEAR AI
-apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:attest, demo:live, demo:reply-key, demo:metrics, record / check-contract scripts
+apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:controls, demo:attest, demo:live, demo:reply-key, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
                      demo:live, demo:metrics and the Tier 2 agent service, and up to the send, with no key, by demo:attest;
