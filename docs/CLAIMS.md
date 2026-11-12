@@ -20,14 +20,16 @@ Honest limitations won prizes at previous NEAR hackathons.
   model's enclave attests, which the SDK authenticates against a TDX quote of its own, names the latest `compose_up` for the
   model's service. The file at that commit in `nearai/cvm-compose-files` is fetched and hashes to the sha256 the enclave
   recorded, and the repository's tag of the recorded name points at that commit (a commit id alone could be a fork's:
-  GitHub serves those under the parent's name). The proxy image the file pins by digest has a signed build provenance
+  GitHub serves those under the parent's name; a recorded tag the repository does not have fails the check). The proxy image the file pins by digest has a signed build provenance
   (Sigstore, GitHub Actions) naming its repository, branch and commit, and so does the Compose Manager image the log says
   it started as; that image is also compared with the one the measured compose starts the manager as. The quote behind
   the log and the quote behind the signing key name one CVM instance id, which rules out a mix-up between replicas, not
   a host that runs two CVMs under one id. This is signed provenance, not a reproducible build. It follows what was
   recorded, not which containers run at this moment (the SDK's own note on the verified log: "This does not establish a
   unique CVM identity or successful/current execution"). The log is a record and not a measurement: see "We do not
-  claim". The engine image and the weights are printed as the file names them and are not checked. "Public for N minutes
+  claim". The engine image and the weights are printed as the file of the engine's own latest release names them and are
+  not checked. A check that could not be made (GitHub or Sigstore not answering, no build policy for an image) is
+  reported as not made, and the summary gets a check mark only when every check of the release was made and held. "Public for N minutes
   before it ran" uses GitHub's commit time and Compose Manager's clock, neither a trusted timestamp, and comes from the
   one CVM that answered: the gateway picks a replica per connection.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and

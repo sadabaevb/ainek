@@ -10,7 +10,7 @@
 import { parseArgs } from 'node:util';
 import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, shortHex as short } from '@ainek/proof';
 import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
-import { failedChecks, inspectRelease, leadTimes } from '@ainek/tier1-node/release';
+import { failedChecks, inspectRelease, leadTimes, uncheckedChecks } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
 import { printLeadTimes, printRelease } from './release-report.ts';
 import { FAIL, NA, OK, exitFlushed, head, line, out, seconds } from './term.ts';
@@ -26,6 +26,7 @@ const flags = (() => {
 
 const { cfg } = loadLiveEnv();
 // Optional and never needed: without it GitHub allows 60 anonymous requests an hour from one address, enough for a few runs.
+// A token GitHub refuses (expired, revoked) is dropped after the first 401 and the public data is read anonymously.
 const githubToken = process.env.GITHUB_TOKEN || undefined;
 if (cfg.logSource !== 'contract') {
   console.error('pnpm demo:attest reads the live log (AINEK_LOG_SOURCE=contract); the recorded one is checked by pnpm demo');
@@ -78,8 +79,11 @@ if (outcome.kind === 'failed') {
     out(`│ ${OK} Model: ${model}, attested deployment (launcher compose ${short(compose)})`);
     out(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
     out(`│ ${OK} Key ${short(m.signer.signingAddress)} is in the public log: entry #${logEntry.index} by ${outcome.verdict.confirmedBy.join(', ')}${normalizeHex(logEntry.compose_hash) === compose ? ", with this launcher's compose hash" : '; this entry has another compose, the attested one is not in the log window'}`);
+    // A check mark only when every check of the release was made and held: "nothing failed" is not "everything was checked".
+    const unchecked = inspection ? uncheckedChecks(inspection) : [];
     if (codeFailed) out(`│ ${FAIL} Code: ${failures.length === 1 ? '' : `${failures.length} checks failed, the first: `}${failures[0]} (step 5)`);
-    else out(summary ? `│ ${OK} Code: ${summary} (step 5)` : `│ ${NA} Code: the release behind the key was not resolved (step 5)`);
+    else if (!summary) out(`│ ${NA} Code: the release behind the key was not resolved (step 5)`);
+    else out(unchecked.length === 0 ? `│ ${OK} Code: ${summary} (step 5)` : `│ ${NA} Code: ${summary}; not checked: ${unchecked.join(', ')} (step 5)`);
     out(`│ ${NA} Not checked here: an answer. No message was written, so nothing was encrypted, sent or signed (pnpm demo:live)`);
     out(codeFailed ? `└─ Result: WOULD SEND by the client's rule, but a check of the code behind the key failed (step 5). Nothing was sent.` : `└─ Result: WOULD SEND. Hardware and log checked in ${seconds(outcome.totalMs)}; nothing was sent.`);
   }

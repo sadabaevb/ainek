@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sha256Hex, type ManagerAction } from '@ainek/proof';
-import { failedChecks, inspectRelease, leadTimes, type InspectReleaseParams } from './release.ts';
+import { failedChecks, inspectRelease, leadTimes, uncheckedChecks, type InspectReleaseParams } from './release.ts';
 
 // A compose repository of two commits, served by a fake GitHub. The images have no build policy, so no test reaches Sigstore.
 const FILE = 'prod/models.yaml';
 const MODEL = 'vendor/model-a';
-const compose = (proxyDigest: string) => `
+const compose = (proxyDigest: string, engineDigest: string) => `
 x-proxy: &proxy
   image: org/proxy@sha256:${proxyDigest}
 services:
@@ -16,14 +16,14 @@ services:
       - MODEL_NAME=${MODEL}
       - VLLM_BACKEND_URLS=http://engine-a:8000
   engine-a:
-    image: org/engine@sha256:${'e'.repeat(64)}
+    image: org/engine@sha256:${engineDigest}
     command: serve --model-path /hub/models--some-org--Some-Model/snapshots/${'9'.repeat(40)}
 `;
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
 const COMMITS: Record<string, { text: string; date: string; tag: string }> = {
-  [A]: { text: compose('1'.repeat(64)), date: '2026-11-01T10:00:00Z', tag: 'v0.0.1' },
-  [B]: { text: compose('2'.repeat(64)), date: '2026-11-03T09:49:00Z', tag: 'v0.0.2' },
+  [A]: { text: compose('1'.repeat(64), 'e'.repeat(64)), date: '2026-11-01T10:00:00Z', tag: 'v0.0.1' },
+  [B]: { text: compose('2'.repeat(64), 'f'.repeat(64)), date: '2026-11-03T09:49:00Z', tag: 'v0.0.2' },
 };
 const up = (timestamp: string, commit: string, extra: Partial<ManagerAction> = {}): ManagerAction => ({ action: 'compose_up', timestamp, commit, file: FILE, ...(COMMITS[commit] ? { tag: COMMITS[commit].tag } : {}), file_sha256: sha256Hex(COMMITS[commit]?.text ?? ''), services: ['proxy-a'], ...extra });
 const MANAGER = `org/manager@sha256:${'c'.repeat(64)}`;
@@ -36,14 +36,15 @@ const ACTIONS: ManagerAction[] = [
 
 interface Seen { paths: string[]; auth: (string | null)[] }
 /** `tags` moves a tag to another commit, as the repository's writers could. */
-function fakeGitHub(over: (path: string) => Response | undefined = () => undefined, tags: Record<string, string> = {}): { fetch: typeof globalThis.fetch; seen: Seen } {
+function fakeGitHub(over: (path: string, auth: string | null) => Response | undefined = () => undefined, tags: Record<string, string> = {}): { fetch: typeof globalThis.fetch; seen: Seen } {
   const seen: Seen = { paths: [], auth: [] };
   const fetch = (async (input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit) => {
     const url = new URL(String(input));
     const path = url.pathname + url.search;
     seen.paths.push(path);
-    seen.auth.push(new Headers(init?.headers).get('authorization'));
-    const forced = over(path);
+    const auth = new Headers(init?.headers).get('authorization');
+    seen.auth.push(auth);
+    const forced = over(path, auth);
     if (forced) return forced;
     const contents = /^\/repos\/nearai\/cvm-compose-files\/contents\/(.+)\?ref=(\w+)$/.exec(path);
     if (contents) {
@@ -122,6 +123,11 @@ test('inspectRelease: a tag that points at another commit is a failure; a tag th
   assert.deepEqual(hexTag?.services[0]?.tag, { status: 'skipped', why: 'the tag is not a name this looks up' });
   assert.equal(hexTag?.services[0]?.committedAt.status, 'ok', 'the commit time is still read, by commit id');
   assert.deepEqual(seen.paths.filter((p) => p.includes('/commits/')), [`/repos/nearai/cvm-compose-files/git/commits/${B}`]);
+  // The repository has no tag of the recorded name (GitHub answers 422): the commit may be a fork's, so this fails.
+  const noTag = await inspectRelease({ deployment: deploymentOf(ACTIONS.map((a) => (a.commit === B ? { ...a, tag: 'v9.9.9' } : a))), model: MODEL, fetch: fakeGitHub().fetch });
+  assert.equal(noTag?.services[0]?.tag.status, 'fail');
+  assert.match(noTag?.services[0]?.tag.status === 'fail' ? noTag.services[0].tag.why : '', /^nearai\/cvm-compose-files has no tag v9\.9\.9: GitHub answered HTTP 422/);
+  assert.equal(noTag?.services[0]?.file.status, 'ok', 'the file still matches: only the tag tells the two cases apart');
   // No tag at all: said so, and a GitHub failure afterwards does not replace that reason.
   const untagged = ACTIONS.map(({ tag: _tag, ...rest }) => rest as ManagerAction);
   const down = await inspectRelease({ deployment: deploymentOf(untagged), model: MODEL, fetch: fakeGitHub((path) => (path.includes('/commits/') ? new Response('{}', { status: 500 }) : undefined)).fetch });
@@ -130,13 +136,44 @@ test('inspectRelease: a tag that points at another commit is a failure; a tag th
 });
 
 test('inspectRelease: a path or commit that would leave the repository never reaches GitHub', async () => {
-  for (const bad of [{ file: '../../../evil/repo/contents/x.yaml' }, { commit: `${A}/../../../../evil/repo/commits/x` }, { commit: 'main' }]) {
+  const nothingOdd = (seen: Seen) => assert.ok(seen.paths.every((p) => !p.includes('evil') && !p.includes('..') && !p.includes('main')), seen.paths.join(' '));
+  // Another file with such a path is passed over, and the model's own file is still found.
+  const other = fakeGitHub();
+  const found = await inspectRelease({ deployment: deploymentOf([...ACTIONS, up('2026-11-04T00:00:00Z', B, { file: '../../../evil/repo/contents/x.yaml' })]), model: MODEL, fetch: other.fetch });
+  assert.equal(found?.services[0]?.release.commit, B);
+  nothingOdd(other.seen);
+  // The latest action for the model's own file names such a commit: what runs cannot be resolved, and nothing is asked for.
+  for (const commit of [`${A}/../../../../evil/repo/commits/x`, 'main']) {
     const { fetch, seen } = fakeGitHub();
-    const found = await inspectRelease({ deployment: deploymentOf([...ACTIONS, up('2026-11-04T00:00:00Z', B, bad)]), model: MODEL, fetch });
-    assert.match(found?.unresolved ?? '', /malformed commit or file path/, JSON.stringify(bad));
-    assert.deepEqual(found?.services, []);
-    assert.ok(seen.paths.every((p) => !p.includes('evil') && !p.includes('..') && !p.includes('main')), seen.paths.join(' '));
+    const lost = await inspectRelease({ deployment: deploymentOf([...ACTIONS, up('2026-11-04T00:00:00Z', B, { commit })]), model: MODEL, fetch });
+    assert.match(lost?.unresolved ?? '', /not read as a compose file: prod\/models\.yaml: the action log names a malformed commit or file path/, commit);
+    assert.deepEqual(lost?.services, []);
+    nothingOdd(seen);
   }
+});
+
+test('inspectRelease: a file GitHub does not have is passed over; GitHub not answering ends the search', async () => {
+  // The most recently deployed file is an unrelated one at a commit the repository does not have (404).
+  const gone = [...ACTIONS, { action: 'compose_up', timestamp: '2026-11-05T00:00:00Z', commit: 'c'.repeat(40), file: 'prod/other.yaml' }];
+  const found = await inspectRelease({ deployment: deploymentOf(gone), model: MODEL, fetch: fakeGitHub().fetch });
+  assert.equal(found?.services[0]?.release.commit, B, 'the model\'s own file is still read');
+  // The same log while GitHub answers 500: no file is tried after the first, and nothing is resolved.
+  const { fetch, seen } = fakeGitHub(() => new Response('{}', { status: 500 }));
+  const down = await inspectRelease({ deployment: deploymentOf(gone), model: MODEL, fetch });
+  assert.match(down?.unresolved ?? '', /GitHub answered HTTP 500/);
+  assert.equal(seen.paths.filter((p) => p.includes('/contents/')).length, 1);
+});
+
+test('inspectRelease: an engine brought up alone is shown as its own latest release defines it', async () => {
+  // The proxy and its engine start from A; later the engine alone is brought up from B, which pins another engine image.
+  const log = [up('2026-11-01T12:00:00Z', A, { services: ['proxy-a', 'engine-a'] }), up('2026-11-03T10:00:00Z', B, { services: ['engine-a'] })];
+  const found = await inspectRelease({ deployment: deploymentOf(log), model: MODEL, fetch: fakeGitHub().fetch });
+  const [service] = found?.services ?? [];
+  assert.equal(service?.release.commit, A, 'the proxy is still the release of A');
+  assert.deepEqual(service?.engines.map((e) => [e.image?.digest, e.release?.commit]), [[`sha256:${'f'.repeat(64)}`, B]]);
+  // Brought up together, the engine is the one the proxy's file names and carries no release of its own.
+  const together = await inspectRelease({ deployment: deploymentOf([up('2026-11-01T12:00:00Z', A, { services: ['proxy-a', 'engine-a'] })]), model: MODEL, fetch: fakeGitHub().fetch });
+  assert.deepEqual(together?.services[0]?.engines.map((e) => [e.image?.digest, e.release]), [[`sha256:${'e'.repeat(64)}`, undefined]]);
 });
 
 test('inspectRelease: the manager the log names against the image the measured compose starts it as; the tag age it is given', async () => {
@@ -163,10 +200,48 @@ test('inspectRelease: the log must be quoted by the CVM instance that quoted the
   assert.equal((await run({ eventLog: events('a8a2') }))?.status, 'skipped');
 });
 
+test('inspectRelease: an image with no build proof fails; GitHub not answering for it is not checked; a refused token is dropped', async (t) => {
+  // The manager image is one the policy table covers, so the SDK asks GitHub for its build proofs through the global fetch.
+  const policed = ACTIONS.map((a) => (a.action === 'compose_manager_started' ? { ...a, image: `nearaidev/compose-manager@sha256:${'c'.repeat(64)}` } : a));
+  const asked: (string | null)[] = [];
+  const answer = (status: (auth: string | null) => number) =>
+    t.mock.method(globalThis, 'fetch', async (_input: unknown, init?: RequestInit) => {
+      const auth = new Headers(init?.headers).get('authorization');
+      asked.push(auth);
+      return new Response('{}', { status: status(auth) });
+    });
+  const managerOf = async (githubToken?: string) => (await inspectRelease({ deployment: deploymentOf(policed), model: MODEL, githubToken, fetch: fakeGitHub().fetch }))?.manager?.provenance;
+
+  // GitHub answers 404 for a digest it holds no build proof for: the image was not built by the workflow the policy names.
+  let stub = answer(() => 404);
+  assert.deepEqual(await managerOf(), { status: 'fail', why: 'nearai/compose-manager holds no build proof for this digest' });
+  stub.mock.restore();
+  // GitHub not serving: the check was not made.
+  stub = answer(() => 503);
+  const unserved = await managerOf();
+  assert.equal(unserved?.status, 'skipped');
+  assert.match(unserved?.status === 'skipped' ? unserved.why : '', /^build proofs could not be fetched: /);
+  stub.mock.restore();
+  // A token GitHub refuses: asked once with it, then again without it, and the anonymous answer is the one that counts.
+  asked.length = 0;
+  stub = answer((auth) => (auth ? 401 : 404));
+  assert.equal((await managerOf('stale-token'))?.status, 'fail');
+  assert.deepEqual(asked, ['Bearer stale-token', null]);
+  stub.mock.restore();
+
+  // The same for this module's own reads: after one 401 the token is not sent again and the release is still resolved.
+  const { fetch, seen } = fakeGitHub((_path, auth) => (auth ? new Response('{}', { status: 401 }) : undefined));
+  const found = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, githubToken: 'stale-token', fetch });
+  assert.equal(found?.services[0]?.file.status, 'ok');
+  assert.deepEqual([seen.auth[0], seen.auth.slice(1).every((a) => a === null)], ['Bearer stale-token', true]);
+});
+
 test('failedChecks: what was checked and did not hold, and nothing that could not be checked', async () => {
   const clean = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub().fetch });
   assert.ok(clean);
   assert.deepEqual(failedChecks(clean), [], 'no build policy and no event logs: not checked is not failed');
+  // And it is not verified either: what could not be checked is named, so nobody draws a check mark over it.
+  assert.deepEqual(uncheckedChecks(clean), ['that the log is from the CVM that holds the key', "the manager image's build provenance", 'the build provenance of the image (proxy-a)']);
   // A file that does not match, a tag moved elsewhere and a log from another replica: three failures, each named.
   const events = (instance: string) => [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: instance }];
   const bad = await inspectRelease({
@@ -176,7 +251,7 @@ test('failedChecks: what was checked and did not hold, and nothing that could no
     fetch: fakeGitHub(undefined, { 'v0.0.2': A }).fetch,
   });
   assert.ok(bad);
-  assert.deepEqual(failedChecks(bad).map((f) => f.split(':').slice(0, -1).join(':').replace(/: (the public file|tag v).*$/, '')), ['the instance behind the action log', "proxy-a: the release's file", "proxy-a: the release's tag"]);
+  assert.deepEqual(failedChecks(bad).map((f) => f.slice(0, f.indexOf(': '))), ['that the log is from the CVM that holds the key', 'the file of the release (proxy-a)', 'the tag of the release (proxy-a)']);
   // GitHub refusing everything fails nothing: the checks were not made.
   const refused = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub(() => new Response('{}', { status: 500 })).fetch });
   assert.ok(refused);
@@ -210,6 +285,11 @@ test('leadTimes: from the commit to its first compose_up, and no more requests a
   const refused = await leadTimes(ACTIONS, FILE, { fetch });
   assert.deepEqual(refused.map((t) => t.committedAt.status), ['skipped', 'skipped']);
   assert.equal(seen.paths.length, 1);
+  // A commit GitHub does not have is that commit's gap: the ones after it are still asked for.
+  const gap = fakeGitHub();
+  const withGap = await leadTimes([up('2026-10-30T00:00:00Z', 'c'.repeat(40)), ...ACTIONS], FILE, { fetch: gap.fetch });
+  assert.deepEqual(withGap.map((t) => t.committedAt.status), ['skipped', 'ok', 'ok']);
+  assert.equal(gap.seen.paths.length, 3);
   // A malformed commit is skipped by itself, without a request and without stopping the rest.
   const odd = fakeGitHub();
   const mixed = await leadTimes([up('2026-11-01T12:00:00Z', 'main'), ...ACTIONS], FILE, { fetch: odd.fetch });

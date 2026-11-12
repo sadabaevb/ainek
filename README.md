@@ -64,10 +64,14 @@ the model to a source commit:
 | Action log | authenticated by the SDK against a TDX quote of its own; that quote and the one behind the signing key name the same CVM instance, so the log is this replica's |
 | Release | the latest `compose_up` for the model's service: tag, commit, file and its sha256 |
 | File | the file at that commit in the public repository `nearai/cvm-compose-files` hashes to the recorded sha256 |
-| Tag | the repository's tag of the recorded name points at that commit. A commit id alone could be a fork's: GitHub serves those under the parent's name |
+| Tag | the repository's tag of the recorded name points at that commit; a tag the repository does not have fails. A commit id alone could be a fork's: GitHub serves those under the parent's name |
 | Proxy image | pinned by digest in the file; its signed build provenance (Sigstore, GitHub Actions) names the repository, branch and commit |
 | Manager image | the same provenance check for Compose Manager, which writes the log, and a comparison with the image the measured compose starts it as |
-| Engine and weights | printed as the file names them; not checked |
+| Engine and weights | printed as the file of the engine's own latest release names them; not checked |
+
+A check has three outcomes, and the command keeps them apart: it held, it failed, or it could not be made. GitHub saying
+"no such tag, file or build proof" fails the check; GitHub not answering leaves it not made. The summary line gets a check
+mark only when every check of the release was made and held.
 
 What that log held on the CVM that answered us on Nov 12, 2026 (`pnpm demo:attest --history` prints it for the CVM that
 answers you):

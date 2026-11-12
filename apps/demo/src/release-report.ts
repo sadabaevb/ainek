@@ -2,7 +2,7 @@
 // It only prints. Which checks failed is `failedChecks` in @ainek/tier1-node/release: a line here is marked as failed, not
 // checked or fine by the same `Checked` values that function reads.
 import { shortHex as short, spanText, timeOf, type Checked } from '@ainek/proof';
-import { COMPOSE_REPOSITORY, type ImageCheck, type LeadTime, type ReleaseInspection, type ServiceRelease } from '@ainek/tier1-node/release';
+import { COMPOSE_REPOSITORY, type ImageCheck, type LeadTime, type ReleaseInspection, type ServiceRelease, type SourceChange } from '@ainek/tier1-node/release';
 import { NA, OK, head, line, markOf } from './term.ts';
 
 // Timestamps come from the action log and from GitHub: one that does not parse is said to be unreadable, not thrown on.
@@ -33,6 +33,14 @@ function imageLine(role: string, { image, provenance }: ImageCheck): void {
   });
 }
 
+/** From the previous build's source to the current one's. A current build that lacks commits the previous one had is a step back. */
+function sourceText({ ahead, behind, files }: SourceChange): string {
+  if (ahead === 0 && behind === 0) return 'the same source commit';
+  const forward = `${count(ahead, 'commit')}, ${files >= 300 ? '300 or more files' : count(files, 'file')} changed`; // GitHub's comparison lists at most 300 files
+  if (behind === 0) return forward;
+  return ahead === 0 ? `an older source: ${count(behind, 'commit')} behind the previous build` : `a diverged source: ${forward}, and ${count(behind, 'commit')} of the previous build missing`;
+}
+
 function printService(s: ServiceRelease, model: string, now: number): void {
   const r = s.release;
   line(OK, `release serving ${model}: ${r.tag ? `${r.tag}, ` : ''}commit ${r.commit.slice(0, 10)} of ${COMPOSE_REPOSITORY}, ${r.file}, service ${s.service}, deployed ${utc(r.deployedAt)}`);
@@ -41,7 +49,11 @@ function printService(s: ServiceRelease, model: string, now: number): void {
   if (s.proxy) imageLine('proxy (decrypts the prompt, signs the answer)', s.proxy);
   else line(NA, 'the service names no image in the file: nothing to check');
   if (s.engines.length === 0) line(NA, 'engine: the file names none through VLLM_BACKEND_URLS that this reads');
-  else line(NA, `engine: ${[...new Set(s.engines.map((e) => (e.image ? `${e.image.repository}@${digestText(e.image.digest)}` : 'no image')))].join(', ')} (${count(s.engines.length, 'service')}); no build policy for it, not checked`);
+  else {
+    // An engine can be brought up alone: one whose own latest release is not the proxy's is shown as that release defines it.
+    const apart = [...new Set(s.engines.flatMap((e) => (e.release ? [e.release.tag ?? e.release.commit.slice(0, 10)] : [])))];
+    line(NA, `engine: ${[...new Set(s.engines.map((e) => (e.image ? `${e.image.repository}@${digestText(e.image.digest)}` : 'image not read')))].join(', ')} (${count(s.engines.length, 'service')}${apart.length > 0 ? `, last brought up by another release than the proxy: ${apart.join(', ')}` : ''}); no build policy for it, not checked`);
+  }
   const weights = [...new Set(s.engines.flatMap((e) => (e.weights ? [`${e.weights.repository}, snapshot ${e.weights.snapshot.slice(0, 8)}`] : [])))];
   if (weights.length > 0) line(NA, `weights named in the file: ${weights.join('; ')}; attestation does not hash weights`);
   // Two clocks nobody attests: a reading, so never a check mark.
@@ -50,8 +62,7 @@ function printService(s: ServiceRelease, model: string, now: number): void {
   if (s.previousBuild) {
     const { release: was, proxy, change } = s.previousBuild;
     const source = proxy.provenance.status === 'ok' ? ` from ${proxy.provenance.value.repository}@${proxy.provenance.value.commit.slice(0, 10)}` : '';
-    // GitHub's comparison lists at most 300 files.
-    const delta = change.status === 'ok' ? `; ${count(change.value.commits, 'commit')}, ${change.value.files >= 300 ? '300 or more files' : count(change.value.files, 'file')} changed: ${change.value.url}` : '';
+    const delta = change.status === 'ok' ? `; ${sourceText(change.value)}: ${change.value.url}` : '';
     line(markOf(proxy.provenance.status === 'fail' ? 'fail' : 'skipped'), `previous build of the proxy: ${digestText(proxy.image.digest)}${source}, in release ${was.tag ?? was.commit.slice(0, 10)} (deployed ${utc(was.deployedAt)})${delta}${proxy.provenance.status === 'fail' ? `; its build provenance did not verify: ${proxy.provenance.why}` : ''}`);
   }
   const first = s.history[0];
@@ -71,7 +82,7 @@ function printManager({ manager, launcher }: ReleaseInspection): void {
   if (boot) {
     const variable = boot.variable ? `the fallback of ${boot.variable}, which is ${boot.settable ? '' : 'not '}in the app's allowed_envs` : undefined;
     if (!boot.image.digest) line(NA, `the measured compose pins no image for the manager (${boot.raw})`);
-    else if (!boot.same) line(NA, `this is not the image the measured compose starts the manager as (${digestText(boot.image.digest)}): it was replaced after boot, which the measured launcher exists to do. What identifies it is the log's own record and the build provenance`);
+    else if (!boot.same) line(NA, `this is not the image the measured compose starts the manager as (${digestText(boot.image.digest)}): ${boot.settable ? `the operator may have set ${boot.variable}, which is in the app's allowed_envs, or the measured launcher replaced the image after boot` : 'it was replaced after boot, which the measured launcher exists to do'}. What identifies it is the log's own record and the build provenance`);
     else if (boot.settable) line(NA, `this is the measured compose's default for the manager (${variable}): the operator may set another, so the compose hash does not fix the image`);
     else line(OK, `this is the image the measured compose starts the manager as${variable ? ` (${variable})` : ''}: at boot it is part of the compose hash`);
   }

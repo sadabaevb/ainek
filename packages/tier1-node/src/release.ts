@@ -11,10 +11,15 @@
 // recorded. It does not show which containers run right now and it does not rebuild images. The log is a record, not a
 // measurement: the quote behind it says it came from inside this CVM, not from which container, and the serving containers
 // the log describes hold the same quote socket. So the log is as good as the code that has run in that CVM.
+//
+// Every check ends in one of three states (`Checked`). The line between two of them is drawn here: GitHub saying "there is no
+// such tag, file or build proof" is the check failing; GitHub not answering (rate limit, outage, no network) is the check
+// not made.
 import { fetchImageProvenance, verifyImageProvenance, type ImageProvenancePolicy, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
 import { checked, composeFilesOf, firstDeployments, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, sha256Hex, timeOf, type Checked, type ManagerAction, type Release } from '@ainek/proof';
 import { MAX_COMPOSE_BYTES, launcherSettings, modelServices, parseImage, type EngineService, type ImageRef, type LauncherSettings, type MeasuredSetting, type ModelService } from '@ainek/proof/compose-file';
-import { describeSdkError as whyOf } from './errors.ts';
+import { describeSdkError as whyOf, sdkHttpStatus } from './errors.ts';
+import { sdkRetryable } from './retry.ts';
 
 /** Where NEAR AI keeps the compose files Compose Manager deploys (the SDK's default too). */
 export const COMPOSE_REPOSITORY = 'nearai/cvm-compose-files';
@@ -41,12 +46,18 @@ export interface ImageCheck {
   image: ImageRef;
   provenance: Checked<Provenance>;
 }
+/** The source between two builds, from the earlier one's commit to the later one's. */
 export interface SourceChange {
-  commits: number;
-  /** Files changed, as GitHub's comparison lists them: it stops at 300. */
+  /** Commits the later build has that the earlier one lacks. */
+  ahead: number;
+  /** Commits the earlier build has that the later one lacks: above zero, the later build is from older or diverged source. */
+  behind: number;
+  /** Files changed by the `ahead` commits, as GitHub's comparison lists them: it stops at 300. */
   files: number;
   url: string;
 }
+/** An engine behind the service. `release` is the engine's own latest release when that is not the service's. */
+export type Engine = EngineService & { release?: Release };
 export interface ServiceRelease {
   service: string;
   /** Every release of this service the log holds, oldest first. */
@@ -59,8 +70,8 @@ export interface ServiceRelease {
   tag: Checked<string>;
   /** The service's image: on NEAR AI the proxy that decrypts the prompt and signs the answer. */
   proxy?: ImageCheck;
-  /** The engines the service forwards to, as the file names them; empty when it names none this reads. */
-  engines: EngineService[];
+  /** The engines the service forwards to, each as its own latest release defines it; empty when the file names none this reads. */
+  engines: Engine[];
   /** When the release's commit was made, by GitHub's record (for a merged pull request, the time of the merge). */
   committedAt: Checked<string>;
   /** The most recent earlier release that ran another build of the service's image, among the last few. */
@@ -109,51 +120,80 @@ export interface InspectReleaseParams {
 const GITHUB_API = 'https://api.github.com';
 
 /**
+ * A GitHub read that did not give the resource. `gone` is true when the answer is about that one resource: GitHub says it
+ * does not exist, or its reference is malformed, or it is too large. Another resource may still be read, and a check that
+ * needed this one has failed. Otherwise GitHub is not answering now (rate limit, refusal, outage, no network): stop
+ * asking, and the check was not made.
+ */
+class ReadError extends Error {
+  readonly gone: boolean;
+  constructor(message: string, gone: boolean) {
+    super(message);
+    this.gone = gone;
+  }
+}
+const isGone = (err: unknown): boolean => err instanceof ReadError && err.gone;
+
+/** A commit named by its id, or by a tag of the repository. */
+type CommitRef = { id: string } | { tag: string };
+
+/**
  * The GitHub reads this needs. Public data; the token is optional. Commits, paths and tags come from the action log, so
  * each is checked for its shape here, where it reaches a URL: a path with `..` would read another repository under this one's name.
  */
 function github(token: string | undefined, fetchImpl: typeof globalThis.fetch) {
+  let useToken = token !== undefined;
   const get = async (path: string, accept: string): Promise<Response> => {
-    let res: Response;
-    try {
-      res = await fetchImpl(`${GITHUB_API}${path}`, {
-        headers: { Accept: accept, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'ainek-demo', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        redirect: 'error',
-        signal: AbortSignal.timeout(30_000),
-      });
-    } catch (err) {
-      throw new Error(`GitHub did not answer (${err instanceof Error ? err.message : String(err)})`);
+    const ask = async (): Promise<Response> => {
+      try {
+        return await fetchImpl(`${GITHUB_API}${path}`, {
+          headers: { Accept: accept, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'ainek-demo', ...(useToken ? { Authorization: `Bearer ${token}` } : {}) },
+          redirect: 'error',
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch (err) {
+        throw new ReadError(`GitHub did not answer (${err instanceof Error ? err.message : String(err)})`, false);
+      }
+    };
+    let res = await ask();
+    // A token GitHub refuses (expired, revoked) must not hide public data: read anonymously from here on.
+    if (res.status === 401 && useToken) {
+      useToken = false;
+      res = await ask();
     }
     if (res.ok) return res;
     const limited = (res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0';
-    throw new Error(limited ? `GitHub's rate limit is used up (${token ? 'for this token' : '60 anonymous requests an hour; GITHUB_TOKEN raises it'})` : `GitHub answered HTTP ${res.status} for ${path}`);
+    if (limited) throw new ReadError(`GitHub's rate limit is used up (${useToken ? 'for this token' : '60 anonymous requests an hour; GITHUB_TOKEN raises it'})`, false);
+    // 404, and 422 for a ref that names no commit: GitHub has no such resource. Anything else is GitHub not serving now.
+    throw new ReadError(`GitHub answered HTTP ${res.status} for ${path}`, res.status === 404 || res.status === 422);
   };
   return {
     /** A file of a repository at a commit, as bytes. */
     async raw(repository: string, file: string, commit: string): Promise<Uint8Array> {
-      if (!isCommitId(commit) || !isRepoPath(file)) throw new Error('the action log names a malformed commit or file path');
+      if (!isCommitId(commit) || !isRepoPath(file)) throw new ReadError('the action log names a malformed commit or file path', true);
       const res = await get(`/repos/${repository}/contents/${file.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`, 'application/vnd.github.raw+json');
       const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.length > MAX_COMPOSE_BYTES) throw new Error(`${file} at ${commit} is larger than ${MAX_COMPOSE_BYTES} bytes`);
+      if (bytes.length > MAX_COMPOSE_BYTES) throw new ReadError(`${file} at ${commit} is larger than ${MAX_COMPOSE_BYTES} bytes`, true);
       return bytes;
     },
     /**
-     * The commit a commit id or a tag name resolves to in a repository, and when it was committed. A commit id is read as a
-     * git object, about 1 KB; a tag name needs the commits endpoint to resolve it, whose answer carries the patches too.
+     * The commit a commit id or a tag name resolves to in a repository, and when it was committed. The caller says which of
+     * the two it holds, so that a name where an id belongs is never looked up as a name. A commit id is read as a git
+     * object, about 1 KB; a tag name needs the commits endpoint to resolve it, whose answer carries the patches too.
      */
-    async commit(repository: string, ref: string): Promise<{ sha: string | undefined; date: string | undefined }> {
-      const byId = isCommitId(ref);
-      if (!byId && !isPlainTag(ref)) throw new Error('the action log names a malformed commit or tag');
-      const res = await get(`/repos/${repository}/${byId ? 'git/commits' : 'commits'}/${ref}`, 'application/vnd.github+json');
+    async commit(repository: string, by: CommitRef): Promise<{ sha: string | undefined; date: string | undefined }> {
+      const byId = 'id' in by;
+      if (byId ? !isCommitId(by.id) : !isPlainTag(by.tag)) throw new ReadError(`the action log names a malformed ${byId ? 'commit' : 'tag'}`, true);
+      const res = await get(`/repos/${repository}/${byId ? `git/commits/${by.id}` : `commits/${by.tag}`}`, 'application/vnd.github+json');
       const body = (await res.json()) as { sha?: unknown; committer?: { date?: unknown }; commit?: { committer?: { date?: unknown } } };
       const date = (byId ? body.committer : body.commit?.committer)?.date;
       return { sha: typeof body.sha === 'string' ? body.sha.toLowerCase() : undefined, date: typeof date === 'string' ? date : undefined };
     },
-    /** How many commits and files lie between two commits of a repository. */
-    async compare(repository: string, from: string, to: string): Promise<{ commits: number; files: number } | undefined> {
-      if (!isCommitId(from) || !isCommitId(to)) throw new Error('a build names a malformed source commit');
-      const cmp = (await (await get(`/repos/${repository}/compare/${from}...${to}`, 'application/vnd.github+json')).json()) as { total_commits?: unknown; files?: unknown };
-      return typeof cmp.total_commits === 'number' && Array.isArray(cmp.files) ? { commits: cmp.total_commits, files: cmp.files.length } : undefined;
+    /** What lies between two commits of a repository, from `from` to `to`: commits on each side and the files `to` changed. */
+    async compare(repository: string, from: string, to: string): Promise<{ ahead: number; behind: number; files: number } | undefined> {
+      if (!isCommitId(from) || !isCommitId(to)) throw new ReadError('a build names a malformed source commit', true);
+      const cmp = (await (await get(`/repos/${repository}/compare/${from}...${to}`, 'application/vnd.github+json')).json()) as { ahead_by?: unknown; behind_by?: unknown; files?: unknown };
+      return typeof cmp.ahead_by === 'number' && typeof cmp.behind_by === 'number' ? { ahead: cmp.ahead_by, behind: cmp.behind_by, files: Array.isArray(cmp.files) ? cmp.files.length : 0 } : undefined;
     },
   };
 }
@@ -162,18 +202,24 @@ function github(token: string | undefined, fetchImpl: typeof globalThis.fetch) {
 async function provenanceOf(image: ImageRef, githubToken: string | undefined): Promise<Checked<Provenance>> {
   const policy = Object.hasOwn(IMAGE_POLICIES, image.repository) ? IMAGE_POLICIES[image.repository] : undefined;
   if (!policy) return checked.skipped('no build policy for this image');
-  if (!image.digest) return checked.failed('the image is not pinned by a sha256 digest');
+  const { digest } = image;
+  if (!digest) return checked.failed('the image is not pinned by a sha256 digest');
+  const proofs = (token: string | undefined) => fetchImageProvenance({ repository: policy.repository, digest, ...(token ? { githubToken: token } : {}) });
   let bundles: readonly string[];
   try {
-    bundles = await fetchImageProvenance({ repository: policy.repository, digest: image.digest, ...(githubToken ? { githubToken } : {}) });
+    // A token GitHub refuses must not hide public data: ask again without it.
+    bundles = await proofs(githubToken).catch((err: unknown) => (githubToken && sdkHttpStatus(err) === 401 ? proofs(undefined) : Promise.reject(err)));
   } catch (err) {
+    // GitHub answers 404 for a digest it holds no build proof for. That is the check failing, not the network.
+    if (sdkHttpStatus(err) === 404) return checked.failed(`${policy.repository} holds no build proof for this digest`);
     return checked.skipped(`build proofs could not be fetched: ${whyOf(err)}`);
   }
   try {
-    const p = await verifyImageProvenance({ bundles, digest: image.digest, policy });
+    const p = await verifyImageProvenance({ bundles, digest, policy });
     return checked.ok({ repository: p.repository, commit: p.commit, ref: p.ref, workflow: p.workflow });
   } catch (err) {
-    return checked.failed(whyOf(err));
+    // The SDK marks one verification failure retryable: Sigstore's trust root could not be fetched. Nothing was verified then.
+    return sdkRetryable(err) ? checked.skipped(`build proofs could not be verified now: ${whyOf(err)}`) : checked.failed(whyOf(err));
   }
 }
 
@@ -210,8 +256,8 @@ function reader(model: string, githubToken: string | undefined, fetchImpl: typeo
     ),
     /** The commit a tag name or a commit id of the compose repository resolves to. */
     commit: once(
-      (ref: string) => ref,
-      (ref) => gh.commit(COMPOSE_REPOSITORY, ref),
+      (by: CommitRef) => ('id' in by ? `id ${by.id}` : `tag ${by.tag}`),
+      (by) => gh.commit(COMPOSE_REPOSITORY, by),
     ),
     image: once(
       (image: ImageRef) => image.raw,
@@ -222,43 +268,69 @@ function reader(model: string, githubToken: string | undefined, fetchImpl: typeo
 }
 type Reader = ReturnType<typeof reader>;
 
-/** Which compose file holds the model's service: the most recently deployed one that names it. */
+/**
+ * Which compose file holds the model's service: the most recently deployed one that names it. A file that cannot be read
+ * (gone from the repository, not a compose file) is passed over with its reason; GitHub not answering ends the search.
+ */
 async function findModelFile(actions: readonly ManagerAction[], model: string, read: Reader): Promise<{ file: string; names: string[] } | { unresolved: string }> {
   const unreadable: string[] = [];
-  try {
-    for (const candidate of composeFilesOf(actions)) {
+  for (const candidate of composeFilesOf(actions)) {
+    try {
       const at = await read.fileAt(candidate.file, candidate.commit);
-      if (at.unreadable) unreadable.push(`${candidate.file}: ${at.unreadable}`);
       if (at.services.length > 0) return { file: candidate.file, names: at.services.map((s) => s.service) };
+      if (at.unreadable) unreadable.push(`${candidate.file}: ${at.unreadable}`);
+    } catch (err) {
+      if (!isGone(err)) return { unresolved: whyOf(err) };
+      unreadable.push(`${candidate.file}: ${whyOf(err)}`);
     }
-  } catch (err) {
-    return { unresolved: whyOf(err) };
   }
   return { unresolved: `no compose file the log deployed has a service with MODEL_NAME=${model}${unreadable.length > 0 ? `; not read as a compose file: ${unreadable.join('; ')}` : ''}` };
 }
 
-/** The release's file against the recorded hash, and the service's image and engines as that file defines them. */
-async function releaseFile(service: string, release: Release, read: Reader): Promise<Pick<ServiceRelease, 'file' | 'proxy' | 'engines'>> {
+/**
+ * Each engine as its own latest release defines it. An engine can be brought up alone, from another commit than the
+ * service in front of it, so the service's file does not say which engine image the log last started.
+ */
+function enginesOf(named: EngineService[], current: Release, actions: readonly ManagerAction[], read: Reader): Promise<Engine[]> {
+  return Promise.all(
+    named.map(async (engine): Promise<Engine> => {
+      const own = releasesFor(actions, { file: current.file, service: engine.service }).at(-1);
+      if (!own || own.commit === current.commit) return engine;
+      try {
+        const defined = (await read.fileAt(own.file, own.commit)).services.flatMap((s) => s.engines).find((e) => e.service === engine.service);
+        return { ...(defined ?? { service: engine.service }), release: own };
+      } catch {
+        return { service: engine.service, release: own }; // that file was not read: the release is known, the image is not
+      }
+    }),
+  );
+}
+
+/** The release's file against the recorded hash, and the service's image and engines. */
+async function releaseFile(service: string, release: Release, actions: readonly ManagerAction[], read: Reader): Promise<Pick<ServiceRelease, 'file' | 'proxy' | 'engines'>> {
   try {
     const at = await read.fileAt(release.file, release.commit);
     const file = !release.fileSha256 ? checked.skipped('the action records no file hash') : at.sha256 === release.fileSha256 ? checked.ok({ sha256: at.sha256 }) : checked.failed(`the public file hashes to ${at.sha256}, the enclave recorded ${release.fileSha256}`);
     const definition = at.services.find((s) => s.service === service);
-    return { file, engines: definition?.engines ?? [], ...(definition?.image ? { proxy: await read.image(definition.image) } : {}) };
+    const [proxy, engines] = await Promise.all([definition?.image ? read.image(definition.image) : undefined, enginesOf(definition?.engines ?? [], release, actions, read)]);
+    return { file, engines, ...(proxy ? { proxy } : {}) };
   } catch (err) {
-    return { file: checked.skipped(whyOf(err)), engines: [] };
+    // The repository has no such file at that commit: the recorded release is not there to compare.
+    return { file: isGone(err) ? checked.failed(whyOf(err)) : checked.skipped(whyOf(err)), engines: [] };
   }
 }
 
 /**
  * The release's tag, resolved in the repository itself, and the commit's time. A commit id alone does not show that the
  * commit is the repository's own: GitHub serves a commit pushed to any fork under the parent's name. A tag is set by those
- * who can write to the repository. The answer for the tag carries the commit's time; without a tag the commit is asked for.
+ * who can write to the repository, so a recorded tag the repository does not have, or has on another commit, fails.
+ * The answer for the tag carries the commit's time; without a tag the commit is asked for.
  */
 async function releaseTag(release: Release, read: Reader): Promise<Pick<ServiceRelease, 'tag' | 'committedAt'>> {
   const tag = release.tag !== undefined && isPlainTag(release.tag) ? release.tag : undefined;
   const untagged = checked.skipped(release.tag === undefined ? 'the action names no tag' : 'the tag is not a name this looks up');
   try {
-    const at = await read.commit(tag ?? release.commit);
+    const at = await read.commit(tag ? { tag } : { id: release.commit });
     const same = at.sha === release.commit;
     return {
       tag: !tag ? untagged : same ? checked.ok(tag) : checked.failed(`tag ${tag} of ${COMPOSE_REPOSITORY} points at ${at.sha ?? 'no commit'}, the enclave recorded ${release.commit}`),
@@ -266,7 +338,8 @@ async function releaseTag(release: Release, read: Reader): Promise<Pick<ServiceR
     };
   } catch (err) {
     const unanswered = checked.skipped(whyOf(err));
-    return { tag: tag ? unanswered : untagged, committedAt: unanswered };
+    if (!tag) return { tag: untagged, committedAt: unanswered };
+    return { tag: isGone(err) ? checked.failed(`${COMPOSE_REPOSITORY} has no tag ${tag}: ${whyOf(err)}`) : unanswered, committedAt: unanswered };
   }
 }
 
@@ -277,7 +350,7 @@ async function previousBuild(service: string, history: Release[], current: Image
     try {
       image = (await read.fileAt(earlier.file, earlier.commit)).services.find((s) => s.service === service)?.image;
     } catch {
-      return undefined; // GitHub stopped answering: the previous build stays unknown
+      return undefined; // that file was not read: the previous build stays unknown
     }
     if (!image?.digest || image.digest === current.image.digest) continue;
     const proxy = await read.image(image);
@@ -286,7 +359,7 @@ async function previousBuild(service: string, history: Release[], current: Image
   return undefined;
 }
 
-/** How much source lies between two builds of one repository, by GitHub's compare. */
+/** What source lies between two builds of one repository, by GitHub's compare, from the earlier build to the later one. */
 async function sourceChange(read: Reader, from: Checked<Provenance>, to: Checked<Provenance>): Promise<Checked<SourceChange>> {
   if (from.status !== 'ok' || to.status !== 'ok') return checked.skipped('one of the two builds has no verified source commit');
   if (from.value.repository !== to.value.repository) return checked.skipped('the two builds come from different repositories');
@@ -299,9 +372,9 @@ async function sourceChange(read: Reader, from: Checked<Provenance>, to: Checked
 }
 
 /** One service of the model: its latest release checked against the public file and tag, its image, the build before it. */
-async function inspectService(service: string, history: Release[], release: Release, read: Reader): Promise<ServiceRelease> {
+async function inspectService(service: string, history: Release[], release: Release, actions: readonly ManagerAction[], read: Reader): Promise<ServiceRelease> {
   // The file and the tag do not depend on each other.
-  const [fromFile, fromTag] = await Promise.all([releaseFile(service, release, read), releaseTag(release, read)]);
+  const [fromFile, fromTag] = await Promise.all([releaseFile(service, release, actions, read), releaseTag(release, read)]);
   const previous = fromFile.proxy?.image.digest ? await previousBuild(service, history, fromFile.proxy, read) : undefined;
   return { service, history, release, ...fromFile, ...fromTag, ...(previous ? { previousBuild: previous } : {}) };
 }
@@ -319,7 +392,8 @@ async function managerOf(actions: readonly ManagerAction[], launcher: Checked<La
 
 /**
  * Follows the action log of a verified model deployment to the release that serves `model`. Returns undefined when the
- * report carried no action log. Never throws for something GitHub or Sigstore did: such a check comes back `skipped`.
+ * report carried no action log. Never throws for something GitHub or Sigstore did: a check they kept from being made comes
+ * back `skipped`.
  */
 export async function inspectRelease({ deployment, report, model, githubToken, fetch: fetchImpl = globalThis.fetch }: InspectReleaseParams): Promise<ReleaseInspection | undefined> {
   const log = deployment.composeManager;
@@ -335,7 +409,7 @@ export async function inspectRelease({ deployment, report, model, githubToken, f
       found.names.map((service) => {
         const history = releasesFor(actions, { file: found.file, service });
         const release = history.at(-1);
-        return release ? inspectService(service, history, release, read) : undefined; // defined in the file, never brought up by this log
+        return release ? inspectService(service, history, release, actions, read) : undefined; // defined in the file, never brought up by this log
       }),
     );
     services.push(...inspected.filter((s) => s !== undefined));
@@ -352,19 +426,35 @@ export async function inspectRelease({ deployment, report, model, githubToken, f
   };
 }
 
+type Named = [what: string, check: Checked<unknown>];
+/** The checks that say whether the release serving the model is the one public sources show, each with a name for a person. */
+function currentChecks(inspection: ReleaseInspection): Named[] {
+  return [
+    ['that the log is from the CVM that holds the key', inspection.log.instance],
+    ["the manager image's build provenance", inspection.manager?.provenance ?? checked.skipped('the log records no start of the manager')],
+    ...inspection.services.flatMap((s): Named[] => [
+      [`the file of the release (${s.service})`, s.file],
+      [`the tag of the release (${s.service})`, s.tag],
+      [`the build provenance of the image (${s.service})`, s.proxy?.provenance ?? checked.skipped('the service names no image in the file')],
+    ]),
+  ];
+}
+
 /**
  * Every check of an inspection that was made and did not hold, one line each. A check that could not be made is not among
  * them. The rule lives here, next to the result, so that whoever shows an inspection cannot print a failure and miss it.
  */
 export function failedChecks(inspection: ReleaseInspection): string[] {
-  const all: [what: string, check: Checked<unknown>][] = [['the instance behind the action log', inspection.log.instance]];
-  if (inspection.manager) all.push(["the manager image's build provenance", inspection.manager.provenance]);
-  for (const s of inspection.services) {
-    all.push([`${s.service}: the release's file`, s.file], [`${s.service}: the release's tag`, s.tag]);
-    if (s.proxy) all.push([`${s.service}: the image's build provenance`, s.proxy.provenance]);
-    if (s.previousBuild) all.push([`${s.service}: the previous image's build provenance`, s.previousBuild.proxy.provenance]);
-  }
-  return all.flatMap(([what, check]) => (check.status === 'fail' ? [`${what}: ${check.why}`] : []));
+  const earlier = inspection.services.flatMap((s): Named[] => (s.previousBuild ? [[`the build provenance of the previous image (${s.service})`, s.previousBuild.proxy.provenance]] : []));
+  return [...currentChecks(inspection), ...earlier].flatMap(([what, check]) => (check.status === 'fail' ? [`${what}: ${check.why}`] : []));
+}
+
+/**
+ * The checks of the current release that could not be made, by name. While there are any, the release was not verified,
+ * whatever else held: "nothing failed" is not "everything was checked".
+ */
+export function uncheckedChecks(inspection: ReleaseInspection): string[] {
+  return currentChecks(inspection).flatMap(([what, check]) => (check.status === 'skipped' ? [what] : []));
 }
 
 /**
@@ -375,17 +465,17 @@ export function failedChecks(inspection: ReleaseInspection): string[] {
 export async function leadTimes(actions: readonly ManagerAction[], file: string, { githubToken, fetch: fetchImpl = globalThis.fetch }: { githubToken?: string | undefined; fetch?: typeof globalThis.fetch } = {}): Promise<LeadTime[]> {
   const gh = github(githubToken, fetchImpl);
   const out: LeadTime[] = [];
-  let unavailable: string | undefined; // after GitHub refuses once, stop asking
+  let unavailable: string | undefined; // once GitHub stops answering, stop asking; a commit it does not have is only that commit's gap
   for (const release of firstDeployments(actions, file)) {
     let committedAt: Checked<string>;
     if (unavailable) committedAt = checked.skipped(unavailable);
-    else if (!isCommitId(release.commit)) committedAt = checked.skipped('the action names a malformed commit'); // its own entry, not a reason to stop
     else {
       try {
-        const { date } = await gh.commit(COMPOSE_REPOSITORY, release.commit);
+        const { date } = await gh.commit(COMPOSE_REPOSITORY, { id: release.commit });
         committedAt = date ? checked.ok(date) : checked.skipped('GitHub returned no commit date');
       } catch (err) {
-        committedAt = checked.skipped((unavailable = whyOf(err)));
+        committedAt = checked.skipped(whyOf(err));
+        if (!isGone(err)) unavailable = whyOf(err);
       }
     }
     const leadMs = committedAt.status === 'ok' ? timeOf(release.deployedAt) - timeOf(committedAt.value) : Number.NaN;
