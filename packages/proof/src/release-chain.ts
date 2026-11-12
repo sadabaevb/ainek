@@ -203,8 +203,8 @@ async function provenanceOf(image: ImageRef, githubToken: string | undefined, sd
 /**
  * `load` made to run once per key: a second caller gets the first one's promise, its failure included. With `kept`, the
  * caller's own store, an answer `final` accepts (any answer, when `final` is left out) is also there for later
- * inspections, for `forMs` or for good. Only an answer goes into the store, and only once it has arrived: a read that
- * failed or hangs is not handed on, and the next inspection asks again.
+ * inspections, for `forMs` from the moment it was asked for, or for good. Only an answer goes into the store, and only
+ * once it has arrived: a read that failed or hangs is not handed on, and the next inspection asks again.
  */
 function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>, kept?: { reads: ReleaseReads; final?: (value: T) => boolean; forMs?: number }): (...args: A) => Promise<T> {
   const seen = new Map<string, Promise<T>>();
@@ -217,12 +217,14 @@ function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...a
       seen.set(key, stored.read as Promise<T>);
       return stored.read as Promise<T>;
     }
+    // An answer is as old as its question: a slow one is kept for less, and never replaces one asked for later.
+    const until = kept?.forMs === undefined ? Infinity : Date.now() + kept.forMs;
     const loading = load(...args);
     seen.set(key, loading);
     if (kept) {
       void loading.then(
         (value) => {
-          if (!kept.final || kept.final(value)) kept.reads.set(key, { read: loading, until: kept.forMs === undefined ? Infinity : Date.now() + kept.forMs });
+          if ((!kept.final || kept.final(value)) && !((kept.reads.get(key)?.until ?? 0) > until)) kept.reads.set(key, { read: loading, until });
         },
         () => undefined,
       );

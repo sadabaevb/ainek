@@ -98,12 +98,28 @@ test('evaluateRelease: a log whose beginning is not what a verifier saw was rewr
   // Shorter than what a verifier saw. Either the log was cut, or this attestation was made before the verifier's entry and
   // the enclave has moved on. The lengths do not say which: refused, and not called a rewrite.
   const shorter = evaluateRelease(seen, at(LOG.slice(0, 2)));
-  assert.equal(shorter.status, 'unknown-release');
+  assert.equal(shorter.status, 'shorter-log');
   assert.match(shorter.detail, /entry #7 by v1\.testnet saw 3 actions from this instance and the log attested now has 2: this attestation is older than that entry, or the log was cut/);
   // A mark for exactly this shorter log does not outweigh the longer one: a verifier has seen the enclave move past it.
-  assert.equal(evaluateRelease([entry(6, 'v1.testnet', [logMark(INSTANCE, LOG.slice(0, 2))]), ...seen], at(LOG.slice(0, 2))).status, 'unknown-release');
+  assert.equal(evaluateRelease([entry(6, 'v1.testnet', [logMark(INSTANCE, LOG.slice(0, 2))]), ...seen], at(LOG.slice(0, 2))).status, 'shorter-log');
   // A provable rewrite is named even when a longer mark is there too.
   assert.equal(evaluateRelease([entry(9, 'v1.testnet', [logMark(INSTANCE, [...edited, ...edited])]), ...seen], at(edited)).status, 'rewritten-log');
+});
+
+test('evaluateRelease: an entry for another key or launcher can contradict the log, and cannot confirm it', () => {
+  const vouching = [entry(7, 'v1.testnet', [logMark(INSTANCE, LOG)])];
+  const longer = [...LOG, up('2026-11-02T10:00:00Z', H2)];
+  // The instance kept its id while its launcher changed: under the other launcher a verifier saw the log two actions on.
+  // The launcher is back and the log is back to three actions. The entries for this launcher alone would say ok.
+  const elsewhere = entry(9, 'v1.testnet', [logMark(INSTANCE, [...longer, up('2026-11-03T10:00:00Z', H1)])]);
+  assert.equal(evaluateRelease(vouching, at(LOG)).status, 'ok');
+  assert.equal(evaluateRelease(vouching, at(LOG), 1, [...vouching, elsewhere]).status, 'shorter-log');
+  // The same for a beginning that differs from what was seen under the other launcher.
+  const edited = [LOG[0] as ManagerAction, up('2026-11-01T10:00:00Z', H2), LOG[2] as ManagerAction];
+  assert.equal(evaluateRelease([entry(7, 'v1.testnet', [logMark(INSTANCE, edited)])], at(edited), 1, [entry(9, 'v1.testnet', [logMark(INSTANCE, LOG)])]).status, 'rewritten-log');
+  // What it saw there does not confirm the log here: the mark must come with an entry for this key and launcher.
+  const onlyElsewhere = evaluateRelease([entry(7, 'v1.testnet', [logMark(INSTANCE, LOG.slice(0, 2))])], at(LOG), 1, [entry(9, 'v2.testnet', [logMark(INSTANCE, LOG)])]);
+  assert.deepEqual([onlyElsewhere.status, onlyElsewhere.confirmedBy], ['unknown-release', []]);
 });
 
 // The recorded entry #0 and the launcher it was logged for, as a verifier that writes marks would have logged it.
@@ -136,9 +152,14 @@ test('withReleaseRule: on top of a key that passed, for every report that carrie
   assert.deepEqual(refused.matching, key.matching, 'what vouched for the key is kept for the card');
   // The report of another key in the same answer is not this key's business.
   assert.equal(rule([reportOf(deployed, { key: 'ee'.repeat(32) }), reportOf(LOG)]), key);
-  // No report for this key, so no action log to check.
-  assert.equal(rule([reportOf(LOG, { key: 'ee'.repeat(32) })]).reason, 'unlogged-release');
-  assert.equal(rule([]).reason, 'unlogged-release');
+  // No report for this key, so no action log that could be tied to it.
+  assert.equal(rule([reportOf(LOG, { key: 'ee'.repeat(32) })]).reason, 'untied-log');
+  assert.equal(rule([]).reason, 'untied-log');
+  // What a trusted verifier logged under another launcher still binds this instance's log: there it saw four actions.
+  // A verifier outside the trust set saying the same is not heard.
+  const elsewhere = (verifier: string) => ({ ...recorded, index: 9, verifier, compose_hash: 'cd'.repeat(32), image_digests: [...recorded.image_digests, logMark(INSTANCE, deployed)] });
+  assert.equal(withReleaseRule(key, [...entries, elsewhere(recorded.verifier)], query, [reportOf(LOG)], true).reason, 'shorter-log');
+  assert.equal(withReleaseRule(key, [...entries, elsewhere('stranger.testnet')], query, [reportOf(LOG)], true), key);
   // A launcher no entry vouches for has no action log logged either. When the client does not ask for the launcher to be
   // logged, every entry for the key may vouch.
   assert.equal(rule([reportOf(LOG, { appCompose: 'another launcher' })]).reason, 'unlogged-release');

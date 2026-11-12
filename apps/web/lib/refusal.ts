@@ -12,6 +12,7 @@ export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLog
     'unlogged-release': [t.refusedNoReleaseTitle, t.refusedNoReleaseBody],
     'untied-log': [t.refusedUntiedTitle, t.refusedUntiedBody],
     'unknown-release': [t.refusedReleaseTitle, t.refusedReleaseBody],
+    'shorter-log': [t.refusedShorterTitle, t.refusedShorterBody],
     'release-below-quorum': [t.refusedReleaseQuorumTitle, t.refusedReleaseQuorumBody(v.confirmedBy.length, v.quorum)],
     'rewritten-log': [t.refusedRewrittenTitle, t.refusedRewrittenBody],
     absent: [t.refusedTitle, t.refusedBody],

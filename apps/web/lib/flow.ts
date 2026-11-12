@@ -146,9 +146,9 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const keyLogPromise = latestKeysFor(log, model, trust.verifiers, undefined, logStop.signal);
   keyLogPromise.catch(() => undefined); // awaited below; avoid an unhandled rejection if attestation fails first
   // SPEC §7.5: the release rule reads the action log of this attestation and says nothing about what the enclave did
-  // after it, so a verification kept for up to an hour will not do: with the rule on, every message attests again.
-  if (cfg.requireLoggedRelease) await forgetDeployment(model, policy);
-  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
+  // after it, so a verification kept for up to an hour will not do: with the rule on, the model reports are verified
+  // again for every message.
+  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy, cfg.requireLoggedRelease), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
     logStop.abort();
     throw err;
   });

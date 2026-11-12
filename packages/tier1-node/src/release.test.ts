@@ -306,7 +306,8 @@ test('leadTimes: from the commit to its first compose_up, and no more requests a
   assert.equal(odd.seen.paths.length, 2);
 });
 
-test('releaseMarksFor: marks only for a release every check held for; what a verifier keeps between reports', async (t) => {
+// The timeout is for the read that never settles, near the end: handed to the next inspection again, it would hang this test.
+test('releaseMarksFor: marks only for a release every check held for; what a verifier keeps between reports', { timeout: 20_000 }, async (t) => {
   const INSTANCE = '19aea1693533dc2d529db03e3f725f20bde8d66d';
   const events = (instance: string) => [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: instance }];
   const report = { eventLog: events(INSTANCE), composeManagerAttestation: { eventLog: events(INSTANCE) } };
