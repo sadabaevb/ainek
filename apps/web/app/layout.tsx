@@ -10,6 +10,7 @@ import { NavLinks } from '@/components/nav-links';
 import { WalletButton } from '@/components/wallet-button';
 import { readPublicConfig } from '@/lib/config.server';
 import { LANG_COOKIE, dict, type Lang } from '@/lib/i18n';
+import { DARK_PAPER, LIGHT } from '@/lib/look';
 import { Providers } from './providers';
 
 const DESCRIPTION = 'A glass box for private AI agents on NEAR: the model key is checked against a public log before anything is sent, and every answer comes with a proof you re-check yourself.';
@@ -23,8 +24,8 @@ export const metadata: Metadata = {
   openGraph: { title: OG_TITLE, description: DESCRIPTION, type: 'website', siteName: 'Ainek' },
   twitter: { card: 'summary_large_image' },
 };
-// The browser's own frame (the address bar of a phone) takes the paper of the theme in use: --paper of globals.css, light and dark.
-export const viewport: Viewport = { themeColor: [{ media: '(prefers-color-scheme: light)', color: '#f6f4ee' }, { media: '(prefers-color-scheme: dark)', color: '#14130f' }] };
+// The browser's own frame (the address bar of a phone) takes the paper of the theme in use.
+export const viewport: Viewport = { themeColor: [{ media: '(prefers-color-scheme: light)', color: LIGHT.paper }, { media: '(prefers-color-scheme: dark)', color: DARK_PAPER }] };
 // Config comes from the root .env at request time (loaded by instrumentation.ts), so the layout cannot be prerendered.
 export const dynamic = 'force-dynamic';
 
@@ -55,7 +56,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </span>
             </div>
           </nav>
-          <div id="content">{children}</div>
+          {/* Focusable by script only, so the skip link moves the focus here in every browser. */}
+          <div id="content" tabIndex={-1}>{children}</div>
         </Providers>
       </body>
     </html>

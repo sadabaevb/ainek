@@ -93,7 +93,7 @@ function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
             <span className={`mark ${ENDS[chip]}`} aria-hidden>{ENDS[chip] === 'warn' ? '!' : mark(ENDS[chip])}</span>
             <span className="title">{t.intro.chips[chip]}</span>
             <span className="sub">{t.intro.subs[chip]}</span>
-            <span className="go" aria-hidden>→</span>
+            <span className="go" aria-hidden />
           </button>
         ))}
       </div>

@@ -1,8 +1,8 @@
 /*
  * The look: a verification sheet. Warm paper, ink, one blue for links and focus, and colour kept for verdicts. Rules and
  * square corners instead of shadows and pills; serif headings, a sans for reading, a monospace for everything that is
- * evidence (keys, hashes, times, labels). Light by default, dark follows the system; every colour is a token so the two
- * themes stay in step. The link preview (app/opengraph-image.tsx) and the mark (components/logo.tsx, app/icon.svg) repeat
+ * evidence (keys, hashes, times, labels). Light by default; on a screen dark follows the system, and print stays light.
+ * Every colour is a token so the two themes stay in step. The link preview (app/opengraph-image.tsx) and the mark (components/logo.tsx, app/icon.svg) repeat
  * the light values, because neither can read these variables.
  */
 :root {
@@ -30,7 +30,7 @@
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) {
+@media screen and (prefers-color-scheme: dark) {
   :root {
     --paper: #14130f;
     --sheet: #1c1a15;
@@ -52,15 +52,17 @@
 }
 
 /* IBM Plex (IBM Corp., SIL OFL 1.1), self-hosted from public/fonts: no request to a third party, and the system font shows
-   until a file lands. The files are copied from the pinned @fontsource packages by `pnpm -F web fonts`. */
+   until a file lands. The files are copied from the pinned @fontsource packages by `pnpm -F web fonts`. The medium
+   monospace is declared for 500 to 700: a key inside a bold line takes it as it is, where the browser would otherwise
+   thicken it by itself. */
 @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-sans-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-sans-cyrillic-600-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500 700; font-display: swap; src: url(/fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-mono-cyrillic-500-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500 700; font-display: swap; src: url(/fonts/ibm-plex-mono-cyrillic-500-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "IBM Plex Serif"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-serif-latin-500-normal.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Serif"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-serif-cyrillic-500-normal.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 
@@ -78,8 +80,12 @@ body {
 ::selection { background: var(--accent-soft); }
 a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 0.16em; }
 a:hover { text-decoration-thickness: 2px; }
-/* One focus ring for everything a keyboard can reach. */
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* One focus ring for everything a keyboard can reach: a control, the "Load file" label around its hidden input, the
+   composer around its field. */
+:focus-visible, .btn:has(input:focus-visible), .composer-inner:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Where the skip link lands: clear of the header that stays on screen, and with no ring around the whole page. */
+#content { scroll-margin-top: 4rem; }
+#content:focus-visible { outline: none; }
 h1, h2 { font-family: var(--serif); font-weight: 500; line-height: 1.2; letter-spacing: -0.005em; }
 /* A heading breaks into lines of like length; a paragraph does not leave one word on its last line. */
 h1, h2, h3 { text-wrap: balance; }
@@ -128,13 +134,12 @@ p { margin: 0.75rem 0; }
 .btn.primary { background: var(--ink); color: var(--paper); }
 .btn:not(:disabled):active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; } /* "Load file" is a label around its input */
 /* Only where a pointer can hover: on a touch screen the hover of the last tap would stay on the button. */
 @media (hover: hover) {
   .btn:not(:disabled):hover { background: var(--ink); color: var(--paper); }
   .btn.primary:not(:disabled):hover { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .scenario:hover { background: var(--accent-soft); }
-  .scenario:hover .go { color: var(--ink); }
+  .scenario:hover .go { border-color: var(--ink); }
 }
 .btn.small { min-height: 2rem; padding: 0.2rem 0.6rem; font-size: 0.82rem; }
 .linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.16em; cursor: pointer; }
@@ -166,19 +171,23 @@ p { margin: 0.75rem 0; }
 .row:only-child::before, .ledger .row::before, .pending .row::before { content: none; }
 .row > * { grid-column: 2; overflow-wrap: anywhere; }
 /* The mark of a line: a ticked, crossed or empty box. The shape says it too, not only the colour. */
-.mark { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1.5rem; height: 1.5rem; border: 1.5px solid currentColor; border-radius: 2px; font: 600 0.95rem/1 var(--mono); }
+.mark { --sign: 1rem; --stroke: 2px; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1.5rem; height: 1.5rem; border: 1.5px solid currentColor; border-radius: 2px; font: 500 0.95rem/1 var(--mono); }
 .row > .mark { grid-column: 3; grid-row: 1 / span 4; margin-left: 0.6rem; }
 .mark.ok { color: var(--ok); }
 .mark.fail { color: var(--fail); background: var(--fail-bg); }
 .mark.skipped { color: var(--muted); border-style: dashed; }
 .mark.warn { color: var(--warn); }
-/* The tick, the cross and the dash are drawn, not typed: the glyphs ✓ ✗ — are in none of the three faces, and a fallback
-   font would draw each a little differently on every system. The typed glyph stays in the markup for a page without CSS. */
-.mark:is(.ok, .fail, .skipped) { font-size: 0; }
-.mark:is(.ok, .fail, .skipped)::after { content: ""; }
-.mark.ok::after { width: 0.36rem; height: 0.7rem; margin-top: -0.15rem; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.mark.fail::after { width: 0.85rem; height: 0.85rem; background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
-.mark.skipped::after { width: 0.6rem; height: 2px; background: currentColor; }
+/* The same signs without the box, the size of the text beside them: in a line of a check list and in the stamp. */
+.tick { --sign: 0.72rem; --stroke: 1.5px; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 0.8rem; height: 0.8rem; color: var(--muted); }
+.tick.ok { color: var(--ok); }
+.tick.fail { color: inherit; } /* a failed line and a failed stamp are red throughout */
+/* The tick, the cross and the dash are drawn, not typed: ✓ and ✗ are in none of the three faces, and a fallback font
+   would draw each a little differently on every system. The typed glyph stays in the markup for a page without CSS. */
+:is(.mark, .tick):is(.ok, .fail, .skipped) { font-size: 0; }
+:is(.mark, .tick):is(.ok, .fail, .skipped)::after { content: ""; }
+:is(.mark, .tick).ok::after { width: calc(var(--sign) * 0.36); height: calc(var(--sign) * 0.7); margin-top: calc(var(--sign) * -0.15); border: solid currentColor; border-width: 0 var(--stroke) var(--stroke) 0; transform: rotate(45deg); }
+:is(.mark, .tick).fail::after { width: calc(var(--sign) * 0.85); height: calc(var(--sign) * 0.85); background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
+:is(.mark, .tick).skipped::after { width: calc(var(--sign) * 0.6); height: var(--stroke); background: currentColor; }
 .row .label { font-weight: 600; }
 .row .value .btn { margin-block: 0.15rem; } /* a button that wraps under its sentence keeps a little air */
 .row .hint { color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
@@ -203,7 +212,8 @@ p { margin: 0.75rem 0; }
 .scenario:focus-visible { outline-offset: -2px; }
 .scenario .title { font-weight: 600; }
 .scenario .sub { grid-column: 2; color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
-.scenario .go { grid-column: 3; grid-row: 1; font-family: var(--mono); color: var(--muted); }
+/* "Go": an angle drawn with two borders. The faces have no arrow to the right. */
+.scenario .go { grid-column: 3; grid-row: 1; align-self: center; width: 0.5rem; height: 0.5rem; margin-inline: 0.3rem 0.25rem; border: solid var(--muted); border-width: 1.5px 1.5px 0 0; transform: rotate(45deg); }
 
 /* The controls of the chat and the forms of the other pages. */
 .controls { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; align-items: flex-end; margin: 1.5rem 0 1.25rem; }
@@ -232,12 +242,8 @@ textarea.json.drop { border-style: dashed; border-color: var(--accent); backgrou
 .checks li { padding: 0.14rem 0; }
 /* A checked line: the mark in its own column, coloured; the text stays in ink unless the line failed. */
 .checks .check { display: grid; grid-template-columns: 1.15rem minmax(0, 1fr); }
-.check > .tick { color: var(--muted); }
-.check.ok > .tick { color: var(--ok); }
+.check > .tick { margin-top: 0.2rem; } /* on the first line of the text */
 .check.fail { color: var(--fail); }
-.check.fail > .tick { color: inherit; }
-/* Whole sentences, not hashes: break between words, and inside one only when it would overflow. */
-.checks.sentences { word-break: normal; overflow-wrap: anywhere; }
 .row .detail .history-title { margin: 0.5rem 0 0; }
 .progress { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem 1rem; border: 1px dashed var(--ink); border-radius: var(--radius); font: 400 0.85rem/1.4 var(--mono); }
 .progress .bar { height: 2px; background: var(--rule); overflow: hidden; }
@@ -245,7 +251,6 @@ textarea.json.drop { border-style: dashed; border-color: var(--accent); backgrou
 @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 .composer { position: fixed; left: 0; right: 0; bottom: 0; padding: 0.75rem 1rem 1rem; background: linear-gradient(to top, var(--paper) 72%, transparent); }
 .composer-inner { max-width: calc(var(--page-w) - 2rem); margin: 0 auto; display: flex; gap: 0.4rem; align-items: stretch; padding: 0.3rem 0.3rem 0.3rem 0.9rem; background: var(--sheet); border: 1px solid var(--ink); border-radius: var(--radius); }
-.composer-inner:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .composer input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; padding: 0.5rem 0; outline: none; }
 
 /* Details, code, tables */
@@ -277,6 +282,7 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
   table.stack tr:first-child { border-top: 0; }
   table.stack td { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.5rem; padding: 0.15rem 0; border: 0; }
   table.stack td > span { min-width: 0; }
+  table.stack .nowrap { white-space: normal; } /* in a narrow cell a long account breaks where it must */
   table.stack td::before { content: attr(data-label); line-height: 1.9; }
   table.kv th { width: 7rem; }
 }
@@ -286,7 +292,7 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
 }
 
 /* Who you trust (/log) */
-.trust { display: grid; gap: 0.75rem; margin: 2rem 0; scroll-margin-top: 4rem; }
+.trust { display: grid; gap: 0.75rem; scroll-margin-top: 4rem; }
 .trust h2 { margin: 0; }
 .trust p { margin: 0; }
 .trust-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
@@ -314,8 +320,9 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
 .ledger > li:first-child { border-top: 0; }
 .ledger > li > details > summary { list-style: none; padding: 0 var(--card-pad); color: var(--ink); font-weight: 400; }
 .ledger > li > details > summary::-webkit-details-marker { display: none; }
-.ledger > li > details > summary .label::after { content: " ▸"; color: var(--muted); font-weight: 400; }
-.ledger > li > details[open] > summary .label::after { content: " ▾"; }
+/* Closed, the angle points to the right; open, down. */
+.ledger > li > details > summary .label::after { content: ""; display: inline-block; width: 0.4rem; height: 0.4rem; margin-left: 0.6rem; border: solid var(--muted); border-width: 0 1.5px 1.5px 0; transform: translateY(-0.12rem) rotate(-45deg); }
+.ledger > li > details[open] > summary .label::after { transform: translateY(-0.22rem) rotate(45deg); }
 .ledger-body { display: grid; gap: 0.6rem; padding: 0 var(--card-pad) 1rem; }
 .ledger-body > * { margin: 0; min-width: 0; }
 .ledger-body .checks { padding-top: 0; }

@@ -14,18 +14,19 @@ export function mark(status: Status): string {
 
 /**
  * The mark of a line with its word for a screen reader. The stylesheet draws the shape and gives it a colour, which only
- * the eye gets; the word says the same to whoever listens to the page.
+ * the eye gets; the word says the same to whoever listens to the page. `lang` because the word is in the language of the
+ * interface, and the check lists it stands in are marked as English.
  */
 function StatusMark({ status, className }: { status: Status; className: string }) {
-  const { t } = useT();
-  return <span className={className} role="img" aria-label={t.status[status]}>{mark(status)}</span>;
+  const { t, lang } = useT();
+  return <span className={className} role="img" aria-label={t.status[status]} lang={lang}>{mark(status)}</span>;
 }
 
 /** One line of a check list: the mark in its own column, so a second line of the text stays clear of it. */
 export function CheckLine({ status, children }: { status: Status; children: ReactNode }) {
   return (
     <li className={`check ${status}`}>
-      <StatusMark status={status} className="tick" />
+      <StatusMark status={status} className={`tick ${status}`} />
       <span>{children}</span>
     </li>
   );
@@ -43,7 +44,7 @@ export function CheckList({ items }: { items: ReadonlyArray<{ id: string; status
 export function CardHead({ status, when, children }: { status: 'ok' | 'fail'; when?: ReactNode; children: ReactNode }) {
   return (
     <header className={`card-head ${status}`}>
-      <span className="stamp"><span aria-hidden>{mark(status)}</span> {children}</span>
+      <span className="stamp"><span className={`tick ${status}`} aria-hidden>{mark(status)}</span> {children}</span>
       {when !== undefined && <span className="when">{when}</span>}
     </header>
   );

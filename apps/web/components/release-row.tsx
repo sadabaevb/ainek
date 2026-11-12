@@ -46,14 +46,14 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
   const detail = check && (
     <>
       {open && (
-        <ul className="mono checks sentences" lang="en">
+        <ul className="mono checks" lang="en">
           {check.lines.map((l, i) => <CheckLine key={i} status={l.status}>{l.text}</CheckLine>)}
         </ul>
       )}
       {history && check.history.length > 0 && (
         <>
           <p className="small history-title">{t.codeHistory(check.history.length)}</p>
-          <ul className="mono checks sentences" lang="en">
+          <ul className="mono checks" lang="en">
             {check.history.map((r, i) => (
               <li key={i}>{r.deployedAt} · {r.name} · {r.commit.slice(0, 10)}</li>
             ))}

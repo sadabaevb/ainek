@@ -1,31 +1,23 @@
 // The picture a link to the site shows in X, Telegram and Slack (1200x630), drawn at build time with next/og.
 // It is a sheet of the site: the mark, the name, and two numbered lines for the two things the product does, with the
-// footer's "testnet, not audited"; the full claims and limits are in the README.
+// footer's "testnet, not audited"; the full claims and limits are in the README. The colours are the light ones of
+// lib/look.ts: the renderer cannot read the stylesheet's variables.
 // The host in the footer and metadataBase in layout.tsx are the same site: change both when it moves.
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
+import { Logo } from '@/components/logo';
+import { LIGHT as C } from '@/lib/look';
 
 export const alt = 'Ainek: a glass box for private AI agents on NEAR. Key not in the public log: nothing is sent. Every answer comes with a proof you re-check yourself.';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
-
-// Mirrors the light tokens of globals.css: the image renderer cannot read CSS variables.
-const C = { paper: '#f6f4ee', sheet: '#fffdf9', ink: '#17150f', muted: '#5f5b51', rule: '#d8d3c6', accent: '#1f44d6', soft: '#e2e8fb', ok: '#1b6b3a', fail: '#b3261e', failBg: '#fbeae7' };
 
 // The renderer reads .woff and not the .woff2 the pages serve, so the three faces it needs lie beside those in public/fonts
 // (scripts/fonts.mjs copies both). Latin only: the picture is in English.
 const face = (file: string) => readFile(join(process.cwd(), 'public/fonts', file));
 const [serif, sans, mono] = await Promise.all([face('ibm-plex-serif-latin-500-normal.woff'), face('ibm-plex-sans-latin-400-normal.woff'), face('ibm-plex-mono-latin-500-normal.woff')]);
 const SERIF = 'IBM Plex Serif', SANS = 'IBM Plex Sans', MONO = 'IBM Plex Mono';
-
-/** The window mark of components/logo.tsx, in the light colours. */
-const Mark = ({ px }: { px: number }) => (
-  <svg width={px} height={px} viewBox="0 0 64 64">
-    <rect x="35" y="9" width="20" height="20" fill={C.accent} />
-    <path d="M9 9h46v46H9zM32 9v46M9 32h46" fill="none" stroke={C.ink} strokeWidth="6" />
-  </svg>
-);
 
 /** One numbered line of the sheet, as on a proof card: the number, what holds, and a ticked or crossed box (drawn: the faces have no such glyph). */
 const Line = ({ n, ok, title, text }: { n: string; ok: boolean; title: string; text: string }) => {
@@ -52,13 +44,13 @@ export default function OpengraphImage() {
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: C.paper, color: C.ink, fontFamily: SANS, padding: '46px 64px 40px' }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'center', fontFamily: SERIF, fontSize: 84, lineHeight: 1 }}>
-            <Mark px={70} />
+            <Logo size={70} ink={C.ink} accent={C.accent} />
             <span style={{ marginLeft: 22 }}>Ainek</span>
           </div>
           {/* The words are separate boxes because the renderer drops the spaces between them; the gap stands for one. */}
           <div style={{ display: 'flex', gap: 11, marginTop: 14, fontFamily: SERIF, fontSize: 42, lineHeight: 1.25 }}>
             <span>A</span>
-            <span style={{ backgroundImage: `linear-gradient(to bottom, ${C.paper} 60%, ${C.soft} 60%)` }}>glass box</span>
+            <span style={{ backgroundImage: `linear-gradient(to bottom, ${C.paper} 60%, ${C.accentSoft} 60%)` }}>glass box</span>
             <span>for private AI agents on NEAR</span>
           </div>
         </div>
