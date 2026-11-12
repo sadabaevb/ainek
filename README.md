@@ -572,8 +572,9 @@ Tests:
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   <!-- TODO link compare pre-hackathon...hackathon-submission -->
-- Other projects by the same people in this hackathon: Dastan also submits a separate project, shashpai, built apart from
-  this one. <!-- TODO before submission: its link, and the exact spelling of the name (each README has to name the other) -->
+- Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
+  project of his own, built apart from this one: nearby (Dastan) and ushak (Bektur).
+  <!-- TODO before submission: links and exact spelling of both names; drop any not submitted -->
 
 ## Next steps
 
