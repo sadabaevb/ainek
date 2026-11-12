@@ -32,24 +32,40 @@ test('checkRelease: the release, its history newest first, and no green while so
   assert.ok(check.lines.some((l) => l.status === 'ok' && l.text.includes('tag v0.0.2')));
 });
 
-test('checkRelease: a result with nothing left unchecked is kept for the session; one with something unchecked is asked for again', async () => {
+test('checkRelease: an inspection is kept for the report it read, unless GitHub left something unanswered', async () => {
   let requests = 0;
-  const counting = ((...args: Parameters<typeof globalThis.fetch>) => {
-    requests += 1;
-    return github(...args);
-  }) as typeof globalThis.fetch;
-  // Something stays unchecked here (no build policy for the image): every call reads GitHub again.
-  const log = [up('2026-11-05T10:00:00Z', B, 'v0.0.2')];
-  await checkRelease(attestation(log), MODEL, counting);
-  const first = requests;
-  await checkRelease(attestation(log), MODEL, counting);
-  assert.ok(first > 0 && requests === 2 * first, `${first} requests, then ${requests - first} more`);
+  const counting = (answer: typeof globalThis.fetch) =>
+    ((...args: Parameters<typeof globalThis.fetch>) => {
+      requests += 1;
+      return answer(...args);
+    }) as typeof globalThis.fetch;
+  // What stays unchecked here cannot change (no build policy for the image, no event logs): the inspection is kept,
+  // and a second card over the same report asks GitHub nothing. Another report is another inspection.
+  const report = attestation([up('2026-11-05T10:00:00Z', B, 'v0.0.2')]);
+  const first = await checkRelease(report, MODEL, counting(github));
+  const asked = requests;
+  const second = await checkRelease(report, MODEL, counting(github));
+  assert.deepEqual([first.retry, asked > 0, requests - asked, second.release?.name], [false, true, 0, 'v0.0.2']);
+  await checkRelease(attestation([up('2026-11-05T10:00:00Z', B, 'v0.0.2')]), MODEL, counting(github));
+  assert.equal(requests, 2 * asked, 'the same log in another report is read again');
+
+  // GitHub not answering for the tag: said so, offered again, and not kept.
+  const down = ((input: Parameters<typeof globalThis.fetch>[0]) => (String(input).includes('/commits/') ? Promise.resolve(new Response('{}', { status: 503 })) : github(input))) as typeof globalThis.fetch;
+  const flaky = attestation([up('2026-11-05T10:00:00Z', B, 'v0.0.2')]);
+  const unanswered = await checkRelease(flaky, MODEL, down);
+  assert.deepEqual([unanswered.retry, unanswered.status], [true, 'skipped']);
+  assert.ok(unanswered.unchecked.includes('the tag of the release (proxy-a)'));
+  requests = 0;
+  const retried = await checkRelease(flaky, MODEL, counting(github));
+  assert.ok(requests > 0, 'asked again');
+  assert.ok(!retried.unchecked.includes('the tag of the release (proxy-a)'));
 });
 
 test('checkRelease: a file that does not match is a failure; a report without an action log is not checked', async () => {
   const bad = await checkRelease(attestation([up('2026-11-03T10:00:00Z', B, 'v0.0.2', 'f'.repeat(64))]), MODEL, github);
   assert.equal(bad.status, 'fail');
   assert.match(bad.failures[0] ?? '', /^the file of the release \(proxy-a\): the public file hashes to /);
+  assert.equal(bad.retry, false, 'a failure is an answer: asking again changes nothing');
   const none = await checkRelease({ deployment: { appCompose: '{}' }, report: {} } as unknown as Parameters<typeof checkRelease>[0], MODEL, github);
-  assert.deepEqual([none.status, none.release, none.unresolved], ['skipped', undefined, 'this model report carries no action log']);
+  assert.deepEqual([none.status, none.release, none.unresolved, none.retry], ['skipped', undefined, 'this model report carries no action log', false]);
 });

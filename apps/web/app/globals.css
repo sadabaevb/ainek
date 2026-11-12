@@ -171,6 +171,7 @@ textarea.json.drop { border-style: dashed; border-color: var(--accent); backgrou
 .checks li.ok { color: var(--ok); }
 /* Whole sentences, not hashes: break between words, and inside one only when it would overflow. */
 .checks.sentences { word-break: normal; overflow-wrap: anywhere; }
+.row .detail .history-title { margin: 0.5rem 0 0; }
 .progress { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem 1rem; color: var(--muted); font-size: 0.95rem; }
 .progress .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .progress .bar > span { display: block; height: 100%; width: 40%; background: var(--grad); border-radius: 2px; animation: slide 1.4s ease-in-out infinite; }

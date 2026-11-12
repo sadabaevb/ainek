@@ -32,10 +32,32 @@ export function ReleaseRow({ attest, model, hint, history = false }: { attest: (
     }
   };
 
-  const status = state.kind === 'done' ? state.check.status : state.kind === 'running' ? 'running' : state.kind === 'error' && state.failed ? 'fail' : 'skipped';
+  const check = state.kind === 'done' ? state.check : undefined;
+  const status = check ? check.status : state.kind === 'running' ? 'running' : state.kind === 'error' && state.failed ? 'fail' : 'skipped';
   const again = <button type="button" className="btn small" onClick={run}>{t.codeAgain}</button>;
+  const detail = check && (
+    <>
+      {open && (
+        <ul className="mono checks sentences" lang="en">
+          {check.lines.map((l, i) => (
+            <li key={i} className={l.status}>{mark(l.status)} {l.text}</li>
+          ))}
+        </ul>
+      )}
+      {history && check.history.length > 0 && (
+        <>
+          <p className="small history-title">{t.codeHistory(check.history.length)}</p>
+          <ul className="mono checks sentences" lang="en">
+            {check.history.map((r, i) => (
+              <li key={i}>{r.deployedAt} · {r.name} · {r.commit.slice(0, 10)}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
+  );
   return (
-    <Row status={status} label={t.rowCode} {...(hint ? { hint } : {})}>
+    <Row status={status} label={t.rowCode} {...(hint ? { hint } : {})} {...(detail ? { detail } : {})}>
       {state.kind === 'idle' && (
         <>
           {t.codeIdle}{' '}
@@ -44,43 +66,29 @@ export function ReleaseRow({ attest, model, hint, history = false }: { attest: (
       )}
       {state.kind === 'running' && t.codeRunning}
       {state.kind === 'error' && <>{state.failed ? t.codeFailed : t.codeError} <span lang="en">{state.why}</span> {again}</>}
-      {state.kind === 'done' && (
+      {check && (
         <>
-          <ReleaseSummary check={state.check} />{' '}
-          {state.check.lines.length > 0 && <button type="button" className="linklike" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? t.codeHide : t.codeDetails}</button>}
-          {/* Something was not checked, perhaps only because GitHub did not answer: asking again can do better. */}
-          {state.check.status === 'skipped' && <> {again}</>}
-          {open && (
-            <ul className="mono checks sentences" lang="en">
-              {state.check.lines.map((l, i) => (
-                <li key={i} className={l.status}>{mark(l.status)} {l.text}</li>
-              ))}
-            </ul>
-          )}
-          {history && state.check.history.length > 0 && (
-            <>
-              <span className="line small">{t.codeHistory(state.check.history.length)}</span>
-              <ul className="mono checks sentences" lang="en">
-                {state.check.history.map((r) => (
-                  <li key={`${r.commit}@${r.deployedAt}`}>{r.deployedAt} · {r.name} · {r.commit.slice(0, 10)}</li>
-                ))}
-              </ul>
-            </>
-          )}
+          <ReleaseSummary check={check} />{' '}
+          {check.lines.length > 0 && <button type="button" className="linklike" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? t.codeHide : t.codeDetails}</button>}
+          {/* Only when asking again can change the answer: GitHub or Sigstore did not answer for something. */}
+          {check.retry && <> {again}</>}
         </>
       )}
     </Row>
   );
 }
 
-/** One sentence for the row: the release and where its proxy was built from, then what failed, what was not checked, or what held. */
+/**
+ * One sentence for the row, read in the order `verdictOf` gives: a failure first, whatever else is missing; then a
+ * release that could not be resolved; then what was not checked; then what held.
+ */
 function ReleaseSummary({ check }: { check: ReleaseCheck }) {
   const { t } = useT();
   const { release, failures, unchecked, unresolved } = check;
-  if (!release) return <>{t.codeUnresolved} <span lang="en">{unresolved}</span></>;
-  const built = release.builtFrom;
   // The first failure is enough to read the line as failed; everything that was not checked is named.
-  const verdict = failures.length > 0 ? <>{t.codeFailed} <span lang="en">{failures[0]}</span></> : unchecked.length > 0 ? <>{t.codeUnchecked} <span lang="en">{unchecked.join('; ')}</span></> : t.codeAllHeld;
+  const failed = failures.length > 0 && <>{t.codeFailed} <span lang="en">{failures[0]}</span></>;
+  if (!release) return failed || <>{t.codeUnresolved} <span lang="en">{unresolved}</span></>;
+  const built = release.builtFrom;
   return (
     <>
       {t.codeRelease(release.name, release.deployedAt)}
@@ -91,7 +99,7 @@ function ReleaseSummary({ check }: { check: ReleaseCheck }) {
         </>
       )}
       {'. '}
-      {verdict}
+      {failed || (unchecked.length > 0 ? <>{t.codeUnchecked} <span lang="en">{unchecked.join('; ')}</span></> : t.codeAllHeld)}
     </>
   );
 }

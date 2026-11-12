@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sha256Hex, type ManagerAction } from '@ainek/proof';
-import { failedChecks, inspectRelease, leadTimes, uncheckedChecks, type InspectReleaseParams } from './release.ts';
+import { failedChecks, inspectRelease, leadTimes, uncheckedChecks, verdictOf, type InspectReleaseParams } from './release.ts';
 
 // A compose repository of two commits, served by a fake GitHub. The images have no build policy, so no test reaches Sigstore.
 const FILE = 'prod/models.yaml';
@@ -242,6 +242,8 @@ test('failedChecks: what was checked and did not hold, and nothing that could no
   assert.deepEqual(failedChecks(clean), [], 'no build policy and no event logs: not checked is not failed');
   // And it is not verified either: what could not be checked is named, so nobody draws a check mark over it.
   assert.deepEqual(uncheckedChecks(clean), ['that the log is from the CVM that holds the key', "the manager image's build provenance", 'the build provenance of the image (proxy-a)']);
+  // None of those can change by asking again, so the result is final; and it is not green.
+  assert.deepEqual([clean.retry, verdictOf(clean).status], [undefined, 'skipped']);
   // A file that does not match, a tag moved elsewhere and a log from another replica: three failures, each named.
   const events = (instance: string) => [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: instance }];
   const bad = await inspectRelease({
@@ -252,6 +254,7 @@ test('failedChecks: what was checked and did not hold, and nothing that could no
   });
   assert.ok(bad);
   assert.deepEqual(failedChecks(bad).map((f) => f.slice(0, f.indexOf(': '))), ['that the log is from the CVM that holds the key', 'the file of the release (proxy-a)', 'the tag of the release (proxy-a)']);
+  assert.equal(verdictOf(bad).status, 'fail', 'a failure decides the verdict, whatever else is unchecked');
   // GitHub refusing everything fails nothing: the checks were not made.
   const refused = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub(() => new Response('{}', { status: 500 })).fetch });
   assert.ok(refused);
@@ -270,12 +273,14 @@ test('inspectRelease: when GitHub refuses, the log is still reported and the che
   const found = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub(limited).fetch });
   assert.equal(found?.log.actions, 4);
   assert.deepEqual(found?.services, []);
-  assert.match(found?.unresolved ?? '', /rate limit is used up \(60 anonymous requests an hour; GITHUB_TOKEN raises it\)/);
+  assert.match(found?.unresolved ?? '', /rate limit is used up \(60 anonymous requests an hour from one address\)/);
+  assert.equal(found?.retry, true, 'nothing was read: asking again may resolve it');
   // GitHub answering for the file but not for the commit: the release is resolved, its tag and age are not checked.
   const partial = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: MODEL, fetch: fakeGitHub((path) => (path.includes('/commits/') ? new Response('{}', { status: 500 }) : undefined)).fetch });
   assert.equal(partial?.services[0]?.file.status, 'ok');
-  assert.equal(partial?.services[0]?.tag.status, 'skipped');
+  assert.deepEqual(partial?.services[0]?.tag, { status: 'skipped', why: 'GitHub answered HTTP 500 for /repos/nearai/cvm-compose-files/commits/v0.0.2', again: true });
   assert.equal(partial?.services[0]?.committedAt.status, 'skipped');
+  assert.equal(partial?.retry, true);
 });
 
 test('leadTimes: from the commit to its first compose_up, and no more requests after GitHub refuses once', async () => {

@@ -21,6 +21,7 @@
 import { checked, type Checked } from './checked.ts';
 import { MAX_COMPOSE_BYTES, launcherSettings, modelServices, parseImage, type EngineService, type ImageRef, type LauncherSettings, type MeasuredSetting, type ModelService } from './compose-file.ts';
 import { sha256Hex } from './hash.ts';
+import type { Engine, ImageCheck, LeadTime, Provenance, ReleaseInspection, ServiceRelease, SourceChange } from './release-types.ts';
 import { COMPOSE_REPOSITORY, composeFilesOf, firstDeployments, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, timeOf, type ManagerAction, type Release } from './release.ts';
 
 /** Which repository and workflow may build an image. */
@@ -56,77 +57,6 @@ export const IMAGE_POLICIES: Readonly<Record<string, ImagePolicy>> = {
 
 /** How many earlier releases are opened while looking for the previous build of a service's image. */
 const LOOK_BACK = 3;
-
-export interface Provenance {
-  repository: string;
-  commit: string;
-  ref: string;
-  workflow: string;
-}
-export interface ImageCheck {
-  image: ImageRef;
-  provenance: Checked<Provenance>;
-}
-/** The source between two builds, from the earlier one's commit to the later one's. */
-export interface SourceChange {
-  /** Commits the later build has that the earlier one lacks. */
-  ahead: number;
-  /** Commits the earlier build has that the later one lacks: above zero, the later build is from older or diverged source. */
-  behind: number;
-  /** Files changed by the `ahead` commits, as GitHub's comparison lists them: it stops at 300. */
-  files: number;
-  url: string;
-}
-/** An engine behind the service. `release` is the engine's own latest release when that is not the service's. */
-export type Engine = EngineService & { release?: Release };
-export interface ServiceRelease {
-  service: string;
-  /** Every release of this service the log holds, oldest first. */
-  history: Release[];
-  /** The latest of them (`history.at(-1)`): what the log says serves the model. */
-  release: Release;
-  /** The public file at the release's commit hashes to what the enclave recorded. */
-  file: Checked<{ sha256: string }>;
-  /** The repository's own tag of the recorded name points at the recorded commit. */
-  tag: Checked<string>;
-  /** The service's image: on NEAR AI the proxy that decrypts the prompt and signs the answer. */
-  proxy?: ImageCheck;
-  /** The engines the service forwards to, each as its own latest release defines it; empty when the file names none this reads. */
-  engines: Engine[];
-  /** When the release's commit was made, by GitHub's record (for a merged pull request, the time of the merge). */
-  committedAt: Checked<string>;
-  /** The most recent earlier release that ran another build of the service's image, among the last few. */
-  previousBuild?: { release: Release; proxy: ImageCheck; change: Checked<SourceChange> };
-}
-export interface ReleaseInspection {
-  log: {
-    actions: number;
-    since: string;
-    until: string;
-    tcbStatus: string;
-    /** The quote behind the log and the quote behind the signing key name one dstack instance id (`sameInstance`). */
-    instance: Checked<string>;
-  };
-  /** What the measured app compose says about Compose Manager, or why it was not read. */
-  launcher: Checked<LauncherSettings>;
-  /**
-   * The image Compose Manager says it last started as. `boot` is the image the measured compose starts it as, when it
-   * names one, and whether the two are the same: when they are, the manager's image is part of the compose hash and not
-   * only the log's own word.
-   */
-  manager?: ImageCheck & { startedAt: string; boot?: MeasuredSetting & { image: ImageRef; same: boolean } };
-  /** The compose file the model's service was found in. */
-  file?: string;
-  services: ServiceRelease[];
-  /** Why no service could be resolved, when none was. */
-  unresolved?: string;
-}
-export interface LeadTime {
-  release: Release;
-  committedAt: Checked<string>;
-  /** Milliseconds from the commit to its first `compose_up`; undefined when a time is missing or does not parse. */
-  leadMs: number | undefined;
-}
 
 export interface InspectReleaseParams {
   /** The verified deployment of a model report: the measured app compose and, when the report carried one, the action log the SDK authenticated. */
@@ -186,7 +116,7 @@ function github(token: string | undefined, fetchImpl: typeof globalThis.fetch) {
     }
     if (res.ok) return res;
     const limited = (res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0';
-    if (limited) throw new ReadError(`GitHub's rate limit is used up (${useToken ? 'for this token' : '60 anonymous requests an hour; GITHUB_TOKEN raises it'})`, false);
+    if (limited) throw new ReadError(`GitHub's rate limit is used up (${useToken ? 'for this token' : '60 anonymous requests an hour from one address'})`, false);
     // 404, and 422 for a ref that names no commit: GitHub has no such resource. Anything else is GitHub not serving now.
     throw new ReadError(`GitHub answered HTTP ${res.status} for ${path}`, res.status === 404 || res.status === 422);
   };
@@ -241,14 +171,14 @@ async function provenanceOf(image: ImageRef, githubToken: string | undefined, sd
   } catch (err) {
     // GitHub answers 404 for a digest it holds no build proof for. That is the check failing, not the network.
     if (httpStatus(err) === 404) return checked.failed(`${policy.repository} holds no build proof for this digest`);
-    return checked.skipped(`build proofs could not be fetched: ${said(err)}`);
+    return checked.unanswered(`build proofs could not be fetched: ${said(err)}`);
   }
   try {
     const p = await sdk.verifyImageProvenance({ bundles, digest, policy });
     return checked.ok({ repository: p.repository, commit: p.commit, ref: p.ref, workflow: p.workflow });
   } catch (err) {
     // The SDK marks one verification failure retryable: Sigstore's trust root could not be fetched. Nothing was verified then.
-    return sdk.getSdkError(err)?.retryable === true ? checked.skipped(`build proofs could not be verified now: ${said(err)}`) : checked.failed(said(err));
+    return sdk.getSdkError(err)?.retryable === true ? checked.unanswered(`build proofs could not be verified now: ${said(err)}`) : checked.failed(said(err));
   }
 }
 
@@ -301,7 +231,7 @@ type Reader = ReturnType<typeof reader>;
  * Which compose file holds the model's service: the most recently deployed one that names it. A file that cannot be read
  * (gone from the repository, not a compose file) is passed over with its reason; GitHub not answering ends the search.
  */
-async function findModelFile(actions: readonly ManagerAction[], model: string, read: Reader): Promise<{ file: string; names: string[] } | { unresolved: string }> {
+async function findModelFile(actions: readonly ManagerAction[], model: string, read: Reader): Promise<{ file: string; names: string[] } | { unresolved: string; retry?: true }> {
   const unreadable: string[] = [];
   for (const candidate of composeFilesOf(actions)) {
     try {
@@ -309,7 +239,7 @@ async function findModelFile(actions: readonly ManagerAction[], model: string, r
       if (at.services.length > 0) return { file: candidate.file, names: at.services.map((s) => s.service) };
       if (at.unreadable) unreadable.push(`${candidate.file}: ${at.unreadable}`);
     } catch (err) {
-      if (!isGone(err)) return { unresolved: whyOf(err) };
+      if (!isGone(err)) return { unresolved: whyOf(err), retry: true };
       unreadable.push(`${candidate.file}: ${whyOf(err)}`);
     }
   }
@@ -345,7 +275,7 @@ async function releaseFile(service: string, release: Release, actions: readonly 
     return { file, engines, ...(proxy ? { proxy } : {}) };
   } catch (err) {
     // The repository has no such file at that commit: the recorded release is not there to compare.
-    return { file: isGone(err) ? checked.failed(whyOf(err)) : checked.skipped(whyOf(err)), engines: [] };
+    return { file: isGone(err) ? checked.failed(whyOf(err)) : checked.unanswered(whyOf(err)), engines: [] };
   }
 }
 
@@ -366,7 +296,7 @@ async function releaseTag(release: Release, read: Reader): Promise<Pick<ServiceR
       committedAt: !same ? checked.skipped('GitHub resolved another commit') : at.date ? checked.ok(at.date) : checked.skipped('GitHub returned no commit date'),
     };
   } catch (err) {
-    const unanswered = checked.skipped(whyOf(err));
+    const unanswered = checked.unanswered(whyOf(err));
     if (!tag) return { tag: untagged, committedAt: unanswered };
     return { tag: isGone(err) ? checked.failed(`${COMPOSE_REPOSITORY} has no tag ${tag}: ${whyOf(err)}`) : unanswered, committedAt: unanswered };
   }
@@ -445,7 +375,7 @@ export async function inspectRelease({ deployment, report, model, githubToken, f
   }
   const manager = await managerCheck;
   const unresolved = 'unresolved' in found ? found.unresolved : services.length === 0 ? `the log never brought up the service of ${model} from ${found.file}` : undefined;
-  return {
+  const inspection: ReleaseInspection = {
     log: { actions: actions.length, since: actions[0]?.timestamp ?? '', until: actions.at(-1)?.timestamp ?? '', tcbStatus: log.tcbStatus, instance: sameInstance(report?.eventLog, report?.composeManagerAttestation?.eventLog) },
     launcher,
     ...(manager ? { manager } : {}),
@@ -453,6 +383,9 @@ export async function inspectRelease({ deployment, report, model, githubToken, f
     services,
     ...(unresolved ? { unresolved } : {}),
   };
+  // Left open only because GitHub or Sigstore did not answer: worth asking again.
+  const unanswered = ('retry' in found && found.retry === true) || currentChecks(inspection).some(([, check]) => check.status === 'skipped' && check.again === true);
+  return unanswered ? { ...inspection, retry: true } : inspection;
 }
 
 type Named = [what: string, check: Checked<unknown>];
@@ -486,6 +419,24 @@ export function uncheckedChecks(inspection: ReleaseInspection): string[] {
   return currentChecks(inspection).flatMap(([what, check]) => (check.status === 'skipped' ? [what] : []));
 }
 
+/** What an inspection comes to, for whoever shows it. */
+export interface ReleaseVerdict {
+  /** `fail`: a check was made and did not hold. `ok`: a release was resolved and every check of it was made and held. `skipped`: anything else. */
+  status: 'ok' | 'fail' | 'skipped';
+  failures: string[];
+  unchecked: string[];
+}
+
+/**
+ * The one reading of an inspection every surface uses, in this order: a failure first, whatever else is missing; green
+ * only for a resolved release with nothing left unchecked.
+ */
+export function verdictOf(inspection: ReleaseInspection): ReleaseVerdict {
+  const failures = failedChecks(inspection);
+  const unchecked = uncheckedChecks(inspection);
+  return { status: failures.length > 0 ? 'fail' : inspection.services.length > 0 && unchecked.length === 0 ? 'ok' : 'skipped', failures, unchecked };
+}
+
 /**
  * For every commit of `file` the log deployed: when GitHub says the commit was made, and how long after that its first
  * `compose_up` ran. One GitHub request per commit. The commit time is the committer's (for a merged pull request, GitHub's
@@ -515,3 +466,4 @@ export async function leadTimes(actions: readonly ManagerAction[], file: string,
 
 export { countText, describeRelease, releaseName, utcText } from './release-lines.ts';
 export type { ReleaseLine } from './release-lines.ts';
+export type { Engine, ImageCheck, LeadTime, Provenance, ReleaseInspection, ServiceRelease, SourceChange } from './release-types.ts';

@@ -5,7 +5,7 @@ import { fetchImageProvenance, getSdkError, verifyImageProvenance } from '@neara
 import { inspectRelease as inspect, type InspectReleaseParams, type ReleaseInspection } from '@ainek/proof/release-chain';
 
 export type * from '@ainek/proof/release-chain';
-export { COMPOSE_REPOSITORY, IMAGE_POLICIES, countText, describeRelease, failedChecks, leadTimes, releaseName, uncheckedChecks, utcText } from '@ainek/proof/release-chain';
+export { COMPOSE_REPOSITORY, IMAGE_POLICIES, countText, describeRelease, failedChecks, leadTimes, releaseName, uncheckedChecks, utcText, verdictOf } from '@ainek/proof/release-chain';
 
 /** The chain with this SDK's image checks. */
 export function inspectRelease(params: Omit<InspectReleaseParams, 'sdk'>): Promise<ReleaseInspection | undefined> {

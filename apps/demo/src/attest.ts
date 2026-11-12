@@ -10,7 +10,7 @@
 import { parseArgs } from 'node:util';
 import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, shortHex as short } from '@ainek/proof';
 import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
-import { failedChecks, inspectRelease, leadTimes, uncheckedChecks } from '@ainek/tier1-node/release';
+import { inspectRelease, leadTimes, verdictOf } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
 import { printLeadTimes, printRelease } from './release-report.ts';
 import { FAIL, NA, OK, exitFlushed, head, line, out, seconds } from './term.ts';
@@ -70,8 +70,10 @@ if (outcome.kind === 'failed') {
     // a check here that fails still fails this command.
     const inspection = await inspectRelease({ deployment: m.deployment, report: m.report, model, githubToken });
     const summary = printRelease(inspection, { model, logEntryIndex: logEntry.index });
-    const failures = inspection ? failedChecks(inspection) : [];
-    codeFailed = failures.length > 0;
+    const verdict = inspection ? verdictOf(inspection) : undefined;
+    codeFailed = verdict?.status === 'fail';
+    // GitHub's anonymous limit is what most often leaves a check unmade here, and here a token can be given.
+    if (inspection?.retry && !githubToken) line(NA, 'GitHub or Sigstore did not answer for something above. GitHub allows 60 anonymous requests an hour from one address: GITHUB_TOKEN in .env raises that');
     const releaseFile = inspection?.file;
     if (flags.history && releaseFile && m.deployment.composeManager) printLeadTimes(releaseFile, await leadTimes(m.deployment.composeManager.actions, releaseFile, { githubToken }));
     // The card repeats names read from the log and from GitHub, so each of its lines goes through `out`.
@@ -79,11 +81,10 @@ if (outcome.kind === 'failed') {
     out(`│ ${OK} Model: ${model}, attested deployment (launcher compose ${short(compose)})`);
     out(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
     out(`│ ${OK} Key ${short(m.signer.signingAddress)} is in the public log: entry #${logEntry.index} by ${outcome.verdict.confirmedBy.join(', ')}${normalizeHex(logEntry.compose_hash) === compose ? ", with this launcher's compose hash" : '; this entry has another compose, the attested one is not in the log window'}`);
-    // A check mark only when every check of the release was made and held: "nothing failed" is not "everything was checked".
-    const unchecked = inspection ? uncheckedChecks(inspection) : [];
-    if (codeFailed) out(`│ ${FAIL} Code: ${failures.length === 1 ? '' : `${failures.length} checks failed, the first: `}${failures[0]} (step 5)`);
-    else if (!summary) out(`│ ${NA} Code: the release behind the key was not resolved (step 5)`);
-    else out(unchecked.length === 0 ? `│ ${OK} Code: ${summary} (step 5)` : `│ ${NA} Code: ${summary}; not checked: ${unchecked.join(', ')} (step 5)`);
+    // A failure first, whatever else is missing; a check mark only when every check of the release was made and held.
+    if (verdict?.status === 'fail') out(`│ ${FAIL} Code: ${verdict.failures.length === 1 ? '' : `${verdict.failures.length} checks failed, the first: `}${verdict.failures[0]} (step 5)`);
+    else if (!verdict || !summary) out(`│ ${NA} Code: the release behind the key was not resolved (step 5)`);
+    else out(verdict.status === 'ok' ? `│ ${OK} Code: ${summary} (step 5)` : `│ ${NA} Code: ${summary}; not checked: ${verdict.unchecked.join(', ')} (step 5)`);
     out(`│ ${NA} Not checked here: an answer. No message was written, so nothing was encrypted, sent or signed (pnpm demo:live)`);
     out(codeFailed ? `└─ Result: WOULD SEND by the client's rule, but a check of the code behind the key failed (step 5). Nothing was sent.` : `└─ Result: WOULD SEND. Hardware and log checked in ${seconds(outcome.totalMs)}; nothing was sent.`);
   }

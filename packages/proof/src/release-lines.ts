@@ -4,7 +4,7 @@
 import type { Checked } from './checked.ts';
 import { shortHex } from './hash.ts';
 import { COMPOSE_REPOSITORY, spanText, timeOf, type Release } from './release.ts';
-import type { ImageCheck, ReleaseInspection, ServiceRelease, SourceChange } from './release-chain.ts';
+import type { ImageCheck, ReleaseInspection, ServiceRelease, SourceChange } from './release-types.ts';
 
 /** One fact of an inspection: `ok` was checked and held, `fail` was checked and did not, `skipped` was not checked or is only a reading. */
 export interface ReleaseLine {
