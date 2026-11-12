@@ -15,7 +15,10 @@ permissions:
 jobs:
   round:
     runs-on: ubuntu-latest
-    timeout-minutes: 25 # five reports that each hang for the verifier's 180 s deadline are 15 minutes, and entries are written after them
+    # The daemon's own deadlines allow a round of 35 minutes: five reports, each up to 120 s to fetch, 180 s to verify
+    # and 60 s for the release check, then five entries that each wait 60 s for log_key. The read of the log has no
+    # deadline of ours, and checkout and install take a minute or two. 45 leaves room and stays inside the hour between runs.
+    timeout-minutes: 45
     env:
       VERIFIER_ACCOUNT_ID: ainek-v2-dastan.testnet
       VERIFIER_PRIVATE_KEY: ${{ secrets.VERIFIER_V2_PRIVATE_KEY }} # function-call key, log_key only
