@@ -1,5 +1,8 @@
 # `gitleaks git .` over this repository's history: the default rules, minus four kinds of public data they take for secrets.
 # Checked on Nov 11, 2026: 29 findings without this file, every one of them listed here; none is a credential.
+# Checked again on Nov 12, the day before the repository opens, over every branch and pull request head (479 commits,
+# the merges with `--log-opts="--all -m"`): one new finding, the model's public signing key in the sample recorded
+# that day, now listed below.
 # Each entry silences one rule in the named files only, so any other rule still fires there.
 title = "Ainek"
 
@@ -12,9 +15,9 @@ targetRules = ["jwt"]
 paths = ['''^docs/samples/nras-response\.json$''']
 
 [[allowlists]]
-description = "Hex fields of a recorded TDX report; the model's public signing key (it is in the key log on NEAR) in a relay test; a public transaction hash in the canonical-JSON test vectors."
+description = "Hex fields of a recorded TDX report; the model's public signing key (it is in the key log on NEAR) in a relay test and in the recorded reply-key control; a public transaction hash in the canonical-JSON test vectors."
 targetRules = ["generic-api-key"]
-paths = ['''^docs/samples/attestation-report\.json$''', '''^apps/web/lib/relay-guard\.test\.ts$''', '''^docs/test-vectors/canonical\.json$''']
+paths = ['''^docs/samples/attestation-report\.json$''', '''^apps/web/lib/relay-guard\.test\.ts$''', '''^docs/samples/reply-key-control\.json$''', '''^docs/test-vectors/canonical\.json$''']
 
 [[allowlists]]
 description = "The vendored NEAR AI skill's curl examples (.agents and its .claude copy): the bearer token is the literal text YOUR_API_KEY, and only that text is let through."
