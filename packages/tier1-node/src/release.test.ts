@@ -1,14 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sha256Hex, type ManagerAction } from '@ainek/proof';
-import { failedChecks, inspectRelease, leadTimes, uncheckedChecks, verdictOf, type InspectReleaseParams } from './release.ts';
+import { logMark, releaseMark, sha256Hex, type ManagerAction } from '@ainek/proof';
+import { releaseMarksFor } from '@ainek/proof/release-chain';
+import { failedChecks, inspectRelease, leadTimes, uncheckedChecks, verdictOf, type InspectReleaseParams, type ReleaseReads } from './release.ts';
 
 // A compose repository of two commits, served by a fake GitHub. The images have no build policy, so no test reaches Sigstore.
 const FILE = 'prod/models.yaml';
 const MODEL = 'vendor/model-a';
-const compose = (proxyDigest: string, engineDigest: string) => `
+const compose = (proxyDigest: string, engineDigest: string, proxyImage = 'org/proxy') => `
 x-proxy: &proxy
-  image: org/proxy@sha256:${proxyDigest}
+  image: ${proxyImage}@sha256:${proxyDigest}
 services:
   proxy-a:
     <<: *proxy
@@ -21,9 +22,12 @@ services:
 `;
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
+/** A commit whose proxy image the policy table covers: only the tests that bring a stub of the SDK's image checks deploy it. */
+const C = '5'.repeat(40);
 const COMMITS: Record<string, { text: string; date: string; tag: string }> = {
   [A]: { text: compose('1'.repeat(64), 'e'.repeat(64)), date: '2026-11-01T10:00:00Z', tag: 'v0.0.1' },
   [B]: { text: compose('2'.repeat(64), 'f'.repeat(64)), date: '2026-11-03T09:49:00Z', tag: 'v0.0.2' },
+  [C]: { text: compose('3'.repeat(64), 'f'.repeat(64), 'nearaidev/vllm-proxy-rs'), date: '2026-11-04T09:00:00Z', tag: 'v0.0.3' },
 };
 const up = (timestamp: string, commit: string, extra: Partial<ManagerAction> = {}): ManagerAction => ({ action: 'compose_up', timestamp, commit, file: FILE, ...(COMMITS[commit] ? { tag: COMMITS[commit].tag } : {}), file_sha256: sha256Hex(COMMITS[commit]?.text ?? ''), services: ['proxy-a'], ...extra });
 const MANAGER = `org/manager@sha256:${'c'.repeat(64)}`;
@@ -300,4 +304,53 @@ test('leadTimes: from the commit to its first compose_up, and no more requests a
   const mixed = await leadTimes([up('2026-11-01T12:00:00Z', 'main'), ...ACTIONS], FILE, { fetch: odd.fetch });
   assert.deepEqual(mixed.map((t) => [t.release.commit, t.committedAt.status]), [['main', 'skipped'], [A, 'ok'], [B, 'ok']]);
   assert.equal(odd.seen.paths.length, 2);
+});
+
+test('releaseMarksFor: marks only for a release every check held for, and what cannot change is asked for once', async () => {
+  const INSTANCE = '19aea1693533dc2d529db03e3f725f20bde8d66d';
+  const events = (instance: string) => [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: instance }];
+  const report = { eventLog: events(INSTANCE), composeManagerAttestation: { eventLog: events(INSTANCE) } };
+  const manager = `nearaidev/compose-manager@sha256:${'c'.repeat(64)}`;
+  const actions: ManagerAction[] = [{ action: 'compose_manager_started', timestamp: '2026-11-04T08:00:00Z', image: manager }, up('2026-11-04T10:00:00Z', C)];
+  // The SDK's image checks, answering for every digest unless told which one has no build proof.
+  const asked: string[] = [];
+  const sdkWith = (unproven?: string): InspectReleaseParams['sdk'] =>
+    ({
+      fetchImageProvenance: async ({ digest }: { digest: string }) => (asked.push(digest), ['bundle']),
+      verifyImageProvenance: async ({ digest, policy }: { digest: string; policy: { repository: string; workflow: string } }) => {
+        if (digest === unproven) throw new Error('no bundle is signed by the workflow the policy names');
+        return { repository: policy.repository, commit: 'd'.repeat(40), ref: 'refs/heads/main', workflow: policy.workflow };
+      },
+      getSdkError: () => undefined,
+    }) as unknown as InspectReleaseParams['sdk'];
+  const marksFor = (over: Partial<InspectReleaseParams> = {}, github = fakeGitHub()) => releaseMarksFor({ deployment: deploymentOf(actions, manager), report, model: MODEL, fetch: github.fetch, sdk: sdkWith(), ...over });
+
+  // Everything held: the action log as it stands, then the release of the model's service.
+  assert.deepEqual(await marksFor(), { marks: [logMark(INSTANCE, actions), releaseMark(FILE, sha256Hex(COMMITS[C]?.text ?? ''))] });
+
+  // Anything short of that gives no marks, and the reason.
+  assert.deepEqual(await marksFor({ report: { eventLog: events(INSTANCE), composeManagerAttestation: { eventLog: events('ff'.repeat(20)) } } }), { marks: [], why: `that the log is from the CVM that holds the key: the log was quoted by instance ${'ff'.repeat(20)}, the signing key by instance ${INSTANCE}` });
+  assert.match((await marksFor({ report: { eventLog: events(INSTANCE) } })).why ?? '', /^not checked: that the log is from the CVM that holds the key/);
+  assert.match((await marksFor({}, fakeGitHub(undefined, { 'v0.0.3': A }))).why ?? '', /^the tag of the release \(proxy-a\): /);
+  assert.match((await marksFor({ sdk: sdkWith(`sha256:${'3'.repeat(64)}`) })).why ?? '', /^the build provenance of the image \(proxy-a\): no bundle is signed/);
+  assert.match((await marksFor({}, fakeGitHub(() => new Response('{}', { status: 503 })))).why ?? '', /GitHub answered HTTP 503/);
+  assert.deepEqual(await marksFor({ deployment: { ...deploymentOf(actions, manager), composeManager: undefined } as InspectReleaseParams['deployment'] }), { marks: [], why: 'the report carries no action log' });
+
+  // A verifier inspects every round. With one store of reads the file and the verified build proofs are asked for once;
+  // the tag is asked for every time, because a tag can be moved.
+  const reads: ReleaseReads = new Map();
+  const first = fakeGitHub();
+  asked.length = 0;
+  assert.equal((await marksFor({ reads }, first)).marks.length, 2);
+  assert.deepEqual([first.seen.paths.length, asked.length], [2, 2], 'the file, the tag; the proxy image, the manager image');
+  const second = fakeGitHub();
+  asked.length = 0;
+  assert.equal((await marksFor({ reads }, second)).marks.length, 2);
+  assert.deepEqual([second.seen.paths, asked], [['/repos/nearai/cvm-compose-files/commits/v0.0.3'], []]);
+  // A check that failed is not kept: a build proof can be published later, and the next round asks again.
+  const retried: ReleaseReads = new Map();
+  assert.equal((await marksFor({ reads: retried, sdk: sdkWith(`sha256:${'3'.repeat(64)}`) })).marks.length, 0);
+  asked.length = 0;
+  assert.equal((await marksFor({ reads: retried })).marks.length, 2);
+  assert.deepEqual(asked, [`sha256:${'3'.repeat(64)}`], 'the image that failed is asked about again, the manager that held is not');
 });

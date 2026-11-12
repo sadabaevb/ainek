@@ -22,6 +22,7 @@ import { checked, type Checked } from './checked.ts';
 import { MAX_COMPOSE_BYTES, launcherSettings, modelServices, parseImage, type EngineService, type ImageRef, type LauncherSettings, type MeasuredSetting, type ModelService } from './compose-file.ts';
 import { sha256Hex } from './hash.ts';
 import type { Engine, ImageCheck, LeadTime, Provenance, ReleaseInspection, ServiceRelease, SourceChange } from './release-types.ts';
+import { logMark, releaseMark } from './release-marks.ts';
 import { COMPOSE_REPOSITORY, composeFilesOf, firstDeployments, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, timeOf, type ManagerAction, type Release } from './release.ts';
 
 /** Which repository and workflow may build an image. */
@@ -68,7 +69,17 @@ export interface InspectReleaseParams {
   githubToken?: string | undefined;
   fetch?: typeof globalThis.fetch;
   sdk: ProvenanceSdk;
+  /**
+   * Reads that cannot change (a file at a commit, the build proof of a digest), kept by a caller that inspects again and
+   * again: a verifier asks GitHub once per release, not once per round. Give the same map to every call.
+   */
+  reads?: ReleaseReads | undefined;
+  /** False leaves out the build before the current one and what changed since: reading for a person, not a check. */
+  previous?: boolean;
 }
+
+/** A store of unchanging reads for `InspectReleaseParams.reads`. What is in it is this module's business. */
+export type ReleaseReads = Map<string, Promise<unknown>>;
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -182,19 +193,28 @@ async function provenanceOf(image: ImageRef, githubToken: string | undefined, sd
   }
 }
 
-/** `load` made to run once per key: a second caller gets the first one's promise, its failure included. */
-function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>): (...args: A) => Promise<T> {
+/**
+ * `load` made to run once per key: a second caller gets the first one's promise, its failure included. With `kept`, the
+ * caller's own store: an answer goes into it only once it is there and `final` says it cannot change, so a failure or an
+ * answer GitHub did not give is asked for again by the next inspection.
+ */
+function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>, kept?: { reads: ReleaseReads; final: (value: T) => boolean }): (...args: A) => Promise<T> {
   const seen = new Map<string, Promise<T>>();
   return (...args) => {
     const key = keyOf(...args);
-    let loading = seen.get(key);
-    if (!loading) seen.set(key, (loading = load(...args)));
+    let loading = seen.get(key) ?? (kept?.reads.get(key) as Promise<T> | undefined);
+    if (!loading) {
+      loading = load(...args);
+      const started = loading;
+      if (kept) void started.then((value) => kept.final(value) && kept.reads.set(key, started), () => undefined);
+    }
+    seen.set(key, loading);
     return loading;
   };
 }
 
 /** The reads of one inspection, each made once: the services of a model often share a commit, a tag and an image. */
-function reader(model: string, githubToken: string | undefined, fetchImpl: typeof globalThis.fetch, sdk: ProvenanceSdk) {
+function reader(model: string, githubToken: string | undefined, fetchImpl: typeof globalThis.fetch, sdk: ProvenanceSdk, reads: ReleaseReads | undefined) {
   const gh = github(githubToken, fetchImpl);
   return {
     /**
@@ -202,7 +222,7 @@ function reader(model: string, githubToken: string | undefined, fetchImpl: typeo
      * compose file (a token rotation job, say), so text that does not parse has no services and keeps the reason.
      */
     fileAt: once(
-      (file: string, commit: string) => `${file}@${commit}`,
+      (file: string, commit: string) => `file ${model} ${file}@${commit}`,
       async (file, commit): Promise<{ sha256: string; services: ModelService[]; unreadable?: string }> => {
         const bytes = await gh.raw(COMPOSE_REPOSITORY, file, commit);
         const sha256 = sha256Hex(bytes);
@@ -212,6 +232,7 @@ function reader(model: string, githubToken: string | undefined, fetchImpl: typeo
           return { sha256, services: [], unreadable: whyOf(err) };
         }
       },
+      reads && { reads, final: () => true }, // a commit's file does not change
     ),
     /** The commit a tag name or a commit id of the compose repository resolves to. */
     commit: once(
@@ -219,8 +240,10 @@ function reader(model: string, githubToken: string | undefined, fetchImpl: typeo
       (by) => gh.commit(COMPOSE_REPOSITORY, by),
     ),
     image: once(
-      (image: ImageRef) => image.raw,
+      (image: ImageRef) => `image ${image.raw}`,
       async (image): Promise<ImageCheck> => ({ image, provenance: await provenanceOf(image, githubToken, sdk) }),
+      // A build proof that verified stays verified. A failure is asked about again: a proof can be published later.
+      reads && { reads, final: (check) => check.provenance.status === 'ok' },
     ),
     compare: gh.compare,
   };
@@ -331,10 +354,10 @@ async function sourceChange(read: Reader, from: Checked<Provenance>, to: Checked
 }
 
 /** One service of the model: its latest release checked against the public file and tag, its image, the build before it. */
-async function inspectService(service: string, history: Release[], release: Release, actions: readonly ManagerAction[], read: Reader): Promise<ServiceRelease> {
+async function inspectService(service: string, history: Release[], release: Release, actions: readonly ManagerAction[], read: Reader, lookBack: boolean): Promise<ServiceRelease> {
   // The file and the tag do not depend on each other.
   const [fromFile, fromTag] = await Promise.all([releaseFile(service, release, actions, read), releaseTag(release, read)]);
-  const previous = fromFile.proxy?.image.digest ? await previousBuild(service, history, fromFile.proxy, read) : undefined;
+  const previous = lookBack && fromFile.proxy?.image.digest ? await previousBuild(service, history, fromFile.proxy, read) : undefined;
   return { service, history, release, ...fromFile, ...fromTag, ...(previous ? { previousBuild: previous } : {}) };
 }
 
@@ -354,11 +377,11 @@ async function managerOf(actions: readonly ManagerAction[], launcher: Checked<La
  * report carried no action log. Never throws for something GitHub or Sigstore did: a check they kept from being made comes
  * back `skipped`.
  */
-export async function inspectRelease({ deployment, report, model, githubToken, fetch: fetchImpl = globalThis.fetch, sdk }: InspectReleaseParams): Promise<ReleaseInspection | undefined> {
+export async function inspectRelease({ deployment, report, model, githubToken, fetch: fetchImpl = globalThis.fetch, sdk, reads, previous = true }: InspectReleaseParams): Promise<ReleaseInspection | undefined> {
   const log = deployment.composeManager;
   if (!log) return undefined;
   const actions: readonly ManagerAction[] = log.actions;
-  const read = reader(model, githubToken, fetchImpl, sdk);
+  const read = reader(model, githubToken, fetchImpl, sdk, reads);
   const launcher = launcherSettings(deployment.appCompose);
   const managerCheck = managerOf(actions, launcher, read); // does not depend on the release: started now, awaited below
   const found = await findModelFile(actions, model, read);
@@ -368,7 +391,7 @@ export async function inspectRelease({ deployment, report, model, githubToken, f
       found.names.map((service) => {
         const history = releasesFor(actions, { file: found.file, service });
         const release = history.at(-1);
-        return release ? inspectService(service, history, release, actions, read) : undefined; // defined in the file, never brought up by this log
+        return release ? inspectService(service, history, release, actions, read, previous) : undefined; // defined in the file, never brought up by this log
       }),
     );
     services.push(...inspected.filter((s) => s !== undefined));
@@ -435,6 +458,25 @@ export function verdictOf(inspection: ReleaseInspection): ReleaseVerdict {
   const failures = failedChecks(inspection);
   const unchecked = uncheckedChecks(inspection);
   return { status: failures.length > 0 ? 'fail' : inspection.services.length > 0 && unchecked.length === 0 ? 'ok' : 'skipped', failures, unchecked };
+}
+
+/**
+ * The marks a verifier adds to a key-log entry for one verified model report (release-marks.ts): the action log as it
+ * stands, and the release of the model's service that log ends in. They are given only when that release was followed to
+ * public sources and every check held, so a mark in the log means "a verifier checked what this log deployed for the
+ * model". Otherwise there are none, and `why` says what was missing: the verifier still logs the key and the launcher,
+ * as it always has.
+ */
+export async function releaseMarksFor(params: InspectReleaseParams): Promise<{ marks: string[]; why?: string }> {
+  const inspection = await inspectRelease({ ...params, previous: false });
+  if (!inspection) return { marks: [], why: 'the report carries no action log' };
+  const verdict = verdictOf(inspection);
+  if (verdict.status !== 'ok') return { marks: [], why: verdict.failures[0] ?? inspection.unresolved ?? `not checked: ${verdict.unchecked.join('; ')}` };
+  const { instance } = inspection.log;
+  if (instance.status !== 'ok') return { marks: [], why: instance.why }; // for the compiler: an `ok` verdict has checked it
+  // A model usually has one service; two that share a release are one mark.
+  const releases = new Set(inspection.services.flatMap((s) => (s.file.status === 'ok' ? [releaseMark(s.release.file, s.file.value.sha256)] : [])));
+  return { marks: [logMark(instance.value, params.deployment.composeManager?.actions ?? []), ...releases] };
 }
 
 /**

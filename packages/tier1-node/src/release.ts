@@ -6,6 +6,7 @@ import { inspectRelease as inspect, type InspectReleaseParams, type ReleaseInspe
 
 export type * from '@ainek/proof/release-chain';
 export { COMPOSE_REPOSITORY, IMAGE_POLICIES, countText, describeRelease, failedChecks, leadTimes, releaseName, uncheckedChecks, utcText, verdictOf } from '@ainek/proof/release-chain';
+// `releaseMarksFor` is not wrapped here: a verifier does not depend on this package and calls it with its own SDK.
 
 /** The chain with this SDK's image checks. */
 export function inspectRelease(params: Omit<InspectReleaseParams, 'sdk'>): Promise<ReleaseInspection | undefined> {

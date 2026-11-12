@@ -37,7 +37,17 @@ export interface BuildKeyEntryInputParams {
   itaJwt?: string;
   /** Unix ms on the verifier; defaults to now. */
   observedAtMs?: number;
+  /**
+   * Release marks to log after the image digests (release-marks.ts), when the verifier followed the release to public
+   * sources. Marks the contract's limits leave no room for are left out, all of them: the key and its launcher are logged
+   * either way.
+   */
+  marks?: readonly string[];
 }
+
+/** The contract's limits on `image_digests` (contracts/ainek/src/lib.rs): at most 16 values of at most 128 bytes. */
+const MAX_IMAGE_DIGESTS = 16;
+const MAX_FIELD_BYTES = 128;
 
 /**
  * The two parts of a dstack `app_compose` JSON this package reads: the compose file it carries and the names of the
@@ -76,6 +86,9 @@ export function buildKeyEntryInput(p: BuildKeyEntryInputParams): KeyEntryInput {
   const appCompose = verified.deployment.appCompose;
   const imageDigests = imageDigestsOf(appCompose);
   if (imageDigests.length === 0) throw new Error(`compose file of ${p.model} pins no image by digest: refusing to log an entry without image_digests`);
+  // Marks come after the digests and never at their cost: the contract rejects a whole entry over one value too many.
+  const marked = [...imageDigests, ...(p.marks ?? [])];
+  const fits = marked.length <= MAX_IMAGE_DIGESTS && marked.every((value) => new TextEncoder().encode(value).length <= MAX_FIELD_BYTES);
   const observedAt = p.observedAtMs ?? Date.now();
   if (!Number.isSafeInteger(observedAt) || observedAt < 0) throw new Error(`observedAtMs must be a non-negative integer of unix milliseconds, got ${String(p.observedAtMs)}`);
   return KeyEntryInput.parse({
@@ -84,7 +97,7 @@ export function buildKeyEntryInput(p: BuildKeyEntryInputParams): KeyEntryInput {
     signing_algo: signingAlgo,
     signing_public_key: normalizeHex(publicKey),
     compose_hash: composeHashOf(verified.deployment),
-    image_digests: imageDigests,
+    image_digests: fits ? marked : imageDigests,
     tcb_status: verified.tcbStatus,
     ita_jwt_hash: p.itaJwt ? sha256Hex(p.itaJwt) : '',
     nras_result_hash: p.nrasJwt ? sha256Hex(p.nrasJwt) : '',

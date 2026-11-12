@@ -92,3 +92,16 @@ test('readAppCompose: the compose file and the allowed variable names of a dstac
   assert.deepEqual(readAppCompose(JSON.stringify({ docker_compose_file: 'services: {}' })), { composeFile: 'services: {}', allowedEnvs: [] });
   for (const not of ['services: {}', '{}', 'null', '[]', '{"docker_compose_file": 5}']) assert.equal(readAppCompose(not), undefined, not);
 });
+
+test('buildKeyEntryInput: release marks ride after the image digests, and never at their cost', () => {
+  const plain = build();
+  const marks = ['release:0123456789abcdef:' + 'a'.repeat(64), 'log:19aea1693533dc2d:224:' + 'b'.repeat(64)];
+  assert.deepEqual(build({ marks }).image_digests, [...plain.image_digests, ...marks]);
+  assert.deepEqual(build({ marks: [] }).image_digests, plain.image_digests);
+  // 16 values of 128 bytes at most (contracts/ainek/src/lib.rs). The contract rejects a whole entry over one value too many,
+  // so marks that do not fit are left out, all of them, and the key and its launcher are logged as before.
+  const room = 16 - plain.image_digests.length;
+  assert.equal(build({ marks: Array(room).fill(marks[0]) as string[] }).image_digests.length, 16);
+  assert.deepEqual(build({ marks: Array(room + 1).fill(marks[0]) as string[] }).image_digests, plain.image_digests);
+  assert.deepEqual(build({ marks: [marks[0] as string, 'log:' + 'x'.repeat(125)] }).image_digests, plain.image_digests);
+});
