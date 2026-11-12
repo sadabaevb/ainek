@@ -60,3 +60,5 @@ export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, toke
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
+export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, spanText, timeOf } from './release.ts';
+export type { ManagerAction, Release } from './release.ts';
