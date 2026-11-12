@@ -120,6 +120,11 @@ export interface ReleaseRule {
   now?: number | undefined;
 }
 
+/** The rule a client's settings ask for: the launcher check and the wait, as the config names them. */
+export function releaseRuleOf(cfg: { requireLoggedDeployment: boolean; releaseWaitMs: number }): ReleaseRule {
+  return { withLauncher: cfg.requireLoggedDeployment, waitMs: cfg.releaseWaitMs };
+}
+
 /** What `evaluateRelease` takes besides the entries and the log: the wait of the rule, the quorum, and the entries that can contradict the log without being able to confirm it. */
 type ReleaseCheck = Pick<ReleaseRule, 'waitMs' | 'now'> & { quorum?: number | undefined; witnesses?: readonly KeyEntry[] | undefined };
 

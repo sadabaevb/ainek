@@ -3,7 +3,7 @@
 // verifiers disagree (split view). Wallet login here asks for the function-call key later used for commit_proof.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
-import { ANY_AGE_NS, LOG_WINDOW_NS, latestKeysFor, deploymentStanding, deploymentsSeen, findSplitView, type KeyEntry, type SeenDeployment } from '@ainek/proof';
+import { ANY_AGE_NS, LOG_WINDOW_NS, latestKeysFor, deploymentStanding, deploymentsSeen, findSplitView, releaseRuleOf, type KeyEntry, type SeenDeployment } from '@ainek/proof';
 import { RedCard } from '@/components/red-card';
 import { ReleaseRow } from '@/components/release-row';
 import { StackTable, type Column } from '@/components/stack-table';
@@ -85,9 +85,10 @@ export default function LogPage() {
     return report;
   }, [cfg.model, cfg.acceptedTcbStatuses]);
   // The chat's release rule (SPEC §7.5) on the entries this page read: shown under the release check, enforced only by the chat.
+  const { requireLoggedDeployment, releaseWaitMs, requireLoggedRelease } = cfg;
   const keyLog = useMemo(
-    () => (log ? { entries: log.entries, trustedVerifiers: trust.verifiers, quorum: trust.quorum, withLauncher: cfg.requireLoggedDeployment, waitMs: cfg.releaseWaitMs, enforced: cfg.requireLoggedRelease } : undefined),
-    [log, trust, cfg.requireLoggedDeployment, cfg.releaseWaitMs, cfg.requireLoggedRelease],
+    () => (log ? { entries: log.entries, trust, rule: releaseRuleOf({ requireLoggedDeployment, releaseWaitMs }), enforced: requireLoggedRelease } : undefined),
+    [log, trust, requireLoggedDeployment, releaseWaitMs, requireLoggedRelease],
   );
   const deployments = useMemo(() => deploymentsSeen(log?.all ?? [], cfg.model), [log?.all, cfg.model]);
   // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.

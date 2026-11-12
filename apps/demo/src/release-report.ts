@@ -1,23 +1,22 @@
 // Prints what `inspectRelease` found: the release that serves the model, from the enclave's action log to a source commit.
 // It only prints. The words are `describeRelease` of @ainek/proof/release-chain, which the proof card shows too, and which
 // checks failed is `failedChecks` there: a line is marked failed, not checked or fine by the same `Checked` values.
-import { spanText, type ReleaseLogVerdict } from '@ainek/proof';
-import { countText as count, describeRelease, releaseInLogLine, utcText as utc, type LeadTime, type ReleaseInspection } from '@ainek/tier1-node/release';
+import { spanText } from '@ainek/proof';
+import { countText as count, describeRelease, utcText as utc, type LeadTime, type ReleaseInspection, type ReleaseLine } from '@ainek/tier1-node/release';
 import { NA, head, line, markOf } from './term.ts';
 
 /**
  * Prints the code section and returns one line for the summary card, or undefined when no release was resolved.
- * `inLog` is the client's release rule (SPEC §7.5) applied to the log this run read, and `enforced` whether this client
- * is set to refuse by it: the section ends with where the key log stands on the action log the enclave attests.
+ * `keyLog` is the last line of the section: where the key log stands on the action log the enclave attests (SPEC §7.5).
  */
-export function printRelease(inspection: ReleaseInspection | undefined, { model, inLog, enforced, now = Date.now() }: { model: string; inLog: ReleaseLogVerdict; enforced: boolean; now?: number }): string | undefined {
+export function printRelease(inspection: ReleaseInspection | undefined, { model, keyLog, now = Date.now() }: { model: string; keyLog: ReleaseLine; now?: number }): string | undefined {
   head("5. Code behind the key: what the enclave's manager deployed (its action log, bound to a TDX quote of its own)");
   if (!inspection) {
     line(NA, 'this model report carries no action log: not checked');
     return undefined;
   }
   const { lines, summary } = describeRelease(inspection, { model, now });
-  for (const l of [...lines, releaseInLogLine(inLog, enforced)]) line(markOf(l.status), l.text);
+  for (const l of [...lines, keyLog]) line(markOf(l.status), l.text);
   return summary;
 }
 

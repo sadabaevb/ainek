@@ -6,19 +6,16 @@ import { useMemo, useState } from 'react';
 import { getSdkError, isVerificationError, type VerifiedModelAttestation } from '@nearai/inference-sdk';
 import { useT } from '@/app/providers';
 import { describeError } from '@/lib/errors';
-import type { KeyLogContext, ReleaseCheck } from '@/lib/release';
+import { withKeyLog, type KeyLogContext } from '@/lib/key-log-line';
+import type { ReleaseCheck } from '@/lib/release';
 import { Row, mark } from './checks';
 
 /**
  * `failed` on an error: the hardware evidence itself did not verify. Anything else thrown is a check that could not be made.
- * A finished check keeps the report it read and the function that reads the key log against it, so that the key-log line
- * follows the log and the viewer's trust set as they change, without checking the release again.
+ * A finished check keeps the report it read, so that the key-log line follows the log and the viewer's trust set as they
+ * change, without checking the release again.
  */
-type State =
-  | { kind: 'idle' }
-  | { kind: 'running' }
-  | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation; withKeyLog: typeof import('@/lib/release').withKeyLog }
-  | { kind: 'error'; why: string; failed: boolean };
+type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation } | { kind: 'error'; why: string; failed: boolean };
 
 /**
  * `attest` gives the verified report to read: the card hands over the one it already holds, /log verifies one when asked.
@@ -33,15 +30,15 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
   const run = async () => {
     setState({ kind: 'running' });
     try {
-      const [{ checkRelease, withKeyLog }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
-      setState({ kind: 'done', check: await checkRelease(attestation, model), attestation, withKeyLog });
+      const [{ checkRelease }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
+      setState({ kind: 'done', check: await checkRelease(attestation, model), attestation });
     } catch (err) {
       const refused = getSdkError(err);
       setState({ kind: 'error', why: describeError(err), failed: isVerificationError(refused) && !refused.retryable });
     }
   };
 
-  const check = useMemo(() => (state.kind !== 'done' ? undefined : keyLog ? state.withKeyLog(state.check, state.attestation, model, keyLog) : state.check), [state, keyLog, model]);
+  const check = useMemo(() => (state.kind !== 'done' ? undefined : keyLog ? withKeyLog(state.check, state.attestation, model, keyLog) : state.check), [state, keyLog, model]);
   const status = check ? check.status : state.kind === 'running' ? 'running' : state.kind === 'error' && state.failed ? 'fail' : 'skipped';
   const again = <button type="button" className="btn small" onClick={run}>{t.codeAgain}</button>;
   const detail = check && (

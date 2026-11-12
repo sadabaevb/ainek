@@ -7,8 +7,7 @@
 // What it reads is the action log of the replica that attested to this browser. Replicas of a model share a signing key
 // and the gateway picks one per connection, so the replica that answers a message may be another one.
 import { fetchImageProvenance, getSdkError, verifyImageProvenance, type VerifiedModelAttestation } from '@nearai/inference-sdk';
-import { releaseStanding, type KeyEntry } from '@ainek/proof';
-import { describeRelease, inspectRelease, releaseInLogLine, releaseName, utcText, verdictOf, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
+import { describeRelease, inspectRelease, releaseName, utcText, verdictOf, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
 
 export interface ReleaseCheck extends ReleaseVerdict {
   /** The release the log names for the model, when one was resolved. */
@@ -73,29 +72,3 @@ function present(inspection: ReleaseInspection | undefined, model: string): Rele
     lines: describeRelease(inspection, { model }).lines,
   };
 }
-
-/** What the page knows about the public key log when it shows a release: the entries it read and the viewer's rule for them. */
-export interface KeyLogContext {
-  entries: readonly KeyEntry[];
-  trustedVerifiers: readonly string[];
-  quorum: number;
-  /** The client asks for the launcher to be logged, so only entries for the report's launcher may confirm its log. */
-  withLauncher: boolean;
-  /** The wait the client asks for, in ms (SPEC §7.5). */
-  waitMs: number;
-  /** The chat refuses by the release rule; otherwise the line only says what the rule would say. */
-  enforced: boolean;
-}
-
-/**
- * A release check with one more line: where the public key log stands on the action log of this report, by the chat's
- * own release rule (SPEC §7.5). The line is shown whether or not the chat refuses by the rule. A log found rewritten
- * fails the check whatever the setting, as it fails `pnpm demo:attest`.
- */
-export function withKeyLog(check: ReleaseCheck, attestation: Pick<VerifiedModelAttestation, 'signer' | 'deployment' | 'report'>, model: string, log: KeyLogContext): ReleaseCheck {
-  const standing = releaseStanding(log.entries, { model, signingAddress: attestation.signer.signingAddress, trustedVerifiers: log.trustedVerifiers, quorum: log.quorum }, attestation, { withLauncher: log.withLauncher, waitMs: log.waitMs });
-  const line = releaseInLogLine(standing, log.enforced);
-  const lines = [...check.lines, line];
-  return line.status === 'fail' ? { ...check, status: 'fail', failures: [...check.failures, line.text], lines } : { ...check, lines };
-}
-

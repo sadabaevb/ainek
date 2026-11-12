@@ -3,7 +3,7 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, withReleaseRule, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, releaseRuleOf, withReleaseRule, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
@@ -166,7 +166,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const verdictFor = (signingAddress: string, composes: readonly (string | undefined)[]): KeyLogVerdict => {
     const query = { model, signingAddress, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
     const key = evaluateKeyLogForAll(entries, query, composes);
-    return cfg.requireLoggedRelease ? withReleaseRule(key, entries, query, deployment.models, { withLauncher: cfg.requireLoggedDeployment, waitMs: cfg.releaseWaitMs }) : key;
+    return cfg.requireLoggedRelease ? withReleaseRule(key, entries, query, deployment.models, releaseRuleOf(cfg)) : key;
   };
   const keyVerdict = verdictFor(seenKey, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
   const seenCompose = keyVerdict.deployment?.composeHash;

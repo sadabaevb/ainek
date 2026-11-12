@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { checked, type Checked } from './checked.ts';
 import { readRepoJson } from './fixtures.ts';
 import { evaluateKeyLog } from './key-log.ts';
-import { releaseInLogLine } from './release-lines.ts';
-import { actionsHash, evaluateRelease, logMark, marksOf, releaseMark, releaseStanding, withReleaseRule, type AttestedReport } from './release-marks.ts';
+import { releaseInLogLine, withFinding } from './release-lines.ts';
+import { actionsHash, evaluateRelease, logMark, marksOf, releaseMark, releaseRuleOf, releaseStanding, withReleaseRule, type AttestedReport } from './release-marks.ts';
 import type { ManagerAction } from './release.ts';
 import type { KeyEntry, RawReport } from './index.ts';
 
@@ -256,5 +256,12 @@ test('releaseInLogLine: what the rule says in one line, the same in the terminal
   const edited = evaluateRelease(seen, at([LOG[0] as ManagerAction, up('2026-11-01T10:00:00Z', H2), LOG[2] as ManagerAction]));
   assert.deepEqual([releaseInLogLine(edited, false).status, /AINEK_REQUIRE_RELEASE/.test(releaseInLogLine(edited, false).text)], ['fail', false]);
   assert.match(releaseInLogLine(edited, false).text, /^key log: the enclave's action log was rewritten: the first 3 actions/);
+
+  // What the line does to a verdict: a failure fails it and is named among its failures; anything else leaves it alone.
+  const held = { status: 'ok' as const, failures: [], unchecked: [] };
+  assert.equal(withFinding(held, releaseInLogLine(added, false)), held);
+  assert.deepEqual(withFinding(held, releaseInLogLine(edited, false)), { status: 'fail', failures: [releaseInLogLine(edited, false).text], unchecked: [] });
+  // The rule a config asks for, as every caller builds it.
+  assert.deepEqual(releaseRuleOf({ requireLoggedDeployment: true, releaseWaitMs: 30 * MIN }), { withLauncher: true, waitMs: 30 * MIN });
 });
 

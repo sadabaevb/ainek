@@ -137,3 +137,11 @@ export function releaseInLogLine(inLog: ReleaseLogVerdict, enforced: boolean): R
   return { status: 'skipped', text: `key log: ${inLog.detail} (${enforced ? 'AINEK_REQUIRE_RELEASE is on' : 'AINEK_REQUIRE_RELEASE is off, so this client sends all the same; with it on it would not'})` };
 }
 
+/**
+ * A verdict with one more finding read into it: a line that failed fails the verdict and is named among its failures,
+ * like any check that did not hold. Any other line leaves the verdict as it was.
+ */
+export function withFinding<V extends { status: 'ok' | 'fail' | 'skipped'; failures: string[] }>(verdict: V, line: ReleaseLine): V {
+  return line.status === 'fail' ? { ...verdict, status: 'fail', failures: [...verdict.failures, line.text] } : verdict;
+}
+
