@@ -51,6 +51,25 @@ test('alreadyLogged: same key + same compose hash from us within the window is n
   assert.equal(alreadyLogged(entry, []), undefined);
 });
 
+/** The entry with the marks a verifier writes after following the release: the enclave's action log at `actions` actions. */
+function marked<E extends { image_digests: string[] }>(entry: E, actions: number): E {
+  return { ...entry, image_digests: [...entry.image_digests, `log:19aea1693533dc2d:${actions}:${'a'.repeat(64)}`, `release:0123456789abcdef:${'b'.repeat(64)}`] };
+}
+
+test('alreadyLogged: an entry with release marks is covered only by one with the same marks', () => {
+  const entry = entryFromRecording();
+  const mine: KeyEntry = { ...logged, signing_address: entry.signing_address, compose_hash: entry.compose_hash, image_digests: entry.image_digests };
+  // The enclave deployed since our last entry: its action log is longer, and a client that asks for a logged release
+  // waits for exactly this entry. The 6 h rule must not hold it back.
+  assert.equal(alreadyLogged(marked(entry, 157), [marked(mine, 156)]), undefined);
+  assert.equal(alreadyLogged(marked(entry, 157), [mine]), undefined, 'an entry without marks does not cover one with marks');
+  assert.equal(alreadyLogged(marked(entry, 157), [marked(mine, 156), marked({ ...mine, index: 9 }, 157)])?.index, 9, 'the same state is logged once');
+  // A round that could not follow the release has nothing new to say about a key and compose already in the log.
+  assert.equal(alreadyLogged(entry, [marked(mine, 156)])?.index, mine.index);
+  // Marks never make another key or another compose look logged.
+  assert.equal(alreadyLogged(marked(entry, 157), [marked({ ...mine, compose_hash: 'cd'.repeat(32) }, 157)]), undefined);
+});
+
 test('report_hash is the sha256 of the exact bytes we store, so the file on disk can be checked against the log', () => {
   const entry = entryFromRecording();
   assert.equal(entry.report_hash, createHash('sha256').update(reportBytes).digest('hex'));
@@ -77,6 +96,12 @@ test('loadConfig refuses to start without the verifier account and key, and boun
   assert.equal(loadConfig({ ...base, VERIFIER_REPORTS_PER_ROUND: '2' }).reportsPerRound, 2);
   assert.throws(() => loadConfig({ ...base, VERIFIER_REPORTS_PER_ROUND: String(MAX_REPORTS_PER_ROUND + 1) }), /between 1 and/);
   assert.throws(() => loadConfig({ ...base, VERIFIER_REPORTS_PER_ROUND: '1.5' }), /whole number/);
+  // Release marks are on unless turned off; the GitHub token is optional and a blank line in .env is no token.
+  assert.deepEqual([cfg.releaseMarks, cfg.githubToken], [true, undefined]);
+  assert.equal(loadConfig({ ...base, VERIFIER_RELEASE_MARKS: '' }).releaseMarks, true);
+  assert.equal(loadConfig({ ...base, VERIFIER_RELEASE_MARKS: '0' }).releaseMarks, false);
+  assert.equal(loadConfig({ ...base, VERIFIER_RELEASE_MARKS: 'false' }).releaseMarks, false);
+  assert.deepEqual([loadConfig({ ...base, GITHUB_TOKEN: ' ' }).githubToken, loadConfig({ ...base, GITHUB_TOKEN: ' t0ken ' }).githubToken], [undefined, 't0ken']);
 });
 
 /** A round in which the gateway's balancer answers from the given replicas, one per report; `fail` reports do not come back. */
@@ -186,4 +211,58 @@ test('attestModel retries a verification Intel let down and does not retry a ver
   const refused = await attestModel(model, { ...opts, verify: refusing });
   assert.equal(calls, 1);
   assert.equal(refused.keys[0]?.ok, false);
+});
+
+test('attestModel: release marks ride in the entry, and a release that cannot be followed never costs the key', async () => {
+  const fetchImpl = (async () => new Response(reportBytes)) as unknown as typeof fetch;
+  const verify: typeof verifyModelAttestation = async ({ clientBinding }) => verifiedWithNonce(clientBinding!.nonce);
+  const opts = { baseUrl: 'https://recorded', acceptedTcbStatuses: ['UpToDate'], fetchImpl, verify };
+  const keyOf = async (release?: Parameters<typeof attestModel>[1]['release']) => {
+    const key = (await attestModel(model, { ...opts, ...(release ? { release } : {}) })).keys[0];
+    assert.ok(key?.ok, 'the key verified');
+    return key;
+  };
+  const plain = await keyOf();
+  assert.equal(plain.unmarked, undefined, 'no marker was given, so there is nothing to explain');
+
+  // The marker sees the verified report of the model it is asked about, and its marks follow the image digests.
+  const marks = marked({ image_digests: [] }, 156).image_digests;
+  const followed = await keyOf(async (m, verified) => {
+    assert.deepEqual([m, verified.signer.signingAddress], [model, plain.entry.signing_address]);
+    return { marks };
+  });
+  assert.deepEqual(followed.entry.image_digests, [...plain.entry.image_digests, ...marks]);
+  assert.equal(followed.unmarked, undefined);
+
+  // GitHub's rate limit, a check that did not hold, a marker that throws: the entry is the one a verifier always logged.
+  const limited = await keyOf(async () => ({ marks: [], why: "GitHub's rate limit is used up" }));
+  assert.deepEqual([limited.entry.image_digests, limited.unmarked], [plain.entry.image_digests, "GitHub's rate limit is used up"]);
+  const broken = await keyOf(async () => Promise.reject(new Error('socket hang up')));
+  assert.deepEqual([broken.entry.image_digests, broken.unmarked], [plain.entry.image_digests, 'socket hang up']);
+  // Marks the contract's limits leave no room for are left out, and the line says so.
+  const crowded = await keyOf(async () => ({ marks: Array(16).fill(marks[0]) as string[] }));
+  assert.deepEqual([crowded.entry.image_digests, crowded.unmarked], [plain.entry.image_digests, 'the marks do not fit the entry']);
+});
+
+test('one round logs a key again when the enclave\'s action log has moved, once per state', async () => {
+  const reportsDir = `${tmpdir()}/ainek-verifier-marks-${process.pid}`;
+  after(() => rmSync(reportsDir, { recursive: true, force: true }));
+  const cfg = { ...loadConfig({ VERIFIER_ACCOUNT_ID: 'v1.testnet', VERIFIER_PRIVATE_KEY: 'ed25519:' + '1'.repeat(80), VERIFIER_REPORTS_PER_ROUND: '5' }), reportsDir };
+  // Five reports from one replica: the same action log twice, then the enclave deploys, then GitHub stops answering and
+  // the release is not followed, then the new state once more.
+  const base = entryFromRecording();
+  const states = [marked(base, 156), marked(base, 156), marked(base, 157), base, marked(base, 157)];
+  let call = 0;
+  const attest = async (m: string) => {
+    const entry = states[call++]!;
+    return { model: m, nonce: 'n', reportBytes: new Uint8Array([call]), reportHash: `marks-${call}`, keys: [{ ok: true as const, verified: { gpuEvidence: 'verified' } as AttestedKey extends { verified: infer V } ? V : never, entry, ...(entry === base ? { unmarked: "GitHub's rate limit is used up" } : {}) }] };
+  };
+  const sent: string[][] = [];
+  const writer: KeyLogWriter = { recentByMe: async () => [], logKey: async (e) => (sent.push(e.image_digests), { index: sent.length, txHash: `tx${sent.length}` }) };
+  const lines: string[] = [];
+  const results = await runRound(cfg, writer, (l) => lines.push(l), attest);
+  assert.deepEqual(results.map((r) => r.outcome), ['logged', 'current', 'logged', 'current', 'current']);
+  assert.deepEqual(sent, [states[0]!.image_digests, states[2]!.image_digests], 'each state of the action log is sent once; the unmarked entry adds nothing');
+  assert.equal(lines.filter((l) => /release checked, action log of 15[67] actions marked/.test(l)).length, 4);
+  assert.ok(lines.some((l) => new RegExp(`${base.image_digests.length} image digest\\(s\\); release not marked: GitHub's rate limit is used up`).test(l)), 'the digests are counted without the marks, and the reason is said');
 });

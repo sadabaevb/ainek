@@ -3,19 +3,20 @@
 //   fetch the signature → SDK byte-exact check → our proof (recomputed hashes, log binding, salted commit) → IndexedDB
 //   → commit on NEAR through the caller's wallet (commitOutcome, after the card is already on screen).
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
-import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, releaseRuleOf, withReleaseRule, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { PublicConfig } from './config';
 import { describeError } from './errors';
 import { keyLogFor } from './key-log';
 import {
+  chatModelOf,
   checkGatewayResponse,
   checkResponse,
   fetchModelMetadata,
   fetchSignature,
+  forgetDeployment,
   prepareE2ee, transmitE2ee,
   sendPlain,
-  forgetDeployment,
   verifyDeployment,
   verifyGateway,
   type ChatMessage,
@@ -144,11 +145,14 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const logStop = new AbortController(); // if attestation fails, the log reads have nothing left to serve
   const keyLogPromise = latestKeysFor(log, model, trust.verifiers, undefined, logStop.signal);
   keyLogPromise.catch(() => undefined); // awaited below; avoid an unhandled rejection if attestation fails first
-  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
+  // SPEC §7.5: the release rule reads the action log of this attestation and says nothing about what the enclave did
+  // after it, so a verification kept for up to an hour will not do: with the rule on, the model reports are verified
+  // again for every message.
+  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy, cfg.requireLoggedRelease), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
     logStop.abort();
     throw err;
   });
-  const modelAttestation = deployment.models.find((m) => m.signingPublicKey !== undefined) ?? deployment.models[0];
+  const modelAttestation = chatModelOf(deployment);
   if (!modelAttestation) fail(emit, 'attestation', 'no model attestation returned');
 
   // 2. Fail-closed: the attested signing key must be in the public log; with the deployment check on (config, or the demo switch),
@@ -158,12 +162,17 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const attestedCompose = composeHashOf(modelAttestation.deployment);
   // Every report that carries this key is checked: the one that signs the reply need not be the first (attestedCompose stays first).
   const honestComposes = cfg.requireLoggedDeployment ? composesBehindKey(deployment.models.map((m) => ({ signingAddress: m.signer.signingAddress, composeHash: composeHashOf(m.deployment) })), modelAttestation.signer.signingAddress) : [undefined];
-  const logPolicy = { model, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
-  const keyVerdict = evaluateKeyLogForAll(entries, { ...logPolicy, signingAddress: seenKey }, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
+  /** The client's whole rule for a key: the key and its launcher in the log, and, when asked for (SPEC §7.5), the action log of each attested report marked by the same verifiers. */
+  const verdictFor = (signingAddress: string, composes: readonly (string | undefined)[]): KeyLogVerdict => {
+    const query = { model, signingAddress, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
+    const key = evaluateKeyLogForAll(entries, query, composes);
+    return cfg.requireLoggedRelease ? withReleaseRule(key, entries, query, deployment.models, releaseRuleOf(cfg)) : key;
+  };
+  const keyVerdict = verdictFor(seenKey, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
   const seenCompose = keyVerdict.deployment?.composeHash;
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    const honestWouldPass = tamper !== false && evaluateKeyLogForAll(entries, { ...logPolicy, signingAddress: modelAttestation.signer.signingAddress }, honestComposes).status === 'ok';
+    const honestWouldPass = tamper !== false && verdictFor(modelAttestation.signer.signingAddress, honestComposes).status === 'ok';
     // An honest refusal on the deployment: forget this verification, so the next try attests again and may reach a replica the log knows.
     if (tamper === false && keyVerdict.reason === 'unknown-deployment') await forgetDeployment(model, policy);
     return { kind: 'refused', model, tampered: tamper, honestWouldPass, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, seenCompose };

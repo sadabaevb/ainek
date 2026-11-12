@@ -4,16 +4,18 @@
 // get seen), verify the evidence locally, and append every verified signing key of the model to the public key log
 // under this verifier's account, unless the same key+deployment was logged by us within the last 6 h. Each full report
 // is kept in data/reports/<report_hash>.json so `report_hash` can always be checked.
+// With VERIFIER_RELEASE_MARKS on (the default) an entry also says which action log of the enclave was checked, and an
+// entry whose marks are new is logged even inside those 6 h (SPEC §7.5).
 //
 //   pnpm -F verifier start          loop
 //   pnpm -F verifier once           one round, exit 0 if every key was logged or already current
 //   npx ainek-verify [--once]       same, as a bin
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { shortHex } from '@ainek/proof';
-import { attestModel, withDeadline, type AttestationRound } from './attest.ts';
+import { marksOf, shortHex, type KeyEntryInput } from '@ainek/proof';
+import { attestModel, releaseMarker, withDeadline, type AttestationRound } from './attest.ts';
 import { loadConfig, type VerifierConfig } from './config.ts';
-import { alreadyLogged, keyLogWriter, type KeyLogWriter } from './log.ts';
+import { alreadyLogged, covers, keyLogWriter, type KeyLogWriter } from './log.ts';
 
 export type KeyResult =
   | { model: string; key: string; outcome: 'logged'; index: number; txHash: string }
@@ -46,7 +48,13 @@ export function nextDelayMs(streaks: ReadonlyMap<string, number>, intervalMs: nu
 /** Fetches and verifies one attestation report; `attestModel` in the daemon, a stub in the tests. */
 export type Attest = (model: string) => Promise<AttestationRound>;
 
-export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (line: string) => void = console.log, attest: Attest = (model) => attestModel(model, { baseUrl: cfg.nearaiBaseUrl, acceptedTcbStatuses: cfg.acceptedTcbStatuses })): Promise<KeyResult[]> {
+/** How the daemon attests. Made once and used for every round: the release marker keeps what it read about a release. */
+export function attestWith(cfg: VerifierConfig): Attest {
+  const release = cfg.releaseMarks ? releaseMarker(cfg.githubToken) : undefined;
+  return (model) => attestModel(model, { baseUrl: cfg.nearaiBaseUrl, acceptedTcbStatuses: cfg.acceptedTcbStatuses, ...(release ? { release } : {}) });
+}
+
+export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (line: string) => void, attest: Attest): Promise<KeyResult[]> {
   const results: KeyResult[] = [];
   for (const model of cfg.models) {
     const started = performance.now();
@@ -76,10 +84,10 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       continue;
     }
 
-    // Keys sent earlier in this same round: two reports from the same replica, or two replicas with the same key and
-    // compose, count once. A key counts as sent from the moment we try: a `log_key` we stopped waiting for may still
-    // land, and must not be sent twice.
-    const sentNow = new Set<string>();
+    // Entries sent earlier in this same round: two reports from the same replica, or two replicas with the same key and
+    // compose (and the same release marks, when they carry any), count once. An entry counts as sent from the moment we
+    // try: a `log_key` we stopped waiting for may still land, and must not be sent twice.
+    const sentNow: KeyEntryInput[] = [];
     const keys = reports.flatMap((r) => r.keys);
     log(`${model}: ${reports.length} report(s) with ${keys.length} attestation(s) checked in ${((performance.now() - started) / 1000).toFixed(1)} s`);
     for (const k of keys) {
@@ -91,21 +99,22 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       }
       const { entry } = k;
       const key = shortHex(entry.signing_address);
-      log(`${model}: key ${key} verified: TCB ${entry.tcb_status}, GPU ${k.verified.gpuEvidence}, compose ${shortHex(entry.compose_hash)}, ${entry.image_digests.length} image digest(s)`);
+      const { digests, logs } = marksOf(entry.image_digests);
+      const release = logs[0] ? `; release checked, action log of ${logs[0].length} actions marked` : k.unmarked ? `; release not marked: ${k.unmarked}` : '';
+      log(`${model}: key ${key} verified: TCB ${entry.tcb_status}, GPU ${k.verified.gpuEvidence}, compose ${shortHex(entry.compose_hash)}, ${digests.length} image digest(s)${release}`);
       if (cfg.dryRun) {
         log(`${model}: dry run, nothing sent. A registered verifier would log this entry with log_key:\n${JSON.stringify(entry, null, 2)}`);
         results.push({ model, key: entry.signing_address, outcome: 'current', index: -1 });
         continue;
       }
-      const pair = `${entry.signing_address}/${entry.compose_hash}`;
       const seen = alreadyLogged(entry, recent);
-      if (seen || sentNow.has(pair)) {
+      if (seen || sentNow.some((sent) => covers(sent, entry))) {
         log(`${model}: key ${key} with this compose already ${seen ? `logged by us at index ${seen.index} within 6 h` : 'sent by us in this round'}, not logging again`);
         results.push({ model, key: entry.signing_address, outcome: 'current', index: seen?.index ?? -1 });
         continue;
       }
       try {
-        sentNow.add(pair);
+        sentNow.push(entry);
         const { index, txHash } = await withDeadline(writer.logKey(entry), LOG_KEY_TIMEOUT_MS, 'log_key');
         log(`logged ${model} key ${key} at index ${index}, tx ${txHash}`);
         results.push({ model, key: entry.signing_address, outcome: 'logged', index, txHash });
@@ -123,13 +132,14 @@ async function main(): Promise<void> {
   const dryRun = process.argv.includes('--dry-run');
   const once = dryRun || process.argv.includes('--once');
   const cfg = loadConfig(process.env, { dryRun });
-  console.log(`Ainek verifier ${dryRun ? '(dry run, no account)' : cfg.accountId} → ${cfg.contract} (${cfg.rpcUrl}); models: ${cfg.models.join(', ')}; TCB policy: ${cfg.acceptedTcbStatuses.join(',')}; reports: ${cfg.reportsDir}`);
+  console.log(`Ainek verifier ${dryRun ? '(dry run, no account)' : cfg.accountId} → ${cfg.contract} (${cfg.rpcUrl}); models: ${cfg.models.join(', ')}; TCB policy: ${cfg.acceptedTcbStatuses.join(',')}; release marks: ${cfg.releaseMarks ? 'on' : 'off'}; reports: ${cfg.reportsDir}`);
   // A dry run never signs: no key is loaded and both contract calls are skipped.
   const writer: KeyLogWriter = dryRun ? { recentByMe: async () => [], logKey: async () => Promise.reject(new Error('dry run')) } : keyLogWriter(cfg);
   const stamped = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
+  const attest = attestWith(cfg);
   let streaks = new Map<string, number>();
   for (;;) {
-    const results = await runRound(cfg, writer, stamped);
+    const results = await runRound(cfg, writer, stamped, attest);
     if (once) process.exit(results.every((r) => r.outcome !== 'failed') ? 0 : 1);
     streaks = failureStreaks(results, streaks);
     const delayMs = nextDelayMs(streaks, cfg.intervalMs);

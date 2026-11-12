@@ -15,13 +15,27 @@ export interface KeyLogWriter {
   logKey(entry: KeyEntryInput): Promise<LoggedKey>;
 }
 
+/** The parts of an entry a client matches on. */
+type Said = Pick<KeyEntryInput, 'signing_address' | 'compose_hash' | 'image_digests'>;
+
 /**
- * The same key from the same deployment, already logged by this verifier recently: logging it again adds nothing
- * for clients (they match on `signing_address`, optionally `compose_hash`) and costs gas and storage. Different key
- * or different compose hash means something changed on the provider side, which is exactly what the log must record.
+ * Whether `logged` already says what `entry` would. The same key from the same deployment adds nothing for clients that
+ * match on `signing_address`, optionally `compose_hash`. A different key or compose hash means something changed on the
+ * provider side, which is exactly what the log must record.
+ *
+ * An entry with release marks (packages/proof/src/release-marks.ts) says more: which action log of the enclave was
+ * checked. Its marks ride in `image_digests`, so the entry is covered only by one that carries every value it does. A
+ * mark changes whenever the enclave deploys, and a client that asks for a logged release waits for exactly the new one.
+ * An entry without marks (the release could not be followed this round) carries only the digests its compose pins, and
+ * any entry for that key and compose has those.
  */
+export function covers(logged: Said, entry: Said): boolean {
+  return logged.signing_address === entry.signing_address && logged.compose_hash === entry.compose_hash && entry.image_digests.every((value) => logged.image_digests.includes(value));
+}
+
+/** The entry this verifier logged recently that already says what `entry` would: logging it again costs gas and storage for nothing. */
 export function alreadyLogged(entry: KeyEntryInput, recent: readonly KeyEntry[]): KeyEntry | undefined {
-  return recent.find((e) => e.signing_address === entry.signing_address && e.compose_hash === entry.compose_hash);
+  return recent.find((e) => covers(e, entry));
 }
 
 /** `log_key` returns the new index as a JSON number in the receipt's SuccessValue (base64). */

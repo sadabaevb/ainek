@@ -1,20 +1,15 @@
 'use client';
-// A refusal or failure in its own red design: title with a warning glyph, optional body, optional English technical lines.
+// A refusal or failure in its own red design: the crossed box of a failed line, the title, an optional body and optional
+// English technical lines.
 import type { ReactNode } from 'react';
 import { useT } from '@/app/providers';
-
-const WARN = (
-  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
-    <path d="M12 3 2.5 20h19L12 3Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-    <path d="M12 9v5M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
+import { mark } from './checks';
 
 export function RedCard({ title, body, note, action, lines }: { title: string; body?: string; note?: string; action?: ReactNode; lines?: ReactNode[] }) {
   const { t } = useT();
   return (
     <section className="card red">
-      <h3>{WARN}<span>{title}</span></h3>
+      <h3><span className="mark fail" aria-hidden>{mark('fail')}</span><span>{title}</span></h3>
       {body && <p>{body}</p>}
       {note && <p className="muted small">{note}</p>}
       {action && <div className="actions">{action}</div>}

@@ -2,12 +2,32 @@
 // reports without a key, so this verifies the gateway's and the model's evidence here (Intel TDX through Intel PCS, the GPU through
 // NVIDIA NRAS), reads the public log from the NEAR contract and applies the client's fail-closed rule. Then it stops: no message
 // exists, so nothing is encrypted, sent or signed. The full exchange is `pnpm demo:live` (needs NEARAI_API_KEY).
-import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, shortHex as short } from '@ainek/proof';
+//
+// It then follows the code behind the key: the action log the model's enclave attests names the release that serves the model,
+// and that release is followed to a file in NEAR AI's public compose repository and to the signed build of the proxy image
+// (public GitHub reads; GITHUB_TOKEN is optional and only raises GitHub's anonymous rate limit). `--history` adds, for every
+// release in the log, how long its commit had existed when it first ran.
+import { parseArgs } from 'node:util';
+import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, releaseLineFor, releaseRuleOf, shortHex as short, withFinding } from '@ainek/proof';
 import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
+import { inspectRelease, leadTimes, verdictOf } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
-import { FAIL, NA, OK, exitFlushed, head, line, seconds } from './term.ts';
+import { printLeadTimes, printRelease } from './release-report.ts';
+import { FAIL, NA, OK, exitFlushed, head, line, out, seconds } from './term.ts';
+
+const flags = (() => {
+  try {
+    return parseArgs({ options: { history: { type: 'boolean', default: false } }, strict: true }).values;
+  } catch (err) {
+    console.error(`${err instanceof Error ? err.message : String(err)}\nusage: pnpm demo:attest [--history]`);
+    return process.exit(2);
+  }
+})();
 
 const { cfg } = loadLiveEnv();
+// Optional and never needed: without it GitHub allows 60 anonymous requests an hour from one address, enough for a few runs.
+// A token GitHub refuses (expired, revoked) is dropped after the first 401 and the public data is read anonymously.
+const githubToken = process.env.GITHUB_TOKEN || undefined;
 if (cfg.logSource !== 'contract') {
   console.error('pnpm demo:attest reads the live log (AINEK_LOG_SOURCE=contract); the recorded one is checked by pnpm demo');
   process.exit(2);
@@ -27,6 +47,7 @@ const outcome = await runPreflight({
 });
 
 let swappedRefused = false;
+let codeFailed = false;
 if (outcome.kind === 'failed') {
   console.log(`\nResult: FAILED at ${outcome.step}. Nothing was sent.`);
 } else {
@@ -45,13 +66,32 @@ if (outcome.kind === 'failed') {
   } else {
     const { signer: m, logEntry } = outcome;
     const compose = composeHashOf(m.deployment);
+    // The code behind the key. Informational for the send decision, which rests on the key and the launcher's compose hash;
+    // a check here that fails still fails this command.
+    const inspection = await inspectRelease({ deployment: m.deployment, report: m.report, model, githubToken });
+    // The client's release rule on the log this run read (SPEC §7.5): is the action log this enclave attests one a trusted
+    // verifier checked and logged? When the setting is on, the send decision above has applied it already.
+    const keyLog = releaseLineFor(outcome.entries, { model, signingAddress: m.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, m, releaseRuleOf(cfg), cfg.requireLoggedRelease);
+    const summary = printRelease(inspection, { model, keyLog });
+    // A log found rewritten fails the release like any check that did not hold, whatever the setting.
+    const verdict = inspection ? withFinding(verdictOf(inspection), keyLog) : undefined;
+    codeFailed = verdict?.status === 'fail';
+    // GitHub's anonymous limit is what most often leaves a check unmade here, and here a token can be given.
+    if (inspection?.retry && !githubToken) line(NA, 'GitHub or Sigstore did not answer for something above. GitHub allows 60 anonymous requests an hour from one address: GITHUB_TOKEN in .env raises that');
+    const releaseFile = inspection?.file;
+    if (flags.history && releaseFile && m.deployment.composeManager) printLeadTimes(releaseFile, await leadTimes(m.deployment.composeManager.actions, releaseFile, { githubToken }));
+    // The card repeats names read from the log and from GitHub, so each of its lines goes through `out`.
     console.log('\n┌─ Ainek, before sending ─ live ──────────────────────────────────────');
-    console.log(`│ ${OK} Model: ${model}, attested deployment (compose ${short(compose)})`);
-    console.log(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
-    console.log(`│ ${OK} Key ${short(m.signer.signingAddress)} is in the public log: entry #${logEntry.index} by ${outcome.verdict.confirmedBy.join(', ')}${normalizeHex(logEntry.compose_hash) === normalizeHex(compose) ? ', with this deployment' : '; this entry has another compose, the attested one is not in the log window'}`);
-    console.log(`│ ${NA} Not checked here: an answer. No message was written, so nothing was encrypted, sent or signed (pnpm demo:live)`);
-    console.log(`└─ Result: WOULD SEND. Checked in ${seconds(outcome.totalMs)}; nothing was sent.`);
+    out(`│ ${OK} Model: ${model}, attested deployment (launcher compose ${short(compose)})`);
+    out(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
+    out(`│ ${OK} Key ${short(m.signer.signingAddress)} is in the public log: entry #${logEntry.index} by ${outcome.verdict.confirmedBy.join(', ')}${normalizeHex(logEntry.compose_hash) === compose ? ", with this launcher's compose hash" : '; this entry has another compose, the attested one is not in the log window'}`);
+    // A failure first, whatever else is missing; a check mark only when every check of the release was made and held.
+    if (verdict?.status === 'fail') out(`│ ${FAIL} Code: ${verdict.failures.length === 1 ? '' : `${verdict.failures.length} checks failed, the first: `}${verdict.failures[0]} (step 5)`);
+    else if (!verdict || !summary) out(`│ ${NA} Code: the release behind the key was not resolved (step 5)`);
+    else out(verdict.status === 'ok' ? `│ ${OK} Code: ${summary} (step 5)` : `│ ${NA} Code: ${summary}; not checked: ${verdict.unchecked.join(', ')} (step 5)`);
+    out(`│ ${NA} Not checked here: an answer. No message was written, so nothing was encrypted, sent or signed (pnpm demo:live)`);
+    out(codeFailed ? `└─ Result: WOULD SEND by the client's rule, but a check of the code behind the key failed (step 5). Nothing was sent.` : `└─ Result: WOULD SEND. Hardware and log checked in ${seconds(outcome.totalMs)}; nothing was sent.`);
   }
 }
-// Zero only for WOULD SEND with the swapped key refused: a refusal of the live key means the log lacks it (as `demo:live` exits).
-await exitFlushed(outcome.kind === 'ready' && swappedRefused ? 0 : 1);
+// Zero only for WOULD SEND with the swapped key refused and no failed code check: a refusal of the live key means the log lacks it.
+await exitFlushed(outcome.kind === 'ready' && swappedRefused && !codeFailed ? 0 : 1);

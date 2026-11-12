@@ -32,18 +32,18 @@ export { buildModelProof, buildCheckedModelProof, buildActionProof } from './bui
 export type { BuildActionProofInput, CommittedActionProof } from './build.ts';
 export { withRetry, isNetworkFailure } from './retry.ts';
 export { parseChatCompletion } from './chat.ts';
-export { e2eeVersionProblem, looksE2ee, requireE2eeVersion } from './e2ee.ts';
+export { E2EE_VERSION, e2eeVersionProblem, looksE2ee, requireE2eeVersion } from './e2ee.ts';
 export { PolicyInput, PolicyOutput, checkPolicyOutput, decidedAtMs, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
 export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
 export type { DisclosedExchange, ParsedDisclosure } from './disclosure.ts';
-export { buildKeyEntryInput, composeHashOf, imageDigestsOf } from './key-entry.ts';
+export { buildKeyEntryInput, composeHashOf, imageDigestsOf, readAppCompose } from './key-entry.ts';
 export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entry.ts';
 export { toModelAttestation, toGatewayAttestation } from './report.ts';
 export type { RawAttestation, RawReport, ModelAttestationInput, GatewayAttestationInput } from './report.ts';
 export { stripHexPrefix, normalizeHex } from './hash.ts';
-export { ainekConfigFromEnv, explorerAccountUrl, explorerTxUrl } from './config.ts';
+export { ainekConfigFromEnv, envFlag, explorerAccountUrl, explorerTxUrl } from './config.ts';
 export type { AinekConfig, EnvLike } from './config.ts';
 export { actionRunChecks, checkActionProof, verifyActionProofOnChain } from './action-on-chain.ts';
 export { actionStatusCheck, agentKeysOf, approveBlocker, checkActionRecord, decidedUnderCurrentPolicy, readAction, readActions, readAgent, readAgentState, readModelCommits, readOwner, readPendingIds } from './agent-ledger.ts';
@@ -60,3 +60,12 @@ export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, toke
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
+export { logMark, marksOf, releaseLineFor, releaseMark, releaseRuleOf, releaseStanding, withReleaseRule } from './release-marks.ts';
+export type { ReleaseLogVerdict, ReleaseRule } from './release-marks.ts';
+// Light, unlike the rest of the release lines, which come with the chain (`@ainek/proof/release-chain`).
+export { withFinding } from './release-lines.ts';
+export type { ReleaseLine } from './release-lines.ts';
+export { checked } from './checked.ts';
+export type { Checked } from './checked.ts';
+export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf, wholeMinutes } from './release.ts';
+export type { ManagerAction, Release } from './release.ts';

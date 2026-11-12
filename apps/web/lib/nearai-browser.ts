@@ -105,25 +105,35 @@ function verifyModels(model: string, policy: AttestationPolicy): Promise<Verifie
   }, { retryable });
 }
 
-/** Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min in memory and in IndexedDB (same TTL the SDK uses), so a reload does not repeat the cold check. */
-export async function verifyDeployment(model: string, policy: AttestationPolicy): Promise<VerifiedDeployment> {
+/**
+ * Gateway + every model report, verified on this device (TDX via dcap-qvl, GPU via NRAS). The two legs are independent in the browser (no TLS pinning), so they run in parallel. Cached 60 min in memory and in IndexedDB (same TTL the SDK uses), so a reload does not repeat the cold check.
+ * `freshModels` reads neither cache for the model reports and verifies them now: for a check that speaks for this moment (the release rule, SPEC §7.5). The gateway's own verification may still come from its cache.
+ */
+export async function verifyDeployment(model: string, policy: AttestationPolicy, freshModels = false): Promise<VerifiedDeployment> {
   const policyKey = policyKeyOf(policy);
   const cacheKey = `${model}|${policyKey}`;
-  if (!deploymentCache.get(cacheKey)) {
-    const stored = await getDeployment(model, policyKey).catch(() => undefined);
-    const at = stored ? Date.parse(stored.verifiedAt) : Number.NaN;
-    if (stored && Date.now() - at < CACHE_TTL_MS) {
-      deploymentCache.set(cacheKey, stored, at);
-      if (!gatewayCache.get('gateway')) gatewayCache.set('gateway', stored.gateway, at); // never replace a fresher entry
+  if (!freshModels) {
+    if (!deploymentCache.get(cacheKey)) {
+      const stored = await getDeployment(model, policyKey).catch(() => undefined);
+      const at = stored ? Date.parse(stored.verifiedAt) : Number.NaN;
+      if (stored && Date.now() - at < CACHE_TTL_MS) {
+        deploymentCache.set(cacheKey, stored, at);
+        if (!gatewayCache.get('gateway')) gatewayCache.set('gateway', stored.gateway, at); // never replace a fresher entry
+      }
     }
+    const cached = deploymentCache.get(cacheKey);
+    if (cached) return { ...cached, tookMs: 0 };
   }
-  const cached = deploymentCache.get(cacheKey);
-  if (cached) return { ...cached, tookMs: 0 };
   const t0 = performance.now();
   const [gateway, models] = await Promise.all([verifyGateway(policy), verifyModels(model, policy)]);
   const verified = deploymentCache.set(cacheKey, { gateway, models, verifiedAt: new Date().toISOString(), tookMs: Math.round(performance.now() - t0) });
   putDeployment(model, policyKey, verified).catch(() => undefined); // best effort
   return verified;
+}
+
+/** The model report the chat encrypts to and checks against the log: the one that carries an E2EE key, else the first. */
+export function chatModelOf(deployment: VerifiedDeployment): VerifiedModelAttestation | undefined {
+  return deployment.models.find((m) => m.signingPublicKey !== undefined) ?? deployment.models[0];
 }
 
 /** Drops the cached verification of `model` (memory and IndexedDB), so the next message attests again over a new connection. */

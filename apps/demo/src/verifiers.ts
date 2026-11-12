@@ -2,10 +2,11 @@
 // checks (nonce in report data, signer in report data, app_compose vs MRCONFIGID, RTMR3 replay, GPU nonce)
 // still run unchanged; only "fetch collateral from Intel" and "ask NVIDIA for a verdict" are replaced by the
 // recording. Time is pinned to when the evidence was recorded, so freshness is explicitly not re-checked.
-import type { GpuEvidenceVerifier, TdxQuoteVerifier } from '@nearai/inference-sdk/node';
+import { verifyModelAttestation, type GpuEvidenceVerifier, type ModelAttestation, type TcbStatus, type TdxQuoteVerifier, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
 import qvl from '@phala/dcap-qvl';
 import { createLocalJWKSet, jwtVerify } from 'jose';
 import { sha256Hex, hexToBytes } from '@ainek/proof';
+import type { Recording } from './evidence.ts';
 
 export function createRecordedTdxVerifier(collateralByQuote: Record<string, unknown>, nowSecs: number): TdxQuoteVerifier {
   return (quoteHex) => {
@@ -56,4 +57,30 @@ export function createRecordedGpuVerifier(
     const hwmodel = firstGpu ? ((await jwtVerify(firstGpu, keys, { algorithms: ['ES384'], currentDate: atDate })).payload['hwmodel'] as string) : 'unknown';
     onVerdict({ kid: protectedHeader.kid ?? '?', iat: payload.iat ?? 0, exp: payload.exp ?? 0, hwmodel, gpus: Object.keys(perGpu).length });
   };
+}
+
+/** What may differ from the replay when a model report is verified against the recording. */
+export interface RecordedCheck {
+  /** The nonce the client says it sent; the report's own by default. */
+  nonce?: string;
+  acceptedTcb?: TcbStatus[];
+  gpuEvidence?: 'required' | 'if-present';
+  onGpuVerdict?: (verdict: RecordedGpuVerdict) => void;
+}
+
+/**
+ * The SDK's verification of a model report, fed from the recording: the one call behind `pnpm demo` and behind every
+ * report control of `pnpm demo:controls`, so the two cannot drift. A quote the recording holds no Intel collateral for
+ * is turned away by `createRecordedTdxVerifier`, here as in the replay.
+ */
+export function verifyRecordedModelReport(rec: Recording, attestation: ModelAttestation, { nonce = attestation.nonce, acceptedTcb = ['UpToDate'], gpuEvidence = 'required', onGpuVerdict = () => undefined }: RecordedCheck = {}): Promise<VerifiedModelAttestation> {
+  return verifyModelAttestation({
+    attestation,
+    clientBinding: { nonce },
+    policy: { acceptedTcbStatuses: acceptedTcb, gpuEvidence },
+    verifiers: {
+      tdxQuote: createRecordedTdxVerifier(rec.collateralByQuote, rec.manifest.nowSecs),
+      gpuEvidence: createRecordedGpuVerifier(rec.nrasResponse, rec.jwks, new Date(rec.manifest.nras.iat * 1000), onGpuVerdict),
+    },
+  });
 }

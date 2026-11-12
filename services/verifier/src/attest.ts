@@ -9,12 +9,21 @@
 // A report may hold several attestations for one model (replicas, or two deployments during a rollout). Every one
 // of them is a key the client may be talking to, so every one that verifies is logged; one failing replica does
 // not hide the others, and is itself reported as failed.
-import { getSdkError, verifyModelAttestation, type ModelAttestation, type TcbStatus, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
-import { buildKeyEntryInput, randomHex32, sha256Hex, toModelAttestation, withRetry, type KeyEntryInput, type RawReport } from '@ainek/proof';
+//
+// The compose hash in an entry is the launcher's. The containers that serve the model are deployed later, through the
+// enclave's action log, which the same report carries and the SDK authenticates. When the release that log ends in can be
+// followed to public sources, the entry also carries release marks (SPEC §7.5, packages/proof/src/release-marks.ts).
+import { fetchImageProvenance, getSdkError, verifyImageProvenance, verifyModelAttestation, type ModelAttestation, type TcbStatus, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
+import { buildKeyEntryInput, marksOf, randomHex32, sha256Hex, toModelAttestation, withRetry, type KeyEntryInput, type RawReport } from '@ainek/proof';
+import { releaseMarksFor, type ReleaseReads } from '@ainek/proof/release-chain';
 
 type RawModelAttestation = RawReport['model_attestations'][number];
 
-export type AttestedKey = { ok: true; verified: VerifiedModelAttestation; entry: KeyEntryInput } | { ok: false; signingAddress: string; error: string };
+/** `unmarked`: why the entry carries no release marks, when a marker was given and it carries none. */
+export type AttestedKey = { ok: true; verified: VerifiedModelAttestation; entry: KeyEntryInput; unmarked?: string } | { ok: false; signingAddress: string; error: string };
+
+/** Follows the release behind a verified report to public sources: the marks to log with its key, or why there are none. */
+export type ReleaseMarker = (model: string, verified: VerifiedModelAttestation) => Promise<{ marks: string[]; why?: string }>;
 
 export interface AttestationRound {
   model: string;
@@ -31,6 +40,8 @@ export interface AttestOptions {
   now?: () => number;
   /** The SDK's verifier; tests pass one that fails on purpose. */
   verify?: typeof verifyModelAttestation;
+  /** Release marks for each verified key (`releaseMarker`). Without it entries are logged as they were before marks. */
+  release?: ReleaseMarker;
 }
 
 /** Whatever the SDK marks `retryable` (Intel's collateral service rejecting, NRAS or transport 5xx, 429, ...). Twin of
@@ -50,6 +61,20 @@ export function withDeadline<T>(work: Promise<T>, ms: number, what: string): Pro
     timer = setTimeout(() => reject(new Error(`${what} did not finish within ${ms / 1000} s`)), ms);
   });
   return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
+/** Following a release is a few GitHub reads and two Sigstore verifications, most of them answered from memory after the
+ *  first round. A round is not held up for it: past this the key is logged without marks. */
+export const RELEASE_TIMEOUT_MS = 60_000;
+
+/**
+ * The marker a daemon uses: the release chain of @ainek/proof with this SDK's image checks. Its store of reads lives as
+ * long as the marker, so a release is read from GitHub once; a later round asks only where the release's tag points now.
+ * The token is optional and goes to api.github.com only: it raises the anonymous limit of 60 requests an hour.
+ */
+export function releaseMarker(githubToken?: string): ReleaseMarker {
+  const reads: ReleaseReads = new Map();
+  return (model, verified) => releaseMarksFor({ deployment: verified.deployment, report: verified.report, model, githubToken, reads, sdk: { fetchImageProvenance, verifyImageProvenance, getSdkError } });
 }
 
 export async function fetchReport(baseUrl: string, model: string, nonce: string, fetchImpl: typeof fetch = fetch): Promise<Uint8Array> {
@@ -91,7 +116,12 @@ export async function attestModel(model: string, opts: AttestOptions): Promise<A
         const attestation = toModelAttestation(selected) as ModelAttestation;
         const verifying = withRetry(() => verify({ attestation, clientBinding: { nonce }, policy }), { retryable: sdkRetryable });
         const verified = await withDeadline(verifying, VERIFY_TIMEOUT_MS, 'verification of the attestation');
-        return { ok: true, verified, entry: buildKeyEntryInput({ model, verified, reportBytes, observedAtMs }) };
+        // What the enclave deployed behind this key, followed to public sources. Whatever goes wrong there (GitHub's rate
+        // limit, a check that does not hold, the deadline), the key and its launcher are logged as before, without marks.
+        const release = opts.release && (await withDeadline(opts.release(model, verified), RELEASE_TIMEOUT_MS, 'the release check').catch((err: unknown) => ({ marks: [], why: err instanceof Error ? err.message : String(err) })));
+        const entry = buildKeyEntryInput({ model, verified, reportBytes, observedAtMs, ...(release ? { marks: release.marks } : {}) });
+        const unmarked = release && marksOf(entry.image_digests).logs.length === 0 ? (release.why ?? 'the marks do not fit the entry') : undefined;
+        return { ok: true, verified, entry, ...(unmarked ? { unmarked } : {}) };
       } catch (err) {
         return { ok: false, signingAddress: selected.signing_address, error: err instanceof Error ? err.message : String(err) };
       }

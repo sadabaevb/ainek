@@ -17,6 +17,7 @@ import { proofFragment } from '@/lib/proof-link';
 import { fill } from '@/lib/fill';
 import { CardHead, CheckList, Row } from './checks';
 import { RedCard } from './red-card';
+import { ReleaseRow } from './release-row';
 import { CopyButton } from './copy-button';
 
 export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }: { outcome: ChatOutcome; onCommit?: (outcome: VerifiedOutcome) => void; /** Shown on a refusal caused by the tamper switch: send the same message again with the honest key. */ onRetry?: () => void }) {
@@ -89,6 +90,7 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
       <Row status="ok" label={t.rowKey} hint={hint('key')}>{t.keyLine(logEntry.index, keyVerdict.confirmedBy.join(', '), since)}{logSource === 'sample' ? ` (${t.sampleEntry})` : ''}{` (${normalizeHex(logEntry.compose_hash) === composeHash ? t.sameCompose : t.otherCompose})`}</Row>
       <Row status="ok" label={t.rowHashes} hint={hint('hashes')}>{t.hashesOk}</Row>
       <Row status="ok" label={t.rowE2ee} hint={hint('e2ee')}>{t.e2eeYes}</Row>
+      <ReleaseRow attest={async () => m} model={proof.model} hint={hint('code')} />
       <Row status={proof.commitTx || outcome.commit === 'committed' ? 'ok' : 'skipped'} label={t.rowChain} hint={hint(proof.commitTx || outcome.commit === 'committed' ? 'chain' : 'chainPending')}>
         {proof.commitTx ? (
           <>{t.chainTx(short(commit))} <a href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{short(proof.commitTx)}</a> <CopyButton text={proof.commitTx} /></>

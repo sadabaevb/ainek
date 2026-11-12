@@ -21,7 +21,7 @@ import {
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, composeHashOf, evaluateKeyLogForAll, composesBehindKey, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { buildCheckedModelProof, composeHashOf, evaluateKeyLogForAll, composesBehindKey, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, releaseRuleOf, requireE2eeVersion, shortHex as short, withReleaseRule, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
@@ -154,6 +154,13 @@ export interface Failed {
   reason: string;
   /** The model answered, but a later step failed: the answer as it came, not verified. Set only for steps after `send`. */
   unverifiedCompletion?: ChatCompletion;
+  /**
+   * Set when `send` failed after a response had begun to arrive. `complete` says its whole body arrived: then an error
+   * status is the service refusing the request (`body` holds what it said, at most 2000 characters), and a 2xx is a reply
+   * that could not be decrypted or parsed. A response that is not complete is a transport failure, whatever its status
+   * line said. Without this field nothing came back.
+   */
+  response?: { status: number; complete: boolean; body?: string };
 }
 export type Tier1Outcome = (Verified | Refused | Failed) & RunStats;
 /** Everything before the send passed: the evidence verified here and the key (with its deployment, when that check is on) is in the log. Nothing was sent. */
@@ -175,11 +182,17 @@ export interface Tier1Params {
   /** Where the log comes from: `contractLog(cfg)` for everything real; the demo passes the recorded entry #0 when AINEK_LOG_SOURCE=sample. Required, so no caller can trust a recording by default. */
   readLog: ReadLog;
   onStep?: (event: StepEvent) => void;
+  /**
+   * For negative controls only: a hop between this client and the enclave. It gets the encrypted request as the client is
+   * about to send it and returns what it forwards. No client passes one; `pnpm demo:reply-key` passes a hop that swaps the
+   * reply key in transit, to see the enclave refuse (./hop.ts). Everything before and after the send runs as usual.
+   */
+  controlHop?: ((request: Request) => Request | Promise<Request>) | undefined;
 }
 
 /** One cold run of the Tier-1 sequence. Never throws: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
-export async function runTier1({ apiKey, chat, ...base }: Tier1Params): Promise<Tier1Outcome> {
-  return run(base, { apiKey, chat });
+export async function runTier1({ apiKey, chat, controlHop, ...base }: Tier1Params): Promise<Tier1Outcome> {
+  return run(base, { apiKey, chat, controlHop });
 }
 
 /**
@@ -190,8 +203,8 @@ export async function runPreflight(base: RunBase): Promise<PreflightOutcome> {
   return run(base);
 }
 
-type RunBase = Omit<Tier1Params, 'apiKey' | 'chat'>;
-type Send = Pick<Tier1Params, 'apiKey' | 'chat'>;
+type RunBase = Omit<Tier1Params, 'apiKey' | 'chat' | 'controlHop'>;
+type Send = Pick<Tier1Params, 'apiKey' | 'chat' | 'controlHop'>;
 // With something to send the run ends verified, refused or failed; without, it stops at `ready` after the log check.
 function run(base: RunBase, send: Send): Promise<Tier1Outcome>;
 function run(base: RunBase): Promise<PreflightOutcome>;
@@ -223,6 +236,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     return { ...outcome, timings, totalMs: performance.now() - t0, retries };
   };
   let answered: ChatCompletion | undefined; // for a failure after the send: the reply as it came
+  let responded: Failed['response']; // the chat response, as far as it has arrived
 
   try {
     // 0. The chosen model must support model attestation: never a silent downgrade to plaintext.
@@ -272,7 +286,10 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     const attestedCompose = composeHashOf(modelAttestation.deployment);
     // Every report that carries this key is checked: the one that signs the reply need not be the first.
     const composes = cfg.requireLoggedDeployment ? composesBehindKey(models.map((m) => ({ signingAddress: m.signer.signingAddress, composeHash: composeHashOf(m.deployment) })), modelAttestation.signer.signingAddress) : [undefined];
-    const verdict = evaluateKeyLogForAll(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, composes);
+    const logQuery = { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum };
+    const keyVerdict = evaluateKeyLogForAll(entries, logQuery, composes);
+    // SPEC §7.5, when asked for: the action log of each of those reports must be one the same verifiers checked and logged.
+    const verdict = cfg.requireLoggedRelease ? withReleaseRule(keyVerdict, entries, logQuery, models, releaseRuleOf(cfg)) : keyVerdict;
     if (verdict.status !== 'ok') {
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });
@@ -281,7 +298,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')}${cfg.requireLoggedDeployment ? ' with the attested deployment' : '; deployment check off'} (source: ${logSource})`, ms: logMs });
 
     if (!send) return done({ kind: 'ready', gateway, signer: modelAttestation, entries, verdict, logEntry });
-    const { apiKey, chat } = send;
+    const { apiKey, chat, controlHop } = send;
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(
@@ -307,11 +324,19 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     const { responseBody, completion } = await step(
       'send',
       async () => {
-        const encrypted = await pinnedFetch(prepared.request);
-        if (!encrypted.ok) throw new Error(`chat completion failed: HTTP ${encrypted.status} ${(await encrypted.text()).slice(0, 200)}`);
-        const forVerification = encrypted.clone();
+        const encrypted = await pinnedFetch(controlHop ? await controlHop(prepared.request) : prepared.request);
+        // The fetch resolves on the status line; the body is still on its way.
+        responded = { status: encrypted.status, complete: false };
+        if (!encrypted.ok) {
+          const body = await encrypted.text();
+          responded = { status: encrypted.status, complete: true, body: body.slice(0, 2000) };
+          throw new Error(`chat completion failed: HTTP ${encrypted.status} ${body.slice(0, 200)}`);
+        }
+        // The ciphertext first, whole: a reply that then fails to decrypt is a reply that arrived, not a broken connection.
+        const bytes = await encrypted.clone().arrayBuffer();
+        responded = { status: encrypted.status, complete: true };
         const decrypted = await prepared.decryptResponse(encrypted);
-        const [bytes, plaintext] = await Promise.all([forVerification.arrayBuffer(), decrypted.text()]);
+        const plaintext = await decrypted.text();
         answered = parseChatCompletion(plaintext) as unknown as ChatCompletion;
         return { responseBody: new Uint8Array(bytes), completion: answered };
       },
@@ -338,6 +363,8 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
   } catch (err) {
     const reason = describeSdkError(err);
     onStep({ id: running, status: 'fail', detail: reason, ms: performance.now() - stepStart });
-    return done({ kind: 'failed', step: running, reason, ...(answered ? { unverifiedCompletion: answered } : {}) });
+    // `running` is assigned inside `step`, which the compiler does not follow: without the cast it believes no step past the log check ran.
+    const response = (running as StepId) === 'send' ? responded : undefined;
+    return done({ kind: 'failed', step: running, reason, ...(answered ? { unverifiedCompletion: answered } : {}), ...(response ? { response } : {}) });
   }
 }

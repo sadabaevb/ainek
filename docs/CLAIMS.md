@@ -10,16 +10,48 @@ Honest limitations won prizes at previous NEAR hackathons.
   The client verifies the TDX quote and the GPU attestation itself (browser SDK; the NVIDIA verdict is fetched through
   NEAR AI's proxy and checked against NVIDIA's keys) and checks the signing key against a **public, append-only log on
   NEAR** written by verifiers (today: two, both ours; the log is designed for independent verifiers). If the key is not in the
-  log, or (since Nov 11) is not logged together with the deployment the client attested, the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
+  log, or (since Nov 11) is not logged together with the compose hash the client attested (the hash of the enclave's launcher: see "We do not claim"), the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
   only sets the default.
 - Among the 26 hackathon entries whose code we read on Nov 6, 2026 (`docs/FIELD.md`), none combines a public log of TEE keys, a
   refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
   of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
   On Nov 10 we also read two later entries (posts, READMEs, parts of the code; `docs/PRIOR-ART.md`). CIPHERWORK refuses before sending and encrypts to the attested model key, with no public key log: it trusts one verifier key of its own. Provable AI Compliance refuses and encrypts at another layer, to an attested OutLayer enclave that then reaches the model over TLS; it has no key log, and when the model's evidence fails a check it records that and still delivers the answer. It binds its gateway's code, input, output and caller into one Intel quote per run, where our Tier 2 has two artifacts joined by hashes.
+- (`pnpm demo:attest` with no key; in the browser on request, from the proof card and `/log`) The **release behind the
+  key is followed to a source commit.** The action log the
+  model's enclave attests, which the SDK authenticates against a TDX quote of its own, names the latest `compose_up` for the
+  model's service. The file at that commit in `nearai/cvm-compose-files` is fetched and hashes to the sha256 the enclave
+  recorded, and the repository's tag of the recorded name points at that commit (a commit id alone could be a fork's:
+  GitHub serves those under the parent's name; a recorded tag the repository does not have fails the check). The proxy image the file pins by digest has a signed build provenance
+  (Sigstore, GitHub Actions) naming its repository, branch and commit, and so does the Compose Manager image the log says
+  it started as; that image is also compared with the one the measured compose starts the manager as. The quote behind
+  the log and the quote behind the signing key name one CVM instance id, which rules out a mix-up between replicas, not
+  a host that runs two CVMs under one id. This is signed provenance, not a reproducible build. It follows what was
+  recorded, not which containers run at this moment (the SDK's own note on the verified log: "This does not establish a
+  unique CVM identity or successful/current execution"). The log is a record and not a measurement: see "We do not
+  claim". The engine image and the weights are printed as the file of the engine's own latest release names them and are
+  not checked. A check that could not be made (GitHub or Sigstore not answering, no build policy for an image) is
+  reported as not made, and the summary gets a check mark only when every check of the release was made and held. "Public for N minutes
+  before it ran" uses GitHub's commit time and Compose Manager's clock, neither a trusted timestamp, and comes from the
+  one CVM that answered: the gateway picks a replica per connection.
+- (in the verifier and in both clients since Nov 12; the rule is off by default) A **verifier can log what it checked
+  behind a key, and the client can refuse an enclave whose action log no trusted verifier logged** (SPEC §7.5). After a
+  key verifies, the verifier follows the release behind it with the chain above. Only when every check holds does its
+  entry carry two marks next to the launcher's image digests: the enclave's action log as it stood (instance, number of
+  actions, hash) and the release of the model's service. The contract is unchanged: the field takes text. With
+  `AINEK_REQUIRE_RELEASE=1` the client sends only when the action log it was attested is exactly one that a quorum of the
+  viewer's verifiers marked, and it refuses a log that does not begin with what a verifier saw from the same instance. The
+  rule compares one record with another and reads no action, so it needs no network; in the browser it attests again for
+  every message, because a verification kept for an hour says nothing about that hour. A client may also wait
+  (`AINEK_RELEASE_WAIT_MIN`): it then sends only when the log has been marked as it stands for that many minutes by a
+  quorum, so anything added to the log starts the wait again. `pnpm -F verifier dry-run` prints
+  the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers; `/log`
+  shows the same line in the browser, without refusing on it. As of
+  Nov 12 the verifier that writes to our log has not been restarted with marks. What a mark does not say is under "We do
+  not claim".
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
-  E2EE v3 and on NEAR AI's proxy refusing a swapped reply key, which we have not tested: see the first item under "Known issues we inherited".
+  E2EE v3 and on NEAR AI's proxy refusing a swapped reply key, which we tested once, on Nov 12, with a request of our own: see the first item under "Known issues we inherited".
 - Every response is **signed inside the enclave** over `sha256(request)` and `sha256(response)`. We keep the
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
 - Only a **salted hash** of each proof goes on-chain (`commit_proof`, paid from storage the committing account prepays and
@@ -43,15 +75,57 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **That the decision key is tied to one build of the policy job.** OutLayer's "one build only" lock is an access
   rule: per OutLayer's docs the owner of the OutLayer project (in the demo: us) can move it to another build or
   remove it, the key stays the same and the contract would not notice.
-- **Verified model weights.** Attestation measures the deployment (container image digests, compose hash), not the
-  weights. We say "attested deployment of model X".
+- **Verified model weights.** Attestation measures the enclave's launcher (compose hash, container image digests) and,
+  through the action log, which images were deployed, not the weights. We say "attested deployment of model X". The
+  compose file of a release names a Hugging Face repository and snapshot for the weights, and `pnpm demo:attest` prints
+  it; nothing hashes the files the engine loads.
 - **No retention inside the model enclave.** Attestation cannot prove what NEAR AI's model enclave does with data after
-  inference (its serving image is not open or reproducible). NEAR AI documents a no-store Responses API, but we use chat
-  completions (needed for E2EE).
+  inference. The proxy that decrypts the prompt is open source (`nearai/inference-proxy`) and its image has signed build
+  provenance, which says which source was built, not what it does with data; we have not audited it, and no build is
+  reproducible. NEAR AI documents a no-store Responses API, but we use chat completions (needed for E2EE).
 - **That nobody can read your data.** Our server cannot. The enclave can, by design, during inference.
 - **Protection from the server that serves the page.** The browser code that verifies, encrypts and checks the log is served
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
+- **That the deployment check sees the code that serves the model.** It sees the launcher. On NEAR AI Cloud the compose
+  hash an enclave measures covers a telemetry sidecar, certbot, Compose Manager and its launcher. The containers that serve
+  the model (the proxy that decrypts the prompt and signs the answer, the engine) are started afterwards by Compose Manager
+  from a file in the public repository `nearai/cvm-compose-files`, and a new release of them changes neither the signing
+  key nor that hash. Compose Manager records each such action in a log the enclave attests with a TDX quote of its own. On
+  the CVM that answered us on Nov 12, 2026 that log held 21 releases of the model's compose file since Oct 21, and the image
+  of the proxy for `z-ai/glm-5.3-flash` had changed five times, twice after our log first held that CVM's compose hash: the
+  client would have refused neither. Since Nov 12 `pnpm demo:attest` reads this log and follows the release to a source
+  commit, and the browser does the same when the visitor asks (the proof card, `/log`). By default that is a reading, not a
+  rule: the client refuses on what an enclave deployed only when `AINEK_REQUIRE_RELEASE` is on, which works only against
+  verifiers that write release marks (below), and a proof says which key signed and which launcher was attested, not which
+  release answered.
+- **That the action log is a measurement.** A release leaves the enclave's measurements as they were. The log is Compose
+  Manager's own record, and the TDX quote behind it says the log came from inside that CVM, not from which container. The
+  serving containers the log describes run privileged and hold the same quote socket, so a dishonest release could present
+  another log; so could a manager replaced after boot, which the measured launcher is configured to do for images signed
+  by a workflow of `nearai/compose-manager` (we read that configuration, not the launcher's code). `pnpm demo:attest`
+  shows that the record agrees with public sources at every link. It cannot show that the record is complete, or that the
+  containers it names are the ones running.
+- **That a logged release is an approved one, or that the release rule closes this gap.** A release mark in the log says
+  that, at one state of an enclave's action log, a verifier followed the release that serves the model to public sources:
+  the latest release of the model's service in the compose file the log most recently deployed for it, the signed build
+  of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release. A client may
+  wait (`AINEK_RELEASE_WAIT_MIN`, no wait by default): it then sends only when the action log has been marked as it
+  stands for that many minutes, by as many verifiers as its quorum. That time counts from the verifiers' marks, not from
+  when the code became public; it is read off the verifiers' clocks and the client's, and off the day of the log the
+  client reads, so after a verifier has been away, or just after marks are turned on, a state that is days old waits
+  again. The verifier does not follow the engine image, or anything else that log brought up. The log does
+  not record the Compose project of a deployment, so it does not show which earlier services a later one replaced, and in
+  one of our recordings nine compose files in a single log define a service for this model. The rule
+  (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own record: the action log it attests must be exactly
+  one a trusted verifier marked. That does not make the record a measurement. A log shorter than one a verifier saw is
+  refused, and it is called rewritten only when its beginning differs from what was seen: lengths alone cannot tell a log
+  that was cut from an attestation older than the verifier's entry. Compose Manager itself starts from an empty log when
+  its file is missing or unreadable. The rule speaks for the moment of attestation, which is why the browser attests again
+  for every message while the rule is on. It checks the replica that attested, and the gateway picks the replica per
+  connection. Its cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the
+  two logs we hold that is about two windows a day for each replica; we have not measured it live. As of Nov 12 the
+  verifier that writes to our log does not write marks yet, so with the rule on the client refuses every message.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
@@ -115,9 +189,18 @@ Honest limitations won prizes at previous NEAR hackathons.
   ([inference-sdk#127](https://github.com/nearai/inference-sdk/pull/127)). This repo has used 0.3.0 since Nov 10: the SDK
   sends `X-Encryption-Version: 3` with no fallback, the client refuses to send an encrypted request not marked v3, and our
   relay refuses one to the attested model. Live exchanges passed on Nov 10 from Node (`pnpm demo:live`, straight to NEAR AI)
-  and from the hosted chat through our relay, so production accepts v3. We did not send a swapped
-  reply key to see the proxy refuse it, so that enforcement rests on NEAR AI's code. The gateway still accepts v1/v2 from
+  and from the hosted chat through our relay, so production accepts v3. On Nov 12 we sent the control
+  (`pnpm demo:reply-key`, recorded in `docs/samples/reply-key-control.json`): the exchange verified as usual; the same
+  client behind a hop that swapped the reply key in transit got HTTP 400 `Decryption failed` where a reply would have been,
+  and so did the swap with the version header rewritten from 3 to 2. That is one model on one day with SDK 0.3.0, not a
+  promise about other routes or later builds of the proxy. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
+- The model CVMs report the OS image `dstack-nvidia-0.5.12`. Before dstack 0.6.0 a container holding the dstack socket
+  can append events to the RTMR3 log (`EmitEvent`, removed in 0.6.0: "runtime RTMR3 events are system-owned and cannot be
+  extended by apps"), and the SDK reports the last `compose-hash` event. A container could in that way show a compose
+  hash the CVM did not boot from, and until Nov 12 our deployment check compared that value. Since Nov 12 the compose hash
+  is taken from the app compose text, which the SDK checks against MRCONFIGID. In every report we have seen the two agree,
+  so no log entry changes.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one on a server since Nov 6, trusted by the site's default, and a second account
   that wrote its first entry on Nov 10 and is not in the default yet (checked 2026-11-10). Nobody outside the team runs

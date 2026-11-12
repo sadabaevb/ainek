@@ -1,17 +1,12 @@
 // `pnpm demo` (replay): re-verify the recorded NEAR AI evidence offline, apply the fail-closed log rule,
 // re-check the signed response and print the proof card. No API key, no network.
 // `pnpm demo:tamper`: same recording, but the key the client sees is swapped → the client must refuse.
-import {
-  verifyGatewayAttestation,
-  verifyModelAttestation,
-  verifyModelResponse,
-  type VerifiedModelAttestation,
-} from '@nearai/inference-sdk/node';
+import { verifyGatewayAttestation, verifyModelResponse, type VerifiedModelAttestation } from '@nearai/inference-sdk/node';
 import { DEMO_SWAPPED_KEY, ainekConfigFromEnv, composeHashOf, evaluateKeyLog, shortHex as short, verifyModelProof, type KeyEntry } from '@ainek/proof';
 import { loadRecording } from './evidence.ts';
 import { FAIL, NA, OK, describe, head, markOf, line as say } from './term.ts';
 import { toGatewayAttestation, toModelAttestation } from './report.ts';
-import { createRecordedGpuVerifier, createRecordedTdxVerifier, type RecordedGpuVerdict } from './verifiers.ts';
+import { createRecordedTdxVerifier, verifyRecordedModelReport, type RecordedGpuVerdict } from './verifiers.ts';
 
 // Replay is the offline sample world: the shared config's sample-mode defaults (trust set, quorum) apply.
 const cfg = ainekConfigFromEnv({ ...process.env, AINEK_LOG_SOURCE: 'sample' });
@@ -34,15 +29,7 @@ head(`1. Model attestation: ${model.model_name}`);
 let gpu: RecordedGpuVerdict | null = null;
 let verifiedModel: VerifiedModelAttestation | null = null;
 try {
-  verifiedModel = await verifyModelAttestation({
-    attestation: toModelAttestation(model),
-    clientBinding: { nonce: model.request_nonce },
-    policy: { acceptedTcbStatuses: ['UpToDate'], gpuEvidence: 'required' },
-    verifiers: {
-      tdxQuote: createRecordedTdxVerifier(rec.collateralByQuote, rec.manifest.nowSecs),
-      gpuEvidence: createRecordedGpuVerifier(rec.nrasResponse, rec.jwks, at, (v) => { gpu = v; }),
-    },
-  });
+  verifiedModel = await verifyRecordedModelReport(rec, toModelAttestation(model), { onGpuVerdict: (v) => { gpu = v; } });
   const g = gpu as RecordedGpuVerdict | null;
   line(OK, `Intel TDX quote verified with recorded collateral (evaluated at ${rec.manifest.evidenceRecordedAt.slice(0, 16)}Z): TCB ${verifiedModel.tcbStatus}, advisories ${verifiedModel.advisoryIds.length === 0 ? 'none' : verifiedModel.advisoryIds.join(',')}, debug off`);
   line(OK, `nonce ${short(model.request_nonce)} and signing key ${short(verifiedModel.signer.signingAddress)} bound in the TDX report data`);

@@ -25,6 +25,19 @@ export interface AinekConfig {
    * it off; a blank value means the default, and anything else turns it on, so a typo cannot weaken the policy.
    */
   requireLoggedDeployment: boolean;
+  /**
+   * SPEC §7.5: refuse to send unless the enclave's action log is exactly one a trusted verifier checked and logged, so
+   * that nothing was deployed there since. Off by default, until the verifiers that write to the log write release marks:
+   * with no marks in the log this rule refuses everything. Same reading of the value as above: blank means the default,
+   * 0 or false is off, anything else is on.
+   */
+  requireLoggedRelease: boolean;
+  /**
+   * SPEC §7.5, with the rule above: send only when the enclave's action log has been marked as it stands for this long, in
+   * ms. 0 is no wait. From `AINEK_RELEASE_WAIT_MIN`: blank, 0 or false is no wait, whole minutes up to 720 are that, and
+   * any other value is read as 720, so a typo cannot turn the wait off.
+   */
+  releaseWaitMs: number;
   /** TCB statuses accepted for gateway and model quotes (SPEC §3.2 policy); unknown names are dropped, never empty. */
   acceptedTcbStatuses: TcbStatusName[];
   explorer: string;
@@ -45,9 +58,32 @@ export type EnvLike = Record<string, string | undefined>;
 const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
 // The deployment check for the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables).
-// On since Nov 11 (DEV-NOTES 2026-11-11); `'0'` here and in `.env.example` turns it back off.
+// On since Nov 11 (DEV-NOTES 2026-11-11); `false` here and `0` in `.env.example` turn it back off.
 // With `AINEK_LOG_SOURCE=sample` the default is off: that log is one recorded entry with one compose, and a live replica need not be that one.
-const REQUIRE_DEPLOYMENT_DEFAULT = '1';
+const REQUIRE_DEPLOYMENT_DEFAULT = true;
+/** Off until the verifiers that write to the log write release marks (DEV-NOTES 2026-11-12). */
+const REQUIRE_RELEASE_DEFAULT = false;
+
+/**
+ * The longest wait a client can ask for, in minutes. It measures the wait on the entries it reads, a day of the log, and a
+ * verifier that runs without a break writes an unchanged state again every six hours: the first mark the client can see
+ * of a state that has stood for days is then 18 to 24 hours old. After a break in the verifier it is younger, and the
+ * client waits again (SPEC §7.5).
+ */
+const MAX_RELEASE_WAIT_MIN = 720;
+
+/** `AINEK_RELEASE_WAIT_MIN` in ms: blank, 0 or false is no wait, plain digits are minutes up to the maximum, and anything else is the maximum. */
+function releaseWaitMs(value: string | undefined): number {
+  const said = value?.trim().toLowerCase() || '0';
+  if (said === 'false') return 0;
+  return (/^\d+$/.test(said) ? Math.min(Number(said), MAX_RELEASE_WAIT_MIN) : MAX_RELEASE_WAIT_MIN) * 60_000;
+}
+
+/** A switch from the environment: blank means `fallback`, `0` or `false` is off, and anything else is on, so a typo cannot turn a check off. */
+export function envFlag(value: string | undefined, fallback: boolean): boolean {
+  const said = value?.trim().toLowerCase();
+  return said ? said !== '0' && said !== 'false' : fallback;
+}
 
 function list(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback).split(',').map((s) => s.trim()).filter(Boolean);
@@ -69,7 +105,9 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     logSource,
     trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
-    requireLoggedDeployment: !['0', 'false'].includes((env['AINEK_REQUIRE_DEPLOYMENT']?.trim() || (logSource === 'sample' ? '0' : REQUIRE_DEPLOYMENT_DEFAULT)).toLowerCase()),
+    requireLoggedDeployment: envFlag(env['AINEK_REQUIRE_DEPLOYMENT'], logSource !== 'sample' && REQUIRE_DEPLOYMENT_DEFAULT),
+    requireLoggedRelease: envFlag(env['AINEK_REQUIRE_RELEASE'], REQUIRE_RELEASE_DEFAULT),
+    releaseWaitMs: releaseWaitMs(env['AINEK_RELEASE_WAIT_MIN']),
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.

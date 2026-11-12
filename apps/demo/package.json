@@ -7,10 +7,13 @@
   "scripts": {
     "replay": "node src/replay.ts",
     "tamper": "node src/replay.ts --tamper",
+    "controls": "node src/controls.ts",
     "live": "node src/live.ts",
     "attest": "node src/attest.ts",
+    "reply-key": "node src/reply-key.ts",
     "record": "node scripts/record-evidence.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "node --test 'src/**/*.test.ts'",
     "check-contract": "node scripts/check-contract.mjs",
     "check-agent": "node scripts/check-agent.mjs",
     "metrics": "node src/metrics.ts",
