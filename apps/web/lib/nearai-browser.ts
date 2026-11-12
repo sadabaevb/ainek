@@ -126,6 +126,11 @@ export async function verifyDeployment(model: string, policy: AttestationPolicy)
   return verified;
 }
 
+/** The model report the chat encrypts to and checks against the log: the one that carries an E2EE key, else the first. */
+export function chatModelOf(deployment: VerifiedDeployment): VerifiedModelAttestation | undefined {
+  return deployment.models.find((m) => m.signingPublicKey !== undefined) ?? deployment.models[0];
+}
+
 /** Drops the cached verification of `model` (memory and IndexedDB), so the next message attests again over a new connection. */
 export async function forgetDeployment(model: string, policy: AttestationPolicy): Promise<void> {
   deploymentCache.delete(`${model}|${policyKeyOf(policy)}`);

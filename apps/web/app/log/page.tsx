@@ -1,16 +1,18 @@
 'use client';
 // The public key log as the client sees it: who logged which key for which model, and whether two trusted
 // verifiers disagree (split view). Wallet login here asks for the function-call key later used for commit_proof.
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNearWallet, type NearContextValue } from 'near-connect-hooks';
 import { ANY_AGE_NS, LOG_WINDOW_NS, latestKeysFor, deploymentStanding, deploymentsSeen, findSplitView, type KeyEntry, type SeenDeployment } from '@ainek/proof';
 import { RedCard } from '@/components/red-card';
+import { ReleaseRow } from '@/components/release-row';
 import { StackTable, type Column } from '@/components/stack-table';
 import { TrustPanel } from '@/components/trust-panel';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
 import { hoursSince, observedUtc, short, utcMinuteOf } from '@/lib/format';
 import { keyLogFor } from '@/lib/key-log';
+import { chatModelOf, verifyDeployment } from '@/lib/nearai-browser';
 import { useConfig, useT, useTrust } from '../providers';
 
 type AccessKeyInfo = Awaited<ReturnType<NearContextValue['getAccessKeyList']>>['keys'][number];
@@ -76,6 +78,12 @@ export default function LogPage() {
   const split = log ? findSplitView(log.entries, cfg.model, trust.verifiers) : null;
   const newest = log?.all?.[0];
   const td = tl.deployments;
+  // The report the chat would use: verified here as before a message, or taken from the chat's own cache of at most an hour.
+  const attestNow = useCallback(async () => {
+    const report = chatModelOf(await verifyDeployment(cfg.model, { acceptedTcbStatuses: cfg.acceptedTcbStatuses }));
+    if (!report) throw new Error('no model attestation returned');
+    return report;
+  }, [cfg.model, cfg.acceptedTcbStatuses]);
   const deployments = useMemo(() => deploymentsSeen(log?.all ?? [], cfg.model), [log?.all, cfg.model]);
   // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.
   const standing = useMemo(() => new Map(deployments.map((d) => [d.composeHash, deploymentStanding(log?.entries ?? [], d, { model: cfg.model, trustedVerifiers: trust.verifiers, quorum: trust.quorum })])), [deployments, log?.entries, cfg.model, trust]);
@@ -129,6 +137,14 @@ export default function LogPage() {
           <p className="muted small">{td.scope(log.all.length)}</p>
         </section>
       )}
+
+      <section>
+        <h2>{tl.code.title}</h2>
+        <p className="muted small">{tl.code.intro}</p>
+        <div className="card">
+          <ReleaseRow attestation={attestNow} model={cfg.model} history />
+        </div>
+      </section>
 
       <TrustPanel entries={log?.entries ?? null} registered={registered} />
 

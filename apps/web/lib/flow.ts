@@ -9,13 +9,14 @@ import type { PublicConfig } from './config';
 import { describeError } from './errors';
 import { keyLogFor } from './key-log';
 import {
+  chatModelOf,
   checkGatewayResponse,
   checkResponse,
   fetchModelMetadata,
   fetchSignature,
+  forgetDeployment,
   prepareE2ee, transmitE2ee,
   sendPlain,
-  forgetDeployment,
   verifyDeployment,
   verifyGateway,
   type ChatMessage,
@@ -148,7 +149,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
     logStop.abort();
     throw err;
   });
-  const modelAttestation = deployment.models.find((m) => m.signingPublicKey !== undefined) ?? deployment.models[0];
+  const modelAttestation = chatModelOf(deployment);
   if (!modelAttestation) fail(emit, 'attestation', 'no model attestation returned');
 
   // 2. Fail-closed: the attested signing key must be in the public log; with the deployment check on (config, or the demo switch),
