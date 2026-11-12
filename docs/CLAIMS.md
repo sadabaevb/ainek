@@ -29,7 +29,7 @@ Honest limitations won prizes at previous NEAR hackathons.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer); the contract
   verifies this signature before executing. The signature shows which key signed, not which code ran: that is in the
   run's attestation (`wasm_hash`). The contract does not check it. `pnpm demo:policy` shows the whole check on a recorded run: the quote is signed by Intel and commits to
-  the published build, the input and the decision. It then checks the runs behind the agent service's five live actions the same way, to the build and the decision only: those runs do not publish the job's input. The agent service runs the same check before it proposes anything; that has run on one live payment (Nov 6, `pnpm -F agent once`). `/verify` runs it in the browser for an action proof, without the job's input, which a proof does not carry.
+  the published build, the input and the decision. It then checks the runs behind the agent service's seven live actions the same way, to the build and the decision only: those runs do not publish the job's input. The agent service runs the same check before it proposes anything; that has run on one live payment (Nov 6, `pnpm -F agent once`). `/verify` runs it in the browser for an action proof, without the job's input, which a proof does not carry.
 - (Tier 2) The policy job **cannot retain or exfiltrate its input by construction**: it is a WASI-P1 binary with no
   network and no storage interfaces, its build is reproducible (`Cargo.lock`, pinned toolchain), and the `wasm_hash`
   you get from building the repo equals the hash in the attestation. This is a proof of *inability to retain*, not a
