@@ -57,7 +57,7 @@ const en = {
   /** What the refusal protected against, where a counterfactual exists; the quorum and split-view bodies already say it all. */
   refusedConsequence: {
     absent: 'Had Ainek sent, the message would have been encrypted to a key no verifier vouches for: whoever holds that key could read it.',
-    'unknown-deployment': 'Instances of a model share one signing key, so the key alone does not say which code is behind it. The instance that attested to this browser runs code no trusted verifier has logged, so nothing was sent. A real new deployment is logged on one of the verifier\'s next rounds: try again in a while.',
+    'unknown-deployment': 'Instances of a model share one signing key, so the key alone does not say which machine is behind it. The instance that attested to this browser booted from a configuration no trusted verifier has logged, so nothing was sent. A real new deployment is logged on one of the verifier\'s next rounds: try again in a while.',
     'untrusted-only': 'Ainek cannot tell this key from a forged one on the word of verifiers it does not trust, so nothing was sent.',
   } as Partial<Record<KeyLogReason, string>>,
   retryHonest: 'Try again with the honest key',
@@ -98,7 +98,7 @@ const en = {
     ],
     tryTitle: 'Try the honest path or one of the catches',
     chips: { ask: 'Ask a private question', tamper: 'Swap the key before sending', deployment: 'A deployment nobody logged', incognito: 'A model without hardware proof' },
-    subs: { ask: 'Encrypted to the attested key, answered with a proof you can re-check.', tamper: 'The fail-closed rule: the prompt never leaves the browser.', deployment: 'The real key, but code no verifier has logged behind it: nothing is sent.', incognito: 'Privacy by contract only, and the card says so.' },
+    subs: { ask: 'Encrypted to the attested key, answered with a proof you can re-check.', tamper: 'The fail-closed rule: the prompt never leaves the browser.', deployment: 'The real key, but a boot configuration no verifier has logged behind it: nothing is sent.', incognito: 'Privacy by contract only, and the card says so.' },
     prompts: { ask: 'In two sentences: what is a TEE, and why would I want my AI to run inside one?', tamper: 'hello', deployment: 'hello', incognito: 'hello' },
   },
   progress: {
@@ -120,7 +120,7 @@ const en = {
   explainRows: 'What do these rows mean?',
   hideRows: 'Hide the explanations',
   hints: {
-    model: 'Which model, and the deployment image in the attestation checked before sending. The compose hash measures the container set, not the weights.',
+    model: 'Which model, and the configuration its enclave booted with, from the attestation checked before sending. The compose hash measures that launcher. It does not measure the containers that serve the model, which the launcher starts later, or the weights.',
     hardware: "The Intel TDX quote was verified here against Intel's collateral; the NVIDIA GPU verdict came from NVIDIA's attestation service through NEAR AI's proxy and was checked here against NVIDIA's keys.",
     key: 'The signing key was found in the append-only log on NEAR, written by a verifier. Without it the message would not have been sent.',
     hashes: "Recomputed in this browser from the exact bytes: the step NEAR AI's own Verification Center says it cannot do.",
@@ -155,7 +155,7 @@ const en = {
     notTrusted: '(not in trust set)',
     deployments: {
       title: 'Deployments seen',
-      intro: 'Instances of a model share one signing key, so one key can stand in front of several deployments. Each line is one compose hash, the measurement of the container set, as verifiers logged it. A new line is a new compose file, not always new code: several hashes in this log carry the same set of container images, as replicas of one build would. The log records each one.',
+      intro: 'Instances of a model share one signing key, so one key can stand in front of several deployments. Each line is one compose hash, the measurement of the configuration an enclave boots with (its launcher), as verifiers logged it. The containers that serve the model are started later by that launcher and are not in this hash: a new release of them adds no line here. A new line is a new launcher configuration, not always new code: several hashes in this log carry the same set of launcher images, as replicas would. The log records each one.',
       enforced: { on: 'This site refuses to send unless the deployment that attests to your browser was logged in the last 24 hours by the verifiers you trust (the last column). The instance that then answers may be another one behind the same key: the gateway chooses per request.', off: 'This site is configured not to refuse on the deployment: it sends when the key is logged and shows the deployment on the proof card. The chat has a demo switch that shows the refusal.' },
       columns: { compose: 'compose', keys: 'signing key', verifiers: 'logged by', entries: 'entries', first: 'first seen', last: 'last seen', counts: 'would pass now' },
       counts: { ok: 'yes', 'below-quorum': 'no: below your quorum', 'split-view': 'no: your verifiers disagree', old: 'no: older than 24 h', untrusted: 'no: not from your trust set' },
@@ -410,7 +410,7 @@ const ru: typeof en = {
   refusedBody: 'Модель назвала ключ подписи, которого нет у доверенных верификаторов. Ainek отказывает, а не доверяет.',
   refusedConsequence: {
     absent: 'Если бы Ainek отправил, сообщение ушло бы на ключ, за который не ручается ни один верификатор: его владелец мог бы прочитать текст.',
-    'unknown-deployment': 'Экземпляры модели делят один ключ подписи, поэтому сам ключ не говорит, какой код за ним стоит. Экземпляр, который прошёл аттестацию перед этим браузером, работает на коде, которого не записал ни один доверенный верификатор, поэтому ничего не отправлено. Настоящий новый деплой верификатор запишет в один из ближайших раундов: попробуй позже.',
+    'unknown-deployment': 'Экземпляры модели делят один ключ подписи, поэтому сам ключ не говорит, какая машина за ним стоит. Экземпляр, который прошёл аттестацию перед этим браузером, загрузился с конфигурацией, которой не записал ни один доверенный верификатор, поэтому ничего не отправлено. Настоящий новый деплой верификатор запишет в один из ближайших раундов: попробуй позже.',
     'untrusted-only': 'Со слов верификаторов, которым клиент не доверяет, Ainek не отличит этот ключ от подделки, поэтому ничего не отправил.',
   },
   retryHonest: 'Повторить с честным ключом',
@@ -451,7 +451,7 @@ const ru: typeof en = {
     ],
     tryTitle: 'Попробуй честный путь или одну из поимок',
     chips: { ask: 'Задать приватный вопрос', tamper: 'Подменить ключ перед отправкой', deployment: 'Деплой, которого никто не записал', incognito: 'Модель без аппаратного доказательства' },
-    subs: { ask: 'Зашифровано на аттестованный ключ, ответ приходит с proof, который можно перепроверить.', tamper: 'Правило fail-closed: промпт не покидает браузер.', deployment: 'Ключ настоящий, но за ним код, которого не записал ни один верификатор: ничего не отправляется.', incognito: 'Приватность только по договору, и карточка так и скажет.' },
+    subs: { ask: 'Зашифровано на аттестованный ключ, ответ приходит с proof, который можно перепроверить.', tamper: 'Правило fail-closed: промпт не покидает браузер.', deployment: 'Ключ настоящий, но за ним загрузочная конфигурация, которой не записал ни один верификатор: ничего не отправляется.', incognito: 'Приватность только по договору, и карточка так и скажет.' },
     prompts: { ask: 'В двух предложениях: что такое TEE и зачем мне, чтобы мой ИИ работал внутри него?', tamper: 'hello', deployment: 'hello', incognito: 'hello' },
   },
   progress: {
@@ -473,7 +473,7 @@ const ru: typeof en = {
   explainRows: 'Что значат эти строки?',
   hideRows: 'Скрыть пояснения',
   hints: {
-    model: 'Какая модель и какой образ деплоя были в аттестации, проверенной перед отправкой. Compose-хеш измеряет набор контейнеров, а не веса.',
+    model: 'Какая модель и с какой конфигурацией загрузился её анклав, по аттестации, проверенной перед отправкой. Compose-хеш измеряет этот загрузчик. Он не измеряет контейнеры, обслуживающие модель (их загрузчик запускает позже), и не измеряет веса.',
     hardware: 'Квота Intel TDX проверена здесь по данным Intel; вердикт по NVIDIA GPU выдал сервис аттестации NVIDIA через прокси NEAR AI и проверен здесь по ключам NVIDIA.',
     key: 'Ключ подписи найден в append-only логе в NEAR, который пишет верификатор. Без него сообщение не ушло бы.',
     hashes: 'Пересчитано в этом браузере из точных байтов: тот самый шаг, который Verification Center самой NEAR AI сделать не может.',
@@ -508,7 +508,7 @@ const ru: typeof en = {
     notTrusted: '(не в доверенном наборе)',
     deployments: {
       title: 'Виденные деплои',
-      intro: 'Экземпляры модели делят один ключ подписи, поэтому за одним ключом может стоять несколько деплоев. Каждая строка — один compose-хеш, измерение набора контейнеров, как его записали верификаторы. Новая строка — это новый compose-файл, но не всегда новый код: у нескольких хешей в этом журнале один и тот же набор образов контейнеров, как было бы у реплик одной сборки. Журнал записывает каждую.',
+      intro: 'Экземпляры модели делят один ключ подписи, поэтому за одним ключом может стоять несколько деплоев. Каждая строка — один compose-хеш, измерение конфигурации, с которой загружается анклав (его загрузчика), как его записали верификаторы. Контейнеры, обслуживающие модель, загрузчик запускает позже, и в этот хеш они не входят: их новый релиз строки здесь не добавляет. Новая строка — это новая конфигурация загрузчика, но не всегда новый код: у нескольких хешей в этом журнале один и тот же набор образов загрузчика, как было бы у реплик. Журнал записывает каждую.',
       enforced: { on: 'Сайт не отправляет сообщение, если деплой, прошедший аттестацию перед твоим браузером, не записан за последние 24 часа верификаторами, которым ты доверяешь (последняя колонка). Ответить затем может другой экземпляр под тем же ключом: его на каждый запрос выбирает шлюз.', off: 'Этот сайт настроен не отказывать по деплою: он отправляет, когда записан ключ, и показывает деплой на карточке proof. В чате есть демо-переключатель, который показывает отказ.' },
       columns: { compose: 'compose', keys: 'ключ подписи', verifiers: 'кто записал', entries: 'записей', first: 'впервые', last: 'последний раз', counts: 'прошёл бы сейчас' },
       counts: { ok: 'да', 'below-quorum': 'нет: меньше твоего кворума', 'split-view': 'нет: твои верификаторы расходятся', old: 'нет: старше 24 ч', untrusted: 'нет: не из твоего trust set' },
