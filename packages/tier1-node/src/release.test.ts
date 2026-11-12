@@ -259,7 +259,7 @@ test('failedChecks: what was checked and did not hold, and nothing that could no
 });
 
 test('inspectRelease: without an action log there is nothing to inspect; a model no file names stays unresolved', async () => {
-  assert.equal(await inspectRelease({ deployment: { appCompose: '{}', runtimeMeasurements: {} }, model: MODEL, fetch: fakeGitHub().fetch }), undefined);
+  assert.equal(await inspectRelease({ deployment: { appCompose: '{}' }, model: MODEL, fetch: fakeGitHub().fetch }), undefined);
   const other = await inspectRelease({ deployment: deploymentOf(ACTIONS), model: 'vendor/none', fetch: fakeGitHub().fetch });
   assert.deepEqual(other?.services, []);
   assert.match(other?.unresolved ?? '', /no compose file the log deployed has a service with MODEL_NAME=vendor\/none; not read as a compose file: prod\/rotate-token\.yaml: /);

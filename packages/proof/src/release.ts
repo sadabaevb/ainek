@@ -10,6 +10,9 @@
 // These helpers read that log. They are pure: fetching the compose file and its build provenance is the caller's job.
 import { checked, type Checked } from './checked.ts';
 
+/** Where NEAR AI keeps the compose files Compose Manager deploys (the SDK's default too). */
+export const COMPOSE_REPOSITORY = 'nearai/cvm-compose-files';
+
 /** One entry of the action log, with the wire names Compose Manager signs. Unknown fields are kept. */
 export interface ManagerAction {
   readonly action: string;
