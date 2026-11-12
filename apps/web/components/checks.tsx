@@ -56,8 +56,8 @@ export function CardHead({ status, when, children }: { status: 'ok' | 'fail'; wh
  */
 export function Row({ status, label, hint, detail, as: Tag = 'div', children }: { status: Status; label: string; hint?: string; detail?: ReactNode; as?: 'div' | 'span'; children: ReactNode }) {
   return (
-    <Tag className={`row ${status === 'running' ? 'skipped' : status}`}>
-      <StatusMark status={status} className="mark" />
+    <Tag className="row">
+      <StatusMark status={status} className={`mark ${status === 'running' ? 'skipped' : status}`} />
       <span className="label">{label}</span>
       <span className="value">{children}</span>
       {detail && <div className="detail">{detail}</div>}

@@ -20,7 +20,6 @@
   --fail: #b3261e;
   --fail-bg: #fbeae7;
   --fail-line: #e9b7b0;
-  --na: #6a665c;
   --warn: #8f5d00;
   --radius: 3px;
   --card-pad: 1.25rem;
@@ -47,7 +46,6 @@
     --fail: #ff8f85;
     --fail-bg: #2e1613;
     --fail-line: #5e2a24;
-    --na: #a8a396;
     --warn: #e3ad45;
     color-scheme: dark;
   }
@@ -99,12 +97,12 @@ p { margin: 0.75rem 0; }
 .skip:focus { position: fixed; top: 0.5rem; left: 0.5rem; z-index: 20; padding: 0.5rem 0.9rem; border-radius: var(--radius); background: var(--ink); color: var(--paper); }
 .line { display: block; } /* several values in one cell or row, one per line */
 /* The small label of a form: who speaks, a column, a field. */
-.who, thead th, table.stack td::before, .controls .field, .kicker { font: 500 0.7rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.who, thead th, table.stack td::before, .controls .field, .kicker, .page h1.compact { font: 500 0.7rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .page { max-width: var(--page-w); margin: 0 auto; padding: 1.75rem 1rem 3rem; }
 .page.wide { max-width: var(--page-wide); }
 .page.chat { padding-bottom: 7.5rem; } /* room for the fixed composer plus breathing space */
 .page p { max-width: 70ch; }
-.page h1.compact { font: 500 0.7rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 0.25rem; }
+.page h1.compact { margin: 0 0 0.25rem; }
 .page h2 { font-size: 1.35rem; margin: 2.25rem 0 0.6rem; }
 /* The blocks of a page keep one distance from each other; the margins of neighbours collapse into it. */
 .page > .card, .page > details, .page > .table-wrap { margin-block: 1.25rem; }
@@ -160,31 +158,30 @@ p { margin: 0.75rem 0; }
 .card-head.fail, .trust-verdict.fail { --tone: var(--fail); --tone-bg: var(--fail-bg); }
 .stamp { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.65rem; border: 2px solid var(--tone); border-radius: 2px; background: var(--tone-bg); color: var(--tone); font: 500 0.8rem/1.25 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; transform: rotate(-1.2deg); }
 .card-head .when { font: 400 0.78rem/1.4 var(--mono); color: var(--muted); }
-.row { counter-increment: row; display: grid; grid-template-columns: 2rem minmax(0, 1fr) 1.6rem; gap: 0.1rem 0.6rem; padding: 0.7rem 0; border-top: 1px solid var(--rule); }
+/* The number and the mark hold their own columns open: a line without a number gives that room back by itself. */
+.row { counter-increment: row; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 0.1rem; padding: 0.7rem 0; border-top: 1px solid var(--rule); }
 .row:first-of-type { border-top: 0; }
-.row::before { content: counter(row, decimal-leading-zero); grid-column: 1; grid-row: 1 / span 4; font: 400 0.76rem/1.95 var(--mono); color: var(--muted); }
+.row::before { content: counter(row, decimal-leading-zero); grid-column: 1; grid-row: 1 / span 4; min-width: 2.6rem; font: 400 0.76rem/1.95 var(--mono); color: var(--muted); }
+/* A line that stands alone needs no number: a sheet of one line, an action of the agent (it carries its own in the label). */
+.row:only-child::before, .ledger .row::before, .pending .row::before { content: none; }
 .row > * { grid-column: 2; overflow-wrap: anywhere; }
 /* The mark of a line: a ticked, crossed or empty box. The shape says it too, not only the colour. */
 .mark { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1.5rem; height: 1.5rem; border: 1.5px solid currentColor; border-radius: 2px; font: 600 0.95rem/1 var(--mono); }
-.row > .mark { grid-column: 3; grid-row: 1 / span 4; justify-self: end; }
-.row.ok > .mark, .mark.ok { color: var(--ok); }
-.row.fail > .mark, .mark.fail { color: var(--fail); background: var(--fail-bg); }
-.row.skipped > .mark, .mark.skipped { color: var(--na); border-style: dashed; }
+.row > .mark { grid-column: 3; grid-row: 1 / span 4; margin-left: 0.6rem; }
+.mark.ok { color: var(--ok); }
+.mark.fail { color: var(--fail); background: var(--fail-bg); }
+.mark.skipped { color: var(--muted); border-style: dashed; }
 .mark.warn { color: var(--warn); }
 /* The tick, the cross and the dash are drawn, not typed: the glyphs ✓ ✗ — are in none of the three faces, and a fallback
    font would draw each a little differently on every system. The typed glyph stays in the markup for a page without CSS. */
-.row.ok > .mark, .row.fail > .mark, .row.skipped > .mark, .mark.ok, .mark.fail, .mark.skipped { font-size: 0; }
-.row.ok > .mark::after, .mark.ok::after { content: ""; width: 0.36rem; height: 0.7rem; margin-top: -0.15rem; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.row.fail > .mark::after, .mark.fail::after { content: ""; width: 0.85rem; height: 0.85rem; background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
-.row.skipped > .mark::after, .mark.skipped::after { content: ""; width: 0.6rem; height: 2px; background: currentColor; }
+.mark:is(.ok, .fail, .skipped) { font-size: 0; }
+.mark:is(.ok, .fail, .skipped)::after { content: ""; }
+.mark.ok::after { width: 0.36rem; height: 0.7rem; margin-top: -0.15rem; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.mark.fail::after { width: 0.85rem; height: 0.85rem; background: linear-gradient(45deg, transparent 43%, currentColor 43% 57%, transparent 57%), linear-gradient(-45deg, transparent 43%, currentColor 43% 57%, transparent 57%); }
+.mark.skipped::after { width: 0.6rem; height: 2px; background: currentColor; }
 .row .label { font-weight: 600; }
 .row .value .btn { margin-block: 0.15rem; } /* a button that wraps under its sentence keeps a little air */
 .row .hint { color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
-/* A sheet of one line needs no line number. */
-.row:only-child { grid-template-columns: minmax(0, 1fr) 1.6rem; }
-.row:only-child::before { content: none; }
-.row:only-child > * { grid-column: 1; }
-.row:only-child > .mark { grid-column: 2; }
 .hint-line { margin: 0.5rem 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.9rem 0 0.5rem; }
 
@@ -194,15 +191,15 @@ p { margin: 0.75rem 0; }
 /* What the product gives, marked the way one marks a line on paper. */
 .hero .marked { background: linear-gradient(transparent 62%, var(--accent-soft) 62%); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .kicker { margin: 0 0 0.5rem; }
-.steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0; list-style: none; }
-.step { padding: 0.95rem 1.1rem 1.05rem; border-left: 1px solid var(--rule); font-size: 0.94rem; line-height: 1.55; }
-.step:first-child { border-left: 0; }
+/* The cells of the two grids are divided by the grid's own colour showing through a gap of one pixel, so no cell has to
+   know where it stands, on a wide screen or on a narrow one. */
+.steps-grid, .scenarios { display: grid; gap: 1px; overflow: hidden; background: var(--rule); }
+.steps-grid { grid-template-columns: repeat(3, 1fr); margin: 0; padding: 0; list-style: none; }
+.step { padding: 0.95rem 1.1rem 1.05rem; background: var(--sheet); font-size: 0.94rem; line-height: 1.55; }
 .step .num { display: block; margin-bottom: 0.4rem; font: 500 0.76rem/1.4 var(--mono); letter-spacing: 0.08em; color: var(--accent); }
 .try { margin: 1.75rem 0 0.5rem; }
-.scenarios { display: grid; grid-template-columns: repeat(2, 1fr); overflow: hidden; }
-.scenario { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.15rem 0.75rem; align-items: start; align-content: start; padding: 0.85rem 1rem; border: 0; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); border-radius: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background-color 0.12s; }
-.scenario:nth-child(-n + 2) { border-top: 0; }
-.scenario:nth-child(odd) { border-left: 0; }
+.scenarios { grid-template-columns: repeat(2, 1fr); }
+.scenario { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.15rem 0.75rem; align-items: start; align-content: start; padding: 0.85rem 1rem; border: 0; border-radius: 0; background: var(--sheet); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background-color 0.12s; }
 .scenario:focus-visible { outline-offset: -2px; }
 .scenario .title { font-weight: 600; }
 .scenario .sub { grid-column: 2; color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
@@ -235,7 +232,7 @@ textarea.json.drop { border-style: dashed; border-color: var(--accent); backgrou
 .checks li { padding: 0.14rem 0; }
 /* A checked line: the mark in its own column, coloured; the text stays in ink unless the line failed. */
 .checks .check { display: grid; grid-template-columns: 1.15rem minmax(0, 1fr); }
-.check > .tick { color: var(--na); }
+.check > .tick { color: var(--muted); }
 .check.ok > .tick { color: var(--ok); }
 .check.fail { color: var(--fail); }
 .check.fail > .tick { color: inherit; }
@@ -274,11 +271,6 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
   .nav .right { grid-row: 1; grid-column: 2; justify-self: end; }
   .nav .links { grid-column: 1 / -1; }
   .steps-grid, .scenarios { grid-template-columns: 1fr; }
-  .step { border-left: 0; border-top: 1px solid var(--rule); }
-  .step:first-child { border-top: 0; }
-  .scenario, .scenario:nth-child(odd) { border-left: 0; }
-  .scenario:nth-child(-n + 2) { border-top: 1px solid var(--rule); }
-  .scenario:first-child { border-top: 0; }
   /* A wide table becomes one block per row, each cell prefixed by its column name (data-label). */
   table.stack thead { display: none; }
   table.stack tr { display: block; padding: 0.6rem 0.85rem; border-top: 1px solid var(--rule); }
@@ -290,7 +282,7 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
 }
 @media (max-width: 480px) {
   .page { padding-top: 1.25rem; }
-  .row { grid-template-columns: 1.7rem minmax(0, 1fr) 1.6rem; }
+  .row::before { min-width: 2.3rem; }
 }
 
 /* Who you trust (/log) */
@@ -324,11 +316,6 @@ table.kv td { overflow-wrap: anywhere; } /* a completion id or hash must not wid
 .ledger > li > details > summary::-webkit-details-marker { display: none; }
 .ledger > li > details > summary .label::after { content: " ▸"; color: var(--muted); font-weight: 400; }
 .ledger > li > details[open] > summary .label::after { content: " ▾"; }
-/* An action already carries its own number in the label. */
-.ledger .row { grid-template-columns: minmax(0, 1fr) 1.6rem; }
-.ledger .row::before { content: none; }
-.ledger .row > * { grid-column: 1; }
-.ledger .row > .mark { grid-column: 2; }
 .ledger-body { display: grid; gap: 0.6rem; padding: 0 var(--card-pad) 1rem; }
 .ledger-body > * { margin: 0; min-width: 0; }
 .ledger-body .checks { padding-top: 0; }

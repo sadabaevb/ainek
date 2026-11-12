@@ -4,7 +4,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
-import { CheckList } from '@/components/checks';
+import { CheckList, mark } from '@/components/checks';
 import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
 import { chatHistory, hasOtherThread } from '@/lib/history';
 import type { Dict } from '@/lib/i18n';
@@ -68,7 +68,7 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
 });
 
 /** What each scenario ends in, drawn as the mark its card will carry: a proof, a refusal, a card that says "no hardware proof". */
-const ENDS: Record<Chip, { tone: 'ok' | 'fail' | 'warn'; glyph: string }> = { ask: { tone: 'ok', glyph: '✓' }, tamper: { tone: 'fail', glyph: '✗' }, deployment: { tone: 'fail', glyph: '✗' }, incognito: { tone: 'warn', glyph: '!' } };
+const ENDS: Record<Chip, 'ok' | 'fail' | 'warn'> = { ask: 'ok', tamper: 'fail', deployment: 'fail', incognito: 'warn' };
 const TAMPER_OF: Partial<Record<Chip, Tamper>> = { tamper: 'key', deployment: 'deployment' };
 
 /** First screen: what the page is about, the honest path and the catches as one-click scenarios. Shown until the first message. */
@@ -90,7 +90,7 @@ function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
       <div className="scenarios">
         {chips.map((chip) => (
           <button key={chip} type="button" className="scenario" onClick={() => onPick(chip)}>
-            <span className={`mark ${ENDS[chip].tone}`} aria-hidden>{ENDS[chip].glyph}</span>
+            <span className={`mark ${ENDS[chip]}`} aria-hidden>{ENDS[chip] === 'warn' ? '!' : mark(ENDS[chip])}</span>
             <span className="title">{t.intro.chips[chip]}</span>
             <span className="sub">{t.intro.subs[chip]}</span>
             <span className="go" aria-hidden>→</span>
