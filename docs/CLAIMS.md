@@ -41,7 +41,9 @@ Honest limitations won prizes at previous NEAR hackathons.
   `AINEK_REQUIRE_RELEASE=1` the client sends only when the action log it was attested is exactly one that a quorum of the
   viewer's verifiers marked, and it refuses a log that does not begin with what a verifier saw from the same instance. The
   rule compares one record with another and reads no action, so it needs no network; in the browser it attests again for
-  every message, because a verification kept for an hour says nothing about that hour. `pnpm -F verifier dry-run` prints
+  every message, because a verification kept for an hour says nothing about that hour. A client may also make a release
+  wait (`AINEK_MIN_RELEASE_AGE_MIN`): it then refuses one whose first mark in the public log is younger than that many
+  minutes. `pnpm -F verifier dry-run` prints
   the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers. As of
   Nov 12 the verifier that writes to our log has not been restarted with marks. What a mark does not say is under "We do
   not claim".
@@ -106,8 +108,11 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **That a logged release is an approved one, or that the release rule closes this gap.** A release mark in the log says
   that, at one state of an enclave's action log, a verifier followed the release that serves the model to public sources:
   the latest release of the model's service in the compose file the log most recently deployed for it, the signed build
-  of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release, and no minimum
-  age is asked of one. The verifier does not follow the engine image, or anything else that log brought up. The log does
+  of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release. A client may
+  ask a release to wait (`AINEK_MIN_RELEASE_AGE_MIN`, no wait by default): that wait counts from the first mark a trusted
+  verifier wrote for the release, by that verifier's clock and the client's, not from when the code became public, and a
+  rollback to a release marked earlier does not wait again. The verifier does not follow the engine image, or anything
+  else that log brought up. The log does
   not record the Compose project of a deployment, so it does not show which earlier services a later one replaced, and in
   one of our recordings nine compose files in a single log define a service for this model. The rule
   (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own record: the action log it attests must be exactly
