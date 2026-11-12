@@ -12,17 +12,18 @@ import { Row, mark } from './checks';
 
 /**
  * `failed` on an error: the hardware evidence itself did not verify. Anything else thrown is a check that could not be made.
- * A finished check keeps the report it read, so that the key-log line follows the log and the viewer's trust set as they
- * change, without checking the release again.
+ * A finished check keeps the report it read and when, so that the key-log line follows the log and the viewer's trust set
+ * as they change without checking the release again, and still speaks for the moment of that check.
  */
-type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation } | { kind: 'error'; why: string; failed: boolean };
+type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation; at: number } | { kind: 'error'; why: string; failed: boolean };
 
 /**
  * `attest` gives the verified report to read: the card hands over the one it already holds, /log verifies one when asked.
  * `history` adds the list of the service's releases under the line. `keyLog` adds, to the lines, where the public key log
- * stands on that report's action log: /log has the entries at hand, a card shown later does not.
+ * stands on that report's action log: /log has the entries at hand (null while it is reading them), a card shown later
+ * does not and leaves it out.
  */
-export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { attest: () => Promise<VerifiedModelAttestation>; model: string; hint?: string | undefined; history?: boolean; keyLog?: KeyLogContext | undefined }) {
+export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { attest: () => Promise<VerifiedModelAttestation>; model: string; hint?: string | undefined; history?: boolean; keyLog?: KeyLogContext | null | undefined }) {
   const { t } = useT();
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [open, setOpen] = useState(false);
@@ -31,14 +32,15 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
     setState({ kind: 'running' });
     try {
       const [{ checkRelease }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
-      setState({ kind: 'done', check: await checkRelease(attestation, model), attestation });
+      const at = Date.now(); // the report is as fresh as it will be; the key-log line is read as of now
+      setState({ kind: 'done', check: await checkRelease(attestation, model), attestation, at });
     } catch (err) {
       const refused = getSdkError(err);
       setState({ kind: 'error', why: describeError(err), failed: isVerificationError(refused) && !refused.retryable });
     }
   };
 
-  const check = useMemo(() => (state.kind !== 'done' ? undefined : keyLog ? withKeyLog(state.check, state.attestation, model, keyLog) : state.check), [state, keyLog, model]);
+  const check = useMemo(() => (state.kind !== 'done' ? undefined : keyLog === undefined ? state.check : withKeyLog(state.check, state.attestation, model, keyLog, state.at)), [state, keyLog, model]);
   const status = check ? check.status : state.kind === 'running' ? 'running' : state.kind === 'error' && state.failed ? 'fail' : 'skipped';
   const again = <button type="button" className="btn small" onClick={run}>{t.codeAgain}</button>;
   const detail = check && (
@@ -76,8 +78,9 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
         <>
           <ReleaseSummary check={check} />{' '}
           {check.lines.length > 0 && <button type="button" className="linklike" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? t.codeHide : t.codeDetails}</button>}
-          {/* Only when asking again can change the answer: GitHub or Sigstore did not answer for something. */}
-          {check.retry && <> {again}</>}
+          {/* Only when asking again can change the answer: GitHub or Sigstore did not answer for something, or the line about
+              the key log is shown, which speaks for the moment of the check and for an enclave that may have moved on. */}
+          {(check.retry || keyLog !== undefined) && <> {again}</>}
         </>
       )}
     </Row>

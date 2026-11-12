@@ -11,11 +11,7 @@ import { NA, head, line, markOf } from './term.ts';
  */
 export function printRelease(inspection: ReleaseInspection | undefined, { model, keyLog, now = Date.now() }: { model: string; keyLog: ReleaseLine; now?: number }): string | undefined {
   head("5. Code behind the key: what the enclave's manager deployed (its action log, bound to a TDX quote of its own)");
-  if (!inspection) {
-    line(NA, 'this model report carries no action log: not checked');
-    return undefined;
-  }
-  const { lines, summary } = describeRelease(inspection, { model, now });
+  const { lines, summary } = inspection ? describeRelease(inspection, { model, now }) : { lines: [{ status: 'skipped', text: 'this model report carries no action log: not checked' }], summary: undefined };
   for (const l of [...lines, keyLog]) line(markOf(l.status), l.text);
   return summary;
 }

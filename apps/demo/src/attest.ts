@@ -8,7 +8,7 @@
 // (public GitHub reads; GITHUB_TOKEN is optional and only raises GitHub's anonymous rate limit). `--history` adds, for every
 // release in the log, how long its commit had existed when it first ran.
 import { parseArgs } from 'node:util';
-import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, releaseInLogLine, releaseRuleOf, releaseStanding, shortHex as short, withFinding } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, releaseLineFor, releaseRuleOf, shortHex as short, withFinding } from '@ainek/proof';
 import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
 import { inspectRelease, leadTimes, verdictOf } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
@@ -71,7 +71,7 @@ if (outcome.kind === 'failed') {
     const inspection = await inspectRelease({ deployment: m.deployment, report: m.report, model, githubToken });
     // The client's release rule on the log this run read (SPEC §7.5): is the action log this enclave attests one a trusted
     // verifier checked and logged? When the setting is on, the send decision above has applied it already.
-    const keyLog = releaseInLogLine(releaseStanding(outcome.entries, { model, signingAddress: m.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, m, releaseRuleOf(cfg)), cfg.requireLoggedRelease);
+    const keyLog = releaseLineFor(outcome.entries, { model, signingAddress: m.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, m, releaseRuleOf(cfg), cfg.requireLoggedRelease);
     const summary = printRelease(inspection, { model, keyLog });
     // A log found rewritten fails the release like any check that did not hold, whatever the setting.
     const verdict = inspection ? withFinding(verdictOf(inspection), keyLog) : undefined;

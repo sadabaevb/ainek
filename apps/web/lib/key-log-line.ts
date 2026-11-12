@@ -1,7 +1,7 @@
 // Where the public key log stands on the action log of a verified report, as one more line of a release check. It needs
 // only the light part of @ainek/proof, so it is imported outright; the release chain itself (lib/release.ts) stays
 // loaded on demand.
-import { releaseInLogLine, releaseStanding, withFinding, type KeyEntry, type ReleaseRule, type TrustSet } from '@ainek/proof';
+import { releaseLineFor, withFinding, type KeyEntry, type ReleaseRule, type TrustSet } from '@ainek/proof';
 import type { VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { ReleaseCheck } from './release.ts';
 
@@ -16,12 +16,18 @@ export interface KeyLogContext {
 }
 
 /**
- * A release check with one more line: where the key log stands on the action log of this report, by the chat's own
- * release rule (SPEC §7.5). The line is shown whether or not the chat refuses by the rule. A log found rewritten fails
- * the check whatever the setting, as it fails `pnpm demo:attest`.
+ * A release check with one more line: where the key log stands on the action log of this report, by the release rule
+ * (SPEC §7.5), as of `at`, the moment the report was checked. With the rule off the line only says what the rule would
+ * say; with it on, a log that is not marked fails the check, because the chat does not send. A log found rewritten fails
+ * it either way, as it fails `pnpm demo:attest`.
+ *
+ * It reads this one report. The chat applies the rule to every report the gateway returns for the key, which is usually
+ * this one alone. `log` is null while the page has no read of the key log to go by: the line then says so, rather than
+ * go missing.
  */
-export function withKeyLog(check: ReleaseCheck, attestation: Pick<VerifiedModelAttestation, 'signer' | 'deployment' | 'report'>, model: string, { entries, trust, rule, enforced }: KeyLogContext): ReleaseCheck {
-  const standing = releaseStanding(entries, { model, signingAddress: attestation.signer.signingAddress, trustedVerifiers: trust.verifiers, quorum: trust.quorum }, attestation, rule);
-  const line = releaseInLogLine(standing, enforced);
+export function withKeyLog(check: ReleaseCheck, attestation: Pick<VerifiedModelAttestation, 'signer' | 'deployment' | 'report'>, model: string, log: KeyLogContext | null, at: number): ReleaseCheck {
+  const line = log
+    ? releaseLineFor(log.entries, { model, signingAddress: attestation.signer.signingAddress, trustedVerifiers: log.trust.verifiers, quorum: log.trust.quorum }, attestation, { ...log.rule, now: at }, log.enforced)
+    : ({ status: 'skipped', text: 'key log: not read at the moment, so where it stands on this action log is not known' } as const);
   return { ...withFinding(check, line), lines: [...check.lines, line] };
 }

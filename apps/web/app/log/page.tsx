@@ -78,17 +78,20 @@ export default function LogPage() {
   const split = log ? findSplitView(log.entries, cfg.model, trust.verifiers) : null;
   const newest = log?.all?.[0];
   const td = tl.deployments;
-  // The report the chat would use: verified here as before a message, or taken from the chat's own cache of at most an hour.
+  // The report the chat would use, verified now and not taken from the chat's cache of up to an hour: the key-log line
+  // under the release check speaks for the moment of the attestation.
   const attestNow = useCallback(async () => {
-    const report = chatModelOf(await verifyDeployment(cfg.model, { acceptedTcbStatuses: cfg.acceptedTcbStatuses }));
+    const report = chatModelOf(await verifyDeployment(cfg.model, { acceptedTcbStatuses: cfg.acceptedTcbStatuses }, true));
     if (!report) throw new Error('no model attestation returned');
     return report;
   }, [cfg.model, cfg.acceptedTcbStatuses]);
-  // The chat's release rule (SPEC §7.5) on the entries this page read: shown under the release check, enforced only by the chat.
+  // The release rule (SPEC §7.5) on the entries this page read: shown under the release check, enforced only by the chat.
+  // Null while the page has no read of the log, so that the line says so and does not go missing.
   const { requireLoggedDeployment, releaseWaitMs, requireLoggedRelease } = cfg;
+  const entries = log?.entries;
   const keyLog = useMemo(
-    () => (log ? { entries: log.entries, trust, rule: releaseRuleOf({ requireLoggedDeployment, releaseWaitMs }), enforced: requireLoggedRelease } : undefined),
-    [log, trust, requireLoggedDeployment, releaseWaitMs, requireLoggedRelease],
+    () => (entries ? { entries, trust, rule: releaseRuleOf({ requireLoggedDeployment, releaseWaitMs }), enforced: requireLoggedRelease } : null),
+    [entries, trust, requireLoggedDeployment, releaseWaitMs, requireLoggedRelease],
   );
   const deployments = useMemo(() => deploymentsSeen(log?.all ?? [], cfg.model), [log?.all, cfg.model]);
   // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.

@@ -34,7 +34,7 @@ import { checked, type Checked } from './checked.ts';
 import { normalizeHex, sha256Hex, shortHex } from './hash.ts';
 import { composeHashOf } from './key-entry.ts';
 import { evaluateKeyLog, type KeyLogQuery, type KeyLogVerdict, type ReleaseRefusal } from './key-log.ts';
-import { utcText } from './release-lines.ts';
+import { releaseInLogLine, utcText, type ReleaseLine } from './release-lines.ts';
 import { sameInstance, wholeMinutes, type ManagerAction } from './release.ts';
 import type { KeyEntry } from './schema.ts';
 
@@ -139,9 +139,7 @@ type ReleaseCheck = Pick<ReleaseRule, 'waitMs' | 'now'> & { quorum?: number | un
 export function evaluateRelease(entries: readonly KeyEntry[], attested: { actions: readonly ManagerAction[]; instance: Checked<string> }, { quorum = 1, witnesses = entries, waitMs = 0, now = Date.now() }: ReleaseCheck = {}): ReleaseLogVerdict {
   const { actions } = attested;
   const refused = (status: ReleaseRefusal, detail: string, confirmedBy: string[] = []): ReleaseLogVerdict => ({ status, confirmedBy, detail });
-  if (!entries.some((entry) => marksOf(entry.image_digests).logs.length > 0)) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher carries a mark of the enclave's action log`);
-  if (attested.instance.status !== 'ok') return refused('untied-log', `the action log cannot be tied to the enclave that holds the key: ${attested.instance.why}`);
-  const instance = instanceIdOf(attested.instance.value);
+  const instance = attested.instance.status === 'ok' ? instanceIdOf(attested.instance.value) : undefined;
 
   const prefixes = new Map<number, string>(); // the hash of the first n actions, computed once per n
   const hashOfFirst = (n: number): string => {
@@ -156,7 +154,9 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
   const confirming: KeyEntry[] = []; // vouching entries that mark the log exactly as it stands
   let ahead: Seen | undefined; // a verifier saw a longer log than this one
   let behind: Seen | undefined; // the longest earlier state of this log a vouching entry marked
-  for (const entry of held) {
+  // First of all, the marks of this instance in everything the client holds: a rewritten log is reported whatever else
+  // is missing, also when no entry for this key and launcher carries a mark.
+  for (const entry of instance === undefined ? [] : held) {
     for (const seen of marksOf(entry.image_digests).logs) {
       if (seen.instance !== instance) continue; // another instance
       if (seen.length > actions.length) ahead = longest(ahead, { entry, length: seen.length });
@@ -167,13 +167,16 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
       else behind = longest(behind, { entry, length: seen.length });
     }
   }
+  if (entries.length === 0) return refused('unlogged-release', "no log entry vouches for this key and launcher, so none marks the enclave's action log");
+  if (!entries.some((entry) => marksOf(entry.image_digests).logs.length > 0)) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher carries a mark of the enclave's action log`);
+  if (attested.instance.status !== 'ok') return refused('untied-log', `the action log cannot be tied to the enclave that holds the key: ${attested.instance.why}`);
 
   // Either this attestation is older than that entry, and the enclave has moved on, or the log lost actions. The lengths
   // alone do not say which, so this is not called a rewrite; an exact match with an earlier mark does not outweigh it.
   if (ahead) return refused('shorter-log', `entry #${ahead.entry.index} by ${ahead.entry.verifier} saw ${ahead.length} actions from this instance and the log attested now has ${actions.length}: this attestation is older than that entry, or the log was cut`);
   const confirmedBy = [...new Set(confirming.map((entry) => entry.verifier))];
   if (confirmedBy.length === 0) {
-    if (!behind) return refused('unknown-release', `no trusted verifier has marked the action log of this instance (${instance})`);
+    if (!behind) return refused('unknown-release', `no trusted verifier has marked the action log of this instance (${instance ?? '?'})`);
     const added = actions.length - behind.length;
     const last = actions.at(-1);
     return refused('unknown-release', `the enclave's action log has ${added} action${added === 1 ? '' : 's'} since entry #${behind.entry.index} by ${behind.entry.verifier} marked it (the latest: ${last?.action ?? '?'} at ${last?.timestamp ?? '?'}); no trusted verifier has marked the log as it stands`);
@@ -223,6 +226,14 @@ export function releaseStanding(entries: readonly KeyEntry[], query: Omit<KeyLog
   // Both quotes are verified by now. When they name two instances the log is another replica's record, not this enclave's.
   const instance = log ? sameInstance(report.eventLog, report.composeManagerAttestation?.eventLog) : checked.skipped('the attested report carries no action log');
   return evaluateRelease(vouching, { actions: log?.actions ?? [], instance }, { quorum: query.quorum, witnesses, waitMs, now });
+}
+
+/**
+ * The line that says where the key log stands on one verified report's action log: `releaseStanding` in the words of
+ * `releaseInLogLine`. `pnpm demo:attest` prints it and /log shows it, so that the two cannot read the log differently.
+ */
+export function releaseLineFor(entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, report: AttestedReport, rule: ReleaseRule, enforced: boolean): ReleaseLine {
+  return releaseInLogLine(releaseStanding(entries, query, report, rule), enforced);
 }
 
 /**
