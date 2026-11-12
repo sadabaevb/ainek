@@ -15,6 +15,8 @@ export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLog
     'shorter-log': [t.refusedShorterTitle, t.refusedShorterBody],
     'release-below-quorum': [t.refusedReleaseQuorumTitle, t.refusedReleaseQuorumBody(v.confirmedBy.length, v.quorum)],
     'rewritten-log': [t.refusedRewrittenTitle, t.refusedRewrittenBody],
+    // Whole minutes, the age rounded down: a release is never shown as older than it is.
+    'young-release': [t.refusedYoungTitle, t.refusedYoungBody(v.releaseAge?.ms === undefined ? undefined : Math.max(0, Math.floor(v.releaseAge.ms / 60_000)), Math.round((v.releaseAge?.minMs ?? 0) / 60_000))],
     absent: [t.refusedTitle, t.refusedBody],
   };
   const [title, body] = texts[reason];

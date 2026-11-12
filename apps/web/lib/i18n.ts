@@ -77,11 +77,17 @@ const en = {
     'unknown-release': "One signing key stands in front of every version of the code behind it, and an enclave changes that code by adding to its action log. A verifier marks the new state once it has followed the model's release to public sources: try again in a while.",
     'shorter-log': 'A log that only grows cannot get shorter. Try again: a new attestation shows the log as it stands now. If it is still shorter than what the verifier saw, the log has lost actions and cannot be relied on.',
     'rewritten-log': 'Compose Manager only adds to this log. One that no longer begins with what a verifier saw has been edited or started over, so what it says about the code cannot be relied on.',
+    'young-release': "A release that has just appeared is one nobody else has had time to look at. The wait is this client's own setting: try again once it has passed.",
   } as Partial<Record<KeyLogReason, string>>,
   refusedReleaseTitle: 'No verifier has marked this state of the enclave. Message not sent.',
   refusedReleaseBody: "The model's key is in the public log. The enclave's action log, as this client was just shown it, is not one a trusted verifier marked: the enclave has added to it since the last mark (a deployment, a restart, a stop), or no trusted verifier has marked this replica. A verifier marks a log only when every check of the model's current release against public sources held.",
   refusedNoReleaseTitle: 'No release mark in the log. Message not sent.',
   refusedNoReleaseBody: "This client is set to send only when a trusted verifier has marked the enclave's action log, and the log entries that vouch for this key carry no such mark.",
+  refusedYoungTitle: 'This release is too new for this client. Message not sent.',
+  refusedYoungBody: (agedMin: number | undefined, waitMin: number) =>
+    agedMin === undefined
+      ? `The log entries that mark this state of the enclave do not name the release, so this client cannot tell how long it has been in the public log. It is set to wait ${waitMin} min.`
+      : `A trusted verifier first marked the release that serves the model ${agedMin} min before this check, by its clock and this device's. This client is set to send to a release only ${waitMin} min after it first appears in the public log.`,
   refusedShorterTitle: 'A verifier has seen a longer action log from this enclave. Message not sent.',
   refusedShorterBody: 'A trusted verifier marked an action log of this enclave with more actions than the one this client was just shown. Either the enclave attested to this client before the verifier wrote that entry, or its log has lost actions.',
   refusedReleaseQuorumTitle: 'Not enough verifiers have marked this state of the enclave. Message not sent.',
@@ -466,11 +472,17 @@ const ru: typeof en = {
     'unknown-release': 'Один ключ подписи стоит перед всеми версиями кода за ним, а меняет этот код анклав, дописывая свой журнал действий. Верификатор отмечает новое состояние, когда сверил релиз модели с публичными источниками: попробуй позже.',
     'shorter-log': 'Журнал, который только дописывается, не может стать короче. Попробуй ещё раз: новая аттестация покажет журнал в нынешнем виде. Если он по-прежнему короче того, что видел верификатор, из журнала пропали действия, и полагаться на него нельзя.',
     'rewritten-log': 'Compose Manager только дописывает этот журнал. Если журнал больше не начинается с того, что видел верификатор, его отредактировали или начали заново, и его словам о коде верить нельзя.',
+    'young-release': 'Релиз, который только что появился, ещё никто не успел посмотреть. Ожидание задано настройкой самого клиента: попробуй, когда оно пройдёт.',
   },
   refusedReleaseTitle: 'Это состояние анклава не отметил ни один верификатор. Сообщение не отправлено.',
   refusedReleaseBody: 'Ключ модели есть в публичном логе. Но журнал действий анклава в том виде, в каком клиент его сейчас получил, не отмечен ни одним доверенным верификатором: после последней метки анклав дописал журнал (развёртывание, перезапуск, остановка), либо эту реплику доверенные верификаторы не отмечали. Верификатор отмечает журнал, только если все проверки текущего релиза модели по публичным источникам сошлись.',
   refusedNoReleaseTitle: 'В логе нет метки релиза. Сообщение не отправлено.',
   refusedNoReleaseBody: 'Этот клиент настроен отправлять, только если доверенный верификатор отметил журнал действий анклава, а в записях лога, которые ручаются за этот ключ, таких меток нет.',
+  refusedYoungTitle: 'Релиз слишком новый для этого клиента. Сообщение не отправлено.',
+  refusedYoungBody: (agedMin, waitMin) =>
+    agedMin === undefined
+      ? `Записи лога, которые отмечают это состояние анклава, не называют релиз, поэтому клиент не знает, сколько он находится в публичном логе. Клиент настроен ждать ${waitMin} мин.`
+      : `Доверенный верификатор впервые отметил релиз, который обслуживает модель, за ${agedMin} мин до этой проверки (по его часам и часам этого устройства). Клиент настроен отправлять на релиз только через ${waitMin} мин после его появления в публичном логе.`,
   refusedShorterTitle: 'Верификатор видел более длинный журнал действий этого анклава. Сообщение не отправлено.',
   refusedShorterBody: 'Доверенный верификатор отметил журнал действий этого анклава, в котором действий больше, чем в журнале, который клиент сейчас получил. Либо анклав прошёл аттестацию перед клиентом раньше, чем верификатор сделал эту запись, либо из журнала пропали действия.',
   refusedReleaseQuorumTitle: 'Это состояние анклава отметило слишком мало верификаторов. Сообщение не отправлено.',

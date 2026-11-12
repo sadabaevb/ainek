@@ -166,7 +166,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const verdictFor = (signingAddress: string, composes: readonly (string | undefined)[]): KeyLogVerdict => {
     const query = { model, signingAddress, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
     const key = evaluateKeyLogForAll(entries, query, composes);
-    return cfg.requireLoggedRelease ? withReleaseRule(key, entries, query, deployment.models, cfg.requireLoggedDeployment) : key;
+    return cfg.requireLoggedRelease ? withReleaseRule(key, entries, query, deployment.models, { withLauncher: cfg.requireLoggedDeployment, minAgeMs: cfg.minReleaseAgeMs }) : key;
   };
   const keyVerdict = verdictFor(seenKey, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
   const seenCompose = keyVerdict.deployment?.composeHash;

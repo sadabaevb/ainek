@@ -289,7 +289,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     const logQuery = { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum };
     const keyVerdict = evaluateKeyLogForAll(entries, logQuery, composes);
     // SPEC §7.5, when asked for: the action log of each of those reports must be one the same verifiers checked and logged.
-    const verdict = cfg.requireLoggedRelease ? withReleaseRule(keyVerdict, entries, logQuery, models, cfg.requireLoggedDeployment) : keyVerdict;
+    const verdict = cfg.requireLoggedRelease ? withReleaseRule(keyVerdict, entries, logQuery, models, { withLauncher: cfg.requireLoggedDeployment, minAgeMs: cfg.minReleaseAgeMs }) : keyVerdict;
     if (verdict.status !== 'ok') {
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });

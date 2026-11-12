@@ -68,3 +68,11 @@ test('AINEK_REQUIRE_RELEASE: off until asked for; blank is the default, 0 or fal
   for (const off of ['', ' ', '0', 'false', 'FALSE']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_RELEASE: off }).requireLoggedRelease, false, JSON.stringify(off));
   for (const on of ['1', 'true', 'yes', 'on']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_RELEASE: on }).requireLoggedRelease, true, on);
 });
+
+test('AINEK_MIN_RELEASE_AGE_MIN: no wait until asked for; a value that is not whole minutes within the limit is the limit', () => {
+  const ms = (value?: string) => ainekConfigFromEnv(value === undefined ? {} : { AINEK_MIN_RELEASE_AGE_MIN: value }).minReleaseAgeMs;
+  assert.deepEqual([ms(), ms(''), ms(' '), ms('0')], [0, 0, 0, 0]);
+  assert.deepEqual([ms('30'), ms(' 90 '), ms('720')], [30 * 60_000, 90 * 60_000, 720 * 60_000]);
+  // A typo must not turn the wait off: it becomes the longest one, and the refusals say so.
+  for (const odd of ['721', '-5', '1.5', '30m', 'one hour']) assert.equal(ms(odd), 720 * 60_000, odd);
+});

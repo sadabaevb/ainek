@@ -32,6 +32,12 @@ export interface AinekConfig {
    * 0 or false is off, anything else is on.
    */
   requireLoggedRelease: boolean;
+  /**
+   * SPEC §7.5, with the rule above: refuse a release that a trusted verifier first marked less than this long ago, in ms.
+   * 0 asks for nothing. From `AINEK_MIN_RELEASE_AGE_MIN`, whole minutes up to MAX_RELEASE_AGE_MIN; any other value is read
+   * as that maximum, so a typo cannot turn the wait off.
+   */
+  minReleaseAgeMs: number;
   /** TCB statuses accepted for gateway and model quotes (SPEC §3.2 policy); unknown names are dropped, never empty. */
   acceptedTcbStatuses: TcbStatusName[];
   explorer: string;
@@ -57,6 +63,21 @@ const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 const REQUIRE_DEPLOYMENT_DEFAULT = true;
 /** Off until the verifiers that write to the log write release marks (DEV-NOTES 2026-11-12). */
 const REQUIRE_RELEASE_DEFAULT = false;
+
+/**
+ * The longest wait a client can ask of a release, in minutes. It measures the wait on the entries it reads, a day of the
+ * log, and a verifier writes an unchanged release again every six hours: past twelve hours the first mark it could see
+ * would often be younger than the release.
+ */
+export const MAX_RELEASE_AGE_MIN = 720;
+
+/** `AINEK_MIN_RELEASE_AGE_MIN` in ms: blank or 0 is no wait, a whole number of minutes up to the maximum is that, anything else is the maximum. */
+function releaseAgeMs(value: string | undefined): number {
+  const said = value?.trim();
+  if (!said) return 0;
+  const minutes = Number(said);
+  return (Number.isInteger(minutes) && minutes >= 0 && minutes <= MAX_RELEASE_AGE_MIN ? minutes : MAX_RELEASE_AGE_MIN) * 60_000;
+}
 
 /** A switch from the environment: blank means `fallback`, `0` or `false` is off, and anything else is on, so a typo cannot turn a check off. */
 export function envFlag(value: string | undefined, fallback: boolean): boolean {
@@ -86,6 +107,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
     requireLoggedDeployment: envFlag(env['AINEK_REQUIRE_DEPLOYMENT'], logSource !== 'sample' && REQUIRE_DEPLOYMENT_DEFAULT),
     requireLoggedRelease: envFlag(env['AINEK_REQUIRE_RELEASE'], REQUIRE_RELEASE_DEFAULT),
+    minReleaseAgeMs: releaseAgeMs(env['AINEK_MIN_RELEASE_AGE_MIN']),
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.
