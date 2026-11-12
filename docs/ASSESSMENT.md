@@ -1,15 +1,23 @@
 # Ainek against six obligations
 
 [Private Inference Beat](https://amiller.github.io/awesome-private-inference/assessments.html) reviews confidential-inference
-routes on six obligations: hardware, session, code, operator access, downstream and updates. It asks for exact client and
-workload versions, proof records and "reproducible negative controls" before it calls a route verified. This page puts
-Ainek's client through the same six, for the route it uses: NEAR AI Cloud, end-to-end encryption through the gateway.
+routes on six obligations: hardware, session, code, operator access, downstream and updates. It assigns no overall
+security stage, and to promote an assessment it requires "a recorded reviewer, exact client and workload versions, linked
+proof records and reproducible negative controls". This page puts Ainek's client through the same six, for the route it
+uses: NEAR AI Cloud, end-to-end encryption through the gateway.
 
-It is our own reading, not the registry's assessment. The obligations are summarised in our words; the registry's wording
-is on its page. Each section says what the client checks, the command that shows it, the change that must be refused,
-and what stays open. Nothing here is audited.
+It is our own reading, not the registry's assessment, and it has no recorded reviewer: nobody outside the team has
+checked it, and nothing here is audited. The obligations are summarised in our words; the registry's wording is on its
+page. Each section says what the client checks, the command that shows it, the change that must be refused, and what
+stays open.
 
-Versions: `@nearai/inference-sdk` 0.3.0, E2EE v3, model `z-ai/glm-5.3-flash`, as run on Nov 12, 2026.
+Versions, because they differ between the commands:
+
+- The live commands (`pnpm demo:attest`, `pnpm demo:reply-key`) ran on Nov 12, 2026 with `@nearai/inference-sdk` 0.3.0,
+  E2EE v3, model `z-ai/glm-5.3-flash`.
+- `pnpm demo:controls` runs on the recording in `docs/samples`: a report captured on Nov 2, Intel's collateral and
+  NVIDIA's verdict recorded on Nov 3, and an exchange of Nov 3 made with SDK 0.2.1, which is E2EE v2. The checks on that
+  recording are the ones of the SDK installed now, 0.3.0.
 
 ```bash
 pnpm demo:controls     # offline, no key: 15 changes to the recorded evidence, each of which must be refused
@@ -19,8 +27,8 @@ pnpm test              # the unit tests named below
 ```
 
 `pnpm demo:controls` prints one line per change, under the same six headings, and exits 0 only when the unchanged
-recording was accepted and every change was refused for the reason its control names. The same table runs as tests
-(`apps/demo/src/controls.test.ts`). The lines it marks "—" are not controls: they say where the control for that part
+recording was accepted and every change was refused with the error code its control expects. The same table runs as
+tests (`apps/demo/src/controls.test.ts`). The lines it marks "—" are not controls: they say where the control for that part
 is, or that there is none.
 
 ## 1. Hardware
@@ -47,12 +55,14 @@ Are the recipient of the prompt, the key the reply is encrypted to, and the fres
   verifiers the viewer trusts, or nothing is sent. E2EE v3 binds the reply key into every encrypted request field. From
   Node the request goes over a connection pinned to the attested gateway's TLS key.
 - **Shown by.** `pnpm demo:live`; the chat.
-- **Must be refused.** `pnpm demo:controls`, section 2: a report served again to a client that sent another nonce; an
-  old quote under a report that names the new nonce; another signing key than the quote binds; a key no trusted verifier
-  logged (also `pnpm demo:tamper` and `/?tamper=1`). Live, `pnpm demo:reply-key`: a
+- **Must be refused.** `pnpm demo:controls`, section 2: a report served again for another nonce, refused once by its GPU
+  evidence and once by its quote; another signing key than the quote binds; a key no trusted verifier logged (also `pnpm demo:tamper` and `/?tamper=1`). Live, `pnpm demo:reply-key`: a
   hop that swaps the reply key in transit got HTTP 400 `Decryption failed` on Nov 12, with and without the version header
   rewritten to 2 (`docs/samples/reply-key-control.json`). Our relay refuses a request to the attested model that is not
   complete E2EE v3 (`relay-guard.test.ts`).
+- **The registry on this route.** It lists the session axis of NEAR AI's "E2EE through gateway" route as a finding: the
+  reply key is substitutable (cloud-api#1061), and it asks for a version-pinned client and deployment shown to reject the
+  substitution. The live control above is that test for one client version, one model and one day.
 - **Open.** The browser reuses a verified report for up to 60 minutes. The browser cannot see the TLS peer, so there the
   request is not pinned: it is encrypted, and our relay sees ciphertext and metadata. The reply-key control is one model
   on one day. A hop that controls the page the client is served from is outside all of this.
