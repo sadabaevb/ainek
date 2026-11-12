@@ -141,8 +141,8 @@ Dastan tops the account up from the testnet faucet.
 Two writers on different infrastructure are what make a quorum of 2 on `/log` possible (the site's defaults are still
 one trusted verifier and quorum 1, `.env.example`; a visitor sets 2 on `/log`, or the defaults change). The second
 verifier is the same daemon run as one round (`pnpm -F verifier once`) by `.github/workflows/verifier-v2.yml` on
-GitHub-hosted runners, as `ainek-v2-dastan.testnet`; the schedule runs once the file is on `main`. The schedule asks
-for a run every hour, and GitHub starts scheduled runs when it has room: from Nov 10 to Nov 12 it started seven (and we
+GitHub-hosted runners, as `ainek-v2-dastan.testnet` (GitHub reads a schedule from the file on `main` only). The
+schedule asks for a run every hour, and GitHub starts scheduled runs when it has room: from Nov 10 to Nov 12 it started seven (and we
 one by hand) in fifty hours, 4.6 to 9.3 hours apart, about three a day. A quorum of 2 that counts this verifier
 therefore waits hours for it after a key, a deployment or an action log changes. A round reads the chain to skip what
 it logged in the last 6 hours, so it needs no state between runs; the full attestation reports go to the run's
