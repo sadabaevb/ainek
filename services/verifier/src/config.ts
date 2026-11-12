@@ -3,7 +3,7 @@
 // `pnpm -F verifier start`, `npx ainek-verify` and `docker run` without a config file.
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { ainekConfigFromEnv, type AinekConfig } from '@ainek/proof';
+import { ainekConfigFromEnv, envFlag, type AinekConfig } from '@ainek/proof';
 
 export interface VerifierConfig extends AinekConfig {
   accountId: string;
@@ -73,8 +73,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, opts: { dryRun?
     reportsDir: env['VERIFIER_DATA_DIR'] || path.resolve(import.meta.dirname, '../data/reports'),
     dedupWindowNs: SIX_HOURS_NS,
     dryRun,
-    // Blank means the default, as for the shared AINEK_* switches.
-    releaseMarks: !['0', 'false'].includes((env['VERIFIER_RELEASE_MARKS']?.trim() || '1').toLowerCase()),
+    releaseMarks: envFlag(env['VERIFIER_RELEASE_MARKS'], true),
     githubToken: env['GITHUB_TOKEN']?.trim() || undefined,
   };
 }

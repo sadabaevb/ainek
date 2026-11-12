@@ -2,7 +2,7 @@
 // what this verifier already logged. near-api-js v7 (`Account` + `KeyPairSigner`); the view calls reuse the shared
 // JSON-RPC reader so the ABI shapes stay in one place (packages/proof/src/near-view.ts).
 import { Account, JsonRpcProvider, KeyPairSigner, actions, teraToGas, type KeyPairString } from 'near-api-js';
-import { keyLogReader, marksOf, type KeyEntry, type KeyEntryInput } from '@ainek/proof';
+import { keyLogReader, type KeyEntry, type KeyEntryInput } from '@ainek/proof';
 
 export interface LoggedKey {
   index: number;
@@ -24,15 +24,13 @@ type Said = Pick<KeyEntryInput, 'signing_address' | 'compose_hash' | 'image_dige
  * provider side, which is exactly what the log must record.
  *
  * An entry with release marks (packages/proof/src/release-marks.ts) says more: which action log of the enclave was
- * checked. That mark changes whenever the enclave deploys, and a client that asks for a logged release waits for exactly
- * the new one, so only an entry with the same marks covers it. An entry without marks (the release could not be followed
- * this round) is covered by any entry for its key and compose.
+ * checked. Its marks ride in `image_digests`, so the entry is covered only by one that carries every value it does. A
+ * mark changes whenever the enclave deploys, and a client that asks for a logged release waits for exactly the new one.
+ * An entry without marks (the release could not be followed this round) carries only the digests its compose pins, and
+ * any entry for that key and compose has those.
  */
 export function covers(logged: Said, entry: Said): boolean {
-  if (logged.signing_address !== entry.signing_address || logged.compose_hash !== entry.compose_hash) return false;
-  if (marksOf(entry.image_digests).logs.length === 0) return true;
-  // The same compose pins the same images, so what can differ between the two lists is the marks.
-  return logged.image_digests.length === entry.image_digests.length && entry.image_digests.every((value) => logged.image_digests.includes(value));
+  return logged.signing_address === entry.signing_address && logged.compose_hash === entry.compose_hash && entry.image_digests.every((value) => logged.image_digests.includes(value));
 }
 
 /** The entry this verifier logged recently that already says what `entry` would: logging it again costs gas and storage for nothing. */

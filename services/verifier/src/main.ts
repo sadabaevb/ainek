@@ -54,7 +54,7 @@ export function attestWith(cfg: VerifierConfig): Attest {
   return (model) => attestModel(model, { baseUrl: cfg.nearaiBaseUrl, acceptedTcbStatuses: cfg.acceptedTcbStatuses, ...(release ? { release } : {}) });
 }
 
-export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (line: string) => void = console.log, attest: Attest = attestWith(cfg)): Promise<KeyResult[]> {
+export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (line: string) => void, attest: Attest): Promise<KeyResult[]> {
   const results: KeyResult[] = [];
   for (const model of cfg.models) {
     const started = performance.now();
@@ -99,9 +99,9 @@ export async function runRound(cfg: VerifierConfig, writer: KeyLogWriter, log: (
       }
       const { entry } = k;
       const key = shortHex(entry.signing_address);
-      const marks = marksOf(entry.image_digests);
-      const release = marks.logs[0] ? `; release checked, action log of ${marks.logs[0].length} actions marked` : k.unmarked ? `; release not marked: ${k.unmarked}` : '';
-      log(`${model}: key ${key} verified: TCB ${entry.tcb_status}, GPU ${k.verified.gpuEvidence}, compose ${shortHex(entry.compose_hash)}, ${entry.image_digests.length - marks.logs.length - marks.releases.length} image digest(s)${release}`);
+      const { digests, logs } = marksOf(entry.image_digests);
+      const release = logs[0] ? `; release checked, action log of ${logs[0].length} actions marked` : k.unmarked ? `; release not marked: ${k.unmarked}` : '';
+      log(`${model}: key ${key} verified: TCB ${entry.tcb_status}, GPU ${k.verified.gpuEvidence}, compose ${shortHex(entry.compose_hash)}, ${digests.length} image digest(s)${release}`);
       if (cfg.dryRun) {
         log(`${model}: dry run, nothing sent. A registered verifier would log this entry with log_key:\n${JSON.stringify(entry, null, 2)}`);
         results.push({ model, key: entry.signing_address, outcome: 'current', index: -1 });
