@@ -306,7 +306,7 @@ test('leadTimes: from the commit to its first compose_up, and no more requests a
   assert.equal(odd.seen.paths.length, 2);
 });
 
-test('releaseMarksFor: marks only for a release every check held for, and what cannot change is asked for once', async () => {
+test('releaseMarksFor: marks only for a release every check held for; what a verifier keeps between reports', async (t) => {
   const INSTANCE = '19aea1693533dc2d529db03e3f725f20bde8d66d';
   const events = (instance: string) => [{ imr: 3, event_type: 0x08000001, event: 'instance-id', event_payload: instance }];
   const report = { eventLog: events(INSTANCE), composeManagerAttestation: { eventLog: events(INSTANCE) } };
@@ -336,23 +336,36 @@ test('releaseMarksFor: marks only for a release every check held for, and what c
   assert.match((await marksFor({}, fakeGitHub(() => new Response('{}', { status: 503 })))).why ?? '', /GitHub answered HTTP 503/);
   assert.deepEqual(await marksFor({ deployment: { ...deploymentOf(actions, manager), composeManager: undefined } as InspectReleaseParams['deployment'] }), { marks: [], why: 'the report carries no action log' });
 
-  // A verifier inspects every round. With one store of reads the file and the verified build proofs are asked for once;
-  // the tag is asked for every time, because a tag can be moved.
+  // An instance id a mark cannot carry: nothing is written, rather than a value no client could read back.
+  const odd = { eventLog: events('not-a-hex-id'), composeManagerAttestation: { eventLog: events('not-a-hex-id') } };
+  assert.deepEqual(await marksFor({ report: odd }), { marks: [], why: 'the instance id or a file hash does not have the form a mark needs' });
+
+  // A verifier inspects for every report. With one store, the file and the verified build proofs are asked for once, and
+  // where the tag points once in ten minutes: the reports of a round share the answer, the next round asks again.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-12T12:00:00Z') });
   const reads: ReleaseReads = new Map();
   const first = fakeGitHub();
   asked.length = 0;
   assert.equal((await marksFor({ reads }, first)).marks.length, 2);
   assert.deepEqual([first.seen.paths.length, asked.length], [2, 2], 'the file, the tag; the proxy image, the manager image');
-  const second = fakeGitHub();
+  const sameRound = fakeGitHub();
   asked.length = 0;
-  assert.equal((await marksFor({ reads }, second)).marks.length, 2);
-  assert.deepEqual([second.seen.paths, asked], [['/repos/nearai/cvm-compose-files/commits/v0.0.3'], []]);
-  // Two replicas of one release inspected at the same moment share the reads in flight: the file and each image once.
-  const together: ReleaseReads = new Map();
-  const both = fakeGitHub();
-  asked.length = 0;
-  await Promise.all([marksFor({ reads: together }, both), marksFor({ reads: together }, both)]);
-  assert.deepEqual([both.seen.paths.filter((p) => p.includes('/contents/')).length, both.seen.paths.filter((p) => p.includes('/commits/')).length, asked.length], [1, 2, 2]);
+  assert.equal((await marksFor({ reads }, sameRound)).marks.length, 2);
+  assert.deepEqual([sameRound.seen.paths, asked], [[], []], 'the next report of the round asks nobody');
+  t.mock.timers.tick(10 * 60_000 + 1);
+  const nextRound = fakeGitHub();
+  assert.equal((await marksFor({ reads }, nextRound)).marks.length, 2);
+  assert.deepEqual([nextRound.seen.paths, asked], [['/repos/nearai/cvm-compose-files/commits/v0.0.3'], []], 'a tag can be moved, so the next round asks where it points');
+  // A tag that was moved by then ends the marks.
+  t.mock.timers.tick(10 * 60_000 + 1);
+  assert.match((await marksFor({ reads }, fakeGitHub(undefined, { 'v0.0.3': A }))).why ?? '', /^the tag of the release \(proxy-a\): /);
+
+  // A read that never settles (a dead socket with no deadline of its own) is not handed to the next inspection.
+  const stuck: ReleaseReads = new Map();
+  const hanging = { ...sdkWith(), fetchImageProvenance: () => new Promise<never>(() => {}) } as unknown as InspectReleaseParams['sdk'];
+  void marksFor({ reads: stuck, sdk: hanging });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal((await marksFor({ reads: stuck })).marks.length, 2, 'the next inspection asks for itself and gets its answer');
   // A check that failed is not kept: a build proof can be published later, and the next round asks again.
   const retried: ReleaseReads = new Map();
   assert.equal((await marksFor({ reads: retried, sdk: sdkWith(`sha256:${'3'.repeat(64)}`) })).marks.length, 0);

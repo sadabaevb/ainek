@@ -145,6 +145,9 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const logStop = new AbortController(); // if attestation fails, the log reads have nothing left to serve
   const keyLogPromise = latestKeysFor(log, model, trust.verifiers, undefined, logStop.signal);
   keyLogPromise.catch(() => undefined); // awaited below; avoid an unhandled rejection if attestation fails first
+  // SPEC §7.5: the release rule reads the action log of this attestation and says nothing about what the enclave did
+  // after it, so a verification kept for up to an hour will not do: with the rule on, every message attests again.
+  if (cfg.requireLoggedRelease) await forgetDeployment(model, policy);
   const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
     logStop.abort();
     throw err;
@@ -159,17 +162,19 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const attestedCompose = composeHashOf(modelAttestation.deployment);
   // Every report that carries this key is checked: the one that signs the reply need not be the first (attestedCompose stays first).
   const honestComposes = cfg.requireLoggedDeployment ? composesBehindKey(deployment.models.map((m) => ({ signingAddress: m.signer.signingAddress, composeHash: composeHashOf(m.deployment) })), modelAttestation.signer.signingAddress) : [undefined];
-  const logPolicy = { model, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
-  const keyOnly = evaluateKeyLogForAll(entries, { ...logPolicy, signingAddress: seenKey }, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
-  // SPEC §7.5, when asked for: the action log of each attested report must be one the same verifiers checked and logged.
-  const keyVerdict = cfg.requireLoggedRelease ? withReleaseRule(keyOnly, entries, { ...logPolicy, signingAddress: seenKey }, deployment.models, cfg.requireLoggedDeployment) : keyOnly;
+  /** The client's whole rule for a key: the key and its launcher in the log, and, when asked for (SPEC §7.5), the action log of each attested report marked by the same verifiers. */
+  const verdictFor = (signingAddress: string, composes: readonly (string | undefined)[]): KeyLogVerdict => {
+    const query = { model, signingAddress, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
+    const key = evaluateKeyLogForAll(entries, query, composes);
+    return cfg.requireLoggedRelease ? withReleaseRule(key, entries, query, deployment.models, cfg.requireLoggedDeployment) : key;
+  };
+  const keyVerdict = verdictFor(seenKey, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
   const seenCompose = keyVerdict.deployment?.composeHash;
   if (keyVerdict.status !== 'ok') {
     emit({ id: 'key-log', status: 'fail', detail: keyVerdict.detail });
-    const honestWouldPass = tamper !== false && evaluateKeyLogForAll(entries, { ...logPolicy, signingAddress: modelAttestation.signer.signingAddress }, honestComposes).status === 'ok';
+    const honestWouldPass = tamper !== false && verdictFor(modelAttestation.signer.signingAddress, honestComposes).status === 'ok';
     // An honest refusal on the deployment: forget this verification, so the next try attests again and may reach a replica the log knows.
-    // The same for an action log nobody logged yet: a verifier may log it meanwhile, and another replica may already be logged.
-    if (tamper === false && (keyVerdict.reason === 'unknown-deployment' || keyVerdict.reason === 'unknown-release')) await forgetDeployment(model, policy);
+    if (tamper === false && keyVerdict.reason === 'unknown-deployment') await forgetDeployment(model, policy);
     return { kind: 'refused', model, tampered: tamper, honestWouldPass, deployment, logSource: log.source, entriesInWindow: entries.length, keyVerdict, seenKey, seenCompose };
   }
   // A demo value passed the check, so somebody logged it: the real key and deployment were never checked, and a demo must not send.

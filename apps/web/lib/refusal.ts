@@ -10,7 +10,9 @@ export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLog
     'unknown-deployment': [t.refusedDeploymentTitle, t.refusedDeploymentBody(shortHex(v.deployment?.composeHash ?? ''), v.deployment?.loggedComposes.length ?? 0)],
     'untrusted-only': [t.refusedUntrustedTitle, t.refusedUntrustedBody(v.loggedByUntrusted.join(', '))],
     'unlogged-release': [t.refusedNoReleaseTitle, t.refusedNoReleaseBody],
+    'untied-log': [t.refusedUntiedTitle, t.refusedUntiedBody],
     'unknown-release': [t.refusedReleaseTitle, t.refusedReleaseBody],
+    'release-below-quorum': [t.refusedReleaseQuorumTitle, t.refusedReleaseQuorumBody(v.confirmedBy.length, v.quorum)],
     'rewritten-log': [t.refusedRewrittenTitle, t.refusedRewrittenBody],
     absent: [t.refusedTitle, t.refusedBody],
   };

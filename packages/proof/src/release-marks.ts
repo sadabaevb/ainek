@@ -6,8 +6,9 @@
 //
 //   log:<16 hex of the instance id>:<number of actions>:<sha256 of those actions>
 //     The action log the verifier was shown, as the enclave quotes it. A verifier writes it only after following the
-//     release that log ends in to public sources (release-chain.ts): the compose file in the public repository, its tag,
-//     the signed builds. So the mark says "a verifier checked what this log deployed", for the log exactly as it stood.
+//     model's current release in that log to public sources (release-chain.ts): the compose file in the public
+//     repository, its tag, the signed builds. So the mark says "at this state of the log, a verifier followed the release
+//     that serves the model". It does not say the verifier followed everything the log deployed: see `releaseMarksFor`.
 //
 //   release:<16 hex of sha256(file path)>:<sha256 of the file>
 //     Which release that was: the compose file that defines the model's service, as the latest `compose_up` of that
@@ -17,8 +18,13 @@
 // The client's rule (`evaluateRelease`): the action log attested now must be exactly one that enough trusted verifiers
 // marked. An enclave deploys by appending to that log, so anything it did after a verifier looked is refused until a
 // verifier looks again. The rule does not interpret the actions, so it does not depend on knowing which of them change
-// what runs. And the log only grows: one that does not begin with what a verifier saw from the same instance was
-// rewritten. No network is needed: the action log comes with the attestation the client already verified.
+// what runs. No network is needed: the action log comes with the attestation the client already verified.
+//
+// Compose Manager only appends to this log (one write site in its source, at the commit the running image was built
+// from), so every state of an honest log begins with every earlier one. A log whose beginning is not what a verifier saw
+// was therefore edited, or started over and grown again: the manager starts from an empty log when its file is missing or
+// unreadable. A log shorter than one a verifier saw is refused too, without that name: the rule cannot tell a log that
+// was cut from an attestation made before the verifier's entry.
 import { canonicalJson } from './canonical.ts';
 import { checked, type Checked } from './checked.ts';
 import { normalizeHex, sha256Hex, shortHex } from './hash.ts';
@@ -31,9 +37,10 @@ const RELEASE = /^release:([0-9a-f]{16}):([0-9a-f]{64})$/;
 const LOG = /^log:([0-9a-f]{16}):(\d{1,7}):([0-9a-f]{64})$/;
 
 /**
- * sha256 of an action log in the form the enclave quotes it and the SDK checks: a JSON array of objects, the fields of
- * each sorted by their UTF-8 bytes, no spaces. For what the SDK lets an action hold, strings and arrays of strings, that
- * is this package's canonical JSON. For the whole log this is the `actions_hash` of the report.
+ * sha256 of an action log in the form the enclave quotes it and the SDK checks. Compose Manager defines that form as
+ * Python's `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)` over actions whose values are strings
+ * and arrays of strings (`canonicalize_actions` in its source), which is this package's canonical JSON. For the whole log
+ * this is the `actions_hash` of the report.
  */
 export function actionsHash(actions: readonly ManagerAction[]): string {
   return sha256Hex(canonicalJson(actions));
@@ -75,10 +82,12 @@ export function marksOf(imageDigests: readonly string[]): ReleaseMarks {
 }
 
 /**
- * - `ok`: the action log the enclave attests is exactly one that enough trusted verifiers checked and logged.
+ * - `ok`: the action log the enclave attests is exactly one that enough trusted verifiers marked.
  * - `unlogged-release`: the entries carry no log mark at all (verifiers that do not write them yet).
+ * - `untied-log`: the log cannot be tied to the instance that holds the key, so no mark can vouch for it.
  * - `unknown-release`: they carry marks, and none for the log as it stands: the enclave did something after the last
- *   verifier looked, or no verifier has seen this instance, or the log cannot be tied to the instance that holds the key.
+ *   verifier looked, or no verifier has seen this instance, or a verifier has seen a longer log than this one.
+ * - `release-below-quorum`: some trusted verifiers marked the log as it stands, fewer than the client requires.
  * - `rewritten-log`: the log does not begin with what a trusted verifier saw from this instance.
  */
 export type ReleaseLogStatus = 'ok' | ReleaseRefusal;
@@ -98,8 +107,8 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
   const { actions } = attested;
   const refused = (status: ReleaseRefusal, detail: string, confirmedBy: string[] = []): ReleaseLogVerdict => ({ status, confirmedBy, detail });
   const marks = entries.flatMap((entry) => marksOf(entry.image_digests).logs.map((seen) => ({ entry, seen })));
-  if (marks.length === 0) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher records a check of the enclave's action log`);
-  if (attested.instance.status !== 'ok') return refused('unknown-release', `the action log cannot be tied to the enclave that holds the key: ${attested.instance.why}`);
+  if (marks.length === 0) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher carries a mark of the enclave's action log`);
+  if (attested.instance.status !== 'ok') return refused('untied-log', `the action log cannot be tied to the enclave that holds the key: ${attested.instance.why}`);
   const instance = instanceIdOf(attested.instance.value);
 
   const prefixes = new Map<number, string>(); // the hash of the first n actions, computed once per n
@@ -108,23 +117,30 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
     prefixes.set(n, known);
     return known;
   };
+  type Seen = { entry: KeyEntry; length: number };
+  const longest = (a: Seen | undefined, b: Seen): Seen => (a && a.length >= b.length ? a : b);
   const confirmedBy = new Set<string>();
-  let latest: { entry: KeyEntry; length: number } | undefined; // the longest earlier state of this log a verifier marked
+  let ahead: Seen | undefined; // a verifier saw a longer log than this one
+  let behind: Seen | undefined; // the longest earlier state of this log a verifier marked
   for (const { entry, seen } of marks) {
     if (seen.instance !== instance) continue; // another instance behind the same key and launcher
-    if (seen.length > actions.length) return refused('rewritten-log', `entry #${entry.index} by ${entry.verifier} saw ${seen.length} actions from this instance; the log attested now has ${actions.length}`);
-    if (hashOfFirst(seen.length) !== seen.hash) return refused('rewritten-log', `the first ${seen.length} actions of the log attested now are not the ones entry #${entry.index} by ${entry.verifier} saw (${shortHex(hashOfFirst(seen.length))}, logged ${shortHex(seen.hash)})`);
-    if (seen.length === actions.length) confirmedBy.add(entry.verifier);
-    else if (!latest || seen.length > latest.length) latest = { entry, length: seen.length };
+    if (seen.length > actions.length) ahead = longest(ahead, { entry, length: seen.length });
+    // An honest log begins with each of its earlier states, whenever those were seen: this is a mismatch no timing explains.
+    else if (hashOfFirst(seen.length) !== seen.hash) return refused('rewritten-log', `the first ${seen.length} actions of the log attested now are not the ones entry #${entry.index} by ${entry.verifier} saw (${shortHex(hashOfFirst(seen.length))}, logged ${shortHex(seen.hash)})`);
+    else if (seen.length === actions.length) confirmedBy.add(entry.verifier);
+    else behind = longest(behind, { entry, length: seen.length });
   }
 
+  // Either this attestation is older than that entry, and the enclave has moved on, or the log lost actions. The lengths
+  // alone do not say which, so this is not called a rewrite; an exact match with an earlier mark does not outweigh it.
+  if (ahead) return refused('unknown-release', `entry #${ahead.entry.index} by ${ahead.entry.verifier} saw ${ahead.length} actions from this instance and the log attested now has ${actions.length}: this attestation is older than that entry, or the log was cut`);
   const need = Math.max(1, quorum);
-  if (confirmedBy.size >= need) return { status: 'ok', confirmedBy: [...confirmedBy], detail: `the action log as it stands (${actions.length} actions) was checked and logged by ${[...confirmedBy].join(', ')}` };
-  if (confirmedBy.size > 0) return refused('unknown-release', `only ${confirmedBy.size} of ${need} required verifiers logged the action log as it stands`, [...confirmedBy]);
-  if (!latest) return refused('unknown-release', `no trusted verifier has logged the action log of this instance (${instance})`);
-  const since = actions.length - latest.length;
+  if (confirmedBy.size >= need) return { status: 'ok', confirmedBy: [...confirmedBy], detail: `the action log as it stands (${actions.length} actions) was marked by ${[...confirmedBy].join(', ')}` };
+  if (confirmedBy.size > 0) return refused('release-below-quorum', `only ${confirmedBy.size} of ${need} required verifiers marked the action log as it stands`, [...confirmedBy]);
+  if (!behind) return refused('unknown-release', `no trusted verifier has marked the action log of this instance (${instance})`);
+  const since = actions.length - behind.length;
   const last = actions.at(-1);
-  return refused('unknown-release', `the enclave's action log has ${since} action${since === 1 ? '' : 's'} since entry #${latest.entry.index} by ${latest.entry.verifier} saw it (the latest: ${last?.action ?? '?'} at ${last?.timestamp ?? '?'}); no trusted verifier has checked the log as it stands`);
+  return refused('unknown-release', `the enclave's action log has ${since} action${since === 1 ? '' : 's'} since entry #${behind.entry.index} by ${behind.entry.verifier} marked it (the latest: ${last?.action ?? '?'} at ${last?.timestamp ?? '?'}); no trusted verifier has marked the log as it stands`);
 }
 
 /** A verified model report as the release rule reads it. Structural, so this package needs no SDK import. */
@@ -150,6 +166,9 @@ export function releaseStanding(entries: readonly KeyEntry[], query: Omit<KeyLog
  * The release rule on top of a key verdict that passed: for every attested report behind the key, the entries that vouch
  * for it must also carry its action log exactly as it stands. A key whose enclave did something no verifier has looked at
  * is refused like a key nobody logged. A verdict that did not pass is returned as it is.
+ *
+ * The reports must be fresh: the rule says nothing about what the enclave did after it attested them. A client that keeps
+ * verified reports for a while attests again before it applies this.
  */
 export function withReleaseRule(verdict: KeyLogVerdict, entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, reports: readonly AttestedReport[], withLauncher: boolean): KeyLogVerdict {
   if (verdict.status !== 'ok') return verdict;

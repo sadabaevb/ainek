@@ -22,7 +22,7 @@ import { checked, type Checked } from './checked.ts';
 import { MAX_COMPOSE_BYTES, launcherSettings, modelServices, parseImage, type EngineService, type ImageRef, type LauncherSettings, type MeasuredSetting, type ModelService } from './compose-file.ts';
 import { sha256Hex } from './hash.ts';
 import type { Engine, ImageCheck, LeadTime, Provenance, ReleaseInspection, ServiceRelease, SourceChange } from './release-types.ts';
-import { logMark, releaseMark } from './release-marks.ts';
+import { logMark, marksOf, releaseMark } from './release-marks.ts';
 import { COMPOSE_REPOSITORY, composeFilesOf, firstDeployments, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, timeOf, type ManagerAction, type Release } from './release.ts';
 
 /** Which repository and workflow may build an image. */
@@ -70,16 +70,23 @@ export interface InspectReleaseParams {
   fetch?: typeof globalThis.fetch;
   sdk: ProvenanceSdk;
   /**
-   * Reads that cannot change (a file at a commit, the build proof of a digest), kept by a caller that inspects again and
-   * again: a verifier asks GitHub once per release, not once per round. Give the same map to every call.
+   * Answers kept by a caller that inspects again and again, so that a verifier asks GitHub once per release and not once
+   * per report: what cannot change (a file at a commit, a verified build proof) for good, where a tag points for a few
+   * minutes. Give the same map to every call.
    */
   reads?: ReleaseReads | undefined;
   /** False leaves out the build before the current one and what changed since: reading for a person, not a check. */
   previous?: boolean;
 }
 
-/** A store of unchanging reads for `InspectReleaseParams.reads`. What is in it is this module's business. */
-export type ReleaseReads = Map<string, Promise<unknown>>;
+/** A store of answers for `InspectReleaseParams.reads`. What is in it is this module's business. */
+export type ReleaseReads = Map<string, { read: Promise<unknown>; until: number }>;
+
+/**
+ * How long a kept answer about a tag is used. A tag can be moved, so where it points is asked again, only not for every
+ * report of one verifier round: the reports of a round arrive within minutes and mostly come from the same release.
+ */
+const TAG_KEPT_MS = 10 * 60_000;
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -195,27 +202,30 @@ async function provenanceOf(image: ImageRef, githubToken: string | undefined, sd
 
 /**
  * `load` made to run once per key: a second caller gets the first one's promise, its failure included. With `kept`, the
- * caller's own store, a read is shared with every other inspection from the moment it starts, and it stays in the store
- * only as an answer `final` says cannot change (any answer, when `final` is left out). A failure, or an answer GitHub did
- * not give, is asked for again by the next inspection.
+ * caller's own store, an answer `final` accepts (any answer, when `final` is left out) is also there for later
+ * inspections, for `forMs` or for good. Only an answer goes into the store, and only once it has arrived: a read that
+ * failed or hangs is not handed on, and the next inspection asks again.
  */
-function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>, kept?: { reads: ReleaseReads; final?: (value: T) => boolean }): (...args: A) => Promise<T> {
+function once<A extends unknown[], T>(keyOf: (...args: A) => string, load: (...args: A) => Promise<T>, kept?: { reads: ReleaseReads; final?: (value: T) => boolean; forMs?: number }): (...args: A) => Promise<T> {
   const seen = new Map<string, Promise<T>>();
   return (...args) => {
     const key = keyOf(...args);
     const known = seen.get(key);
     if (known) return known;
-    const shared = kept?.reads.get(key) as Promise<T> | undefined;
-    const loading = shared ?? load(...args);
+    const stored = kept?.reads.get(key);
+    if (stored && stored.until > Date.now()) {
+      seen.set(key, stored.read as Promise<T>);
+      return stored.read as Promise<T>;
+    }
+    const loading = load(...args);
     seen.set(key, loading);
-    if (kept && !shared) {
-      kept.reads.set(key, loading);
-      const forget = (): void => {
-        if (kept.reads.get(key) === loading) kept.reads.delete(key);
-      };
-      void loading.then((value) => {
-        if (kept.final && !kept.final(value)) forget();
-      }, forget);
+    if (kept) {
+      void loading.then(
+        (value) => {
+          if (!kept.final || kept.final(value)) kept.reads.set(key, { read: loading, until: kept.forMs === undefined ? Infinity : Date.now() + kept.forMs });
+        },
+        () => undefined,
+      );
     }
     return loading;
   };
@@ -246,6 +256,7 @@ function reader(model: string, githubToken: string | undefined, fetchImpl: typeo
     commit: once(
       (by: CommitRef) => ('id' in by ? `id ${by.id}` : `tag ${by.tag}`),
       (by) => gh.commit(COMPOSE_REPOSITORY, by),
+      reads && { reads, forMs: TAG_KEPT_MS },
     ),
     image: once(
       (image: ImageRef) => `image ${image.raw}`,
@@ -470,10 +481,17 @@ export function verdictOf(inspection: ReleaseInspection): ReleaseVerdict {
 
 /**
  * The marks a verifier adds to a key-log entry for one verified model report (release-marks.ts): the action log as it
- * stands, and the release of the model's service that log ends in. They are given only when that release was followed to
- * public sources and every check held, so a mark in the log means "a verifier checked what this log deployed for the
- * model". Otherwise there are none, and `why` says what was missing: the verifier still logs the key and the launcher,
- * as it always has.
+ * stands, and the release of the model's service in it. They are given only when that release was followed to public
+ * sources and every check held. Otherwise there are none, and `why` says what was missing: the verifier still logs the
+ * key and the launcher, as it always has.
+ *
+ * What was followed is what `inspectRelease` follows: the latest release of the model's service in the compose file the
+ * log most recently deployed that names the model, the proxy image of that release, and the manager's image. Not
+ * followed: the engine image, and whatever else the log brought up, from that file or from another, for this model or
+ * not. The log does not record the Compose project of a deployment, so it does not show which earlier services a later
+ * deployment replaced. A mark therefore says "at this state of the log, the release that serves the model matched public
+ * sources", and a client that requires it knows that nothing was appended since. It does not say the enclave runs
+ * nothing else.
  */
 export async function releaseMarksFor(params: InspectReleaseParams): Promise<{ marks: string[]; why?: string }> {
   const log = params.deployment.composeManager;
@@ -485,7 +503,9 @@ export async function releaseMarksFor(params: InspectReleaseParams): Promise<{ m
   if (instance.status !== 'ok') return { marks: [], why: instance.why }; // for the compiler: an `ok` verdict has checked it
   // A model usually has one service; two that share a release are one mark.
   const releases = new Set(inspection.services.flatMap((s) => (s.file.status === 'ok' ? [releaseMark(s.release.file, s.file.value.sha256)] : [])));
-  return { marks: [logMark(instance.value, log.actions), ...releases] };
+  const marks = [logMark(instance.value, log.actions), ...releases];
+  // A mark that could not be read back (an instance id that is not hex, say) would sit in the log as noise: none is written.
+  return marksOf(marks).digests.length === 0 ? { marks } : { marks: [], why: 'the instance id or a file hash does not have the form a mark needs' };
 }
 
 /**
