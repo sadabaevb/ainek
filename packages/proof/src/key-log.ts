@@ -48,7 +48,7 @@ export interface KeyLogVerdict {
   loggedByUntrusted: string[];
   /** Set when the query named a deployment: its compose hash, and the distinct composes trusted verifiers logged with this key in the window (newest first). */
   deployment?: { composeHash: string; loggedComposes: string[] } | undefined;
-  /** Set on a `recent-mark` refusal, in ms: for how long the enclave's action log has been marked as it stands (absent when the marks carry no readable time), and how long this client waits. */
+  /** Set on a `recent-mark` refusal, in ms: for how long the enclave's action log has been marked as it stands (absent when too few of the marks carry a time that can be read), and how long this client waits. */
   releaseWait?: { markedForMs?: number | undefined; waitMs: number } | undefined;
   detail: string;
 }

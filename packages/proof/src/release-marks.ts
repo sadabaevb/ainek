@@ -40,8 +40,8 @@ import type { KeyEntry } from './schema.ts';
 
 const RELEASE = /^release:([0-9a-f]{16}):([0-9a-f]{64})$/;
 const LOG = /^log:([0-9a-f]{16}):(\d{1,7}):([0-9a-f]{64})$/;
-/** The furthest a JavaScript date reaches from 1970, in ms. */
-const MAX_DATE_MS = 8.64e15;
+/** The last millisecond of the year 9999: a time past it is not one a verifier's clock reads (microseconds or nanoseconds, say). */
+const MAX_TIME_MS = 253_402_300_799_999;
 
 /**
  * sha256 of an action log in the form the enclave quotes it and the SDK checks. Compose Manager defines that form as
@@ -97,14 +97,15 @@ export function marksOf(imageDigests: readonly string[]): ReleaseMarks {
  * - `shorter-log`: a trusted verifier marked a longer log from this instance than the one attested now.
  * - `release-below-quorum`: some trusted verifiers marked the log as it stands, fewer than the client requires.
  * - `rewritten-log`: the log does not begin with what a trusted verifier saw from this instance.
- * - `recent-mark`: the log is marked as it stands by enough verifiers, for less time than the client waits.
+ * - `recent-mark`: the log is marked as it stands by enough verifiers, for less time than the client waits, or for a
+ *   time that cannot be read.
  */
 export type ReleaseLogStatus = 'ok' | ReleaseRefusal;
 export interface ReleaseLogVerdict {
   status: ReleaseLogStatus;
   /** Distinct verifiers that logged the action log exactly as it stands. */
   confirmedBy: string[];
-  /** On a `recent-mark` refusal: for how long the log has been marked as it stands, in ms; absent when the marks carry no readable time. */
+  /** On a `recent-mark` refusal: for how long the log has been marked as it stands, in ms; absent when too few of the marks carry a time that can be read. */
   markedForMs?: number | undefined;
   detail: string;
 }
@@ -177,20 +178,22 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
 
   // The log is marked as it stands. Since when: each of those verifiers' earliest entry with this mark, and of them the
   // one that completes the quorum. Before that moment fewer verifiers than the client requires had marked this state, so
-  // one verifier's clock cannot make it look older. A time that is no date (nanoseconds, say) is no time.
+  // one verifier's clock cannot make it look older. Only plain digits within the years a clock shows are a time.
   const firstBy = new Map<string, number>();
   for (const entry of confirming) {
-    const at = Number(entry.observed_at);
-    if (Number.isFinite(at) && Math.abs(at) <= MAX_DATE_MS) firstBy.set(entry.verifier, Math.min(firstBy.get(entry.verifier) ?? at, at));
+    const text = String(entry.observed_at);
+    const at = /^\d{1,15}$/.test(text) ? Number(text) : Number.NaN;
+    if (at <= MAX_TIME_MS) firstBy.set(entry.verifier, Math.min(firstBy.get(entry.verifier) ?? at, at));
   }
   const since = [...firstBy.values()].sort((a, b) => a - b)[need - 1];
   const marked = `the action log as it stands (${actions.length} actions) is marked by ${confirmedBy.join(', ')}`;
+  const waiting = !(waitMs <= 0); // written so that a wait that is not a number waits
   const waits = `this client waits ${wholeMinutes(waitMs)} min`;
-  if (since === undefined) return waitMs > 0 ? refused('recent-mark', `${marked}, at a time that does not read as one, so for how long is not known; ${waits}`, confirmedBy) : { status: 'ok', confirmedBy, detail: marked };
+  if (since === undefined) return waiting ? refused('recent-mark', `${marked}, but too few of those marks carry a time that reads as one, so for how long is not known; ${waits}`, confirmedBy) : { status: 'ok', confirmedBy, detail: marked };
   const markedForMs = now - since;
   const from = `${marked} since ${utcText(new Date(since).toISOString())}`;
   // A clock behind the verifiers' makes the time negative: without a wait that refuses nothing.
-  if (waitMs > 0 && markedForMs < waitMs) return { ...refused('recent-mark', `${from}, ${wholeMinutes(markedForMs)} min before this check; ${waits}`, confirmedBy), markedForMs };
+  if (waiting && !(markedForMs >= waitMs)) return { ...refused('recent-mark', `${from}, ${wholeMinutes(markedForMs)} min before this check; ${waits}`, confirmedBy), markedForMs };
   return { status: 'ok', confirmedBy, detail: from };
 }
 
@@ -232,10 +235,13 @@ export function withReleaseRule(verdict: KeyLogVerdict, entries: readonly KeyEnt
   const behindKey = reports.filter((r) => normalizeHex(r.signer.signingAddress) === key);
   if (behindKey.length === 0) return refused('untied-log', 'the action log cannot be tied to the enclave that holds the key: no attested report carries this key');
   const at = { ...rule, now: rule.now ?? Date.now() }; // one moment for every report of this check
+  // A mark that is only too recent passes with time. It is reported last, so that it does not stand in front of a refusal
+  // on another report that waiting will not cure.
+  let recent: ReleaseLogVerdict | undefined;
   for (const report of behindKey) {
     const standing = releaseStanding(entries, query, report, at);
-    if (standing.status === 'recent-mark') return { ...refused(standing.status, standing.detail, standing.confirmedBy), releaseWait: { markedForMs: standing.markedForMs, waitMs: rule.waitMs ?? 0 } };
-    if (standing.status !== 'ok') return refused(standing.status, standing.detail, standing.confirmedBy);
+    if (standing.status === 'recent-mark') recent ??= standing;
+    else if (standing.status !== 'ok') return refused(standing.status, standing.detail, standing.confirmedBy);
   }
-  return verdict;
+  return recent ? { ...refused('recent-mark', recent.detail, recent.confirmedBy), releaseWait: { markedForMs: recent.markedForMs, waitMs: rule.waitMs ?? 0 } } : verdict;
 }

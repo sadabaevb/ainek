@@ -77,17 +77,17 @@ const en = {
     'unknown-release': "One signing key stands in front of every version of the code behind it, and an enclave changes that code by adding to its action log. A verifier marks the new state once it has followed the model's release to public sources: try again in a while.",
     'shorter-log': 'A log that only grows cannot get shorter. Try again: a new attestation shows the log as it stands now. If it is still shorter than what the verifier saw, the log has lost actions and cannot be relied on.',
     'rewritten-log': 'Compose Manager only adds to this log. One that no longer begins with what a verifier saw has been edited or started over, so what it says about the code cannot be relied on.',
-    'recent-mark': "Whatever the enclave last did, nobody else has had long to look at it. The wait is this client's own setting: try again once it has passed.",
+    'recent-mark': "The wait is this client's own setting: it leaves others time to look at a state of the enclave after its marks appear in the public log, before this client sends to it.",
   } as Partial<Record<KeyLogReason, string>>,
   refusedReleaseTitle: 'No verifier has marked this state of the enclave. Message not sent.',
   refusedReleaseBody: "The model's key is in the public log. The enclave's action log, as this client was just shown it, is not one a trusted verifier marked: the enclave has added to it since the last mark (a deployment, a restart, a stop), or no trusted verifier has marked this replica. A verifier marks a log only when every check of the model's current release against public sources held.",
   refusedNoReleaseTitle: 'No release mark in the log. Message not sent.',
   refusedNoReleaseBody: "This client is set to send only when a trusted verifier has marked the enclave's action log, and the log entries that vouch for this key carry no such mark.",
-  refusedRecentTitle: 'This state of the enclave is too new for this client. Message not sent.',
+  refusedRecentTitle: 'This state of the enclave was marked too recently for this client. Message not sent.',
   refusedRecentBody: (markedMin: number | undefined, waitMin: number) =>
     markedMin === undefined
-      ? `The log entries that mark this state of the enclave carry no time this client can read, so it cannot tell for how long the state has been marked. It is set to wait ${waitMin} min.`
-      : `In the part of the public log this client reads, enough trusted verifiers have marked the enclave's action log as it stands for ${markedMin} min, by their clocks and this device's. This client is set to wait ${waitMin} min after a state of the enclave is marked before it sends to it.`,
+      ? `Too few of the log entries that mark this state of the enclave carry a time this client can read, so it cannot tell for how long the state has been marked. It is set to wait ${waitMin} min.`
+      : `In the part of the public log this client reads, enough trusted verifiers have marked the enclave's action log as it stands for ${markedMin} min, by their clocks and this device's. This client is set to wait ${waitMin} min after a state of the enclave is marked before it sends to it. Try again once that has passed.`,
   refusedShorterTitle: 'A verifier has seen a longer action log from this enclave. Message not sent.',
   refusedShorterBody: 'A trusted verifier marked an action log of this enclave with more actions than the one this client was just shown. Either the enclave attested to this client before the verifier wrote that entry, or its log has lost actions.',
   refusedReleaseQuorumTitle: 'Not enough verifiers have marked this state of the enclave. Message not sent.',
@@ -472,17 +472,17 @@ const ru: typeof en = {
     'unknown-release': 'Один ключ подписи стоит перед всеми версиями кода за ним, а меняет этот код анклав, дописывая свой журнал действий. Верификатор отмечает новое состояние, когда сверил релиз модели с публичными источниками: попробуй позже.',
     'shorter-log': 'Журнал, который только дописывается, не может стать короче. Попробуй ещё раз: новая аттестация покажет журнал в нынешнем виде. Если он по-прежнему короче того, что видел верификатор, из журнала пропали действия, и полагаться на него нельзя.',
     'rewritten-log': 'Compose Manager только дописывает этот журнал. Если журнал больше не начинается с того, что видел верификатор, его отредактировали или начали заново, и его словам о коде верить нельзя.',
-    'recent-mark': 'Что бы анклав ни сделал последним, посмотреть на это ещё никто толком не успел. Ожидание задано настройкой самого клиента: попробуй, когда оно пройдёт.',
+    'recent-mark': 'Ожидание задано настройкой самого клиента: оно оставляет другим время посмотреть на состояние анклава после того, как его метки появились в публичном логе, и только потом клиент отправляет.',
   },
   refusedReleaseTitle: 'Это состояние анклава не отметил ни один верификатор. Сообщение не отправлено.',
   refusedReleaseBody: 'Ключ модели есть в публичном логе. Но журнал действий анклава в том виде, в каком клиент его сейчас получил, не отмечен ни одним доверенным верификатором: после последней метки анклав дописал журнал (развёртывание, перезапуск, остановка), либо эту реплику доверенные верификаторы не отмечали. Верификатор отмечает журнал, только если все проверки текущего релиза модели по публичным источникам сошлись.',
   refusedNoReleaseTitle: 'В логе нет метки релиза. Сообщение не отправлено.',
   refusedNoReleaseBody: 'Этот клиент настроен отправлять, только если доверенный верификатор отметил журнал действий анклава, а в записях лога, которые ручаются за этот ключ, таких меток нет.',
-  refusedRecentTitle: 'Это состояние анклава слишком новое для этого клиента. Сообщение не отправлено.',
+  refusedRecentTitle: 'Это состояние анклава отмечено слишком недавно для этого клиента. Сообщение не отправлено.',
   refusedRecentBody: (markedMin, waitMin) =>
     markedMin === undefined
-      ? `В записях лога, которые отмечают это состояние анклава, нет времени, которое клиент может прочитать, поэтому он не знает, как давно состояние отмечено. Клиент настроен ждать ${waitMin} мин.`
-      : `В той части публичного лога, которую читает клиент, достаточное число доверенных верификаторов отмечает журнал действий анклава в нынешнем виде ${markedMin} мин (по их часам и часам этого устройства). Клиент настроен ждать ${waitMin} мин после того, как состояние анклава отмечено, и только потом отправлять.`,
+      ? `Слишком мало записей лога, отмечающих это состояние анклава, несут время, которое клиент может прочитать, поэтому он не знает, как давно состояние отмечено. Клиент настроен ждать ${waitMin} мин.`
+      : `В той части публичного лога, которую читает клиент, достаточное число доверенных верификаторов отмечает журнал действий анклава в нынешнем виде ${markedMin} мин (по их часам и часам этого устройства). Клиент настроен ждать ${waitMin} мин после того, как состояние анклава отмечено, и только потом отправлять. Попробуй, когда это время пройдёт.`,
   refusedShorterTitle: 'Верификатор видел более длинный журнал действий этого анклава. Сообщение не отправлено.',
   refusedShorterBody: 'Доверенный верификатор отметил журнал действий этого анклава, в котором действий больше, чем в журнале, который клиент сейчас получил. Либо анклав прошёл аттестацию перед клиентом раньше, чем верификатор сделал эту запись, либо из журнала пропали действия.',
   refusedReleaseQuorumTitle: 'Это состояние анклава отметило слишком мало верификаторов. Сообщение не отправлено.',

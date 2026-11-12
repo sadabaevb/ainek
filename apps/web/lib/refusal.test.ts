@@ -23,11 +23,11 @@ test('refusalText: the numbers on a card are the verdict\'s own', () => {
   // never shown as marked for longer than it is.
   const recent = refusalText(dict.en, refused({ reason: 'recent-mark', releaseWait: { markedForMs: 12 * 60_000 + 59_000, waitMs: 60 * 60_000 } })).body;
   assert.match(recent, /as it stands for 12 min, by their clocks and this device's/);
-  assert.match(recent, /set to wait 60 min after a state of the enclave is marked/);
+  assert.match(recent, /set to wait 60 min after a state of the enclave is marked before it sends to it\. Try again once that has passed\.$/);
   // A verifier's clock ahead of this device's is not a negative time on the card.
   assert.match(refusalText(dict.en, refused({ reason: 'recent-mark', releaseWait: { markedForMs: -90_000, waitMs: 60_000 } })).body, /as it stands for 0 min/);
   // Marks with no readable time: the card says so and does not invent one.
   const unread = refusalText(dict.ru, refused({ reason: 'recent-mark', releaseWait: { waitMs: 30 * 60_000 } })).body;
-  assert.match(unread, /нет времени, которое клиент может прочитать/);
+  assert.match(unread, /несут время, которое клиент может прочитать/);
   assert.match(unread, /ждать 30 мин/);
 });

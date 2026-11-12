@@ -135,15 +135,18 @@ test('evaluateRelease: a wait counts from the moment the log was marked as it st
   assert.deepEqual([recent.status, recent.confirmedBy, recent.markedForMs], ['recent-mark', ['v1.testnet'], 120 * MIN]);
   assert.match(recent.detail, /is marked by v1\.testnet since 2026-11-12 08:00 UTC, 120 min before this check; this client waits 180 min$/);
 
-  // Anything the enclave does starts the wait again, whatever it is: the same release, and a restart ten minutes ago.
+  // Anything added to the log starts the wait again, whatever it is: the same release, a restart of the manager at 09:45,
+  // and the new state marked at 09:50, ten minutes ago.
   const restarted = [...LOG, { action: 'compose_manager_started', timestamp: '2026-11-12T09:45:00Z', image: 'org/manager@sha256:bb' }];
   const after = [...held, entry(9, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, restarted)], T0 + 110 * MIN)];
   const again = evaluateRelease(after, at(restarted), { now, waitMs: 60 * MIN });
   assert.deepEqual([again.status, again.markedForMs], ['recent-mark', 10 * MIN]);
   assert.equal(evaluateRelease(after, at(restarted), { now }).status, 'ok', 'no wait asked, none applied');
-  // An entry for another launcher or instance marks another log: it adds no time to this one.
-  const elsewhere = entry(3, 'v2.testnet', [releaseMark(FILE, H1), logMark('ff'.repeat(20), restarted)], T0 - 600 * MIN);
-  assert.equal(evaluateRelease(after, at(restarted), { now, waitMs: 60 * MIN, witnesses: [elsewhere] }).status, 'recent-mark');
+  // Only the entries that confirm this log add time. Not the same log marked long ago on another instance, and not this
+  // instance's own log marked long ago by an entry for another key or launcher, which is a witness here and no more.
+  const otherInstance = entry(3, 'v2.testnet', [logMark('ff'.repeat(20), restarted)], T0 - 600 * MIN);
+  const otherLauncher = entry(4, 'v1.testnet', [logMark(INSTANCE, restarted)], T0 - 600 * MIN);
+  assert.equal(evaluateRelease(after, at(restarted), { now, waitMs: 60 * MIN, witnesses: [otherInstance, otherLauncher] }).status, 'recent-mark');
 
   // With a quorum of two the time counts from the second verifier's first mark: one verifier's clock, or one verifier's
   // entry dated a day back, does not make the state look older.
@@ -157,12 +160,20 @@ test('evaluateRelease: a wait counts from the moment the log was marked as it st
   const ahead = [entry(7, 'v1.testnet', marks, now + 5_000)];
   assert.equal(evaluateRelease(ahead, at(LOG), { now, waitMs: MIN }).status, 'recent-mark');
   assert.equal(evaluateRelease(ahead, at(LOG), { now }).status, 'ok');
-  // A time that is no date (a verifier that logs nanoseconds): a verdict, not an exception, and no time served.
-  const nanos = [{ ...entry(7, 'v1.testnet', marks), observed_at: '1794470400000000000' } as KeyEntry];
-  assert.deepEqual(evaluateRelease(nanos, at(LOG), { now }), { status: 'ok', confirmedBy: ['v1.testnet'], detail: 'the action log as it stands (3 actions) is marked by v1.testnet' });
-  const unread = evaluateRelease(nanos, at(LOG), { now, waitMs: MIN });
-  assert.deepEqual([unread.status, unread.markedForMs], ['recent-mark', undefined]);
-  assert.match(unread.detail, /at a time that does not read as one, so for how long is not known; this client waits 1 min$/);
+  // A time no clock shows (a verifier that logs nanoseconds or microseconds) and a value that is no number at all: a
+  // verdict, not an exception, and no time served. Read as a number, the last three would be 1970 and pass any wait.
+  const stamped = (observed: string) => [{ ...entry(7, 'v1.testnet', marks), observed_at: observed } as KeyEntry];
+  assert.deepEqual(evaluateRelease(stamped('1794470400000000000'), at(LOG), { now }), { status: 'ok', confirmedBy: ['v1.testnet'], detail: 'the action log as it stands (3 actions) is marked by v1.testnet' });
+  for (const odd of ['1794470400000000000', String(T0 * 1000), '', '0x1', '-5']) {
+    const unread = evaluateRelease(stamped(odd), at(LOG), { now, waitMs: MIN });
+    assert.deepEqual([unread.status, unread.markedForMs], ['recent-mark', undefined], JSON.stringify(odd));
+    assert.match(unread.detail, /but too few of those marks carry a time that reads as one, so for how long is not known; this client waits 1 min$/);
+  }
+  // One of two required verifiers with a time that reads: still too few.
+  assert.equal(evaluateRelease([entry(5, 'v1.testnet', marks), ...stamped('1794470400000000000').map((e) => ({ ...e, verifier: 'v2.testnet' }))], at(LOG), { now, quorum: 2, waitMs: MIN }).status, 'recent-mark');
+  // A wait or a clock that is not a number does not pass for no wait.
+  assert.equal(evaluateRelease(held, at(LOG), { now, waitMs: Number.NaN }).status, 'recent-mark');
+  assert.equal(evaluateRelease(held, at(LOG), { now: Number.NaN, waitMs: MIN }).status, 'recent-mark');
   // The numbers of the detail are whole minutes rounded down, like the card's: 59 min 40 s is not an hour.
   assert.match(evaluateRelease([entry(7, 'v1.testnet', marks, now - 59 * MIN - 40_000)], at(LOG), { now, waitMs: 60 * MIN }).detail, /, 59 min before this check; this client waits 60 min$/);
 });
@@ -195,6 +206,10 @@ test('withReleaseRule: on top of a key that passed, for every report that carrie
   const recent = withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true, waitMs: 6 * 60 * MIN, now: loggedAt + 3 * 60 * MIN });
   assert.deepEqual([recent.status, recent.reason, recent.releaseWait], ['not-logged', 'recent-mark', { markedForMs: 3 * 60 * MIN, waitMs: 6 * 60 * MIN }]);
   assert.equal(withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true, waitMs: 2 * 60 * MIN, now: loggedAt + 3 * 60 * MIN }), key);
+  // Two replicas behind the key: one only marked too recently, the other with a rewritten log. Waiting cures the first
+  // and not the second, so the second is what the client reports, whichever comes first.
+  const edited = reportOf([LOG[0] as ManagerAction, up('2026-11-01T10:00:00Z', H2), LOG[2] as ManagerAction]);
+  for (const reports of [[reportOf(LOG), edited], [edited, reportOf(LOG)]]) assert.equal(withReleaseRule(key, entries, query, reports, { withLauncher: true, waitMs: 6 * 60 * MIN, now: loggedAt + 3 * 60 * MIN }).reason, 'rewritten-log');
   // Two replicas behind the key: one has deployed since the verifier looked, and that refuses the message.
   const refused = rule([reportOf(LOG), reportOf(deployed)]);
   assert.deepEqual([refused.status, refused.reason], ['not-logged', 'unknown-release']);
