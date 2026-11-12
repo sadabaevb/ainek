@@ -60,6 +60,8 @@ export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, toke
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
+export { actionsHash, attestedLogsOf, evaluateRelease, logMark, marksOf, releaseMark, withReleaseRule } from './release-marks.ts';
+export type { AttestedLog, ReleaseLogStatus, ReleaseLogVerdict, ReleaseMarks } from './release-marks.ts';
 export { checked } from './checked.ts';
 export type { Checked } from './checked.ts';
 export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf } from './release.ts';

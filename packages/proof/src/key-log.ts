@@ -24,7 +24,9 @@ export interface KeyLogQuery {
 
 export type KeyLogStatus = 'ok' | 'not-logged' | 'split-view';
 /** Why the status is what it is. The UI words it; `detail` is the English technical line. */
-export type KeyLogReason = 'ok' | 'split-view' | 'below-quorum' | 'unknown-deployment' | 'untrusted-only' | 'absent';
+export type KeyLogReason = 'ok' | 'split-view' | 'below-quorum' | 'unknown-deployment' | 'untrusted-only' | 'absent' | ReleaseRefusal;
+/** Refusals of the release rule (release-marks.ts), applied on top of a key that passed when the client asks for it. */
+export type ReleaseRefusal = 'unlogged-release' | 'unknown-release' | 'rewritten-log';
 
 /** The key the demo shows the client instead of the attested one (the chat's "Swap the key" switch, `pnpm demo:tamper`, `demo:metrics`): a well-formed 32-byte hex no verifier ever logged. */
 export const DEMO_SWAPPED_KEY = 'ab'.repeat(32);
