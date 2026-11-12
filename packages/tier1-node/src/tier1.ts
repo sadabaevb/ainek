@@ -155,10 +155,12 @@ export interface Failed {
   /** The model answered, but a later step failed: the answer as it came, not verified. Set only for steps after `send`. */
   unverifiedCompletion?: ChatCompletion;
   /**
-   * Set when `send` failed after a response had arrived: its HTTP status. An error status is the service refusing the
-   * request; a 2xx here means a reply came back that could not be decrypted or parsed. Without it nothing came back.
+   * Set when `send` failed after a response had begun to arrive. `complete` says its whole body arrived: then an error
+   * status is the service refusing the request (`body` holds what it said, at most 2000 characters), and a 2xx is a reply
+   * that could not be decrypted or parsed. A response that is not complete is a transport failure, whatever its status
+   * line said. Without this field nothing came back.
    */
-  httpStatus?: number;
+  response?: { status: number; complete: boolean; body?: string };
 }
 export type Tier1Outcome = (Verified | Refused | Failed) & RunStats;
 /** Everything before the send passed: the evidence verified here and the key (with its deployment, when that check is on) is in the log. Nothing was sent. */
@@ -234,7 +236,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     return { ...outcome, timings, totalMs: performance.now() - t0, retries };
   };
   let answered: ChatCompletion | undefined; // for a failure after the send: the reply as it came
-  let responded: number | undefined; // the HTTP status of the chat response, once one has arrived
+  let responded: Failed['response']; // the chat response, as far as it has arrived
 
   try {
     // 0. The chosen model must support model attestation: never a silent downgrade to plaintext.
@@ -320,11 +322,18 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
       'send',
       async () => {
         const encrypted = await pinnedFetch(controlHop ? await controlHop(prepared.request) : prepared.request);
-        responded = encrypted.status;
-        if (!encrypted.ok) throw new Error(`chat completion failed: HTTP ${encrypted.status} ${(await encrypted.text()).slice(0, 200)}`);
-        const forVerification = encrypted.clone();
+        // The fetch resolves on the status line; the body is still on its way.
+        responded = { status: encrypted.status, complete: false };
+        if (!encrypted.ok) {
+          const body = await encrypted.text();
+          responded = { status: encrypted.status, complete: true, body: body.slice(0, 2000) };
+          throw new Error(`chat completion failed: HTTP ${encrypted.status} ${body.slice(0, 200)}`);
+        }
+        // The ciphertext first, whole: a reply that then fails to decrypt is a reply that arrived, not a broken connection.
+        const bytes = await encrypted.clone().arrayBuffer();
+        responded = { status: encrypted.status, complete: true };
         const decrypted = await prepared.decryptResponse(encrypted);
-        const [bytes, plaintext] = await Promise.all([forVerification.arrayBuffer(), decrypted.text()]);
+        const plaintext = await decrypted.text();
         answered = parseChatCompletion(plaintext) as unknown as ChatCompletion;
         return { responseBody: new Uint8Array(bytes), completion: answered };
       },
@@ -352,7 +361,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     const reason = describeSdkError(err);
     onStep({ id: running, status: 'fail', detail: reason, ms: performance.now() - stepStart });
     // `running` is assigned inside `step`, which the compiler does not follow: without the cast it believes no step past the log check ran.
-    const httpStatus = (running as StepId) === 'send' ? responded : undefined;
-    return done({ kind: 'failed', step: running, reason, ...(answered ? { unverifiedCompletion: answered } : {}), ...(httpStatus !== undefined ? { httpStatus } : {}) });
+    const response = (running as StepId) === 'send' ? responded : undefined;
+    return done({ kind: 'failed', step: running, reason, ...(answered ? { unverifiedCompletion: answered } : {}), ...(response ? { response } : {}) });
   }
 }

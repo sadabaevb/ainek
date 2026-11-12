@@ -7,7 +7,7 @@
 // ties to the request, so a hop on the way could swap it and read the reply. Version 3 mixes that key into every
 // encrypted field of the request (as AEAD associated data): with another key in the header the fields no longer decrypt.
 
-const E2EE_VERSION = '3';
+export const E2EE_VERSION = '3';
 /** Headers only an E2EE request carries. `x-model-pub-key` names the key it is encrypted to, `x-client-pub-key` the reply key. */
 const E2EE_HEADERS = ['x-model-pub-key', 'x-client-pub-key', 'x-encryption-version', 'x-encrypt-all-fields'] as const;
 
