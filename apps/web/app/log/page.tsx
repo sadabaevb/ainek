@@ -97,27 +97,27 @@ export default function LogPage() {
   // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.
   const standing = useMemo(() => new Map(deployments.map((d) => [d.composeHash, deploymentStanding(log?.entries ?? [], d, { model: cfg.model, trustedVerifiers: trust.verifiers, quorum: trust.quorum })])), [deployments, log?.entries, cfg.model, trust]);
   const deploymentColumns: Column<SeenDeployment>[] = [
-    { label: td.columns.compose, cell: (d) => short(d.composeHash), className: 'mono' },
+    { label: td.columns.compose, cell: (d) => short(d.composeHash), className: 'mono nowrap' },
     { label: td.columns.keys, cell: (d) => d.keys.map(short).join(', '), className: 'mono' },
-    { label: td.columns.verifiers, cell: (d) => d.verifiers.join(', '), className: 'mono' },
+    { label: td.columns.verifiers, cell: (d) => d.verifiers.map((v) => <span key={v} className="mono nowrap line">{v}</span>) },
     { label: td.columns.entries, cell: (d) => d.entries },
-    { label: td.columns.first, cell: (d) => utcMinuteOf(d.firstSeenMs) },
-    { label: td.columns.last, cell: (d) => utcMinuteOf(d.lastSeenMs) },
+    { label: td.columns.first, cell: (d) => utcMinuteOf(d.firstSeenMs), className: 'mono nowrap' },
+    { label: td.columns.last, cell: (d) => utcMinuteOf(d.lastSeenMs), className: 'mono nowrap' },
     { label: td.columns.counts, cell: (d) => td.counts[standing.get(d.composeHash) ?? 'untrusted'] },
   ];
   const c = tl.columns;
   const columns: Column<KeyEntry>[] = [
     { label: c.index, cell: (e) => e.index },
-    { label: c.model, cell: (e) => e.model, className: 'mono' },
-    { label: c.verifier, cell: (e) => (trust.verifiers.includes(e.verifier) ? e.verifier : `${e.verifier} ${tl.notTrusted}`), className: 'mono' },
-    { label: c.key, cell: (e) => short(e.signing_address), className: 'mono' },
-    { label: c.compose, cell: (e) => short(e.compose_hash), className: 'mono' },
+    { label: c.model, cell: (e) => e.model, className: 'mono nowrap' },
+    { label: c.verifier, cell: (e) => <><span className="mono nowrap">{e.verifier}</span>{!trust.verifiers.includes(e.verifier) && <> <span className="tag">{tl.notTrusted}</span></>}</> },
+    { label: c.key, cell: (e) => short(e.signing_address), className: 'mono nowrap' },
+    { label: c.compose, cell: (e) => short(e.compose_hash), className: 'mono nowrap' },
     { label: c.tcb, cell: (e) => e.tcb_status },
-    { label: c.observed, cell: (e) => observedUtc(e.observed_at) },
+    { label: c.observed, cell: (e) => observedUtc(e.observed_at), className: 'mono nowrap' },
   ];
 
   return (
-    <main className="page">
+    <main className="page wide">
       <h1>{tl.title}</h1>
       <p className="muted">
         {fill(tl.intro(cfg.network), { contract: <span className="mono">{cfg.contract}</span> })}

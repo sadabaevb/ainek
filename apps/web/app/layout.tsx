@@ -1,7 +1,8 @@
 import { cookies } from 'next/headers';
 import Link from 'next/link';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { preload } from 'react-dom';
 import './globals.css';
 import { LangToggle } from '@/components/lang-toggle';
 import { Logo } from '@/components/logo';
@@ -22,6 +23,8 @@ export const metadata: Metadata = {
   openGraph: { title: OG_TITLE, description: DESCRIPTION, type: 'website', siteName: 'Ainek' },
   twitter: { card: 'summary_large_image' },
 };
+// The browser's own frame (the address bar of a phone) takes the paper of the theme in use: --paper of globals.css, light and dark.
+export const viewport: Viewport = { themeColor: [{ media: '(prefers-color-scheme: light)', color: '#f6f4ee' }, { media: '(prefers-color-scheme: dark)', color: '#14130f' }] };
 // Config comes from the root .env at request time (loaded by instrumentation.ts), so the layout cannot be prerendered.
 export const dynamic = 'force-dynamic';
 
@@ -29,13 +32,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const config = readPublicConfig();
   // The language lives in a cookie so the server renders the right one: no flash of English, no client-only nav.
   const lang: Lang = (await cookies()).get(LANG_COOKIE)?.value === 'ru' ? 'ru' : 'en';
+  // The self-hosted faces of the first paint (text and headings), announced early so it does not reflow when they land.
+  // The Cyrillic subsets only for the Russian page; the monospace and the bold load when a rule first needs them.
+  // Through React's preload(), which a production build sends as a Link header ahead of the page; a <link> written in
+  // this tree was fetched twice on the dev server (docs/DEV-NOTES.md, Nov 12, the design pass).
+  for (const subset of lang === 'ru' ? ['latin', 'cyrillic'] : ['latin']) {
+    for (const face of [`sans-${subset}-400`, `serif-${subset}-500`]) preload(`/fonts/ibm-plex-${face}-normal.woff2`, { as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' });
+  }
   return (
     <html lang={lang}>
-      <head>
-        {/* The self-hosted font subsets, preloaded so the first paint does not reflow when they land. */}
-        <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        {lang === 'ru' && <link rel="preload" href="/fonts/inter-cyrillic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />}
-      </head>
       <body>
         <Providers config={config} lang={lang}>
           <nav className="nav">

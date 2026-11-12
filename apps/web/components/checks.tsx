@@ -10,21 +10,29 @@ export function mark(status: Status): string {
   return MARK[status];
 }
 
+/** One line of a check list: the mark in its own column, so a second line of the text stays clear of it. */
+export function CheckLine({ status, children }: { status: Status; children: ReactNode }) {
+  return (
+    <li className={`check ${status}`}>
+      <span className="tick">{mark(status)}</span>
+      <span>{children}</span>
+    </li>
+  );
+}
+
 export function CheckList({ items }: { items: ReadonlyArray<{ id: string; status: Status; detail: string }> }) {
   return (
     <ul className="mono checks" lang="en">
-      {items.map((c) => (
-        <li key={c.id} className={c.status}>{mark(c.status)} {c.id}: {c.detail}</li>
-      ))}
+      {items.map((c) => <CheckLine key={c.id} status={c.status}>{c.id}: {c.detail}</CheckLine>)}
     </ul>
   );
 }
 
-/** The strip at the top of a result card: tone and glyph follow the status, so a card can never look green by omission. */
+/** The head of a result card: the verdict as a stamp. Tone and glyph follow the status, so a card can never look green by omission. */
 export function CardHead({ status, when, children }: { status: 'ok' | 'fail'; when?: ReactNode; children: ReactNode }) {
   return (
     <header className={`card-head ${status}`}>
-      <span>{mark(status)} {children}</span>
+      <span className="stamp"><span aria-hidden>{mark(status)}</span> {children}</span>
       {when !== undefined && <span className="when">{when}</span>}
     </header>
   );

@@ -189,7 +189,7 @@ const en = {
     newest: (index: number, verifier: string, observed: string, hours: string) => `Newest entry for this model: #${index} by ${verifier}, observed ${observed} (${hours} h ago).`,
     none: 'The log has no entry for this model at all.',
     columns: { index: '#', model: 'model', verifier: 'verifier', key: 'signing key', compose: 'compose', tcb: 'TCB', observed: 'observed' },
-    notTrusted: '(not in trust set)',
+    notTrusted: 'not in trust set',
     deployments: {
       title: 'Deployments seen',
       intro: 'Instances of a model share one signing key, so one key can stand in front of several deployments. Each line is one compose hash, the measurement of the configuration an enclave boots with (its launcher), as verifiers logged it. The containers that serve the model are started later by that launcher and are not in this hash: a new release of them adds no line here. A new line is a new launcher configuration, not always new code: several hashes in this log carry the same set of launcher images, as replicas would. The log records each one.',
@@ -584,7 +584,7 @@ const ru: typeof en = {
     newest: (index, verifier, observed, hours) => `Самая свежая запись для этой модели: №${index} от ${verifier}, наблюдалась ${observed} (${hours} ч назад).`,
     none: 'В логе нет ни одной записи для этой модели.',
     columns: { index: '#', model: 'модель', verifier: 'верификатор', key: 'ключ подписи', compose: 'compose', tcb: 'TCB', observed: 'наблюдалась' },
-    notTrusted: '(не в доверенном наборе)',
+    notTrusted: 'не в доверенном наборе',
     deployments: {
       title: 'Виденные деплои',
       intro: 'Экземпляры модели делят один ключ подписи, поэтому за одним ключом может стоять несколько деплоев. Каждая строка — один compose-хеш, измерение конфигурации, с которой загружается анклав (его загрузчика), как его записали верификаторы. Контейнеры, обслуживающие модель, загрузчик запускает позже, и в этот хеш они не входят: их новый релиз строки здесь не добавляет. Новая строка — это новая конфигурация загрузчика, но не всегда новый код: у нескольких хешей в этом журнале один и тот же набор образов загрузчика, как было бы у реплик. Журнал записывает каждую.',

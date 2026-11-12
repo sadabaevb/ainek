@@ -67,7 +67,8 @@ const TurnView = memo(function TurnView({ turn, idx, canRetry, onCommit, onRetry
   );
 });
 
-const DOT: Record<Chip, 'ok' | 'fail' | 'warn'> = { ask: 'ok', tamper: 'fail', deployment: 'fail', incognito: 'warn' };
+/** What each scenario ends in, drawn as the mark its card will carry: a proof, a refusal, a card that says "no hardware proof". */
+const ENDS: Record<Chip, { tone: 'ok' | 'fail' | 'warn'; glyph: string }> = { ask: { tone: 'ok', glyph: '✓' }, tamper: { tone: 'fail', glyph: '✗' }, deployment: { tone: 'fail', glyph: '✗' }, incognito: { tone: 'warn', glyph: '!' } };
 const TAMPER_OF: Partial<Record<Chip, Tamper>> = { tamper: 'key', deployment: 'deployment' };
 
 /** First screen: what the page is about, the honest path and the catches as one-click scenarios. Shown until the first message. */
@@ -77,20 +78,22 @@ function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
   return (
     <section>
       <div className="hero">
-        <h1>{t.hero[0]} <span className="grad">{t.hero[1]}</span></h1>
-        <p>{t.intro.title}</p>
+        <h1>{t.hero[0]} <span className="marked">{t.hero[1]}</span></h1>
       </div>
+      <p className="kicker">{t.intro.title}</p>
       <ol className="steps-grid">
         {t.intro.lines.map((line, i) => (
-          <li key={line} className="step"><span className="num">{i + 1}</span><div>{line}</div></li>
+          <li key={line} className="step"><span className="num" aria-hidden>{String(i + 1).padStart(2, '0')}</span>{line}</li>
         ))}
       </ol>
-      <p className="try">{t.intro.tryTitle}</p>
+      <p className="kicker try">{t.intro.tryTitle}</p>
       <div className="scenarios">
         {chips.map((chip) => (
           <button key={chip} type="button" className="scenario" onClick={() => onPick(chip)}>
-            <span className="title"><span className={`dot ${DOT[chip]}`} aria-hidden />{t.intro.chips[chip]}</span>
+            <span className={`mark ${ENDS[chip].tone}`} aria-hidden>{ENDS[chip].glyph}</span>
+            <span className="title">{t.intro.chips[chip]}</span>
             <span className="sub">{t.intro.subs[chip]}</span>
+            <span className="go" aria-hidden>→</span>
           </button>
         ))}
       </div>
@@ -119,7 +122,10 @@ export default function ChatPage() {
     setTamper(asked === '1' ? 'key' : asked === 'deployment' ? 'deployment' : false);
   }, []);
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: 'smooth' });
+    // Follow the thread as it grows. Not on the first screen: with no message yet there is nothing to follow, and the page
+    // would open scrolled past its own headline.
+    if (turns.length === 0) return;
+    bottom.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }, [turns.length]);
 
   /** Step 8 for one turn, off the critical path: the card is already on screen, the commit lands when it lands. `consent` is what the click allowed (the card's button); the automatic pass after a reply opens no dialog. */

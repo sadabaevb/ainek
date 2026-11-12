@@ -8,7 +8,7 @@ import { useT } from '@/app/providers';
 import { describeError } from '@/lib/errors';
 import { withKeyLog, type KeyLogContext } from '@/lib/key-log-line';
 import type { ReleaseCheck } from '@/lib/release';
-import { Row, mark } from './checks';
+import { CheckLine, Row } from './checks';
 
 /**
  * `failed` on an error: the hardware evidence itself did not verify. Anything else thrown is a check that could not be made.
@@ -47,9 +47,7 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
     <>
       {open && (
         <ul className="mono checks sentences" lang="en">
-          {check.lines.map((l, i) => (
-            <li key={i} className={l.status}>{mark(l.status)} {l.text}</li>
-          ))}
+          {check.lines.map((l, i) => <CheckLine key={i} status={l.status}>{l.text}</CheckLine>)}
         </ul>
       )}
       {history && check.history.length > 0 && (
