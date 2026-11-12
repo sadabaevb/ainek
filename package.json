@@ -12,6 +12,7 @@
     "demo:policy": "pnpm -F demo policy",
     "demo:live": "pnpm -F demo live",
     "demo:attest": "pnpm -F demo attest",
+    "demo:reply-key": "pnpm -F demo reply-key",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

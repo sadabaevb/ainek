@@ -1,0 +1,19 @@
+{
+  "recordedAt": "2026-11-12T09:41:29.885Z",
+  "model": "z-ai/glm-5.3-flash",
+  "sdk": "@nearai/inference-sdk 0.3.0",
+  "encryptionVersion": 3,
+  "honest": {
+    "kind": "verified"
+  },
+  "swapped": {
+    "kind": "refused",
+    "status": 400,
+    "detail": "{\"error\":{\"message\":\"Provider failed for model 'z-ai/glm-5.3-flash': Decryption failed\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null}}"
+  },
+  "swappedAndDowngraded": {
+    "kind": "refused",
+    "status": 400,
+    "detail": "{\"error\":{\"message\":\"Provider failed for model 'z-ai/glm-5.3-flash': Decryption failed\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":null}}"
+  }
+}
