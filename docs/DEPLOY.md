@@ -127,9 +127,14 @@ because the Docker service is enabled at boot on this server (`systemctl is-enab
 been tried. Run one daemon per verifier account: two with the same key race and can write the same entry twice.
 Since Nov 10 a round fetches `VERIFIER_REPORTS_PER_ROUND` reports (default 5, nothing to set in `verifier.env`): each
 request reaches one replica behind the gateway's balancer, so this is how every replica's deployment gets logged
-over the following rounds, which the deployment check (`AINEK_REQUIRE_DEPLOYMENT`) depends on. Storage: at most one
-entry per key, compose and model per 6 h; with the six composes seen so far that is up to 24 entries a day for the one
-model, up to ~0.24 NEAR (one entry is about 1 KB, 0.01 NEAR).
+over the following rounds, which the deployment check (`AINEK_REQUIRE_DEPLOYMENT`) depends on. Storage, before release
+marks: at most one entry per key, compose and model per 6 h; with the six composes seen so far that is up to 24 entries
+a day for the one model, up to ~0.24 NEAR (one entry is about 1 KB, 0.01 NEAR). With release marks (SPEC §7.5) an entry
+is about 1.2 KB, and a change in an enclave's action log brings a new entry from each verifier that sees it, outside the
+6 h rule: about two a day for each replica, by the two action logs the README's figure rests on. On Nov 12
+(17:11 UTC) the contract account held 10.4 NEAR, of which 3.7 NEAR were bound by 372 KB of storage: the 6.7 NEAR left
+pay for about 540 such entries. Dastan's estimate is that this lasts through Nov 25 with about 2 NEAR to spare, and
+Dastan tops the account up from the testnet faucet.
 
 ### The second verifier, on GitHub's machines (`ainek-v2-dastan.testnet`)
 
@@ -149,8 +154,8 @@ on GitHub-hosted runners, as `ainek-v2-dastan.testnet`; the schedule runs once t
   `gh secret set VERIFIER_V2_PRIVATE_KEY < file`, then `near account delete-keys` for the old one.
 - Minutes: the verifier step takes seconds, the job one to two minutes (checkout and `pnpm install`), billed per started
   minute; 24 runs a day are at most ~1,500 of a private repository's 2,000 free minutes a month, a public repository is
-  not metered. A run that hangs stops at 25 minutes. A scheduled run can start late by a few minutes; nothing depends
-  on the exact time.
+  not metered. A run that hangs stops at 45 minutes; why that number is in the workflow file, next to it. A scheduled
+  run can start late by a few minutes; nothing depends on the exact time.
 
 ## Agent service (Tier 2)
 
