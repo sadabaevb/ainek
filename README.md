@@ -127,8 +127,9 @@ pnpm demo:attest           # step 5 ends with where the key log stands on the ac
 ```
 
 `/log` shows that same line in the browser: under "The code behind the key", Check the release, then Show every check.
-It follows the trust set chosen on the page. For the submission the rule is shown and not enforced; we switch it to
-refusing once a day of entries with marks shows that the log keeps up.
+It reads the replica that attests to the browser at that moment and follows the trust set chosen on the page. For the
+submission the rule is shown and not enforced; we switch it to refusing once a day of entries with marks shows that
+the log keeps up.
 
 The cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the two action
 logs we hold (22 and 47 days) that is about two windows a day for each replica. The limits are the ones above and one
