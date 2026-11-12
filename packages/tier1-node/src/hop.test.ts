@@ -5,6 +5,7 @@ import type { ChatCompletion, Tier1Outcome } from './tier1.ts';
 
 const stats = { timings: {}, totalMs: 1, retries: 0 };
 const failed = (step: string, reason: string, extra: object = {}) => ({ kind: 'failed', step, reason, ...stats, ...extra }) as unknown as Tier1Outcome;
+const refusal = 'chat completion failed: HTTP 400 {"error":{"message":"Provider failed: Decryption failed"}}';
 
 test('swapReplyKey: only the reply key (and the version, when asked) change; the body and the other headers pass through', async () => {
   const sent = new Request('https://gateway.invalid/v1/chat/completions', {
@@ -22,15 +23,22 @@ test('swapReplyKey: only the reply key (and the version, when asked) change; the
   assert.notEqual(downgraded.headers.get('x-client-pub-key'), swapped.headers.get('x-client-pub-key'), 'a fresh key each time');
 });
 
-test('readHopOutcome: an HTTP error about the request is a refusal; a reply nobody could read is an answer; the rest says nothing', () => {
-  assert.deepEqual(readHopOutcome(failed('send', 'chat completion failed: HTTP 400 {"error":"decryption failed"}')), { kind: 'refused', status: 400, detail: '{"error":"decryption failed"}' });
-  assert.deepEqual(readHopOutcome(failed('send', 'chat completion failed: HTTP 422 ')), { kind: 'refused', status: 422, detail: '' });
-  // The key, the balance, the rate limit and the service: not about the swapped reply key.
-  for (const status of [401, 402, 403, 429, 500, 503]) assert.equal(readHopOutcome(failed('send', `chat completion failed: HTTP ${status} x`)).kind, 'inconclusive', String(status));
-  // A 2xx came back and the client could not decrypt it: the enclave answered to another key.
-  assert.equal(readHopOutcome(failed('send', '[e2ee.decryption_failed] the reply could not be decrypted')).kind, 'answered');
+test('readHopOutcome: HTTP 400 or 422 where a reply would have been is a refusal, and says whether decryption is the reason', () => {
+  assert.deepEqual(readHopOutcome(failed('send', refusal, { httpStatus: 400 })), { kind: 'refused', status: 400, detail: refusal, decryptionFailed: true });
+  assert.deepEqual(readHopOutcome(failed('send', 'chat completion failed: HTTP 422 bad field', { httpStatus: 422 })), { kind: 'refused', status: 422, detail: 'chat completion failed: HTTP 422 bad field', decryptionFailed: false });
+});
+
+test('readHopOutcome: a reply that came back is an answer, whether or not this client could read it', () => {
+  // A 2xx arrived and could not be decrypted: the enclave answered to another key.
+  assert.deepEqual(readHopOutcome(failed('send', 'the reply could not be decrypted', { httpStatus: 200 })), { kind: 'answered', status: 200, detail: 'the reply could not be decrypted' });
   assert.equal(readHopOutcome(failed('signature', 'no signature', { unverifiedCompletion: { id: 'c' } as unknown as ChatCompletion })).kind, 'answered');
-  // Stopped before anything was sent.
+});
+
+test('readHopOutcome: nothing sent, nothing back, or a status about something else says nothing about the reply key', () => {
+  // A timeout or a dropped connection in the send step is not the enclave answering: no status was recorded.
+  assert.deepEqual(readHopOutcome(failed('send', 'the send step timed out after 120 s')), { kind: 'inconclusive', detail: 'send: the send step timed out after 120 s' });
+  // The API key, the balance, the rate limit, the route, the service.
+  for (const status of [401, 402, 403, 404, 405, 413, 429, 500, 503]) assert.equal(readHopOutcome(failed('send', `chat completion failed: HTTP ${status} x`, { httpStatus: status })).kind, 'inconclusive', String(status));
   assert.equal(readHopOutcome(failed('attestation', 'quote.collateral_unavailable')).kind, 'inconclusive');
   assert.equal(readHopOutcome({ kind: 'refused', step: 'key-log', reason: 'key is not in the public log', ...stats } as unknown as Tier1Outcome).kind, 'inconclusive');
   assert.deepEqual(readHopOutcome({ kind: 'verified', completion: { id: 'chatcmpl-1' }, ...stats } as unknown as Tier1Outcome), { kind: 'verified', detail: 'completion chatcmpl-1 verified under the attested key' });

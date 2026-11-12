@@ -154,6 +154,11 @@ export interface Failed {
   reason: string;
   /** The model answered, but a later step failed: the answer as it came, not verified. Set only for steps after `send`. */
   unverifiedCompletion?: ChatCompletion;
+  /**
+   * Set when `send` failed after a response had arrived: its HTTP status. An error status is the service refusing the
+   * request; a 2xx here means a reply came back that could not be decrypted or parsed. Without it nothing came back.
+   */
+  httpStatus?: number;
 }
 export type Tier1Outcome = (Verified | Refused | Failed) & RunStats;
 /** Everything before the send passed: the evidence verified here and the key (with its deployment, when that check is on) is in the log. Nothing was sent. */
@@ -177,15 +182,15 @@ export interface Tier1Params {
   onStep?: (event: StepEvent) => void;
   /**
    * For negative controls only: a hop between this client and the enclave. It gets the encrypted request as the client is
-   * about to send it and returns what it forwards. The client has none; `pnpm demo:reply-key` passes one that swaps the
-   * reply key in transit, to see the enclave refuse (./hop.ts).
+   * about to send it and returns what it forwards. No client passes one; `pnpm demo:reply-key` passes a hop that swaps the
+   * reply key in transit, to see the enclave refuse (./hop.ts). Everything before and after the send runs as usual.
    */
-  hop?: (request: Request) => Request | Promise<Request>;
+  controlHop?: ((request: Request) => Request | Promise<Request>) | undefined;
 }
 
 /** One cold run of the Tier-1 sequence. Never throws: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
-export async function runTier1({ apiKey, chat, hop, ...base }: Tier1Params): Promise<Tier1Outcome> {
-  return run(base, { apiKey, chat, ...(hop ? { hop } : {}) });
+export async function runTier1({ apiKey, chat, controlHop, ...base }: Tier1Params): Promise<Tier1Outcome> {
+  return run(base, { apiKey, chat, controlHop });
 }
 
 /**
@@ -196,8 +201,8 @@ export async function runPreflight(base: RunBase): Promise<PreflightOutcome> {
   return run(base);
 }
 
-type RunBase = Omit<Tier1Params, 'apiKey' | 'chat' | 'hop'>;
-type Send = Pick<Tier1Params, 'apiKey' | 'chat' | 'hop'>;
+type RunBase = Omit<Tier1Params, 'apiKey' | 'chat' | 'controlHop'>;
+type Send = Pick<Tier1Params, 'apiKey' | 'chat' | 'controlHop'>;
 // With something to send the run ends verified, refused or failed; without, it stops at `ready` after the log check.
 function run(base: RunBase, send: Send): Promise<Tier1Outcome>;
 function run(base: RunBase): Promise<PreflightOutcome>;
@@ -229,6 +234,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     return { ...outcome, timings, totalMs: performance.now() - t0, retries };
   };
   let answered: ChatCompletion | undefined; // for a failure after the send: the reply as it came
+  let responded: number | undefined; // the HTTP status of the chat response, once one has arrived
 
   try {
     // 0. The chosen model must support model attestation: never a silent downgrade to plaintext.
@@ -287,7 +293,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')}${cfg.requireLoggedDeployment ? ' with the attested deployment' : '; deployment check off'} (source: ${logSource})`, ms: logMs });
 
     if (!send) return done({ kind: 'ready', gateway, signer: modelAttestation, entries, verdict, logEntry });
-    const { apiKey, chat, hop } = send;
+    const { apiKey, chat, controlHop } = send;
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(
@@ -313,7 +319,8 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     const { responseBody, completion } = await step(
       'send',
       async () => {
-        const encrypted = await pinnedFetch(hop ? await hop(prepared.request) : prepared.request);
+        const encrypted = await pinnedFetch(controlHop ? await controlHop(prepared.request) : prepared.request);
+        responded = encrypted.status;
         if (!encrypted.ok) throw new Error(`chat completion failed: HTTP ${encrypted.status} ${(await encrypted.text()).slice(0, 200)}`);
         const forVerification = encrypted.clone();
         const decrypted = await prepared.decryptResponse(encrypted);
@@ -344,6 +351,8 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
   } catch (err) {
     const reason = describeSdkError(err);
     onStep({ id: running, status: 'fail', detail: reason, ms: performance.now() - stepStart });
-    return done({ kind: 'failed', step: running, reason, ...(answered ? { unverifiedCompletion: answered } : {}) });
+    // `running` is assigned inside `step`, which the compiler does not follow: without the cast it believes no step past the log check ran.
+    const httpStatus = (running as StepId) === 'send' ? responded : undefined;
+    return done({ kind: 'failed', step: running, reason, ...(answered ? { unverifiedCompletion: answered } : {}), ...(httpStatus !== undefined ? { httpStatus } : {}) });
   }
 }

@@ -18,6 +18,10 @@
     "./dcap": {
       "types": "./src/dcap.ts",
       "default": "./src/dcap.ts"
+    },
+    "./hop": {
+      "types": "./src/hop.ts",
+      "default": "./src/hop.ts"
     }
   },
   "scripts": {
