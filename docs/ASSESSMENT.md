@@ -84,9 +84,9 @@ Does what was measured resolve to source somebody can read, and is it the code t
   of another replica; a path that would leave the repository.
 - **Open.** Signed provenance is not a reproducible build. The engine image has no build policy and the weights are only
   named. The action log is a record, not a measurement: a release leaves the measurements as they were, and the proxy
-  holds the socket that quotes the log. The chain is a reading: the client does not refuse on a release, and the key log
-  and the proofs do not record one.
-  Nobody approves a release: the most a log could say is that verifiers saw it.
+  holds the socket that quotes the log. By default the chain is a reading: the client refuses on what an enclave deployed
+  only with `AINEK_REQUIRE_RELEASE=1` (section 6), and a proof does not record a release. Nobody approves a release: a
+  mark in the log says that a verifier followed it to public sources.
 
 ## 4. Operator access
 
@@ -123,17 +123,25 @@ Is the answer bound to the request, the model that was asked for and the key tha
 Can the client refuse a change until somebody it trusts has approved it?
 
 - **Checked.** A launcher configuration no trusted verifier logged in the last 24 hours is refused, on by default since
-  Nov 11. Who counts is the viewer's choice on `/log`: the trust set and the quorum, not ours.
+  Nov 11. Who counts is the viewer's choice on `/log`: the trust set and the quorum, not ours. With
+  `AINEK_REQUIRE_RELEASE=1`, off by default, the same holds for what the enclave deployed: the action log it attests must
+  be exactly one a trusted verifier checked and logged, so anything deployed, restarted or stopped after the last check is
+  refused until a verifier looks again.
 - **Must be refused.** `pnpm demo:controls`, section 6, and `/?tamper=deployment`: the right key, logged with another
-  launcher than the one attested. `key-log.test.ts` (`unknown deployment`).
-- **Open.** A new release of the serving containers behind the same launcher is not refused: this is the finding of
-  Nov 12. A rollback is not refused either; `pnpm demo:attest` shows it as a release. A minimum time a release must have
-  been public is not enforced. "Logged by a verifier" means seen, not reviewed.
+  launcher than the one attested. `key-log.test.ts` (`unknown deployment`). For the release rule, `pnpm test`
+  (`release-marks.test.ts`): an action added after the verifier's mark, whether a release of the model's file, a deployment
+  from another file or a restart of the manager; a log shortened or edited; a log quoted by another instance than the key;
+  one verifier where two are required.
+- **Open.** A new release of the serving containers behind the same launcher is not refused by default: this is the
+  finding of Nov 12. The rule that refuses it is off until the verifiers a client trusts write release marks, and on
+  Nov 12 the verifier that writes to our log does not yet. Its controls are unit tests, not a run against the live
+  service. A rollback is logged like any other release once a verifier has followed it. A minimum time a release must
+  have been public is not enforced. "Logged by a verifier" means followed to public sources, not reviewed.
 
 ## What would close the open items
 
-In the order we would take them: the release in the key log and a client that refuses one no trusted verifier logged; a
-minimum public age for a release, set by the viewer; the action log's length and hash in the key log, so that a later log
-can be checked to continue an earlier one; a proof that names the release that answered.
+In the order we would take them: release marks from every verifier a client trusts and the release rule on by default,
+with a control against the live service; a minimum public age for a release, set by the viewer; a proof that names the
+release that answered.
 None of that makes the action log a measurement. That needs the releases in the enclave's measurements, which is NEAR
 AI's to build.

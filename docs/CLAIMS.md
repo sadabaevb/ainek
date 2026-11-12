@@ -33,6 +33,17 @@ Honest limitations won prizes at previous NEAR hackathons.
   reported as not made, and the summary gets a check mark only when every check of the release was made and held. "Public for N minutes
   before it ran" uses GitHub's commit time and Compose Manager's clock, neither a trusted timestamp, and comes from the
   one CVM that answered: the gateway picks a replica per connection.
+- (in the verifier and in both clients since Nov 12; the rule is off by default) A **verifier can log what it checked
+  behind a key, and the client can refuse an enclave whose action log no trusted verifier logged** (SPEC §7.5). After a
+  key verifies, the verifier follows the release behind it with the chain above. Only when every check holds does its
+  entry carry two marks next to the launcher's image digests: the enclave's action log as it stood (instance, number of
+  actions, hash) and the release of the model's service. The contract is unchanged: the field takes text. With
+  `AINEK_REQUIRE_RELEASE=1` the client sends only when the action log it was attested is exactly one that a quorum of the
+  viewer's verifiers marked, and it refuses a log that does not begin with what a verifier saw from the same instance. The
+  rule compares one record with another and reads no action, so it needs no network. `pnpm -F verifier dry-run` prints
+  the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers. As of
+  Nov 12 the verifier that writes to our log has not been restarted with marks. What a mark does not say is under "We do
+  not claim".
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
@@ -80,9 +91,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   the CVM that answered us on Nov 12, 2026 that log held 21 releases of the model's compose file since Oct 21, and the image
   of the proxy for `z-ai/glm-5.3-flash` had changed five times, twice after our log first held that CVM's compose hash: the
   client would have refused neither. Since Nov 12 `pnpm demo:attest` reads this log and follows the release to a source
-  commit, and the browser does the same when the visitor asks (the proof card, `/log`). That is a reading, not a rule: the
-  client does not refuse on a release, the key log does not record one, and a proof says which key signed and which
-  launcher was attested, not which release answered.
+  commit, and the browser does the same when the visitor asks (the proof card, `/log`). By default that is a reading, not a
+  rule: the client refuses on what an enclave deployed only when `AINEK_REQUIRE_RELEASE` is on, which works only against
+  verifiers that write release marks (below), and a proof says which key signed and which launcher was attested, not which
+  release answered.
 - **That the action log is a measurement.** A release leaves the enclave's measurements as they were. The log is Compose
   Manager's own record, and the TDX quote behind it says the log came from inside that CVM, not from which container. The
   serving containers the log describes run privileged and hold the same quote socket, so a dishonest release could present
@@ -90,6 +102,16 @@ Honest limitations won prizes at previous NEAR hackathons.
   by a workflow of `nearai/compose-manager` (we read that configuration, not the launcher's code). `pnpm demo:attest`
   shows that the record agrees with public sources at every link. It cannot show that the record is complete, or that the
   containers it names are the ones running.
+- **That a logged release is an approved one, or that the release rule closes this gap.** A release mark in the log says
+  that a verifier followed what an enclave's action log deployed for the model to public sources (the file, the tag, the
+  signed builds of the proxy and of Compose Manager) and that the log stood exactly so. Nobody read that code. A rollback
+  is logged like any other release, and no minimum age is asked of one. The verifier follows the model's service, not
+  whatever else the same enclave runs. The rule (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own
+  record: the action log it attests must be one a trusted verifier marked. That does not make the record a measurement.
+  It checks the replica that attested, and the gateway picks the replica per connection. Its cost is refusals: after every
+  action in an enclave, until a verifier has seen that replica again. On the two logs we hold that is about two windows a
+  day for each replica; we have not measured it live. As of Nov 12 the verifier that writes to our log does not write
+  marks yet, so with the rule on the client refuses every message.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
