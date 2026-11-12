@@ -54,7 +54,7 @@ test('evaluateRelease: no marks, another instance, no instance', () => {
   // A verifier that does not write marks yet: the key and the launcher are logged, the action log is not.
   const unmarked = evaluateRelease([entry(7, 'v1.testnet', [])], { actions: LOG, instance: INSTANCE });
   assert.equal(unmarked.status, 'unlogged-release');
-  assert.match(unmarked.detail, /none of the 1 log entry for this key and launcher records an action log/);
+  assert.match(unmarked.detail, /none of the 1 log entry for this key and launcher records a check of the enclave's action log/);
   // A release mark alone is a name, not a check of this log.
   assert.equal(evaluateRelease([entry(7, 'v1.testnet', [releaseMark(FILE, H1)])], { actions: LOG, instance: INSTANCE }).status, 'unlogged-release');
   // Marks of another instance behind the same key and launcher say nothing about this one, whatever they are.

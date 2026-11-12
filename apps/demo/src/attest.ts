@@ -8,7 +8,7 @@
 // (public GitHub reads; GITHUB_TOKEN is optional and only raises GitHub's anonymous rate limit). `--history` adds, for every
 // release in the log, how long its commit had existed when it first ran.
 import { parseArgs } from 'node:util';
-import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, shortHex as short } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, attestedLogsOf, composeHashOf, evaluateKeyLog, normalizeHex, shortHex as short, withReleaseRule } from '@ainek/proof';
 import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
 import { inspectRelease, leadTimes, verdictOf } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
@@ -69,9 +69,13 @@ if (outcome.kind === 'failed') {
     // The code behind the key. Informational for the send decision, which rests on the key and the launcher's compose hash;
     // a check here that fails still fails this command.
     const inspection = await inspectRelease({ deployment: m.deployment, report: m.report, model, githubToken });
-    const summary = printRelease(inspection, { model, logEntryIndex: logEntry.index });
+    // The client's release rule on the log this run read (SPEC §7.5): is the action log this enclave attests one a trusted
+    // verifier checked and logged? When the setting is on, the send decision above has applied it already.
+    const key = m.signer.signingAddress;
+    const inLog = withReleaseRule(outcome.verdict, outcome.entries, { model, signingAddress: key, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, attestedLogsOf([m], key, cfg.requireLoggedDeployment));
+    const summary = printRelease(inspection, { model, inLog, enforced: cfg.requireLoggedRelease });
     const verdict = inspection ? verdictOf(inspection) : undefined;
-    codeFailed = verdict?.status === 'fail';
+    codeFailed = verdict?.status === 'fail' || inLog.reason === 'rewritten-log';
     // GitHub's anonymous limit is what most often leaves a check unmade here, and here a token can be given.
     if (inspection?.retry && !githubToken) line(NA, 'GitHub or Sigstore did not answer for something above. GitHub allows 60 anonymous requests an hour from one address: GITHUB_TOKEN in .env raises that');
     const releaseFile = inspection?.file;
@@ -82,7 +86,8 @@ if (outcome.kind === 'failed') {
     out(`│ ${OK} Hardware: Intel TDX ${m.tcbStatus}, NVIDIA GPU ${m.gpuEvidence}; gateway TDX ${outcome.gateway.tcbStatus}`);
     out(`│ ${OK} Key ${short(m.signer.signingAddress)} is in the public log: entry #${logEntry.index} by ${outcome.verdict.confirmedBy.join(', ')}${normalizeHex(logEntry.compose_hash) === compose ? ", with this launcher's compose hash" : '; this entry has another compose, the attested one is not in the log window'}`);
     // A failure first, whatever else is missing; a check mark only when every check of the release was made and held.
-    if (verdict?.status === 'fail') out(`│ ${FAIL} Code: ${verdict.failures.length === 1 ? '' : `${verdict.failures.length} checks failed, the first: `}${verdict.failures[0]} (step 5)`);
+    if (inLog.reason === 'rewritten-log') out(`│ ${FAIL} Code: the enclave's action log does not continue what a trusted verifier saw of it (step 5)`);
+    else if (verdict?.status === 'fail') out(`│ ${FAIL} Code: ${verdict.failures.length === 1 ? '' : `${verdict.failures.length} checks failed, the first: `}${verdict.failures[0]} (step 5)`);
     else if (!verdict || !summary) out(`│ ${NA} Code: the release behind the key was not resolved (step 5)`);
     else out(verdict.status === 'ok' ? `│ ${OK} Code: ${summary} (step 5)` : `│ ${NA} Code: ${summary}; not checked: ${verdict.unchecked.join(', ')} (step 5)`);
     out(`│ ${NA} Not checked here: an answer. No message was written, so nothing was encrypted, sent or signed (pnpm demo:live)`);

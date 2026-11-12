@@ -104,7 +104,7 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
   const { actions } = attested;
   const refused = (status: ReleaseRefusal, detail: string, confirmedBy: string[] = []): ReleaseLogVerdict => ({ status, confirmedBy, detail });
   const marks = entries.flatMap((entry) => marksOf(entry.image_digests).logs.map((seen) => ({ entry, seen })));
-  if (marks.length === 0) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher records an action log`);
+  if (marks.length === 0) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher records a check of the enclave's action log`);
   if (attested.instance === undefined) return refused('unknown-release', "the enclave's event log names no instance id, so no logged action log can be matched to it");
   const instance = instanceIdOf(attested.instance);
 
