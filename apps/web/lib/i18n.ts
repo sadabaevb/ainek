@@ -17,6 +17,7 @@ const en = {
   // The composer says which route the message takes: the two differ in what the page can prove about the answer.
   placeholder: 'Ask the private model…',
   placeholderIncognito: 'Ask the non-attested model…',
+  composerLabel: 'Message',
   send: 'Send',
   working: 'Working…',
   steps: 'What happens before and after sending',
@@ -368,7 +369,9 @@ const ru: typeof en = {
   tamper: 'Демо: подменить ключ перед сверкой с логом (tamper)',
   tamperDeployment: 'Демо: деплой, которого не записал ни один верификатор, под настоящим ключом',
   placeholder: 'Спроси приватную модель…',
+  // «без TEE», not «без аппаратного доказательства»: the longer wordings are cut off on a 390 px screen.
   placeholderIncognito: 'Спроси модель без TEE…',
+  composerLabel: 'Сообщение',
   send: 'Отправить',
   working: 'Работаю…',
   steps: 'Что происходит до и после отправки',

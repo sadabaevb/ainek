@@ -218,7 +218,7 @@ export default function ChatPage() {
         }}
       >
         <div className="composer-inner">
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={model === cfg.incognitoModel ? t.placeholderIncognito : t.placeholder} disabled={busy} maxLength={4000} />
+          <input value={input} onChange={(e) => setInput(e.target.value)} aria-label={t.composerLabel} placeholder={model === cfg.incognitoModel ? t.placeholderIncognito : t.placeholder} disabled={busy} maxLength={4000} />
           <button type="submit" className="btn primary" disabled={busy || !input.trim()}>{busy ? t.working : t.send}</button>
         </div>
       </form>
