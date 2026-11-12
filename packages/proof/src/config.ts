@@ -25,6 +25,13 @@ export interface AinekConfig {
    * it off; a blank value means the default, and anything else turns it on, so a typo cannot weaken the policy.
    */
   requireLoggedDeployment: boolean;
+  /**
+   * SPEC §7.5: refuse to send unless the enclave's action log is exactly one a trusted verifier checked and logged, so
+   * that nothing was deployed there since. Off by default, until the verifiers that write to the log write release marks:
+   * with no marks in the log this rule refuses everything. Same reading of the value as above: blank means the default,
+   * 0 or false is off, anything else is on.
+   */
+  requireLoggedRelease: boolean;
   /** TCB statuses accepted for gateway and model quotes (SPEC §3.2 policy); unknown names are dropped, never empty. */
   acceptedTcbStatuses: TcbStatusName[];
   explorer: string;
@@ -48,6 +55,8 @@ const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 // On since Nov 11 (DEV-NOTES 2026-11-11); `'0'` here and in `.env.example` turns it back off.
 // With `AINEK_LOG_SOURCE=sample` the default is off: that log is one recorded entry with one compose, and a live replica need not be that one.
 const REQUIRE_DEPLOYMENT_DEFAULT = '1';
+/** Off until the verifiers that write to the log write release marks (DEV-NOTES 2026-11-12). */
+const REQUIRE_RELEASE_DEFAULT = '0';
 
 function list(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback).split(',').map((s) => s.trim()).filter(Boolean);
@@ -70,6 +79,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
     requireLoggedDeployment: !['0', 'false'].includes((env['AINEK_REQUIRE_DEPLOYMENT']?.trim() || (logSource === 'sample' ? '0' : REQUIRE_DEPLOYMENT_DEFAULT)).toLowerCase()),
+    requireLoggedRelease: !['0', 'false'].includes((env['AINEK_REQUIRE_RELEASE']?.trim() || REQUIRE_RELEASE_DEFAULT).toLowerCase()),
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.

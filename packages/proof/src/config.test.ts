@@ -62,3 +62,9 @@ test('the deployment check: only an explicit 0 or false turns it off; blank is t
   for (const v of ['0', 'false', ' False ']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, false, v);
   for (const v of ['', '  ']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_DEPLOYMENT: v }).requireLoggedDeployment, byDefault, JSON.stringify(v));
 });
+
+test('AINEK_REQUIRE_RELEASE: off until asked for; blank is the default, 0 or false is off, anything else is on', () => {
+  assert.equal(ainekConfigFromEnv({}).requireLoggedRelease, false);
+  for (const off of ['', ' ', '0', 'false', 'FALSE']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_RELEASE: off }).requireLoggedRelease, false, JSON.stringify(off));
+  for (const on of ['1', 'true', 'yes', 'on']) assert.equal(ainekConfigFromEnv({ AINEK_REQUIRE_RELEASE: on }).requireLoggedRelease, true, on);
+});

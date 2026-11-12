@@ -21,7 +21,7 @@ import {
   type VerifiedGatewayAttestation,
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk/node';
-import { buildCheckedModelProof, composeHashOf, evaluateKeyLogForAll, composesBehindKey, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
+import { attestedLogsOf, buildCheckedModelProof, composeHashOf, evaluateKeyLogForAll, composesBehindKey, failurePhase, keyLogReader, latestKeysFor, parseChatCompletion, proofEntryOf, requireE2eeVersion, shortHex as short, withReleaseRule, withRetry, type AinekConfig, type KeyEntry, type KeyLogVerdict, type ModelProof, type Tier1StepId, type VerifyReport } from '@ainek/proof';
 import { describeSdkError } from './errors.ts';
 import { sdkRetryable } from './retry.ts';
 
@@ -286,7 +286,10 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     const attestedCompose = composeHashOf(modelAttestation.deployment);
     // Every report that carries this key is checked: the one that signs the reply need not be the first.
     const composes = cfg.requireLoggedDeployment ? composesBehindKey(models.map((m) => ({ signingAddress: m.signer.signingAddress, composeHash: composeHashOf(m.deployment) })), modelAttestation.signer.signingAddress) : [undefined];
-    const verdict = evaluateKeyLogForAll(entries, { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, composes);
+    const logQuery = { model, signingAddress: modelAttestation.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum };
+    const keyVerdict = evaluateKeyLogForAll(entries, logQuery, composes);
+    // SPEC §7.5, when asked for: the action log of each of those reports must be one the same verifiers checked and logged.
+    const verdict = cfg.requireLoggedRelease ? withReleaseRule(keyVerdict, entries, logQuery, attestedLogsOf(models, logQuery.signingAddress, cfg.requireLoggedDeployment)) : keyVerdict;
     if (verdict.status !== 'ok') {
       onStep({ id: 'key-log', status: 'fail', detail: `${verdict.detail} (source: ${logSource})`, ms: logMs });
       return done({ kind: 'refused', step: 'key-log', reason: verdict.detail, entries, logSource, verdict });
