@@ -130,13 +130,15 @@ Can the client refuse a change until somebody it trusts has approved it?
 - **Must be refused.** `pnpm demo:controls`, section 6, and `/?tamper=deployment`: the right key, logged with another
   launcher than the one attested. `key-log.test.ts` (`unknown deployment`). For the release rule, `pnpm test`
   (`release-marks.test.ts`): an action added after the verifier's mark, whether a release of the model's file, a deployment
-  from another file or a restart of the manager; a log shortened or edited; a log quoted by another instance than the key;
-  one verifier where two are required.
+  from another file or a restart of the manager; a log whose beginning was edited; a log shorter than one a verifier saw;
+  a log quoted by another instance than the key; one verifier where two are required.
 - **Open.** A new release of the serving containers behind the same launcher is not refused by default: this is the
   finding of Nov 12. The rule that refuses it is off until the verifiers a client trusts write release marks, and on
   Nov 12 the verifier that writes to our log does not yet. Its controls are unit tests, not a run against the live
-  service. A rollback is logged like any other release once a verifier has followed it. A minimum time a release must
-  have been public is not enforced. "Logged by a verifier" means followed to public sources, not reviewed.
+  service. A mark covers the release that serves the model, not everything the same log deployed: the log does not
+  record which earlier services a later deployment replaced. A rollback is marked like any other release once a verifier
+  has followed it. A minimum time a release must have been public is not enforced. "Marked by a verifier" means followed
+  to public sources, not reviewed.
 
 ## What would close the open items
 

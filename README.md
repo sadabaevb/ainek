@@ -113,7 +113,8 @@ Reading a release is not refusing one. Since Nov 12 both ends of a rule exist, a
   quorum of the viewer's verifiers marked. An enclave deploys by adding to that log, so whatever it did after a verifier
   looked is refused until a verifier looks again: a release of the model's file, a deployment from another file, a restart
   of its manager. A log that no longer begins with what a verifier saw from the same instance is refused as rewritten.
-  The rule needs no network: the log comes with the attestation the client has already verified.
+  The rule needs no network: the log comes with the attestation the client has already verified. It speaks for the moment
+  of that attestation, so with the rule on the browser attests again for every message instead of reusing one for an hour.
 
 ```bash
 pnpm -F verifier dry-run   # no account, sends nothing: the entry a verifier would log, with its two marks
@@ -121,10 +122,11 @@ pnpm demo:attest           # step 5 ends with where the key log stands on the ac
 ```
 
 The cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the two action
-logs we hold (22 and 47 days) that is about two windows a day for each replica. The limit is the one above: the action
-log is a record, so the rule holds an enclave to what its own record said, and "logged" means a verifier followed the
-release to public sources, not that anybody read the code. As of Nov 12 the verifier that writes to our log has not been
-restarted with marks, so the rule stays off.
+logs we hold (22 and 47 days) that is about two windows a day for each replica. The limits are the ones above and one
+more. The action log is a record, so the rule holds an enclave to what its own record said. A mark means a verifier
+followed the release that serves the model to public sources, not that anybody read the code, and not that the verifier
+followed everything that log deployed: the log does not say which earlier services a later deployment replaced. As of
+Nov 12 the verifier that writes to our log has not been restarted with marks, so the rule stays off.
 
 ## Status
 
@@ -339,15 +341,21 @@ inherited" below).
   shows that the record agrees with public sources at every link. It cannot show that the record is complete, or that the
   containers it names are the ones running.
 - **That a logged release is an approved one, or that the release rule closes this gap.** A release mark in the log says
-  that a verifier followed what an enclave's action log deployed for the model to public sources (the file, the tag, the
-  signed builds of the proxy and of Compose Manager) and that the log stood exactly so. Nobody read that code. A rollback
-  is logged like any other release, and no minimum age is asked of one. The verifier follows the model's service, not
-  whatever else the same enclave runs. The rule (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own
-  record: the action log it attests must be one a trusted verifier marked. That does not make the record a measurement.
-  It checks the replica that attested, and the gateway picks the replica per connection. Its cost is refusals: after every
-  action in an enclave, until a verifier has seen that replica again. On the two logs we hold that is about two windows a
-  day for each replica; we have not measured it live. As of Nov 12 the verifier that writes to our log does not write
-  marks yet, so with the rule on the client refuses every message.
+  that, at one state of an enclave's action log, a verifier followed the release that serves the model to public sources:
+  the latest release of the model's service in the compose file the log most recently deployed for it, the signed build
+  of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release, and no minimum
+  age is asked of one. The verifier does not follow the engine image, or anything else that log brought up. The log does
+  not record the Compose project of a deployment, so it does not show which earlier services a later one replaced, and in
+  one of our recordings nine compose files in a single log define a service for this model. The rule
+  (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own record: the action log it attests must be exactly
+  one a trusted verifier marked. That does not make the record a measurement. A log shorter than one a verifier saw is
+  refused, and it is called rewritten only when its beginning differs from what was seen: lengths alone cannot tell a log
+  that was cut from an attestation older than the verifier's entry. Compose Manager itself starts from an empty log when
+  its file is missing or unreadable. The rule speaks for the moment of attestation, which is why the browser attests again
+  for every message while the rule is on. It checks the replica that attested, and the gateway picks the replica per
+  connection. Its cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the
+  two logs we hold that is about two windows a day for each replica; we have not measured it live. As of Nov 12 the
+  verifier that writes to our log does not write marks yet, so with the rule on the client refuses every message.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be

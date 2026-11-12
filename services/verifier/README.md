@@ -18,6 +18,8 @@ What one round does, per model:
    proxy and of Compose Manager. When every check holds, the entry carries two release marks after its image digests: the action
    log as it stood, and the release of the model's service (SPEC §7.5). When one does not hold, or GitHub does not answer within
    60 s, the entry is the one a verifier always logged and the round says why. `VERIFIER_RELEASE_MARKS=0` skips this step.
+   What is followed is the latest release of the model's service in the compose file the log most recently deployed for it.
+   The engine image and the other deployments in the same log are not followed, and a mark does not say they were.
 5. A key+compose pair this verifier logged in the last 6 h, or already sent in this round, is not sent again, unless the entry
    carries release marks that no such entry has: the enclave's action log moved, and a client that asks for a logged release
    waits for exactly that entry. Otherwise `log_key` under the verifier's account.
@@ -86,8 +88,9 @@ Variables (root `.env`, see `.env.example`): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PR
 (comma-separated, default `z-ai/glm-5.3-flash`), `VERIFIER_INTERVAL_MIN` (15), `VERIFIER_REPORTS_PER_ROUND` (5; 1 in a dry run), `AINEK_CONTRACT`, `NEAR_RPC_URL`,
 `NEARAI_BASE_URL`, `AINEK_ACCEPTED_TCB`, optional `VERIFIER_DATA_DIR`, `VERIFIER_RELEASE_MARKS` (on; `0` logs keys without
 release marks) and optional `GITHUB_TOKEN`. The release check reads public repositories on GitHub: a few requests for a
-release it has not read yet, then one per report (where the release's tag points). GitHub allows 60 anonymous requests an
-hour from one address; a token with no scopes raises that, and it is sent to api.github.com only.
+release it has not read yet, then one in ten minutes for each release it sees (where the release's tag points). GitHub
+allows 60 anonymous requests an hour from one address; a token with no scopes raises that, and it is sent to
+api.github.com only.
 
 Tests: `pnpm -F verifier test` (offline, on the recorded report in `docs/samples`).
 
