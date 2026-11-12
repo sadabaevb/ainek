@@ -50,6 +50,7 @@ export function JsonTextarea({ value, onChange, onError, placeholder }: { value:
       onDrop={drop}
       rows={6}
       placeholder={placeholder}
+      aria-label={placeholder}
     />
   );
 }
@@ -63,7 +64,7 @@ export function LoadFileButton({ onText, onError }: { onText: (text: string) => 
       <input
         type="file"
         accept="application/json"
-        style={{ display: 'none' }}
+        className="visually-hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = ''; // so picking the same file again fires onChange

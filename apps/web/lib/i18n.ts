@@ -173,6 +173,11 @@ const en = {
   linkTooLong: 'Too long for a link: use the file',
   details: 'Technical details',
   lang: 'RU',
+  // The spoken name of the language button starts with what the button shows.
+  langLabel: 'RU: switch the language to Russian',
+  skip: 'Skip to the content',
+  // The word a screen reader says for the mark of a line (a ticked, crossed or empty box on screen).
+  status: { ok: 'checked', fail: 'failed', skipped: 'not checked', running: 'being checked' },
   nav: { log: 'Log', verify: 'Verify', auditor: 'Auditor', agent: 'Agent', trust: 'Trust' },
   loading: 'Loading…',
   loadFile: 'Load file',
@@ -568,6 +573,9 @@ const ru: typeof en = {
   linkTooLong: 'Слишком длинно для ссылки: возьми файл',
   details: 'Технические детали',
   lang: 'EN',
+  langLabel: 'EN: переключить язык на английский',
+  skip: 'К содержимому',
+  status: { ok: 'проверено', fail: 'не прошло', skipped: 'не проверялось', running: 'проверяется' },
   nav: { log: 'Лог', verify: 'Проверка', auditor: 'Аудитор', agent: 'Агент', trust: 'Доверие' },
   loading: 'Загрузка…',
   loadFile: 'Загрузить файл',

@@ -1,6 +1,8 @@
+'use client';
 // One place for the ✓ / ✗ / — glyphs and the check list used by the chat steps, the card and /verify. The details are
 // English whatever the UI language (they come from @ainek/proof), hence lang="en" on the list.
 import type { ReactNode } from 'react';
+import { useT } from '@/app/providers';
 
 export type Status = 'ok' | 'fail' | 'skipped' | 'running';
 
@@ -10,11 +12,20 @@ export function mark(status: Status): string {
   return MARK[status];
 }
 
+/**
+ * The mark of a line with its word for a screen reader. The stylesheet draws the shape and gives it a colour, which only
+ * the eye gets; the word says the same to whoever listens to the page.
+ */
+function StatusMark({ status, className }: { status: Status; className: string }) {
+  const { t } = useT();
+  return <span className={className} role="img" aria-label={t.status[status]}>{mark(status)}</span>;
+}
+
 /** One line of a check list: the mark in its own column, so a second line of the text stays clear of it. */
 export function CheckLine({ status, children }: { status: Status; children: ReactNode }) {
   return (
     <li className={`check ${status}`}>
-      <span className="tick">{mark(status)}</span>
+      <StatusMark status={status} className="tick" />
       <span>{children}</span>
     </li>
   );
@@ -46,7 +57,7 @@ export function CardHead({ status, when, children }: { status: 'ok' | 'fail'; wh
 export function Row({ status, label, hint, detail, as: Tag = 'div', children }: { status: Status; label: string; hint?: string; detail?: ReactNode; as?: 'div' | 'span'; children: ReactNode }) {
   return (
     <Tag className={`row ${status === 'running' ? 'skipped' : status}`}>
-      <span className="mark" aria-hidden>{mark(status)}</span>
+      <StatusMark status={status} className="mark" />
       <span className="label">{label}</span>
       <span className="value">{children}</span>
       {detail && <div className="detail">{detail}</div>}

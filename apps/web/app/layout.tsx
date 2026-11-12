@@ -9,7 +9,7 @@ import { Logo } from '@/components/logo';
 import { NavLinks } from '@/components/nav-links';
 import { WalletButton } from '@/components/wallet-button';
 import { readPublicConfig } from '@/lib/config.server';
-import { LANG_COOKIE, type Lang } from '@/lib/i18n';
+import { LANG_COOKIE, dict, type Lang } from '@/lib/i18n';
 import { Providers } from './providers';
 
 const DESCRIPTION = 'A glass box for private AI agents on NEAR: the model key is checked against a public log before anything is sent, and every answer comes with a proof you re-check yourself.';
@@ -43,6 +43,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html lang={lang}>
       <body>
         <Providers config={config} lang={lang}>
+          {/* The first stop of the Tab key: past the navigation, to the page. */}
+          <a className="skip" href="#content">{dict[lang].skip}</a>
           <nav className="nav">
             <div className="nav-inner">
               <Link href="/" className="brand"><Logo /> Ainek</Link>
@@ -53,7 +55,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </span>
             </div>
           </nav>
-          {children}
+          <div id="content">{children}</div>
         </Providers>
       </body>
     </html>
