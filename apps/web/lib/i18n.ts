@@ -176,6 +176,7 @@ const en = {
   // The spoken name of the language button starts with what the button shows.
   langLabel: 'RU: switch the language to Russian',
   skip: 'Skip to the content',
+  notFound: { title: 'No such page', body: 'This address is not a page of Ainek. The pages are in the header above.', home: 'To the chat' },
   // The word a screen reader says for the mark of a line (a ticked, crossed or empty box on screen).
   status: { ok: 'checked', fail: 'failed', skipped: 'not checked', running: 'being checked' },
   nav: { log: 'Log', verify: 'Verify', auditor: 'Auditor', agent: 'Agent', trust: 'Trust' },
@@ -575,6 +576,7 @@ const ru: typeof en = {
   lang: 'EN',
   langLabel: 'EN: переключить язык на английский',
   skip: 'К содержимому',
+  notFound: { title: 'Такой страницы нет', body: 'По этому адресу на сайте Ainek ничего нет. Разделы — в шапке выше.', home: 'К чату' },
   status: { ok: 'проверено', fail: 'не прошло', skipped: 'не проверялось', running: 'проверяется' },
   nav: { log: 'Лог', verify: 'Проверка', auditor: 'Аудитор', agent: 'Агент', trust: 'Доверие' },
   loading: 'Загрузка…',
