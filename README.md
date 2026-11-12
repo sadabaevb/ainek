@@ -126,6 +126,10 @@ pnpm -F verifier dry-run   # no account, sends nothing: the entry a verifier wou
 pnpm demo:attest           # step 5 ends with where the key log stands on the action log of the replica that answers
 ```
 
+`/log` shows that same line in the browser: under "The code behind the key", Check the release, then Show every check.
+It follows the trust set chosen on the page. For the submission the rule is shown and not enforced; we switch it to
+refusing once a day of entries with marks shows that the log keeps up.
+
 The cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the two action
 logs we hold (22 and 47 days) that is about two windows a day for each replica. The limits are the ones above and one
 more. The action log is a record, so the rule holds an enclave to what its own record said. A mark means a verifier

@@ -44,7 +44,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   every message, because a verification kept for an hour says nothing about that hour. A client may also wait
   (`AINEK_RELEASE_WAIT_MIN`): it then sends only when the log has been marked as it stands for that many minutes by a
   quorum, so anything added to the log starts the wait again. `pnpm -F verifier dry-run` prints
-  the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers. As of
+  the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers; `/log`
+  shows the same line in the browser, without refusing on it. As of
   Nov 12 the verifier that writes to our log has not been restarted with marks. What a mark does not say is under "We do
   not claim".
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
