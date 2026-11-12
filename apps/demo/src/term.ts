@@ -9,13 +9,21 @@ export function markOf(status: 'ok' | 'fail' | 'skipped' | string): string {
   return status === 'ok' ? OK : status === 'fail' ? FAIL : NA;
 }
 
+/**
+ * Text from outside (a log entry, a tag, a file or image name, a server's error) with its control characters replaced, so it
+ * cannot move the cursor or recolour a line: an escape sequence in a tag must not be able to draw a check mark.
+ */
+export function plain(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, '?');
+}
+
 export function head(title: string): void {
-  console.log(`\n${title}`);
+  console.log(`\n${plain(title)}`);
 }
 
 /** Prints one check line and tells the caller whether it was a failure (modes count failures differently). */
 export function line(mark: string, text: string): boolean {
-  console.log(`  ${mark} ${text}`);
+  console.log(`  ${mark} ${plain(text)}`);
   return mark === FAIL;
 }
 
