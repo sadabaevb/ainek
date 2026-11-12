@@ -142,7 +142,7 @@ export default function LogPage() {
         <h2>{tl.code.title}</h2>
         <p className="muted small">{tl.code.intro}</p>
         <div className="card">
-          <ReleaseRow attestation={attestNow} model={cfg.model} history />
+          <ReleaseRow attest={attestNow} model={cfg.model} history />
         </div>
       </section>
 

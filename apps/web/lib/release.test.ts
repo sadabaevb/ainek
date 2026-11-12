@@ -32,6 +32,20 @@ test('checkRelease: the release, its history newest first, and no green while so
   assert.ok(check.lines.some((l) => l.status === 'ok' && l.text.includes('tag v0.0.2')));
 });
 
+test('checkRelease: a result with nothing left unchecked is kept for the session; one with something unchecked is asked for again', async () => {
+  let requests = 0;
+  const counting = ((...args: Parameters<typeof globalThis.fetch>) => {
+    requests += 1;
+    return github(...args);
+  }) as typeof globalThis.fetch;
+  // Something stays unchecked here (no build policy for the image): every call reads GitHub again.
+  const log = [up('2026-11-05T10:00:00Z', B, 'v0.0.2')];
+  await checkRelease(attestation(log), MODEL, counting);
+  const first = requests;
+  await checkRelease(attestation(log), MODEL, counting);
+  assert.ok(first > 0 && requests === 2 * first, `${first} requests, then ${requests - first} more`);
+});
+
 test('checkRelease: a file that does not match is a failure; a report without an action log is not checked', async () => {
   const bad = await checkRelease(attestation([up('2026-11-03T10:00:00Z', B, 'v0.0.2', 'f'.repeat(64))]), MODEL, github);
   assert.equal(bad.status, 'fail');

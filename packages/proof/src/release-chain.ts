@@ -513,5 +513,5 @@ export async function leadTimes(actions: readonly ManagerAction[], file: string,
   return out;
 }
 
-export { countText, describeRelease, utcText } from './release-lines.ts';
+export { countText, describeRelease, releaseName, utcText } from './release-lines.ts';
 export type { ReleaseLine } from './release-lines.ts';
