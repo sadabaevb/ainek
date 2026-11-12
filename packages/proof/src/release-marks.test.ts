@@ -44,7 +44,7 @@ test('marks: what a verifier writes, within the 128 bytes the contract allows, a
 
 test('evaluateRelease: the log exactly as a trusted verifier marked it passes; anything the enclave did since does not', () => {
   const logged = [entry(7, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, LOG)])];
-  assert.deepEqual(evaluateRelease(logged, at(LOG), { now: T0 + 90 * MIN }), { status: 'ok', confirmedBy: ['v1.testnet'], detail: 'the action log as it stands (3 actions) was marked by v1.testnet; its release was first marked at 2026-11-12 08:00 UTC' });
+  assert.deepEqual(evaluateRelease(logged, at(LOG), { now: T0 + 90 * MIN }), { status: 'ok', confirmedBy: ['v1.testnet'], detail: 'the action log as it stands (3 actions) is marked by v1.testnet since 2026-11-12 08:00 UTC' });
   // The enclave has since deployed: from the same file, from another file, or by restarting its manager. The rule does not
   // read the action, so each of them is a log no verifier has checked.
   for (const next of [up('2026-11-02T10:00:00Z', H2), up('2026-11-02T10:00:00Z', H1, 'prod/another.yaml'), { action: 'compose_manager_started', timestamp: '2026-11-02T10:00:00Z', image: 'org/manager@sha256:bb' }, { action: 'docker_restart', timestamp: '2026-11-02T10:00:00Z', container: 'proxy' }]) {
@@ -125,35 +125,46 @@ test('evaluateRelease: an entry for another key or launcher can contradict the l
   assert.deepEqual([onlyElsewhere.status, onlyElsewhere.confirmedBy], ['unknown-release', []]);
 });
 
-test('evaluateRelease: a wait asked of a release counts from the first mark a trusted verifier wrote for it', () => {
-  // The release was first marked at 08:00, with an earlier state of the log, and the log as it stands at 09:30. It is 10:00.
-  const held = [entry(5, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, LOG.slice(0, 2))]), entry(7, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, LOG)], T0 + 90 * MIN)];
+test('evaluateRelease: a wait counts from the moment the log was marked as it stands, by as many verifiers as required', () => {
+  const marks = [releaseMark(FILE, H1), logMark(INSTANCE, LOG)];
+  // The log has stood as it is since 08:00: marked then, and again at 09:30. It is 10:00.
+  const held = [entry(5, 'v1.testnet', marks), entry(7, 'v1.testnet', marks, T0 + 90 * MIN)];
   const now = T0 + 120 * MIN;
-  assert.deepEqual([evaluateRelease(held, at(LOG), { now, minAgeMs: 60 * MIN }).status, evaluateRelease(held, at(LOG), { now, minAgeMs: 120 * MIN }).status], ['ok', 'ok'], 'the wait has passed, to the minute');
-  const young = evaluateRelease(held, at(LOG), { now, minAgeMs: 180 * MIN });
-  assert.deepEqual([young.status, young.confirmedBy, young.ageMs], ['young-release', ['v1.testnet'], 120 * MIN]);
-  assert.match(young.detail, /its release was first marked at 2026-11-12 08:00 UTC, 2 h 0 min before this check, and this client waits 3 h 0 min$/);
+  assert.deepEqual([evaluateRelease(held, at(LOG), { now, waitMs: 60 * MIN }).status, evaluateRelease(held, at(LOG), { now, waitMs: 120 * MIN }).status], ['ok', 'ok'], 'the wait has passed, to the minute');
+  const recent = evaluateRelease(held, at(LOG), { now, waitMs: 180 * MIN });
+  assert.deepEqual([recent.status, recent.confirmedBy, recent.markedForMs], ['recent-mark', ['v1.testnet'], 120 * MIN]);
+  assert.match(recent.detail, /is marked by v1\.testnet since 2026-11-12 08:00 UTC, 120 min before this check; this client waits 180 min$/);
 
-  // A new release of the same file starts the wait again: marked at 09:50, ten minutes ago.
-  const released = [...LOG, up('2026-11-12T09:45:00Z', H2)];
-  const after = [...held, entry(9, 'v1.testnet', [releaseMark(FILE, H2), logMark(INSTANCE, released)], T0 + 110 * MIN)];
-  assert.deepEqual([evaluateRelease(after, at(released), { now, minAgeMs: 60 * MIN }).status, evaluateRelease(after, at(released), { now, minAgeMs: 60 * MIN }).ageMs], ['young-release', 10 * MIN]);
-  assert.equal(evaluateRelease(after, at(released), { now }).status, 'ok', 'no wait asked, none applied');
-  // The first mark may sit in an entry for another launcher or instance: the release was in the public log all the same.
-  const elsewhere = entry(3, 'v2.testnet', [releaseMark(FILE, H2), logMark('ff'.repeat(20), LOG)], T0 - 600 * MIN);
-  assert.equal(evaluateRelease(after, at(released), { now, minAgeMs: 60 * MIN, witnesses: [elsewhere] }).status, 'ok');
-  // A rollback to a release that was marked long ago is not held back: it has been public that long.
-  const rolledBack = [...released, up('2026-11-12T09:55:00Z', H1)];
-  assert.equal(evaluateRelease([...after, entry(11, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, rolledBack)], T0 + 118 * MIN)], at(rolledBack), { now, minAgeMs: 60 * MIN }).status, 'ok');
+  // Anything the enclave does starts the wait again, whatever it is: the same release, and a restart ten minutes ago.
+  const restarted = [...LOG, { action: 'compose_manager_started', timestamp: '2026-11-12T09:45:00Z', image: 'org/manager@sha256:bb' }];
+  const after = [...held, entry(9, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, restarted)], T0 + 110 * MIN)];
+  const again = evaluateRelease(after, at(restarted), { now, waitMs: 60 * MIN });
+  assert.deepEqual([again.status, again.markedForMs], ['recent-mark', 10 * MIN]);
+  assert.equal(evaluateRelease(after, at(restarted), { now }).status, 'ok', 'no wait asked, none applied');
+  // An entry for another launcher or instance marks another log: it adds no time to this one.
+  const elsewhere = entry(3, 'v2.testnet', [releaseMark(FILE, H1), logMark('ff'.repeat(20), restarted)], T0 - 600 * MIN);
+  assert.equal(evaluateRelease(after, at(restarted), { now, waitMs: 60 * MIN, witnesses: [elsewhere] }).status, 'recent-mark');
 
-  // An entry that marks the log and names no release: nothing says how old the release is, so a wait cannot be met.
-  const unnamed = [entry(7, 'v1.testnet', [logMark(INSTANCE, LOG)])];
-  assert.equal(evaluateRelease(unnamed, at(LOG), { now }).status, 'ok');
-  const unknown = evaluateRelease(unnamed, at(LOG), { now, minAgeMs: MIN });
-  assert.deepEqual([unknown.status, unknown.ageMs], ['young-release', undefined]);
-  assert.match(unknown.detail, /no entry names the release, so its age is not known; this client waits 1 min$/);
-  // A verifier whose clock runs ahead of this one's: the mark is "in the future", and that is not an age.
-  assert.equal(evaluateRelease([entry(7, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, LOG)], now + 30 * MIN)], at(LOG), { now, minAgeMs: MIN }).status, 'young-release');
+  // With a quorum of two the time counts from the second verifier's first mark: one verifier's clock, or one verifier's
+  // entry dated a day back, does not make the state look older.
+  const two = [entry(5, 'v1.testnet', marks, T0 - 23 * 60 * MIN), entry(6, 'v2.testnet', marks, T0 + 115 * MIN)];
+  const byTwo = evaluateRelease(two, at(LOG), { now, quorum: 2, waitMs: 60 * MIN });
+  assert.deepEqual([byTwo.status, byTwo.markedForMs], ['recent-mark', 5 * MIN]);
+  assert.equal(evaluateRelease(two, at(LOG), { now, quorum: 1, waitMs: 60 * MIN }).status, 'ok', 'a quorum of one takes the one verifier at its word');
+  assert.equal(evaluateRelease([...two, entry(4, 'v2.testnet', marks, T0)], at(LOG), { now, quorum: 2, waitMs: 60 * MIN }).status, 'ok', 'both have marked it for two hours');
+
+  // A clock behind the verifiers': the mark is "in the future". With a wait that is not time served; without one it refuses nothing.
+  const ahead = [entry(7, 'v1.testnet', marks, now + 5_000)];
+  assert.equal(evaluateRelease(ahead, at(LOG), { now, waitMs: MIN }).status, 'recent-mark');
+  assert.equal(evaluateRelease(ahead, at(LOG), { now }).status, 'ok');
+  // A time that is no date (a verifier that logs nanoseconds): a verdict, not an exception, and no time served.
+  const nanos = [{ ...entry(7, 'v1.testnet', marks), observed_at: '1794470400000000000' } as KeyEntry];
+  assert.deepEqual(evaluateRelease(nanos, at(LOG), { now }), { status: 'ok', confirmedBy: ['v1.testnet'], detail: 'the action log as it stands (3 actions) is marked by v1.testnet' });
+  const unread = evaluateRelease(nanos, at(LOG), { now, waitMs: MIN });
+  assert.deepEqual([unread.status, unread.markedForMs], ['recent-mark', undefined]);
+  assert.match(unread.detail, /at a time that does not read as one, so for how long is not known; this client waits 1 min$/);
+  // The numbers of the detail are whole minutes rounded down, like the card's: 59 min 40 s is not an hour.
+  assert.match(evaluateRelease([entry(7, 'v1.testnet', marks, now - 59 * MIN - 40_000)], at(LOG), { now, waitMs: 60 * MIN }).detail, /, 59 min before this check; this client waits 60 min$/);
 });
 
 // The recorded entry #0 and the launcher it was logged for, as a verifier that writes marks would have logged it.
@@ -179,11 +190,11 @@ test('withReleaseRule: on top of a key that passed, for every report that carrie
   assert.equal(rule([reportOf(LOG, { key: recorded.signing_address.toUpperCase() })]), key, 'the key is matched as hex, whatever its case');
   // What the rule says about one report, in its own words: `pnpm demo:attest` prints this.
   const loggedAt = Number(recorded.observed_at);
-  assert.deepEqual(releaseStanding(entries, query, reportOf(LOG), { withLauncher: true, now: loggedAt + 3 * 60 * MIN }), { status: 'ok', confirmedBy: [recorded.verifier], detail: `the action log as it stands (3 actions) was marked by ${recorded.verifier}; its release was first marked at ${new Date(loggedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` });
-  // A client that waits six hours for a release refuses this one, three hours old, and the card can say both numbers.
-  const young = withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true, minAgeMs: 6 * 60 * MIN, now: loggedAt + 3 * 60 * MIN });
-  assert.deepEqual([young.status, young.reason, young.releaseAge], ['not-logged', 'young-release', { ms: 3 * 60 * MIN, minMs: 6 * 60 * MIN }]);
-  assert.equal(withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true, minAgeMs: 2 * 60 * MIN, now: loggedAt + 3 * 60 * MIN }), key);
+  assert.deepEqual(releaseStanding(entries, query, reportOf(LOG), { withLauncher: true, now: loggedAt + 3 * 60 * MIN }), { status: 'ok', confirmedBy: [recorded.verifier], detail: `the action log as it stands (3 actions) is marked by ${recorded.verifier} since ${new Date(loggedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` });
+  // A client that waits six hours refuses this state, marked for three, and the card can say both numbers.
+  const recent = withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true, waitMs: 6 * 60 * MIN, now: loggedAt + 3 * 60 * MIN });
+  assert.deepEqual([recent.status, recent.reason, recent.releaseWait], ['not-logged', 'recent-mark', { markedForMs: 3 * 60 * MIN, waitMs: 6 * 60 * MIN }]);
+  assert.equal(withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true, waitMs: 2 * 60 * MIN, now: loggedAt + 3 * 60 * MIN }), key);
   // Two replicas behind the key: one has deployed since the verifier looked, and that refuses the message.
   const refused = rule([reportOf(LOG), reportOf(deployed)]);
   assert.deepEqual([refused.status, refused.reason], ['not-logged', 'unknown-release']);

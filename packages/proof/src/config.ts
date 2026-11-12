@@ -33,11 +33,11 @@ export interface AinekConfig {
    */
   requireLoggedRelease: boolean;
   /**
-   * SPEC §7.5, with the rule above: refuse a release that a trusted verifier first marked less than this long ago, in ms.
-   * 0 asks for nothing. From `AINEK_MIN_RELEASE_AGE_MIN`, whole minutes up to MAX_RELEASE_AGE_MIN; any other value is read
-   * as that maximum, so a typo cannot turn the wait off.
+   * SPEC §7.5, with the rule above: send only when the enclave's action log has been marked as it stands for this long, in
+   * ms. 0 is no wait. From `AINEK_RELEASE_WAIT_MIN`: blank, 0 or false is no wait, whole minutes up to 720 are that, and
+   * any other value is read as 720, so a typo cannot turn the wait off.
    */
-  minReleaseAgeMs: number;
+  releaseWaitMs: number;
   /** TCB statuses accepted for gateway and model quotes (SPEC §3.2 policy); unknown names are dropped, never empty. */
   acceptedTcbStatuses: TcbStatusName[];
   explorer: string;
@@ -65,16 +65,18 @@ const REQUIRE_DEPLOYMENT_DEFAULT = true;
 const REQUIRE_RELEASE_DEFAULT = false;
 
 /**
- * The longest wait a client can ask of a release, in minutes. It measures the wait on the entries it reads, a day of the
- * log, and a verifier writes an unchanged release again every six hours: past twelve hours the first mark it could see
- * would often be younger than the release.
+ * The longest wait a client can ask for, in minutes. It measures the wait on the entries it reads, a day of the log, and a
+ * verifier that runs without a break writes an unchanged state again every six hours: the first mark the client can see
+ * of a state that has stood for days is then 18 to 24 hours old. After a break in the verifier it is younger, and the
+ * client waits again (SPEC §7.5).
  */
-const MAX_RELEASE_AGE_MIN = 720;
+const MAX_RELEASE_WAIT_MIN = 720;
 
-/** `AINEK_MIN_RELEASE_AGE_MIN` in ms: blank or 0 is no wait, a whole number of minutes up to the maximum is that, anything else is the maximum. */
-function releaseAgeMs(value: string | undefined): number {
-  const minutes = Number(value?.trim() || 0);
-  return (Number.isInteger(minutes) && minutes >= 0 && minutes <= MAX_RELEASE_AGE_MIN ? minutes : MAX_RELEASE_AGE_MIN) * 60_000;
+/** `AINEK_RELEASE_WAIT_MIN` in ms: blank, 0 or false is no wait, plain digits are minutes up to the maximum, and anything else is the maximum. */
+function releaseWaitMs(value: string | undefined): number {
+  const said = value?.trim().toLowerCase() || '0';
+  if (said === 'false') return 0;
+  return (/^\d+$/.test(said) ? Math.min(Number(said), MAX_RELEASE_WAIT_MIN) : MAX_RELEASE_WAIT_MIN) * 60_000;
 }
 
 /** A switch from the environment: blank means `fallback`, `0` or `false` is off, and anything else is on, so a typo cannot turn a check off. */
@@ -105,7 +107,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
     requireLoggedDeployment: envFlag(env['AINEK_REQUIRE_DEPLOYMENT'], logSource !== 'sample' && REQUIRE_DEPLOYMENT_DEFAULT),
     requireLoggedRelease: envFlag(env['AINEK_REQUIRE_RELEASE'], REQUIRE_RELEASE_DEFAULT),
-    minReleaseAgeMs: releaseAgeMs(env['AINEK_MIN_RELEASE_AGE_MIN']),
+    releaseWaitMs: releaseWaitMs(env['AINEK_RELEASE_WAIT_MIN']),
     acceptedTcbStatuses: accepted.length > 0 ? accepted : ['UpToDate'],
     explorer: network === 'mainnet' ? 'https://nearblocks.io' : 'https://testnet.nearblocks.io',
     // `||`: `.env.example` lists these for the agent, and a copied file may leave them blank.

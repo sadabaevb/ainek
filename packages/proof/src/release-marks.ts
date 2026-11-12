@@ -20,8 +20,9 @@
 // verifier looks again. The rule does not interpret the actions, so it does not depend on knowing which of them change
 // what runs. No network is needed: the action log comes with the attestation the client already verified.
 //
-// A client may also ask a release to have been in the public log for a while before it sends to it (`minAgeMs`): the
-// time since a trusted verifier first wrote its `release:` mark, by that verifier's clock and the client's.
+// A client may also wait (`waitMs`): it then sends only when the log has been marked as it stands for that long, by as
+// many verifiers as it requires. Whatever the enclave last did, others have had that long to look at it. The time is the
+// verifiers' own and the client's, and it reaches back only as far as the client reads the public log.
 //
 // Compose Manager only appends to this log (one write site in its source, at the commit the running image was built
 // from), so every state of an honest log begins with every earlier one. A log whose beginning is not what a verifier saw
@@ -34,11 +35,13 @@ import { normalizeHex, sha256Hex, shortHex } from './hash.ts';
 import { composeHashOf } from './key-entry.ts';
 import { evaluateKeyLog, type KeyLogQuery, type KeyLogVerdict, type ReleaseRefusal } from './key-log.ts';
 import { utcText } from './release-lines.ts';
-import { sameInstance, spanText, type ManagerAction } from './release.ts';
+import { sameInstance, wholeMinutes, type ManagerAction } from './release.ts';
 import type { KeyEntry } from './schema.ts';
 
 const RELEASE = /^release:([0-9a-f]{16}):([0-9a-f]{64})$/;
 const LOG = /^log:([0-9a-f]{16}):(\d{1,7}):([0-9a-f]{64})$/;
+/** The furthest a JavaScript date reaches from 1970, in ms. */
+const MAX_DATE_MS = 8.64e15;
 
 /**
  * sha256 of an action log in the form the enclave quotes it and the SDK checks. Compose Manager defines that form as
@@ -94,16 +97,15 @@ export function marksOf(imageDigests: readonly string[]): ReleaseMarks {
  * - `shorter-log`: a trusted verifier marked a longer log from this instance than the one attested now.
  * - `release-below-quorum`: some trusted verifiers marked the log as it stands, fewer than the client requires.
  * - `rewritten-log`: the log does not begin with what a trusted verifier saw from this instance.
- * - `young-release`: the log is marked, and the release it serves the model from first appeared in the public log less
- *   than the client's wait ago, or no entry names that release.
+ * - `recent-mark`: the log is marked as it stands by enough verifiers, for less time than the client waits.
  */
 export type ReleaseLogStatus = 'ok' | ReleaseRefusal;
 export interface ReleaseLogVerdict {
   status: ReleaseLogStatus;
   /** Distinct verifiers that logged the action log exactly as it stands. */
   confirmedBy: string[];
-  /** On a `young-release` refusal: how long before this check a trusted verifier first marked the release, in ms; absent when no entry names it. */
-  ageMs?: number | undefined;
+  /** On a `recent-mark` refusal: for how long the log has been marked as it stands, in ms; absent when the marks carry no readable time. */
+  markedForMs?: number | undefined;
   detail: string;
 }
 
@@ -111,14 +113,14 @@ export interface ReleaseLogVerdict {
 export interface ReleaseRule {
   /** The client asks for the launcher to be logged: only entries for a report's own launcher may confirm its log. */
   withLauncher: boolean;
-  /** Refuse a release first marked less than this long ago (SPEC §7.5); 0 or absent asks for nothing. */
-  minAgeMs?: number | undefined;
-  /** Unix ms on this client, to measure that age from; defaults to now. */
+  /** Send only when the log has been marked as it stands for this long (SPEC §7.5); 0 or absent is no wait. */
+  waitMs?: number | undefined;
+  /** Unix ms on this client, to measure that time from; defaults to now. */
   now?: number | undefined;
 }
 
 /** What `evaluateRelease` takes besides the entries and the log: the wait of the rule, the quorum, and the entries that can contradict the log without being able to confirm it. */
-type ReleaseCheck = Pick<ReleaseRule, 'minAgeMs' | 'now'> & { quorum?: number | undefined; witnesses?: readonly KeyEntry[] | undefined };
+type ReleaseCheck = Pick<ReleaseRule, 'waitMs' | 'now'> & { quorum?: number | undefined; witnesses?: readonly KeyEntry[] | undefined };
 
 /**
  * Checks the action log a client was attested against the marks of key-log entries. `entries` are the ones the key check
@@ -128,7 +130,7 @@ type ReleaseCheck = Pick<ReleaseRule, 'minAgeMs' | 'now'> & { quorum?: number | 
  * `instance` is the dstack instance id that both the key's quote and the log's quote name; a log that cannot be tied to
  * that instance matches no mark.
  */
-export function evaluateRelease(entries: readonly KeyEntry[], attested: { actions: readonly ManagerAction[]; instance: Checked<string> }, { quorum = 1, witnesses = entries, minAgeMs = 0, now = Date.now() }: ReleaseCheck = {}): ReleaseLogVerdict {
+export function evaluateRelease(entries: readonly KeyEntry[], attested: { actions: readonly ManagerAction[]; instance: Checked<string> }, { quorum = 1, witnesses = entries, waitMs = 0, now = Date.now() }: ReleaseCheck = {}): ReleaseLogVerdict {
   const { actions } = attested;
   const refused = (status: ReleaseRefusal, detail: string, confirmedBy: string[] = []): ReleaseLogVerdict => ({ status, confirmedBy, detail });
   if (!entries.some((entry) => marksOf(entry.image_digests).logs.length > 0)) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher carries a mark of the enclave's action log`);
@@ -173,21 +175,23 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
   const need = Math.max(1, quorum);
   if (confirmedBy.length < need) return refused('release-below-quorum', `only ${confirmedBy.length} of ${need} required verifiers marked the action log as it stands`, confirmedBy);
 
-  // The log is marked. Which release its entries name, and when a trusted verifier first marked that release: the earliest
-  // entry the client holds with the same release mark, whatever key, launcher or instance it was logged for. Several
-  // services of one model can run different releases: the one marked last is the one that counts.
-  const marked = `the action log as it stands (${actions.length} actions) was marked by ${confirmedBy.join(', ')}`;
-  const named = [...new Set(confirming.flatMap((entry) => entry.image_digests.filter((value) => RELEASE.test(value))))];
-  const firstMarked = (mark: string): number => Math.min(...held.filter((entry) => entry.image_digests.includes(mark)).map((entry) => Number(entry.observed_at)));
-  const since = named.length > 0 ? Math.max(...named.map(firstMarked)) : undefined;
-  // No entry names the release, or one carries a time that is not a number: then nothing says how old the release is.
-  if (since === undefined || !Number.isFinite(since)) {
-    return minAgeMs > 0 ? refused('young-release', `${marked}, and no entry names the release, so its age is not known; this client waits ${spanText(minAgeMs)}`, confirmedBy) : { status: 'ok', confirmedBy, detail: marked };
+  // The log is marked as it stands. Since when: each of those verifiers' earliest entry with this mark, and of them the
+  // one that completes the quorum. Before that moment fewer verifiers than the client requires had marked this state, so
+  // one verifier's clock cannot make it look older. A time that is no date (nanoseconds, say) is no time.
+  const firstBy = new Map<string, number>();
+  for (const entry of confirming) {
+    const at = Number(entry.observed_at);
+    if (Number.isFinite(at) && Math.abs(at) <= MAX_DATE_MS) firstBy.set(entry.verifier, Math.min(firstBy.get(entry.verifier) ?? at, at));
   }
-  const ageMs = now - since;
-  const first = `its release was first marked at ${utcText(new Date(since).toISOString())}`;
-  if (ageMs < minAgeMs) return { ...refused('young-release', `${marked}; ${first}, ${spanText(ageMs)} before this check, and this client waits ${spanText(minAgeMs)}`, confirmedBy), ageMs };
-  return { status: 'ok', confirmedBy, detail: `${marked}; ${first}` };
+  const since = [...firstBy.values()].sort((a, b) => a - b)[need - 1];
+  const marked = `the action log as it stands (${actions.length} actions) is marked by ${confirmedBy.join(', ')}`;
+  const waits = `this client waits ${wholeMinutes(waitMs)} min`;
+  if (since === undefined) return waitMs > 0 ? refused('recent-mark', `${marked}, at a time that does not read as one, so for how long is not known; ${waits}`, confirmedBy) : { status: 'ok', confirmedBy, detail: marked };
+  const markedForMs = now - since;
+  const from = `${marked} since ${utcText(new Date(since).toISOString())}`;
+  // A clock behind the verifiers' makes the time negative: without a wait that refuses nothing.
+  if (waitMs > 0 && markedForMs < waitMs) return { ...refused('recent-mark', `${from}, ${wholeMinutes(markedForMs)} min before this check; ${waits}`, confirmedBy), markedForMs };
+  return { status: 'ok', confirmedBy, detail: from };
 }
 
 /** A verified model report as the release rule reads it. Structural, so this package needs no SDK import. */
@@ -201,7 +205,7 @@ export interface AttestedReport {
  * What the release rule says about one verified report: the entries that vouch for its key, and for its launcher when
  * the client asks for the launcher to be logged, against the action log the report attests.
  */
-export function releaseStanding(entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, { deployment, report }: AttestedReport, { withLauncher, minAgeMs, now }: ReleaseRule): ReleaseLogVerdict {
+export function releaseStanding(entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, { deployment, report }: AttestedReport, { withLauncher, waitMs, now }: ReleaseRule): ReleaseLogVerdict {
   const vouching = evaluateKeyLog(entries, { ...query, composeHash: withLauncher ? composeHashOf(deployment) : undefined }).matching;
   // Whatever a trusted verifier logged for the model, under any key or launcher: an instance keeps its id when its
   // launcher is upgraded, and what was seen of it then still binds its log now.
@@ -210,7 +214,7 @@ export function releaseStanding(entries: readonly KeyEntry[], query: Omit<KeyLog
   const log = deployment.composeManager;
   // Both quotes are verified by now. When they name two instances the log is another replica's record, not this enclave's.
   const instance = log ? sameInstance(report.eventLog, report.composeManagerAttestation?.eventLog) : checked.skipped('the attested report carries no action log');
-  return evaluateRelease(vouching, { actions: log?.actions ?? [], instance }, { quorum: query.quorum, witnesses, minAgeMs, now });
+  return evaluateRelease(vouching, { actions: log?.actions ?? [], instance }, { quorum: query.quorum, witnesses, waitMs, now });
 }
 
 /**
@@ -230,7 +234,7 @@ export function withReleaseRule(verdict: KeyLogVerdict, entries: readonly KeyEnt
   const at = { ...rule, now: rule.now ?? Date.now() }; // one moment for every report of this check
   for (const report of behindKey) {
     const standing = releaseStanding(entries, query, report, at);
-    if (standing.status === 'young-release') return { ...refused(standing.status, standing.detail, standing.confirmedBy), releaseAge: { ms: standing.ageMs, minMs: rule.minAgeMs ?? 0 } };
+    if (standing.status === 'recent-mark') return { ...refused(standing.status, standing.detail, standing.confirmedBy), releaseWait: { markedForMs: standing.markedForMs, waitMs: rule.waitMs ?? 0 } };
     if (standing.status !== 'ok') return refused(standing.status, standing.detail, standing.confirmedBy);
   }
   return verdict;

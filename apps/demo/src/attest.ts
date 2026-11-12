@@ -71,7 +71,7 @@ if (outcome.kind === 'failed') {
     const inspection = await inspectRelease({ deployment: m.deployment, report: m.report, model, githubToken });
     // The client's release rule on the log this run read (SPEC §7.5): is the action log this enclave attests one a trusted
     // verifier checked and logged? When the setting is on, the send decision above has applied it already.
-    const inLog = releaseStanding(outcome.entries, { model, signingAddress: m.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, m, { withLauncher: cfg.requireLoggedDeployment, minAgeMs: cfg.minReleaseAgeMs });
+    const inLog = releaseStanding(outcome.entries, { model, signingAddress: m.signer.signingAddress, trustedVerifiers: cfg.trustedVerifiers, quorum: cfg.quorum }, m, { withLauncher: cfg.requireLoggedDeployment, waitMs: cfg.releaseWaitMs });
     const rewritten = inLog.status === 'rewritten-log';
     const summary = printRelease(inspection, { model, inLog, enforced: cfg.requireLoggedRelease });
     const verdict = inspection ? verdictOf(inspection) : undefined;

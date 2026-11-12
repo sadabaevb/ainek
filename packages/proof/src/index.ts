@@ -64,5 +64,5 @@ export { logMark, marksOf, releaseMark, releaseStanding, withReleaseRule } from 
 export type { ReleaseLogVerdict } from './release-marks.ts';
 export { checked } from './checked.ts';
 export type { Checked } from './checked.ts';
-export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf } from './release.ts';
+export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf, wholeMinutes } from './release.ts';
 export type { ManagerAction, Release } from './release.ts';
