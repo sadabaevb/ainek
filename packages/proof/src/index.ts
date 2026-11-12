@@ -61,7 +61,7 @@ export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
 export { logMark, marksOf, releaseMark, releaseStanding, withReleaseRule } from './release-marks.ts';
-export type { ReleaseLogVerdict, ReleaseRule } from './release-marks.ts';
+export type { ReleaseLogVerdict } from './release-marks.ts';
 export { checked } from './checked.ts';
 export type { Checked } from './checked.ts';
 export { composeFilesOf, firstDeployments, firstRuntimeEvent, isCommitId, isPlainTag, isRepoPath, managerStartOf, releasesFor, sameInstance, spanText, timeOf } from './release.ts';

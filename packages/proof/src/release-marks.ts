@@ -102,22 +102,23 @@ export interface ReleaseLogVerdict {
   status: ReleaseLogStatus;
   /** Distinct verifiers that logged the action log exactly as it stands. */
   confirmedBy: string[];
-  /** When the log is marked and its entries name a release: how long before this check a trusted verifier first marked that release, in ms. */
-  ageMs?: number;
+  /** On a `young-release` refusal: how long before this check a trusted verifier first marked the release, in ms; absent when no entry names it. */
+  ageMs?: number | undefined;
   detail: string;
 }
 
-/** What a client may ask of the release rule beyond the marks themselves. */
-export interface ReleaseRuleOptions {
-  /** Confirmations from distinct trusted verifiers required; at least 1. */
-  quorum?: number | undefined;
-  /** Entries that can contradict the log without being able to confirm it: see `evaluateRelease`. */
-  witnesses?: readonly KeyEntry[] | undefined;
-  /** Refuse a release first marked less than this long ago; 0 or absent asks for nothing. */
+/** How a client applies the release rule to its attested reports. */
+export interface ReleaseRule {
+  /** The client asks for the launcher to be logged: only entries for a report's own launcher may confirm its log. */
+  withLauncher: boolean;
+  /** Refuse a release first marked less than this long ago (SPEC §7.5); 0 or absent asks for nothing. */
   minAgeMs?: number | undefined;
   /** Unix ms on this client, to measure that age from; defaults to now. */
   now?: number | undefined;
 }
+
+/** What `evaluateRelease` takes besides the entries and the log: the wait of the rule, the quorum, and the entries that can contradict the log without being able to confirm it. */
+type ReleaseCheck = Pick<ReleaseRule, 'minAgeMs' | 'now'> & { quorum?: number | undefined; witnesses?: readonly KeyEntry[] | undefined };
 
 /**
  * Checks the action log a client was attested against the marks of key-log entries. `entries` are the ones the key check
@@ -127,7 +128,7 @@ export interface ReleaseRuleOptions {
  * `instance` is the dstack instance id that both the key's quote and the log's quote name; a log that cannot be tied to
  * that instance matches no mark.
  */
-export function evaluateRelease(entries: readonly KeyEntry[], attested: { actions: readonly ManagerAction[]; instance: Checked<string> }, { quorum = 1, witnesses = entries, minAgeMs = 0, now = Date.now() }: ReleaseRuleOptions = {}): ReleaseLogVerdict {
+export function evaluateRelease(entries: readonly KeyEntry[], attested: { actions: readonly ManagerAction[]; instance: Checked<string> }, { quorum = 1, witnesses = entries, minAgeMs = 0, now = Date.now() }: ReleaseCheck = {}): ReleaseLogVerdict {
   const { actions } = attested;
   const refused = (status: ReleaseRefusal, detail: string, confirmedBy: string[] = []): ReleaseLogVerdict => ({ status, confirmedBy, detail });
   if (!entries.some((entry) => marksOf(entry.image_digests).logs.length > 0)) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher carries a mark of the enclave's action log`);
@@ -163,31 +164,30 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
   // alone do not say which, so this is not called a rewrite; an exact match with an earlier mark does not outweigh it.
   if (ahead) return refused('shorter-log', `entry #${ahead.entry.index} by ${ahead.entry.verifier} saw ${ahead.length} actions from this instance and the log attested now has ${actions.length}: this attestation is older than that entry, or the log was cut`);
   const confirmedBy = [...new Set(confirming.map((entry) => entry.verifier))];
-  const need = Math.max(1, quorum);
-  if (confirmedBy.length === 0 && !behind) return refused('unknown-release', `no trusted verifier has marked the action log of this instance (${instance})`);
-  if (confirmedBy.length === 0 && behind) {
-    const since = actions.length - behind.length;
+  if (confirmedBy.length === 0) {
+    if (!behind) return refused('unknown-release', `no trusted verifier has marked the action log of this instance (${instance})`);
+    const added = actions.length - behind.length;
     const last = actions.at(-1);
-    return refused('unknown-release', `the enclave's action log has ${since} action${since === 1 ? '' : 's'} since entry #${behind.entry.index} by ${behind.entry.verifier} marked it (the latest: ${last?.action ?? '?'} at ${last?.timestamp ?? '?'}); no trusted verifier has marked the log as it stands`);
+    return refused('unknown-release', `the enclave's action log has ${added} action${added === 1 ? '' : 's'} since entry #${behind.entry.index} by ${behind.entry.verifier} marked it (the latest: ${last?.action ?? '?'} at ${last?.timestamp ?? '?'}); no trusted verifier has marked the log as it stands`);
   }
+  const need = Math.max(1, quorum);
   if (confirmedBy.length < need) return refused('release-below-quorum', `only ${confirmedBy.length} of ${need} required verifiers marked the action log as it stands`, confirmedBy);
 
   // The log is marked. Which release its entries name, and when a trusted verifier first marked that release: the earliest
-  // entry the client holds with the same release mark, whatever key, launcher or instance it was logged for.
+  // entry the client holds with the same release mark, whatever key, launcher or instance it was logged for. Several
+  // services of one model can run different releases: the one marked last is the one that counts.
   const marked = `the action log as it stands (${actions.length} actions) was marked by ${confirmedBy.join(', ')}`;
-  const releaseOf = (entry: KeyEntry): string[] => marksOf(entry.image_digests).releases.map((r) => `${r.fileId}:${r.fileSha256}`);
-  const named = [...new Set(confirming.flatMap(releaseOf))];
-  const firstMarked = (release: string): number => Math.min(...held.filter((entry) => releaseOf(entry).includes(release)).map((entry) => Number(entry.observed_at)));
-  // Several services of one model can run different releases: the one marked last is the one that counts.
-  const since = named.length > 0 ? Math.max(...named.map(firstMarked)) : Number.NaN;
-  if (!Number.isFinite(since)) {
-    // No entry says which release this is, so nothing says how long it has been in the log.
+  const named = [...new Set(confirming.flatMap((entry) => entry.image_digests.filter((value) => RELEASE.test(value))))];
+  const firstMarked = (mark: string): number => Math.min(...held.filter((entry) => entry.image_digests.includes(mark)).map((entry) => Number(entry.observed_at)));
+  const since = named.length > 0 ? Math.max(...named.map(firstMarked)) : undefined;
+  // No entry names the release, or one carries a time that is not a number: then nothing says how old the release is.
+  if (since === undefined || !Number.isFinite(since)) {
     return minAgeMs > 0 ? refused('young-release', `${marked}, and no entry names the release, so its age is not known; this client waits ${spanText(minAgeMs)}`, confirmedBy) : { status: 'ok', confirmedBy, detail: marked };
   }
   const ageMs = now - since;
   const first = `its release was first marked at ${utcText(new Date(since).toISOString())}`;
   if (ageMs < minAgeMs) return { ...refused('young-release', `${marked}; ${first}, ${spanText(ageMs)} before this check, and this client waits ${spanText(minAgeMs)}`, confirmedBy), ageMs };
-  return { status: 'ok', confirmedBy, ageMs, detail: `${marked}; ${first}` };
+  return { status: 'ok', confirmedBy, detail: `${marked}; ${first}` };
 }
 
 /** A verified model report as the release rule reads it. Structural, so this package needs no SDK import. */
@@ -195,16 +195,6 @@ export interface AttestedReport {
   signer: { signingAddress: string };
   deployment: { appCompose: string; composeManager?: { actions: readonly ManagerAction[] } | undefined };
   report: { eventLog?: unknown; composeManagerAttestation?: { eventLog?: unknown } | undefined };
-}
-
-/** How a client applies the release rule to its attested reports. */
-export interface ReleaseRule {
-  /** The client asks for the launcher to be logged: only entries for a report's own launcher may confirm its log. */
-  withLauncher: boolean;
-  /** Refuse a release first marked less than this long ago (SPEC §7.5); 0 or absent asks for nothing. */
-  minAgeMs?: number | undefined;
-  /** Unix ms on this client, to measure that age from; defaults to now. */
-  now?: number | undefined;
 }
 
 /**
@@ -237,9 +227,10 @@ export function withReleaseRule(verdict: KeyLogVerdict, entries: readonly KeyEnt
   const key = normalizeHex(query.signingAddress);
   const behindKey = reports.filter((r) => normalizeHex(r.signer.signingAddress) === key);
   if (behindKey.length === 0) return refused('untied-log', 'the action log cannot be tied to the enclave that holds the key: no attested report carries this key');
+  const at = { ...rule, now: rule.now ?? Date.now() }; // one moment for every report of this check
   for (const report of behindKey) {
-    const standing = releaseStanding(entries, query, report, rule);
-    if (standing.status === 'young-release') return { ...refused(standing.status, standing.detail, standing.confirmedBy), releaseAge: { ...(standing.ageMs === undefined ? {} : { ms: standing.ageMs }), minMs: rule.minAgeMs ?? 0 } };
+    const standing = releaseStanding(entries, query, report, at);
+    if (standing.status === 'young-release') return { ...refused(standing.status, standing.detail, standing.confirmedBy), releaseAge: { ms: standing.ageMs, minMs: rule.minAgeMs ?? 0 } };
     if (standing.status !== 'ok') return refused(standing.status, standing.detail, standing.confirmedBy);
   }
   return verdict;

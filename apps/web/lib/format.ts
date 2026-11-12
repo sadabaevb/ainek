@@ -23,3 +23,8 @@ export function observedUtc(observedAtMs: string): string {
 export function hoursSince(observedAtMs: string): string {
   return (Math.max(0, Date.now() - Number(observedAtMs)) / 3_600_000).toFixed(1);
 }
+
+/** Whole minutes in a span of ms, rounded down and never negative: an age shown this way is never more than it is. */
+export function wholeMinutes(ms: number): number {
+  return Math.max(0, Math.floor(ms / 60_000));
+}

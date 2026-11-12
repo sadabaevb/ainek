@@ -49,7 +49,7 @@ export interface KeyLogVerdict {
   /** Set when the query named a deployment: its compose hash, and the distinct composes trusted verifiers logged with this key in the window (newest first). */
   deployment?: { composeHash: string; loggedComposes: string[] } | undefined;
   /** Set on a `young-release` refusal, in ms: how long before the check the release was first marked (absent when no entry names the release), and how long this client waits. */
-  releaseAge?: { ms?: number; minMs: number } | undefined;
+  releaseAge?: { ms?: number | undefined; minMs: number } | undefined;
   detail: string;
 }
 

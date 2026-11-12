@@ -44,7 +44,7 @@ test('marks: what a verifier writes, within the 128 bytes the contract allows, a
 
 test('evaluateRelease: the log exactly as a trusted verifier marked it passes; anything the enclave did since does not', () => {
   const logged = [entry(7, 'v1.testnet', [releaseMark(FILE, H1), logMark(INSTANCE, LOG)])];
-  assert.deepEqual(evaluateRelease(logged, at(LOG), { now: T0 + 90 * MIN }), { status: 'ok', confirmedBy: ['v1.testnet'], ageMs: 90 * MIN, detail: 'the action log as it stands (3 actions) was marked by v1.testnet; its release was first marked at 2026-11-12 08:00 UTC' });
+  assert.deepEqual(evaluateRelease(logged, at(LOG), { now: T0 + 90 * MIN }), { status: 'ok', confirmedBy: ['v1.testnet'], detail: 'the action log as it stands (3 actions) was marked by v1.testnet; its release was first marked at 2026-11-12 08:00 UTC' });
   // The enclave has since deployed: from the same file, from another file, or by restarting its manager. The rule does not
   // read the action, so each of them is a log no verifier has checked.
   for (const next of [up('2026-11-02T10:00:00Z', H2), up('2026-11-02T10:00:00Z', H1, 'prod/another.yaml'), { action: 'compose_manager_started', timestamp: '2026-11-02T10:00:00Z', image: 'org/manager@sha256:bb' }, { action: 'docker_restart', timestamp: '2026-11-02T10:00:00Z', container: 'proxy' }]) {
@@ -179,7 +179,7 @@ test('withReleaseRule: on top of a key that passed, for every report that carrie
   assert.equal(rule([reportOf(LOG, { key: recorded.signing_address.toUpperCase() })]), key, 'the key is matched as hex, whatever its case');
   // What the rule says about one report, in its own words: `pnpm demo:attest` prints this.
   const loggedAt = Number(recorded.observed_at);
-  assert.deepEqual(releaseStanding(entries, query, reportOf(LOG), { withLauncher: true, now: loggedAt + 3 * 60 * MIN }), { status: 'ok', confirmedBy: [recorded.verifier], ageMs: 3 * 60 * MIN, detail: `the action log as it stands (3 actions) was marked by ${recorded.verifier}; its release was first marked at ${new Date(loggedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` });
+  assert.deepEqual(releaseStanding(entries, query, reportOf(LOG), { withLauncher: true, now: loggedAt + 3 * 60 * MIN }), { status: 'ok', confirmedBy: [recorded.verifier], detail: `the action log as it stands (3 actions) was marked by ${recorded.verifier}; its release was first marked at ${new Date(loggedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` });
   // A client that waits six hours for a release refuses this one, three hours old, and the card can say both numbers.
   const young = withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true, minAgeMs: 6 * 60 * MIN, now: loggedAt + 3 * 60 * MIN });
   assert.deepEqual([young.status, young.reason, young.releaseAge], ['not-logged', 'young-release', { ms: 3 * 60 * MIN, minMs: 6 * 60 * MIN }]);

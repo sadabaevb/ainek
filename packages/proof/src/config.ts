@@ -69,13 +69,11 @@ const REQUIRE_RELEASE_DEFAULT = false;
  * log, and a verifier writes an unchanged release again every six hours: past twelve hours the first mark it could see
  * would often be younger than the release.
  */
-export const MAX_RELEASE_AGE_MIN = 720;
+const MAX_RELEASE_AGE_MIN = 720;
 
 /** `AINEK_MIN_RELEASE_AGE_MIN` in ms: blank or 0 is no wait, a whole number of minutes up to the maximum is that, anything else is the maximum. */
 function releaseAgeMs(value: string | undefined): number {
-  const said = value?.trim();
-  if (!said) return 0;
-  const minutes = Number(said);
+  const minutes = Number(value?.trim() || 0);
   return (Number.isInteger(minutes) && minutes >= 0 && minutes <= MAX_RELEASE_AGE_MIN ? minutes : MAX_RELEASE_AGE_MIN) * 60_000;
 }
 

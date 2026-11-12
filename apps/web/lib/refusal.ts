@@ -1,5 +1,6 @@
 // The words for a refused key, decided once from the verdict: the refusal card and the /log preview must say the same thing.
 import { shortHex, type KeyLogReason, type KeyLogVerdict } from '@ainek/proof';
+import { wholeMinutes } from './format.ts';
 import type { Dict } from './i18n';
 
 export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLogReason, 'ok'>; title: string; body: string } {
@@ -15,8 +16,7 @@ export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLog
     'shorter-log': [t.refusedShorterTitle, t.refusedShorterBody],
     'release-below-quorum': [t.refusedReleaseQuorumTitle, t.refusedReleaseQuorumBody(v.confirmedBy.length, v.quorum)],
     'rewritten-log': [t.refusedRewrittenTitle, t.refusedRewrittenBody],
-    // Whole minutes, the age rounded down: a release is never shown as older than it is.
-    'young-release': [t.refusedYoungTitle, t.refusedYoungBody(v.releaseAge?.ms === undefined ? undefined : Math.max(0, Math.floor(v.releaseAge.ms / 60_000)), Math.round((v.releaseAge?.minMs ?? 0) / 60_000))],
+    'young-release': [t.refusedYoungTitle, t.refusedYoungBody(v.releaseAge?.ms === undefined ? undefined : wholeMinutes(v.releaseAge.ms), wholeMinutes(v.releaseAge?.minMs ?? 0))],
     absent: [t.refusedTitle, t.refusedBody],
   };
   const [title, body] = texts[reason];
