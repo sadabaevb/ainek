@@ -15,9 +15,14 @@ export interface VerifiedModelEvidence {
   report: { nonce: string };
 }
 
-/** The compose hash of a verified deployment: the value of the RTMR3 `compose-hash` event, without one (absent or empty) sha256(app_compose), which the SDK checks against MRCONFIGID. */
+/**
+ * The compose hash of a verified deployment: sha256(app_compose), the value the SDK has checked against the quote's
+ * MRCONFIGID, which the hardware measures. In an honest boot the RTMR3 `compose-hash` event carries the same value, and it
+ * is not what this returns: the SDK reports the last event of that name, and before dstack 0.6.0 a container holding the
+ * dstack socket could append one of its own (`EmitEvent`), so a CVM could show a hash it did not boot from.
+ */
 export function composeHashOf(deployment: VerifiedModelEvidence['deployment']): string {
-  return normalizeHex(deployment.runtimeMeasurements.composeHash || sha256Hex(deployment.appCompose));
+  return sha256Hex(deployment.appCompose);
 }
 
 export interface BuildKeyEntryInputParams {

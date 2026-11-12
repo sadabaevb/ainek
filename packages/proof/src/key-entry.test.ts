@@ -60,12 +60,12 @@ test('compose hash falls back to sha256(app_compose); NRAS / ITA hashes are set 
   assert.equal(b.ita_jwt_hash.length, 64);
 });
 
-test('composeHashOf: the measured value wins; absent or empty, the hash of app_compose; always in the logged form', () => {
-  const measured = 'cd'.repeat(32);
+test('composeHashOf: the hash of app_compose, which MRCONFIGID binds; a compose-hash event that says otherwise is not believed', () => {
   const hashed = sha256Hex('compose');
-  assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: { composeHash: `0x${measured.toUpperCase()}` } }), measured);
   assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: {} }), hashed);
-  assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: { composeHash: '' } }), hashed);
+  assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: { composeHash: hashed } }), hashed, 'an honest boot: the event agrees');
+  // Before dstack 0.6.0 a container with the dstack socket could append a `compose-hash` event, and the SDK reports the last one.
+  assert.equal(composeHashOf({ appCompose: 'compose', runtimeMeasurements: { composeHash: 'cd'.repeat(32) } }), hashed);
 });
 
 test('refuses to build an entry that would pin nothing', () => {
