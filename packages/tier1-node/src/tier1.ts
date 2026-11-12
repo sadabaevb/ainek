@@ -175,11 +175,17 @@ export interface Tier1Params {
   /** Where the log comes from: `contractLog(cfg)` for everything real; the demo passes the recorded entry #0 when AINEK_LOG_SOURCE=sample. Required, so no caller can trust a recording by default. */
   readLog: ReadLog;
   onStep?: (event: StepEvent) => void;
+  /**
+   * For negative controls only: a hop between this client and the enclave. It gets the encrypted request as the client is
+   * about to send it and returns what it forwards. The client has none; `pnpm demo:reply-key` passes one that swaps the
+   * reply key in transit, to see the enclave refuse (./hop.ts).
+   */
+  hop?: (request: Request) => Request | Promise<Request>;
 }
 
 /** One cold run of the Tier-1 sequence. Never throws: a step that fails ends the run as `failed` at that step; a key the log does not confirm ends it as `refused`. */
-export async function runTier1({ apiKey, chat, ...base }: Tier1Params): Promise<Tier1Outcome> {
-  return run(base, { apiKey, chat });
+export async function runTier1({ apiKey, chat, hop, ...base }: Tier1Params): Promise<Tier1Outcome> {
+  return run(base, { apiKey, chat, ...(hop ? { hop } : {}) });
 }
 
 /**
@@ -190,8 +196,8 @@ export async function runPreflight(base: RunBase): Promise<PreflightOutcome> {
   return run(base);
 }
 
-type RunBase = Omit<Tier1Params, 'apiKey' | 'chat'>;
-type Send = Pick<Tier1Params, 'apiKey' | 'chat'>;
+type RunBase = Omit<Tier1Params, 'apiKey' | 'chat' | 'hop'>;
+type Send = Pick<Tier1Params, 'apiKey' | 'chat' | 'hop'>;
 // With something to send the run ends verified, refused or failed; without, it stops at `ready` after the log check.
 function run(base: RunBase, send: Send): Promise<Tier1Outcome>;
 function run(base: RunBase): Promise<PreflightOutcome>;
@@ -281,7 +287,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     onStep({ id: 'key-log', status: 'ok', detail: `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window; key #${logEntry.index} logged by ${verdict.confirmedBy.join(', ')}${cfg.requireLoggedDeployment ? ' with the attested deployment' : '; deployment check off'} (source: ${logSource})`, ms: logMs });
 
     if (!send) return done({ kind: 'ready', gateway, signer: modelAttestation, entries, verdict, logEntry });
-    const { apiKey, chat } = send;
+    const { apiKey, chat, hop } = send;
 
     // 3. Encrypt to the attested model key, keeping the exact bytes that will be hashed.
     const prepared = await step(
@@ -307,7 +313,7 @@ async function run({ cfg, readLog, onStep: rawOnStep = () => undefined }: RunBas
     const { responseBody, completion } = await step(
       'send',
       async () => {
-        const encrypted = await pinnedFetch(prepared.request);
+        const encrypted = await pinnedFetch(hop ? await hop(prepared.request) : prepared.request);
         if (!encrypted.ok) throw new Error(`chat completion failed: HTTP ${encrypted.status} ${(await encrypted.text()).slice(0, 200)}`);
         const forVerification = encrypted.clone();
         const decrypted = await prepared.decryptResponse(encrypted);
