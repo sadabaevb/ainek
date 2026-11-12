@@ -19,6 +19,10 @@
       "types": "./src/dcap.ts",
       "default": "./src/dcap.ts"
     },
+    "./release": {
+      "types": "./src/release.ts",
+      "default": "./src/release.ts"
+    },
     "./hop": {
       "types": "./src/hop.ts",
       "default": "./src/hop.ts"

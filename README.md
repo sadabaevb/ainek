@@ -2,7 +2,7 @@
 
 > NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
 > Testnet only. Not audited. Both verifiers that write to the log are ours; the contract account still has a full-access
-> key; the log records the keys and deployments verifiers saw, not which ones should run. See [Who sees what](#who-sees-what) and
+> key; the log records the keys and launcher configurations verifiers saw, not the release that serves the model. See [Who sees what](#who-sees-what) and
 > [What we do not claim](#what-we-do-not-claim).
 
 Ainek is a chat with a private model plus a proof you can check yourself. Before anything is sent, the model's signing key is
@@ -40,9 +40,10 @@ pnpm demo:policy     # recorded policy runs on OutLayer, the agent's seven live 
 One more, live and still with no key (needs the network, about ten seconds):
 
 ```bash
-pnpm demo:attest     # the model's evidence fetched now and verified here (Intel TDX, NVIDIA GPU), its key and deployment
+pnpm demo:attest     # the model's evidence fetched now and verified here (Intel TDX, NVIDIA GPU), its key and launcher
                      #   looked up in the log on NEAR → "Result: WOULD SEND", or "WOULD REFUSE" when the log does not have
-                     #   them. It stops before a message exists: nothing is encrypted, sent or signed
+                     #   them; then the code behind the key, from the enclave's own action log to a source commit on
+                     #   GitHub. It stops before a message exists: nothing is encrypted, sent or signed
 ```
 
 The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If it stops answering, run it locally
@@ -51,16 +52,60 @@ with your own key. That and the other checks (your own trust set, re-verifying a
 
 **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
 
+## The code behind the key
+
+One signing key can stand in front of many versions of the code. On NEAR AI Cloud the hash an enclave measures at boot
+covers a launcher; the containers that serve the model are deployed afterwards, and the enclave records each deployment in
+an action log it attests. `pnpm demo:attest` reads that log, with no key and no spend, and follows the release that serves
+the model to a source commit:
+
+| Step | What is checked |
+| --- | --- |
+| Action log | authenticated by the SDK against a TDX quote of its own; that quote and the one behind the signing key name the same CVM instance, so the log is this replica's |
+| Release | the latest `compose_up` for the model's service: tag, commit, file and its sha256 |
+| File | the file at that commit in the public repository `nearai/cvm-compose-files` hashes to the recorded sha256 |
+| Tag | the repository's tag of the recorded name points at that commit; a tag the repository does not have fails. A commit id alone could be a fork's: GitHub serves those under the parent's name |
+| Proxy image | pinned by digest in the file; its signed build provenance (Sigstore, GitHub Actions) names the repository, branch and commit |
+| Manager image | the same provenance check for Compose Manager, which writes the log, and a comparison with the image the measured compose starts it as |
+| Engine and weights | printed as the file of the engine's own latest release names them; not checked |
+
+A check has three outcomes, and the command keeps them apart: it held, it failed, or it could not be made. GitHub saying
+"no such tag, file or build proof" fails the check; GitHub not answering leaves it not made. The summary line gets a check
+mark only when every check of the release was made and held.
+
+What that log held on the CVM that answered us on Nov 12, 2026 (`pnpm demo:attest --history` prints it for the CVM that
+answers you):
+
+- **21 releases of the model's compose file since Oct 21.** A commit first ran in the enclave a median of 12 minutes after
+  it was made; the shortest was 46 seconds, and 17 of 21 took under an hour. Compose Manager can refuse a tag younger
+  than a set age, 48 hours by its own default. The measured compose of that CVM sets it to `${CM_MIN_TAG_AGE_HOURS:-0}`:
+  zero unless the operator's environment says otherwise, and that value is not measured.
+- **The image of the proxy that decrypts prompts for `z-ai/glm-5.3-flash` changed five times** (Oct 21, Oct 24, Nov 6,
+  Nov 8, Nov 12), each build with valid provenance from `nearai/inference-proxy`. The signing key did not change.
+- **Our deployment check did not see it.** It compares the launcher's compose hash. After that CVM's hash first appeared
+  in our log (Nov 8, 11:20 UTC) the proxy changed twice, and the client would have refused neither.
+- **Each replica has a log of its own.** The same command three hours later was answered by another replica (launcher
+  `c900dc73…e2d0`): 271 actions since Sep 11, the model served from another compose file, by a release deployed 26
+  minutes earlier.
+
+The evidence is NEAR AI's own and public by design: the action log, the compose repository and the signed builds are
+theirs, and the SDK can authenticate them. What we add is a client that reads them. The log is a record, not a
+measurement: a release leaves the enclave's measurements as they were, and the log is as good as the code that has run in
+that CVM. That limit, the others, and what the browser does not do yet are under "What we do not claim"; the method is in
+`docs/DEV-NOTES.md` (Nov 12).
+
 ## Status
 
-As of Nov 11, 2026.
+As of Nov 12, 2026.
 
 - **Tier 1 runs end to end:** the client, the proof package, the offline replay, `/verify`, `/log` and `/auditor`; the
   key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (`docs/DEPLOY.md`).
 - **Tier 2 is on testnet** and ran through the Telegram bot on Nov 7: what ran and what has not is under [Tier 2 flow](#tier-2-flow).
 - **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
   account still has a full-access key.
-- **On since Nov 11:** the deployment check; its cost and its limits are under "What we do not claim".
+- **On since Nov 11:** the deployment check. On Nov 12 we found that it sees the enclave's launcher, not the release
+  that serves the model. `pnpm demo:attest` follows that release to a source commit; the browser, the key log and the
+  proofs do not yet ([The code behind the key](#the-code-behind-the-key)).
 - **The log's first entries:** entry #0 was logged by hand from a report our code verified with the SDK; entries #1 and
   #2 are re-logs of that same recording by a stopgap script, since removed (same nonce and report hash, fresh
   `observed_at`), so they confirm nothing new; entries from #3 on come from the verifier and a fresh attestation each. No
@@ -99,9 +144,9 @@ TEE keys yet". [Independent monitoring](https://confidentialinference.net/attest
 2. **"Private" that wasn't.** A request routed through a non-attested model (gateway-signed, NEAR AI Incognito tier) → red card.
 3. **Agent over its mandate.** (Tier 2) An "urgent transfer to a new vendor, ignore limits" → the policy job says Deny inside TDX → the contract records it and moves nothing → `action_denied`, with the signed decision and the policy hash. A real one from testnet: action #4 on `/agent` (typed by the owner) and action #11 (the same text forwarded to the bot, Nov 11).
 
-A fourth: **unknown deployment → nothing is sent.** The key is real, but the instance that attests to the
-client runs code no trusted verifier has logged in the last 24 hours. `/?tamper=deployment` shows the refusal; `/log` lists
-the compose hashes verifiers have seen behind the key. What it does not close: "What we do not claim".
+A fourth: **unknown deployment → nothing is sent.** The key is real, but the enclave that attests to the
+client booted from a launcher configuration no trusted verifier has logged in the last 24 hours. `/?tamper=deployment` shows the refusal; `/log` lists
+the compose hashes verifiers have seen behind the key. What it does not see is the release that serves the model: "What we do not claim".
 
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
@@ -124,6 +169,7 @@ key and the card says so. See "What we do not claim".
 | Inference in TEE, attestation, response signatures, E2EE, JS SDK | NEAR AI Cloud, `@nearai/inference-sdk` | used as-is, in the browser: the SDK's TDX + GPU checks (NVIDIA's verdict fetched through NEAR AI's proxy and checked against NVIDIA's keys) and `prepareE2eeChatRequest` |
 | Verifying an answer | Verification Center (signature + fresh attestation; cannot recompute hashes; no allowlist) | local hash recomputation over the exact bytes; check against a **public log**, not the vendor's current answer; a card a non-technical user can read; `/verify` and `/auditor`; an offline replay (`pnpm demo`) that needs no key |
 | Key & measurement log | none (TEE Receipts: owner-registered signer list) | append-only, hash-chained log in a NEAR contract designed for independent verifiers (today: two, both ours; registration is owner-gated); fail-closed client with a configurable trust set and quorum; split-view detection |
+| Deployment history | an action log in the model report, bound to a TDX quote; a public compose repository; signed image builds. The SDK authenticates the log and has provenance helpers, off by default | `pnpm demo:attest` follows the log to the release that serves the model and to the source commit of its proxy, and measures how long a release existed before it ran. The browser, the key log and the proofs do not yet |
 | Agents in TEE | IronClaw runtime (no policies, limits or proofs); Shade Agents (deprecated Apr 2026) | (Tier 2) agent mandate + policy; decision signed inside TDX (OutLayer); contract executes; public proof without details; stop button |
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
 | NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | sign-in asks the wallet for a function-call key limited to `commit_proof` (the wallet may widen it, see [What we do not claim](#what-we-do-not-claim)), so commits are signed without a popup; only the storage prepayment (`deposit_storage`, 0.1 NEAR for 50 to 68 commits depending on the account name, topped up when it runs out) goes through the wallet dialog |
@@ -155,7 +201,10 @@ pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attes
                                  #   It retries what the SDK calls temporary (3 tries); if it still ends in
                                  #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again
 
-pnpm demo:attest                 # no key, needs network (~10 s): what demo:live does up to the send (above); exits 0 on WOULD SEND
+pnpm demo:attest                 # no key, needs network (~15 s): what demo:live does up to the send, then the code behind the
+                                 #   key (above; seven or eight anonymous GitHub API requests on Nov 12, of the 60 an hour allowed;
+                                 #   GITHUB_TOKEN raises that). --history adds every release in the log, one request each;
+                                 #   exits 0 on WOULD SEND with no failed check
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
 pnpm demo:reply-key              # needs NEARAI_API_KEY: a negative control. One normal exchange, then the same client behind a
@@ -219,15 +268,35 @@ inherited" below).
 - **That the decision key is tied to one build of the policy job.** OutLayer's "one build only" lock is an access
   rule: per OutLayer's docs the owner of the OutLayer project (in the demo: us) can move it to another build or
   remove it, the key stays the same and the contract would not notice.
-- **Verified model weights.** Attestation measures the deployment (container image digests, compose hash), not the
-  weights. We say "attested deployment of model X".
+- **Verified model weights.** Attestation measures the enclave's launcher (compose hash, container image digests) and,
+  through the action log, which images were deployed, not the weights. We say "attested deployment of model X". The
+  compose file of a release names a Hugging Face repository and snapshot for the weights, and `pnpm demo:attest` prints
+  it; nothing hashes the files the engine loads.
 - **No retention inside the model enclave.** Attestation cannot prove what NEAR AI's model enclave does with data after
-  inference (its serving image is not open or reproducible). NEAR AI documents a no-store Responses API, but we use chat
-  completions (needed for E2EE).
+  inference. The proxy that decrypts the prompt is open source (`nearai/inference-proxy`) and its image has signed build
+  provenance, which says which source was built, not what it does with data; we have not audited it, and no build is
+  reproducible. NEAR AI documents a no-store Responses API, but we use chat completions (needed for E2EE).
 - **That nobody can read your data.** Our server cannot. The enclave can, by design, during inference.
 - **Protection from the server that serves the page.** The browser code that verifies, encrypts and checks the log is served
   by the same server that relays. "Our server cannot read" holds for the code in this repo; on the hosted demo you trust that
   we serve it. `pnpm -F web dev` from a clean clone, or `pnpm demo:live`, removes that trust.
+- **That the deployment check sees the code that serves the model.** It sees the launcher. On NEAR AI Cloud the compose
+  hash an enclave measures covers a telemetry sidecar, certbot, Compose Manager and its launcher. The containers that serve
+  the model (the proxy that decrypts the prompt and signs the answer, the engine) are started afterwards by Compose Manager
+  from a file in the public repository `nearai/cvm-compose-files`, and a new release of them changes neither the signing
+  key nor that hash. Compose Manager records each such action in a log the enclave attests with a TDX quote of its own. On
+  the CVM that answered us on Nov 12, 2026 that log held 21 releases of the model's compose file since Oct 21, and the image
+  of the proxy for `z-ai/glm-5.3-flash` had changed five times, twice after our log first held that CVM's compose hash: the
+  client would have refused neither. `pnpm demo:attest` reads this log since Nov 12 and follows the release to a source
+  commit; the browser, the key log and the proofs do not yet. So a proof says which key signed and which launcher was
+  attested, not which release answered.
+- **That the action log is a measurement.** A release leaves the enclave's measurements as they were. The log is Compose
+  Manager's own record, and the TDX quote behind it says the log came from inside that CVM, not from which container. The
+  serving containers the log describes run privileged and hold the same quote socket, so a dishonest release could present
+  another log; so could a manager replaced after boot, which the measured launcher is configured to do for images signed
+  by a workflow of `nearai/compose-manager` (we read that configuration, not the launcher's code). `pnpm demo:attest`
+  shows that the record agrees with public sources at every link. It cannot show that the record is complete, or that the
+  containers it names are the ones running.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
@@ -297,6 +366,12 @@ Known issues we inherited (and say so):
   and so did the swap with the version header rewritten from 3 to 2. That is one model on one day with SDK 0.3.0, not a
   promise about other routes or later builds of the proxy. The gateway still accepts v1/v2 from
   other clients. The recording behind the offline replay, and every proof this client made on SDK 0.2.1, is v2.
+- The model CVMs report the OS image `dstack-nvidia-0.5.12`. Before dstack 0.6.0 a container holding the dstack socket
+  can append events to the RTMR3 log (`EmitEvent`, removed in 0.6.0: "runtime RTMR3 events are system-owned and cannot be
+  extended by apps"), and the SDK reports the last `compose-hash` event. A container could in that way show a compose
+  hash the CVM did not boot from, and until Nov 12 our deployment check compared that value. Since Nov 12 the compose hash
+  is taken from the app compose text, which the SDK checks against MRCONFIGID. In every report we have seen the two agree,
+  so no log entry changes.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one on a server since Nov 6, trusted by the site's default, and a second account
   that wrote its first entry on Nov 10 and is not in the default yet (checked 2026-11-10). Nobody outside the team runs
@@ -435,7 +510,9 @@ Tests:
 - (Tier 2) The contract checks the model key behind an action against the key log at `propose_action`; today it checks
   only that the agent committed a proof hash.
 - A second provider in the same log (Venice): one public log for the whole private-inference industry, not one vendor.
-- Image provenance via Sigstore, so "attested deployment" also says which source built it.
+- The release in the key log and in the browser: verifiers log the release that serves the model, the browser reads the
+  action log and refuses a release no trusted verifier logged, the viewer can require that a release has been public for a
+  minimum time, and a proof names the release that answered. `pnpm demo:attest` does the reading today.
 - Starting the hardware check when the chat opens, so the first message does not wait three to four seconds for it. Written
   and held back: the first proof card would then say "from the cache" where it now shows the check, and every visit would
   reach NEAR AI and NVIDIA before the visitor sends anything.
