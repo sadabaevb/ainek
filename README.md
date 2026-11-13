@@ -107,6 +107,18 @@ The same chain runs in the browser, on request: the proof card has a line "Code 
 has a section of the same name that also lists the releases in the replica's log. The check asks GitHub and Sigstore
 from the visitor's own address, so it never starts by itself. It shows the release; the client does not refuse on it.
 
+### Who else has looked at exactly this
+
+Both verifiers that write to our log are ours. Other people check NEAR AI too, and three of them publish what they found
+under the same values the enclave attests: [Countersign](https://github.com/greenlima/sealed-review) (a reviewer's signed
+feed in a NEAR testnet contract, another entry in this hackathon), [Quill Cloud](https://github.com/Lore-Hex/quill-cloud-proxy)
+(a gateway's public policy file) and [teemoon audits](https://github.com/teemoonai/audits) (source reviews by the hash
+of a release file). `pnpm demo:attest` and the release check in the browser read the three and mark each "seen", "not
+seen" or "not known". "Seen" is not approval: on Nov 13 Countersign had seen the key and the launcher we use, and its
+verdict was "warning"; none of the three had looked at the release that had gone live a few hours before. The readings
+are shown and never applied, and a Countersign entry lasts three days, so its line may read "expired". What a reading
+says and does not say is in [docs/CLAIMS.md](docs/CLAIMS.md); the sources are in [docs/SPEC.md](docs/SPEC.md) §7.6.
+
 ![The code behind the key on /log: the release, each check and the releases in the replica's action log](docs/screenshots/code-behind-the-key.png)
 
 ### The release in the key log
@@ -280,8 +292,10 @@ pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live fr
 pnpm demo:reply-key              # needs NEARAI_API_KEY: a negative control. One normal exchange, then the same client behind a
                                  #   hop that swaps the reply key in transit, and once more with the version header rewritten
                                  #   from 3 to 2: both must get no reply; exits 0 on "Result: REFUSED"
-pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. The chat needs NEARAI_API_KEY
-                                 #   (server-side only); /log, /verify, /auditor, /agent and /trust work without it. Send "hello" → the
+pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. Sending a message needs
+                                 #   NEARAI_API_KEY (server-side only). Everything before a message works without it: /log,
+                                 #   /verify, /auditor, /agent, /trust, the release check, and the two refusals on the first
+                                 #   screen, which verify the evidence and stop before anything is sent. Send "hello" → the
                                  #   browser verifies the TEE evidence itself (a few seconds cold, longer when the attestation
                                  #   services are slow, see "Metrics"; then cached 60 min), encrypts to the attested model key,
                                  #   checks the signature and shows the proof card. Needs a log entry younger than 24 h (see
@@ -425,6 +439,16 @@ inherited" below).
   before the client filters, so a registered verifier that writes a hundred entries dated ahead crowds the general read;
   each trusted verifier is still read on its own. A trusted verifier's key that leaks still lets its holder log a key of
   their choice, a day at a time.
+- **That an outside reading is a verifier of ours, or an endorsement.** The three readings are shown and never applied:
+  they take no part in the decision to send, and none of the parties is in a trust set or writes to our log. They
+  publish for their own users, not for us. "Seen" is "has looked", not "approves": Countersign's verdict on the machine
+  we use is "warning", for two checks our client does not make (Intel's early collateral rates the platform out of
+  date; the report declares four NVSwitches and carries no evidence for them). Its entries are signed by one person, by
+  hand, and expire after three days. Which of its entries is the latest is the word of a public RPC: an older entry that has
+  not expired can be served as the current one. The feed's two keys are pinned as we compared them once, on Nov 13; a
+  key the feed retires after that is still accepted here. Quill Cloud's file and teemoon's pages come over HTTPS from
+  GitHub and are not signed: whoever can write to those repositories, or GitHub, decides what the reading says. The
+  formats are theirs and may change without notice; then the reading says it could not be made.
 - **A log that can grow without end.** `latest_keys` reads a model's whole history before it filters by verifier and
   age. Measured in near-sdk's unit-test environment, not on a node, that costs about 0.15 Tgas an entry, which reaches
   the 300 Tgas of a view call near 2,000 entries for one model; the log held 79 on Nov 13. Past that point every read
@@ -604,6 +628,9 @@ Tests:
   `@fontsource/ibm-plex-*` 5.3.0 (SIL OFL 1.1, licences alongside); Rust: `near-sdk` 5, `near-contract-standards` 5 (the demo token), `cargo-near`, `near-sandbox` + `near-api` (tests), `serde`.
 - Copied pattern: `contracts/demo-token/src/lib.rs` wires up `near-contract-standards` the way the official
   `near-examples/FT` example does (the token logic itself is that library).
+- Read at run time, with no code copied: Countersign's feed contract on NEAR testnet, Quill Cloud's policy file and
+  teemoon's review pages on GitHub ("Who else has looked at exactly this"). Two feed entries, two pins and the first lines
+  of one review page are recorded under `docs/samples/outside` for the tests.
 - Reference material followed (no other code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
   verification guide, `near-examples/nearai-cloud-verification-example`, `nearai/nearai-cloud-verifier`,
   `out-layer/private-dao-example` (Tier 2).

@@ -40,6 +40,16 @@ const ARG_ROUTES: Readonly<Record<string, { ok: (segment: string, models: Readon
   'GET signature': { ok: completionIdOk, problem: 'completion id not allowed', params: new Set(['signing_algo']) },
 };
 
+/**
+ * What a relay with no API key can still forward: the reads. The model's metadata and its attestation report are public
+ * at NEAR AI, so the checks before sending (the evidence, the key log, the refusals, the release behind the key) work
+ * from a clean clone with no key; only a message needs one. A read that does need the key is refused upstream.
+ */
+export const KEY_MISSING = 'NEARAI_API_KEY is not set on the server';
+export function keyProblem(method: string, apiKey: string | undefined): string | null {
+  return apiKey || method === 'GET' ? null : KEY_MISSING;
+}
+
 /** Why this request may not go upstream, or null when it is one the page makes for one of the configured models. */
 export function relayRequestProblem(method: string, rawPath: string, query: URLSearchParams, models: ReadonlySet<string>): string | null {
   const [v1, kind, arg, ...extra] = rawPath.split('/');

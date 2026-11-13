@@ -1,7 +1,7 @@
 // A proof you can pass on as a link: the "Disclose to auditor" file (SPEC §5.4), deflated and base64url-encoded into the URL
 // fragment of /verify. A fragment is never sent to a server, so the page that serves /verify does not see it; whoever gets the
 // link does, and the link is as private as the file.
-import { base64ToBytes, bytesToBase64 } from '@ainek/proof';
+import { base64UrlToBytes, bytesToBase64 } from '@ainek/proof';
 
 const PARAM = 'd=';
 /** A disclosure is a few kilobytes; these stop a crafted link from making the page inflate megabytes. */
@@ -9,7 +9,6 @@ const MAX_FRAGMENT_CHARS = 200_000;
 const MAX_JSON_BYTES = 1_000_000;
 
 const toBase64Url = (bytes: Uint8Array) => bytesToBase64(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
-const fromBase64Url = (text: string) => base64ToBytes(text.replaceAll('-', '+').replaceAll('_', '/'));
 const streamOf = (bytes: Uint8Array) => new Blob([bytes as BlobPart]).stream();
 
 /** Inflates with a ceiling on the output: the stream is cancelled as soon as it passes `limit`. */
@@ -43,5 +42,5 @@ export async function proofFromFragment(fragment: string): Promise<string | null
   const body = fragment.replace(/^#/, '');
   if (!body.startsWith(PARAM)) return null;
   if (body.length > MAX_FRAGMENT_CHARS) throw new Error('the link is too long to be a proof');
-  return new TextDecoder('utf-8', { fatal: true }).decode(await inflate(fromBase64Url(body.slice(PARAM.length)), MAX_JSON_BYTES));
+  return new TextDecoder('utf-8', { fatal: true }).decode(await inflate(base64UrlToBytes(body.slice(PARAM.length)), MAX_JSON_BYTES));
 }

@@ -20,6 +20,8 @@ export interface ReleaseCheck extends ReleaseVerdict {
   history: { name: string; commit: string; deployedAt: string }[];
   /** Every fact, in the words `pnpm demo:attest` prints. */
   lines: ReleaseLine[];
+  /** What the lines were worded from; absent when the report carried no action log. */
+  inspection?: ReleaseInspection;
 }
 
 type Attested = Pick<VerifiedModelAttestation, 'deployment' | 'report'>;
@@ -48,6 +50,13 @@ export async function checkRelease(attestation: Attested, model: string, fetch: 
   return present(await running, model);
 }
 
+/**
+ * What three parties outside our team published about the state a report attests (outside-readings.ts in @ainek/proof).
+ * Read once the visitor has asked for the release check, from their own address, with no token, and given the inspection
+ * that check made: it names the release. It never rejects.
+ */
+export { outsideReadingsFor as readOutside } from '@ainek/proof/release-chain';
+
 function present(inspection: ReleaseInspection | undefined, model: string): ReleaseCheck {
   if (!inspection) return { status: 'skipped', failures: [], unchecked: [], unresolved: 'this model report carries no action log', retry: false, history: [], lines: [] };
   // Every service of the model feeds the verdict; the first is the one the sentence names.
@@ -70,5 +79,6 @@ function present(inspection: ReleaseInspection | undefined, model: string): Rele
     // The log is oldest first.
     history: (served?.history ?? []).map((r) => ({ name: releaseName(r), commit: r.commit, deployedAt: utcText(r.deployedAt) })).reverse(),
     lines: describeRelease(inspection, { model }).lines,
+    inspection,
   };
 }

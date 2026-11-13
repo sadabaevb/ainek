@@ -30,7 +30,8 @@ non-commercial use: no payments, ads or paid hosting on the site.
    - The web app never reads the verifier, agent, Telegram or OutLayer secrets.
    - The tamper switch is a client-side demo control (`?tamper=1` or the checkbox) and stays available on the hosted
      demo on purpose: it is the demo of the refusal.
-4. Deploy. Without the key the chat answers 503; the other pages work.
+4. Deploy. Without the key a message is refused with 503; everything before a message works, the two refusals of the first
+   screen and the release check included, because the relay forwards the reads (the evidence, the model's metadata) with no key.
 
 **In Project Settings afterwards:**
 
@@ -56,8 +57,11 @@ non-commercial use: no payments, ads or paid hosting on the site.
 11. - Pages: `/log` shows the live log; `/auditor` → "Use the sample file" → Check → "checks out".
     - Headers: `curl -sI $U` shows `Content-Security-Policy: frame-ancestors 'none'`.
     - Settings: Environment Variables lists only `NEARAI_API_KEY`, for Production only.
-    - The key, model metadata only: `curl -s -o /dev/null -w '%{http_code}\n' -H "Origin: $U" "$U/api/nearai/v1/model/z-ai%2Fglm-5.3-flash"`
-      → 200 means the server has a key, 503 that it has none (the model is `NEARAI_MODEL`, `/` written as `%2F`).
+    - The key, model metadata only: `curl -s -o /dev/null -D - -H "Origin: $U" "$U/api/nearai/v1/model/z-ai%2Fglm-5.3-flash" | grep -iE '^HTTP|^x-ainek-key'`
+      → a `200` line alone means the server has a key; `200` and `x-ainek-key: absent` that it has none and forwarded
+      the read without one. Any other status is a refusal (the rate limit, the origin) and says nothing about the key.
+      A GET, not `curl -I`: the relay forwards no HEAD request and answers it 404 (the model is `NEARAI_MODEL`, `/`
+      written as `%2F`).
       Whether NEAR AI accepts the key shows only in the chat message.
     - The firewall (the relay refuses an empty body before it uses the key), for the path as the page writes it and for
       `/api/nearai/./v1/chat/completions`:

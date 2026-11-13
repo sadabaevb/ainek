@@ -62,6 +62,11 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-export function base64ToBytes(text: string): Uint8Array {
+export function base64ToBytes(text: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+}
+
+/** The URL-safe alphabet (`-` and `_`), with or without padding: a link fragment, a part of a JWT. */
+export function base64UrlToBytes(text: string): Uint8Array<ArrayBuffer> {
+  return base64ToBytes(text.replaceAll('-', '+').replaceAll('_', '/'));
 }

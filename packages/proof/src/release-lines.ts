@@ -24,6 +24,10 @@ export const utcText = (time: string): string => {
   const iso = isoOf(time);
   return iso ? `${iso.slice(0, 16).replace('T', ' ')} UTC` : 'an unreadable time';
 };
+/** The last millisecond of the year 9999: a time past it is not one a clock reads (microseconds or nanoseconds, say). */
+export const MAX_TIME_MS = 253_402_300_799_999;
+/** The same for Unix milliseconds: a verifier's `observed_at`, the times of a signed feed entry. */
+export const utcTextOfMs = (ms: number): string => utcText(ms >= 0 && ms <= MAX_TIME_MS ? new Date(ms).toISOString() : '');
 const day = (time: string): string => isoOf(time)?.slice(0, 10) ?? 'an unreadable date';
 const digestText = (digest: string | undefined): string => (digest ? `sha256:${shortHex(digest.replace(/^sha256:/, ''))}` : 'no digest');
 /** What a release is called: its tag, or the start of its commit id when the action carried none. */

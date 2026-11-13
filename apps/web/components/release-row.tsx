@@ -7,6 +7,7 @@ import { getSdkError, isVerificationError, type VerifiedModelAttestation } from 
 import { useT } from '@/app/providers';
 import { describeError } from '@/lib/errors';
 import { withKeyLog, type KeyLogContext } from '@/lib/key-log-line';
+import type { OutsideReading } from '@ainek/proof/release-chain';
 import type { ReleaseCheck } from '@/lib/release';
 import { CheckLine, Row } from './checks';
 
@@ -15,7 +16,7 @@ import { CheckLine, Row } from './checks';
  * A finished check keeps the report it read and when, so that the key-log line follows the log and the viewer's trust set
  * as they change without checking the release again, and still speaks for the moment of that check.
  */
-type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation; at: number } | { kind: 'error'; why: string; failed: boolean };
+type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation; at: number; /** What outside parties say about this state; absent while it is being read. */ outside?: OutsideReading[] } | { kind: 'error'; why: string; failed: boolean };
 
 /**
  * `attest` gives the verified report to read: the card hands over the one it already holds, /log verifies one when asked.
@@ -24,16 +25,20 @@ type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: Rel
  * does not and leaves it out.
  */
 export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { attest: () => Promise<VerifiedModelAttestation>; model: string; hint?: string | undefined; history?: boolean; keyLog?: KeyLogContext | null | undefined }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [open, setOpen] = useState(false);
 
   const run = async () => {
     setState({ kind: 'running' });
     try {
-      const [{ checkRelease }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
+      const [{ checkRelease, readOutside }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
       const at = Date.now(); // the report is as fresh as it will be; the key-log line is read as of now
-      setState({ kind: 'done', check: await checkRelease(attestation, model), attestation, at });
+      const check = await checkRelease(attestation, model);
+      setState({ kind: 'done', check, attestation, at });
+      // The row does not wait for the outside readings, and they land only on the check they were read for.
+      const outside = await readOutside(attestation, model, check.inspection);
+      setState((s) => (s.kind === 'done' && s.at === at ? { ...s, outside } : s));
     } catch (err) {
       const refused = getSdkError(err);
       setState({ kind: 'error', why: describeError(err), failed: isVerificationError(refused) && !refused.retryable });
@@ -43,11 +48,20 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
   const check = useMemo(() => (state.kind !== 'done' ? undefined : keyLog === undefined ? state.check : withKeyLog(state.check, state.attestation, model, keyLog, state.at)), [state, keyLog, model]);
   const status = check ? check.status : state.kind === 'running' ? 'running' : state.kind === 'error' && state.failed ? 'fail' : 'skipped';
   const again = <button type="button" className="btn small" onClick={run}>{t.codeAgain}</button>;
+  const outside = state.kind === 'done' ? state.outside : undefined;
   const detail = check && (
     <>
       {open && (
         <ul className="mono checks" lang="en">
           {check.lines.map((l, i) => <CheckLine key={i} status={l.status}>{l.text}</CheckLine>)}
+        </ul>
+      )}
+      <p className="small history-title">{t.outsideTitle}</p>
+      <p className="muted small">{outside ? t.outsideNote : t.outsideLoading}</p>
+      {/* Words in a tag, not the marks of our own checks: "seen" is not "held". */}
+      {outside && (
+        <ul className="mono checks" lang="en">
+          {outside.map((r, i) => <li key={i}><span className="tag" lang={lang}>{t.outsideStatus[r.status]}</span> {r.source}: {r.text}</li>)}
         </ul>
       )}
       {history && check.history.length > 0 && (

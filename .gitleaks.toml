@@ -10,14 +10,14 @@ title = "Ainek"
 useDefault = true
 
 [[allowlists]]
-description = "Recorded attestation evidence: NVIDIA's NRAS tokens are signed verdicts about a GPU, not credentials. The offline replay verifies this file."
+description = "Recorded attestation evidence: NVIDIA's NRAS tokens are signed verdicts about a GPU, not credentials. The offline replay verifies this file. And two entries of Countersign's public feed, read from its NEAR contract: signed verdicts of an outside reviewer, public by design."
 targetRules = ["jwt"]
-paths = ['''^docs/samples/nras-response\.json$''']
+paths = ['''^docs/samples/nras-response\.json$''', '''^docs/samples/outside/countersign-entry-\d+\.jwt$''']
 
 [[allowlists]]
-description = "Hex fields of a recorded TDX report; the model's public signing key (it is in the key log on NEAR) in a relay test and in the recorded reply-key control; a public transaction hash in the canonical-JSON test vectors."
+description = "Hex fields of a recorded TDX report; the model's public signing key (it is in the key log on NEAR) in a relay test, in the test of the outside readings and in the recorded reply-key control; a public transaction hash in the canonical-JSON test vectors."
 targetRules = ["generic-api-key"]
-paths = ['''^docs/samples/attestation-report\.json$''', '''^apps/web/lib/relay-guard\.test\.ts$''', '''^docs/samples/reply-key-control\.json$''', '''^docs/test-vectors/canonical\.json$''']
+paths = ['''^docs/samples/attestation-report\.json$''', '''^apps/web/lib/relay-guard\.test\.ts$''', '''^packages/proof/src/outside-readings\.test\.ts$''', '''^docs/samples/reply-key-control\.json$''', '''^docs/test-vectors/canonical\.json$''']
 
 [[allowlists]]
 description = "The vendored NEAR AI skill's curl examples (.agents and its .claude copy): the bearer token is the literal text YOUR_API_KEY, and only that text is let through."
