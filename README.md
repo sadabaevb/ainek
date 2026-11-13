@@ -94,13 +94,14 @@ answers you):
 The evidence is NEAR AI's own and public by design: the action log, the compose repository and the signed builds are
 theirs, and the SDK can authenticate them. We are not the first to read them. Brave's near-verifier, Quill Cloud,
 AnonRouter and the Hermes confidential-mode plugin each follow this log for their own gateway or user, and all but
-AnonRouter can refuse a release they have not approved (Brave's code and Quill's review we opened ourselves; the other
-two are as a delegated reader reported). In this hackathon Countersign and Neslos read it too
-([docs/PRIOR-ART.md](docs/PRIOR-ART.md)). We add two things: a client that reads them in a browser and from a clean
-clone, and marks in a public log on NEAR, so that the approval is not one operator's list (below). The log is a record,
-not a measurement: a release leaves the enclave's measurements as they were, and the log is as good as the code that has
-run in that CVM. That limit and the others are under "What we do not claim"; the method is in `docs/DEV-NOTES.md` (Nov
-12).
+AnonRouter can refuse a release they have not approved. Brave's README, its gateway's attestation check and Quill's
+review of Nov 12 we opened ourselves; the other two are as a delegated reader reported. In this hackathon Countersign,
+Neslos and DNA Confidential read it too ([docs/PRIOR-ART.md](docs/PRIOR-ART.md)). We add two things: a client that reads
+them in a browser and from a clean clone, and marks in a public log on NEAR, below, which several verifiers can write
+and a client can choose among (today both verifiers are ours, and a mark is not an approval). The log is a record, not a
+measurement: a release leaves the enclave's measurements as they were, and the log is as good as the code that has run
+in that CVM. That limit and the others are under "What we do not claim"; the method is in `docs/DEV-NOTES.md`
+(Nov 12).
 
 The same chain runs in the browser, on request: the proof card has a line "Code behind the key" with a button, and `/log`
 has a section of the same name that also lists the releases in the replica's log. The check asks GitHub and Sigstore
@@ -246,7 +247,7 @@ entry, including two read on Nov 10, with where it is ahead and what Ainek adds,
 
 Among those 26 entries, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours. On Nov 10 we also read two later entries (posts, READMEs, parts of the code; `docs/PRIOR-ART.md`). CIPHERWORK refuses before sending and encrypts to the attested model key, with no public key log: it trusts one verifier key of its own. Provable AI Compliance refuses and encrypts at another layer, to an attested OutLayer enclave that then reaches the model over TLS; it has no key log, and when the model's evidence fails a check it records that and still delivers the answer. It binds its gateway's code, input, output and caller into one Intel quote per run, where our Tier 2 has two artifacts joined by hashes.
 
-On Nov 13 the gallery held 820 entries. We read the text of 779 of their posts, searched GitHub for code that reads NEAR AI's evidence, and read 23 more repositories with Claude Code: Countersign directly, 22 through delegated agents. For Shade, Neslos, DNA Confidential and Oathline we then checked against the source what is said about them here and in [docs/PRIOR-ART.md](docs/PRIOR-ART.md); the other 18 we know only as the agents reported them. The sentence about the 26 does not describe this later field. **Countersign** keeps a signed, hash-chained feed of reviewed NEAR AI machines in a NEAR contract and refuses before sending; its reviewer is its author, as our verifiers are ours. It is ahead of us on the contract (no access keys; ours has one), on boot measurements recomputed from the OS image and on published evidence. By its own method page it does not check response signatures, follow an image to its source or compare the release per request, and its encryption is version 2. **Shade** has a key registry that watchers fill by a quorum the contract enforces, a refusal before sending and receipts on chain; by its README the gateway in its demo is a mock and nothing is on testnet. In none of the 51 repositories read so far did we find three things: an append-only, hash-chained key log for several verifiers with the trust set and the quorum at the viewer; release marks in such a log with a client rule on them; a policy kept private whose decision is signed inside an OutLayer job and verified by the contract. Charter, Neslos and a policy gate by the author of Provable AI Compliance each do part of the third; they and the other near neighbours are in [docs/PRIOR-ART.md](docs/PRIOR-ART.md). That is a statement about 51 repositories as far as those readings go, not about 820 entries.
+On Nov 13 the gallery held 820 entries. We read the text of 779 of their posts, searched GitHub for code that reads NEAR AI's evidence, and read the repositories of 23 more entries with Claude Code: Countersign directly, 22 through delegated agents. For Shade, Neslos, DNA Confidential and Oathline we then checked against the source what is said about them here and in [docs/PRIOR-ART.md](docs/PRIOR-ART.md); the other 18 we know only as the agents reported them. The sentence about the 26 does not describe this later field. **Countersign** keeps a signed, hash-chained feed of reviewed NEAR AI machines in a NEAR contract and refuses before sending; its reviewer is its author, as our verifiers are ours. It is ahead of us on the contract (no access keys; ours has one), on boot measurements recomputed from the OS image and on published evidence. By its own method page it does not check response signatures, follow an image to its source or compare the release per request, and its encryption is version 2. **Shade** has a key registry that watchers fill by a quorum the contract enforces, a refusal before sending and receipts on chain; by its README the gateway in its demo is a mock and nothing is on testnet. In none of the 51 entries' repositories read so far did we find three things: an append-only, hash-chained key log for several verifiers with the trust set and the quorum at the viewer; release marks in such a log with a client rule on them; a policy kept private whose decision is signed inside an OutLayer job and verified by the contract. Charter, Neslos and a policy gate by the author of Provable AI Compliance each do part of the third; they and the other near neighbours are in [docs/PRIOR-ART.md](docs/PRIOR-ART.md). That is a statement about 51 repositories as far as those readings go, not about 820 entries. Another 17 projects outside the hackathon were read the same day for one question, who else reads the enclave's action log; they are in a section of their own in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
 ## Try it (do X → see Y)
 
@@ -614,11 +615,13 @@ Tests:
   without trusting the sender. A provider could then not show verifiers one thing and users another without leaving a
   public trace, and a refusal could last seconds, not hours. Not built and not measured: verifiers take no evidence from
   outside today.
-- What neighbours in this hackathon already do and we do not ([docs/PRIOR-ART.md](docs/PRIOR-ART.md)):
-  - a contract with no access keys (Countersign);
+- What neighbours in this hackathon already do and we do not. The names are entries with a row in
+  [docs/PRIOR-ART.md](docs/PRIOR-ART.md); `docs/FIELD.md` lists more:
+  - a contract with no access keys (Black box, Judge on NEAR, Countersign);
   - the answer's signature checked by the contract (TEE Receipts, Shade, Oathline);
+  - a quorum of key watchers that the contract enforces (Shade), and the Intel quote verified on chain (Oathline);
   - every attestation the gateway returns verified, not just one (CIPHERWORK, Countersign);
-  - the raw evidence behind each entry published (Vouch, Countersign);
+  - the raw evidence behind each entry published (Vouch, TEE Receipts, Countersign);
   - the log read from two RPC providers (Countersign).
 - Starting the hardware check when the chat opens, so the first message does not wait three to four seconds for it. Written
   and held back: the first proof card would then say "from the cache" where it now shows the check, and every visit would

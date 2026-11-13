@@ -14,3 +14,20 @@ test('README "What we do not claim" and "Known issues" repeat docs/CLAIMS.md wor
     claims.trim(),
   );
 });
+
+// The paragraph on the field as it stood on Nov 13 is in the README ("Prior art in this hackathon") and in CLAIMS
+// ("We claim"), copied by hand like the list above. The README bolds two names and links the file CLAIMS names in
+// backticks; nothing else may differ.
+test('README and docs/CLAIMS.md carry the same paragraph on the Nov 13 field', () => {
+  const paragraph = (md: string): string => {
+    const start = md.indexOf('On Nov 13 the gallery held 820 entries.');
+    assert.ok(start >= 0, 'the paragraph is there');
+    return md
+      .slice(start, md.indexOf('\n', start))
+      .split('**')
+      .join('')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '`$1`')
+      .trim();
+  };
+  assert.equal(paragraph(readRepoText('README.md')), paragraph(readRepoText('docs/CLAIMS.md')));
+});
