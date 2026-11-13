@@ -5,7 +5,7 @@
     "contract": "ainek-log-dastan.testnet",
     "rpcUrl": "https://rpc.testnet.fastnear.com",
     "node": "v24.15.0",
-    "measuredAt": "2026-11-11T16:17:06.006Z",
+    "measuredAt": "2026-11-13T15:29:10.360Z",
     "prompt": "Reply with the single word: ok.",
     "note": "from Node, direct to NEAR AI (no relay), evidence re-fetched on every run; connections and proxy caches may be warm; times in ms"
   },
@@ -14,893 +14,901 @@
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1387,
+      "bytesReceived": 834,
       "retries": 0,
       "timings": {
-        "metadata": 725.867166,
-        "attestation": 3551.301583,
-        "key-log": 325.96245799999997,
-        "encrypt": 14.959624999999505,
-        "send": 9006.088415999999,
-        "signature": 573.255459,
-        "sdk-check": 9.657499999999345,
-        "proof": 15.384625000000597
+        "metadata": 816.2851250000001,
+        "attestation": 5979.2714160000005,
+        "key-log": 497.93991600000004,
+        "encrypt": 15.39995799999997,
+        "send": 2492.0387500000006,
+        "signature": 637.3523339999992,
+        "sdk-check": 4.512791999999536,
+        "proof": 6.089375000001382
       },
-      "totalMs": 13898.298959
+      "totalMs": 9953.418209
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1099,
+      "bytesReceived": 1114,
       "retries": 0,
       "timings": {
-        "metadata": 186.4053329999988,
-        "attestation": 3916.897041,
-        "key-log": 336.8530410000003,
-        "encrypt": 15.627958000000945,
-        "send": 3183.5093339999985,
-        "signature": 649.6110419999968,
-        "sdk-check": 17.040791999999783,
-        "proof": 8.242957999998907
+        "metadata": 204.47758299999987,
+        "attestation": 6266.850750000001,
+        "key-log": 374.06045900000026,
+        "encrypt": 5.673208000000159,
+        "send": 2506.1201249999976,
+        "signature": 630.2600839999977,
+        "sdk-check": 3.6945830000004207,
+        "proof": 3.9807500000024447
       },
-      "totalMs": 7978.813792000001
+      "totalMs": 9621.498583
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1516,
+      "bytesReceived": 832,
       "retries": 0,
       "timings": {
-        "metadata": 205.92895899999712,
-        "attestation": 4132.089791999999,
-        "key-log": 342.161583000001,
-        "encrypt": 7.731375000003027,
-        "send": 9996.821333999997,
-        "signature": 633.086083000002,
-        "sdk-check": 5.246875000004366,
-        "proof": 8.129667000001064
+        "metadata": 255.585750000002,
+        "attestation": 7377.9906249999985,
+        "key-log": 342.74020799999926,
+        "encrypt": 6.654875000000175,
+        "send": 2534.804709,
+        "signature": 642.0819160000028,
+        "sdk-check": 8.999292000000423,
+        "proof": 7.12354200000118
       },
-      "totalMs": 14989.716250000001
+      "totalMs": 10833.753917000002
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1667,
+      "bytesReceived": 990,
       "retries": 0,
       "timings": {
-        "metadata": 199.6687499999971,
-        "attestation": 4258.594499999999,
-        "key-log": 338.7952920000025,
-        "encrypt": 9.565291999999317,
-        "send": 14817.208792000005,
-        "signature": 656.1782079999975,
-        "sdk-check": 5.776292000002286,
-        "proof": 6.041874999995343
+        "metadata": 222.79941600000166,
+        "attestation": 4906.501916999998,
+        "key-log": 440.3266249999979,
+        "encrypt": 6.4589169999962905,
+        "send": 3427.682958999998,
+        "signature": 625.4299580000006,
+        "sdk-check": 4.847249999998894,
+        "proof": 5.4973749999990105
       },
-      "totalMs": 19953.944874999994
+      "totalMs": 9199.777541000003
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1749,
+      "bytesReceived": 974,
       "retries": 0,
       "timings": {
-        "metadata": 214.75270799999998,
-        "attestation": 3991.380667000005,
-        "key-log": 348.14504199999647,
-        "encrypt": 13.634500000000116,
-        "send": 8214.031667000003,
-        "signature": 647.7173749999929,
-        "sdk-check": 14.465125000002445,
-        "proof": 38.18583299999591
+        "metadata": 237.60654199999408,
+        "attestation": 7475.636958999996,
+        "key-log": 438.46345800000563,
+        "encrypt": 6.381500000003143,
+        "send": 2920.5343330000032,
+        "signature": 608.8241669999989,
+        "sdk-check": 8.320082999998704,
+        "proof": 7.0173329999961425
       },
-      "totalMs": 13134.870792000002
+      "totalMs": 11265.219582999998
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 829,
+      "bytesReceived": 1102,
       "retries": 0,
       "timings": {
-        "metadata": 202.7517499999958,
-        "attestation": 4102.249542000005,
-        "key-log": 409.442458000005,
-        "encrypt": 29.32041699999536,
-        "send": 2331.127416999996,
-        "signature": 596.4015419999923,
-        "sdk-check": 5.095707999993465,
-        "proof": 4.80716699999175
+        "metadata": 204.8773749999964,
+        "attestation": 6709.919667000002,
+        "key-log": 471.8286250000019,
+        "encrypt": 5.546667000002344,
+        "send": 2002.081333000002,
+        "signature": 695.2146250000005,
+        "sdk-check": 8.46483299999818,
+        "proof": 7.600833000004059
       },
-      "totalMs": 7272.3680830000085
+      "totalMs": 9634.275208
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 977,
+      "bytesReceived": 956,
       "retries": 0,
       "timings": {
-        "metadata": 187.47604100000171,
-        "attestation": 3894.9067919999943,
-        "key-log": 352.17908400000306,
-        "encrypt": 9.625832999998238,
-        "send": 2329.2244999999966,
-        "signature": 642.0554169999959,
-        "sdk-check": 11.535000000003492,
-        "proof": 7.915333999990253
+        "metadata": 237.0614579999965,
+        "attestation": 18909.980125000002,
+        "key-log": 8673.362417000004,
+        "encrypt": 5.970583999995142,
+        "send": 9571.21695799999,
+        "signature": 910.1402499999967,
+        "sdk-check": 7.2618749999965075,
+        "proof": 6.859167000002344
       },
-      "totalMs": 7083.430916999991
+      "totalMs": 29648.998999999996
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1137,
+      "bytesReceived": 832,
       "retries": 0,
       "timings": {
-        "metadata": 219.08729100000346,
-        "attestation": 3544.614459000004,
-        "key-log": 395.4936250000028,
-        "encrypt": 11.640500000008615,
-        "send": 6500.614916999999,
-        "signature": 633.9428749999934,
-        "sdk-check": 4.236290999993798,
-        "proof": 8.549917000011192
+        "metadata": 196.56341699999757,
+        "attestation": 5318.489291999998,
+        "key-log": 373.1818750000093,
+        "encrypt": 5.386457999993581,
+        "send": 5088.173500000004,
+        "signature": 630.8018750000047,
+        "sdk-check": 3.9172919999982696,
+        "proof": 4.484167000002344
       },
-      "totalMs": 10923.577874999988
+      "totalMs": 11248.378958000001
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1657,
+      "bytesReceived": 1032,
       "retries": 0,
       "timings": {
-        "metadata": 205.40229099999124,
-        "attestation": 4485.012167000008,
-        "key-log": 668.4726659999869,
-        "encrypt": 5.899457999999868,
-        "send": 9409.208666000006,
-        "signature": 672.4730419999978,
-        "sdk-check": 12.592208000001847,
-        "proof": 9.157417000009445
+        "metadata": 213.89749999999185,
+        "attestation": 4589.124834000002,
+        "key-log": 429.4676669999899,
+        "encrypt": 5.824040999999852,
+        "send": 1615.1461249999993,
+        "signature": 672.9684589999961,
+        "sdk-check": 3.471000000005006,
+        "proof": 4.352666000006138
       },
-      "totalMs": 14801.447165999998
+      "totalMs": 7105.362292000005
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1213,
+      "bytesReceived": 1454,
       "retries": 0,
       "timings": {
-        "metadata": 196.19104099999822,
-        "attestation": 4281.796458000012,
-        "key-log": 349.80650000000605,
-        "encrypt": 15.850166999996873,
-        "send": 6777.9550829999935,
-        "signature": 745.1203329999989,
-        "sdk-check": 23.684542000002693,
-        "proof": 19.318207999996957
+        "metadata": 210.28474999999162,
+        "attestation": 6740.9238329999935,
+        "key-log": 348.828708999994,
+        "encrypt": 5.899250000002212,
+        "send": 3293.4311670000025,
+        "signature": 676.5722499999974,
+        "sdk-check": 4.807583000001614,
+        "proof": 3.743458000011742
       },
-      "totalMs": 12071.507874999996
+      "totalMs": 10936.202374999993
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1125,
+      "bytesReceived": 1000,
       "retries": 0,
       "timings": {
-        "metadata": 208.31225000000268,
-        "attestation": 4486.289000000004,
-        "key-log": 398.83012499999313,
-        "encrypt": 7.2774999999965075,
-        "send": 6979.80404100001,
-        "signature": 589.8447499999893,
-        "sdk-check": 4.256250000005821,
-        "proof": 4.812917000002926
+        "metadata": 218.41954199998872,
+        "attestation": 4463.386207999996,
+        "key-log": 724.5881250000093,
+        "encrypt": 5.158917000007932,
+        "send": 2425.7078750000073,
+        "signature": 657.1111249999958,
+        "sdk-check": 5.087500000008731,
+        "proof": 5.011166999989655
       },
-      "totalMs": 12280.987458000003
+      "totalMs": 7780.942666000003
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 977,
+      "bytesReceived": 844,
       "retries": 0,
       "timings": {
-        "metadata": 191.42283300001873,
-        "attestation": 3471.3810840000224,
-        "key-log": 505.88999999998487,
-        "encrypt": 5.843250000005355,
-        "send": 3057.918875000003,
-        "signature": 582.553917000012,
-        "sdk-check": 3.5375829999975394,
-        "proof": 3.691791999997804
+        "metadata": 221.9824579999986,
+        "attestation": 5056.420125000004,
+        "key-log": 306.03666699999303,
+        "encrypt": 5.312290999980178,
+        "send": 2437.089042000007,
+        "signature": 644.2269999999844,
+        "sdk-check": 3.40929199999664,
+        "proof": 3.466375000018161
       },
-      "totalMs": 7316.6666249999835
+      "totalMs": 8372.520791000003
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1137,
+      "bytesReceived": 2354,
       "retries": 0,
       "timings": {
-        "metadata": 189.58820800000103,
-        "attestation": 3620.1341660000035,
-        "key-log": 669.6784580000094,
-        "encrypt": 4.8385830000042915,
-        "send": 5590.721374999994,
-        "signature": 1241.9339169999876,
-        "sdk-check": 7.400167000014335,
-        "proof": 7.342166000016732
+        "metadata": 193.3861250000191,
+        "attestation": 4724.599875000014,
+        "key-log": 1598.2140420000069,
+        "encrypt": 20.212375000002794,
+        "send": 15878.69066600001,
+        "signature": 2381.310999999987,
+        "sdk-check": 4.414875000016764,
+        "proof": 4.736625000019558
       },
-      "totalMs": 10662.187792000012
+      "totalMs": 23207.83266700001
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 825,
+      "bytesReceived": 840,
       "retries": 0,
       "timings": {
-        "metadata": 195.1576659999846,
-        "attestation": 4314.168917000003,
-        "key-log": 369.7584999999963,
-        "encrypt": 5.710292000003392,
-        "send": 2537.471500000014,
-        "signature": 591.0658330000006,
-        "sdk-check": 7.753792000003159,
-        "proof": 7.81554199999664
+        "metadata": 200.1697920000006,
+        "attestation": 9670.050334,
+        "key-log": 392.1870409999974,
+        "encrypt": 6.006165999977384,
+        "send": 2319.0965840000135,
+        "signature": 719.6469590000052,
+        "sdk-check": 6.980792000016663,
+        "proof": 8.157124999997905
       },
-      "totalMs": 7659.588916000008
+      "totalMs": 12930.667874999985
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 999,
+      "bytesReceived": 832,
       "retries": 0,
       "timings": {
-        "metadata": 190.1516249999986,
-        "attestation": 3646.189624999999,
-        "key-log": 373.37429200002225,
-        "encrypt": 5.864332999975886,
-        "send": 5210.785625000019,
-        "signature": 614.8159159999923,
-        "sdk-check": 7.366290999983903,
-        "proof": 7.030292000010377
+        "metadata": 192.51458300001104,
+        "attestation": 6546.993708000024,
+        "key-log": 563.3129159999953,
+        "encrypt": 5.510041000001365,
+        "send": 3119.930708000029,
+        "signature": 787.6626249999972,
+        "sdk-check": 6.02925000002142,
+        "proof": 5.760334000020521
       },
-      "totalMs": 9682.707999999984
+      "totalMs": 10664.843500000017
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 945,
+      "bytesReceived": 852,
       "retries": 0,
       "timings": {
-        "metadata": 200.37766699999338,
-        "attestation": 3475.4318750000093,
-        "key-log": 310.32050000000163,
-        "encrypt": 5.834083000023384,
-        "send": 3642.4534170000115,
-        "signature": 581.3064169999852,
-        "sdk-check": 8.484375,
-        "proof": 7.800291999999899
+        "metadata": 974.6145829999878,
+        "attestation": 4787.002959000005,
+        "key-log": 984.774333999987,
+        "encrypt": 5.794708000001265,
+        "send": 1313.9397919999901,
+        "signature": 595.2564169999969,
+        "sdk-check": 6.901417000015499,
+        "proof": 6.397999999986496
       },
-      "totalMs": 7922.061332999991
+      "totalMs": 7690.380333000008
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1159,
+      "bytesReceived": 840,
       "retries": 0,
       "timings": {
-        "metadata": 189.18829199997708,
-        "attestation": 4168.139042000024,
-        "key-log": 351.0338750000228,
-        "encrypt": 5.770832999987761,
-        "send": 3942.8018750000047,
-        "signature": 605.4697499999893,
-        "sdk-check": 8.466041000006953,
-        "proof": 7.390625
+        "metadata": 188.5928750000021,
+        "attestation": 3518.423167000001,
+        "key-log": 305.4741670000076,
+        "encrypt": 4.919874999992317,
+        "send": 2598.302166999987,
+        "signature": 605.6425829999789,
+        "sdk-check": 3.433874999987893,
+        "proof": 3.5507919999945443
       },
-      "totalMs": 8927.570916999975
+      "totalMs": 6923.204166999989
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1317,
+      "bytesReceived": 2264,
       "retries": 0,
       "timings": {
-        "metadata": 197.42995900000096,
-        "attestation": 3598.2466669999994,
-        "key-log": 323.4312499999942,
-        "encrypt": 5.836416999984067,
-        "send": 5653.711874999979,
-        "signature": 597.6670409999788,
-        "sdk-check": 7.992125000018859,
-        "proof": 6.901333999994677
+        "metadata": 209.10425000000396,
+        "attestation": 3932.631374999997,
+        "key-log": 356.06587500000023,
+        "encrypt": 6.196249999979045,
+        "send": 14493.630750000011,
+        "signature": 855.5540000000037,
+        "sdk-check": 3.8781249999883585,
+        "proof": 4.472666999994544
       },
-      "totalMs": 10068.088791999995
+      "totalMs": 19506.013458
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1037,
+      "bytesReceived": 2408,
       "retries": 0,
       "timings": {
-        "metadata": 191.7172080000164,
-        "attestation": 3598.3508750000037,
-        "key-log": 332.33050000001094,
-        "encrypt": 6.050041999988025,
-        "send": 3580.2477499999804,
-        "signature": 588.6024580000085,
-        "sdk-check": 8.754458000010345,
-        "proof": 8.340792000002693
+        "metadata": 197.104290999996,
+        "attestation": 4281.039625000005,
+        "key-log": 418.0643749999872,
+        "encrypt": 47.49616700000479,
+        "send": 8498.434207999991,
+        "signature": 669.3564590000024,
+        "sdk-check": 4.312541999999667,
+        "proof": 4.816374999994878
       },
-      "totalMs": 7982.42300000001
+      "totalMs": 13716.410541999998
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 819,
+      "bytesReceived": 1078,
       "retries": 0,
       "timings": {
-        "metadata": 190.3061249999737,
-        "attestation": 4263.748958000011,
-        "key-log": 346.9052500000107,
-        "encrypt": 5.873790999990888,
-        "send": 2428.216833000013,
-        "signature": 589.8037079999922,
-        "sdk-check": 6.380000000004657,
-        "proof": 5.672249999974156
+        "metadata": 210.22708300000522,
+        "attestation": 4762.899125000025,
+        "key-log": 399.8567080000066,
+        "encrypt": 5.648749999993015,
+        "send": 3529.655207999982,
+        "signature": 925.3930419999815,
+        "sdk-check": 4.642625000007683,
+        "proof": 5.28087499999674
       },
-      "totalMs": 7490.3186660000065
+      "totalMs": 9444.284833999991
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 819,
+      "bytesReceived": 1242,
       "retries": 0,
       "timings": {
-        "metadata": 196.18208299999242,
-        "attestation": 3790.8278750000172,
-        "key-log": 340.8522499999963,
-        "encrypt": 6.216665999992983,
-        "send": 2311.9907079999975,
-        "signature": 1049.8547090000066,
-        "sdk-check": 3.1196249999920838,
-        "proof": 3.196541999990586
+        "metadata": 238.69612500001676,
+        "attestation": 4451.790959000005,
+        "key-log": 321.5870420000283,
+        "encrypt": 5.22179199999664,
+        "send": 6128.99545799999,
+        "signature": 894.5739999999932,
+        "sdk-check": 3.3575000000128057,
+        "proof": 3.6399169999931473
       },
-      "totalMs": 7361.604166000005
+      "totalMs": 11726.639583000011
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 963,
+      "bytesReceived": 836,
       "retries": 0,
       "timings": {
-        "metadata": 187.61020799999824,
-        "attestation": 3618.0882090000086,
-        "key-log": 469.93866600000183,
-        "encrypt": 6.013542000000598,
-        "send": 2365.2074589999975,
-        "signature": 630.8117499999935,
-        "sdk-check": 7.656042000016896,
-        "proof": 5.293000000005122
+        "metadata": 213.47508400000515,
+        "attestation": 4502.364250000013,
+        "key-log": 320.0899999999965,
+        "encrypt": 5.387749999994412,
+        "send": 2428.2415829999954,
+        "signature": 652.7997500000056,
+        "sdk-check": 3.019166000012774,
+        "proof": 3.3039580000040587
       },
-      "totalMs": 6820.9425830000255
+      "totalMs": 7808.978292000014
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 969,
+      "bytesReceived": 1541,
       "retries": 0,
       "timings": {
-        "metadata": 205.70691700000316,
-        "attestation": 3673.7297919999983,
-        "key-log": 364.8347080000094,
-        "encrypt": 4.720000000001164,
-        "send": 3838.149000000005,
-        "signature": 592.8492090000072,
-        "sdk-check": 3.116042000008747,
-        "proof": 2.9679999999934807
+        "metadata": 216.34787500000675,
+        "attestation": 6385.574291999976,
+        "key-log": 359.78462500000023,
+        "encrypt": 5.001333000021987,
+        "send": 2605.809209000028,
+        "signature": 608.6826669999864,
+        "sdk-check": 2.949124999984633,
+        "proof": 3.179082999995444
       },
-      "totalMs": 8321.41391600002
+      "totalMs": 9827.871167000005
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 821,
+      "bytesReceived": 844,
       "retries": 0,
       "timings": {
-        "metadata": 220.94583399998373,
-        "attestation": 5282.239042000001,
-        "key-log": 436.0648330000113,
-        "encrypt": 6.277624999987893,
-        "send": 3466.156583999982,
-        "signature": 588.3885000000009,
-        "sdk-check": 3.789167000009911,
-        "proof": 4.377708000014536
+        "metadata": 189.5042920000269,
+        "attestation": 3882.2248339999933,
+        "key-log": 422.16574999998556,
+        "encrypt": 4.814207999967039,
+        "send": 1595.6225829999894,
+        "signature": 782.9054999999935,
+        "sdk-check": 2.97908300004201,
+        "proof": 3.3386249999748543
       },
-      "totalMs": 9572.436333999998
+      "totalMs": 6461.784458000038
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 2023,
+      "bytesReceived": 1126,
       "retries": 0,
       "timings": {
-        "metadata": 193.14787500002421,
-        "attestation": 3683.316582999978,
-        "key-log": 340.226874999993,
-        "encrypt": 5.742332999972859,
-        "send": 9912.459999999992,
-        "signature": 1553.2354590000177,
-        "sdk-check": 3.200749999989057,
-        "proof": 3.912917000008747
+        "metadata": 484.84337499999674,
+        "attestation": 3698.861917000031,
+        "key-log": 391.4569999999949,
+        "encrypt": 4.862916999962181,
+        "send": 6555.834916000022,
+        "signature": 3865.5962909999653,
+        "sdk-check": 3.438458000018727,
+        "proof": 3.7267080000019632
       },
-      "totalMs": 15355.322875000013
+      "totalMs": 14617.58474999998
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 825,
+      "bytesReceived": 1346,
       "retries": 0,
       "timings": {
-        "metadata": 228.42679100000532,
-        "attestation": 3536.6642499999725,
-        "key-log": 322.8788329999952,
-        "encrypt": 5.7650830000056885,
-        "send": 3100.1307919999817,
-        "signature": 584.5590420000372,
-        "sdk-check": 2.955833000014536,
-        "proof": 3.1964580000494607
+        "metadata": 1306.304582999961,
+        "attestation": 11598.274665999983,
+        "key-log": 3089.010540999996,
+        "encrypt": 5.1107089999713935,
+        "send": 5397.447417000018,
+        "signature": 658.843499999959,
+        "sdk-check": 4.591917000012472,
+        "proof": 4.56416700000409
       },
-      "totalMs": 7461.923333000013
+      "totalMs": 18975.573957999994
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 817,
+      "bytesReceived": 1020,
       "retries": 0,
       "timings": {
-        "metadata": 191.27370899997186,
-        "attestation": 3442.706917000003,
-        "key-log": 299.2920409999788,
-        "encrypt": 6.485916000034194,
-        "send": 2337.298624999996,
-        "signature": 821.1094589999993,
-        "sdk-check": 7.650792000000365,
-        "proof": 6.921542000025511
+        "metadata": 210.74837499996647,
+        "attestation": 4987.521583000023,
+        "key-log": 410.336249999993,
+        "encrypt": 5.306583999947179,
+        "send": 3919.142625000037,
+        "signature": 924.065958000021,
+        "sdk-check": 3.009957999980543,
+        "proof": 3.1589159999857657
       },
-      "totalMs": 6813.819499999983
+      "totalMs": 10053.34058399999
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 795,
+      "bytesReceived": 1426,
       "retries": 0,
       "timings": {
-        "metadata": 202.7025830000057,
-        "attestation": 3930.2471660000156,
-        "key-log": 324.52845799998613,
-        "encrypt": 6.24800000002142,
-        "send": 2454.8233330000076,
-        "signature": 589.3612500000163,
-        "sdk-check": 3.365124999952968,
-        "proof": 3.4340419999789447
+        "metadata": 190.3267909999704,
+        "attestation": 4547.787750000018,
+        "key-log": 365.4207919999608,
+        "encrypt": 5.9792080000042915,
+        "send": 7334.94420800003,
+        "signature": 648.8369170000078,
+        "sdk-check": 4.4487499999813735,
+        "proof": 5.278749999997672
       },
-      "totalMs": 7190.45166599995
+      "totalMs": 12738.199790999992
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 891,
+      "bytesReceived": 836,
       "retries": 0,
       "timings": {
-        "metadata": 191.3057919999701,
-        "attestation": 3214.824125000043,
-        "key-log": 340.8850419999799,
-        "encrypt": 5.576041999971494,
-        "send": 3188.777666000009,
-        "signature": 590.3782500000088,
-        "sdk-check": 7.022667000012007,
-        "proof": 4.188625000009779
+        "metadata": 202.61466600000858,
+        "attestation": 4639.202332999965,
+        "key-log": 420.5119999999879,
+        "encrypt": 5.578291999991052,
+        "send": 1409.7853750000359,
+        "signature": 921.6459580000374,
+        "sdk-check": 4.665916999976616,
+        "proof": 5.967042000032961
       },
-      "totalMs": 7202.317833999987
+      "totalMs": 7190.143291999993
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 987,
+      "bytesReceived": 840,
       "retries": 0,
       "timings": {
-        "metadata": 191.9567500000121,
-        "attestation": 3657.733499999973,
-        "key-log": 322.99874999996973,
-        "encrypt": 5.988874999980908,
-        "send": 5225.041917000024,
-        "signature": 614.5997079999652,
-        "sdk-check": 4.942332999955397,
-        "proof": 4.705667000031099
+        "metadata": 208.57579199998872,
+        "attestation": 4499.818417000002,
+        "key-log": 389.3020419999957,
+        "encrypt": 8.715625000011642,
+        "send": 1201.697583000001,
+        "signature": 1286.9996670000255,
+        "sdk-check": 5.4832920000189915,
+        "proof": 7.718708000029437
       },
-      "totalMs": 9705.360624999972
+      "totalMs": 7219.791917000024
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 819,
+      "bytesReceived": 1262,
       "retries": 0,
       "timings": {
-        "metadata": 203.63291700003901,
-        "attestation": 3577.651124999975,
-        "key-log": 366.2010420000297,
-        "encrypt": 6.491334000020288,
-        "send": 1609.5310000000172,
-        "signature": 585.4154170000111,
-        "sdk-check": 5.419374999997672,
-        "proof": 6.321166999987327
+        "metadata": 208.47620799997821,
+        "attestation": 4595.486583999998,
+        "key-log": 317.39395800000057,
+        "encrypt": 5.107250000000931,
+        "send": 2926.6995420000167,
+        "signature": 641.0362910000258,
+        "sdk-check": 3.4686670000082813,
+        "proof": 3.8821670000324957
       },
-      "totalMs": 5994.757040999946
+      "totalMs": 8384.572209000005
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 829,
+      "bytesReceived": 998,
       "retries": 0,
       "timings": {
-        "metadata": 190.51245799998287,
-        "attestation": 2917.9091659999685,
-        "key-log": 347.74324999999953,
-        "encrypt": 6.458165999967605,
-        "send": 2662.34375,
-        "signature": 606.2183340000338,
-        "sdk-check": 4.851624999952037,
-        "proof": 4.583332999958657
+        "metadata": 205.36945800000103,
+        "attestation": 4109.543915999995,
+        "key-log": 475.7193340000231,
+        "encrypt": 4.883917000028305,
+        "send": 3120.453709000023,
+        "signature": 634.0448329999927,
+        "sdk-check": 4.0373750000144355,
+        "proof": 4.545290999987628
       },
-      "totalMs": 6393.144708000007
+      "totalMs": 8083.267749999999
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 819,
+      "bytesReceived": 1234,
       "retries": 0,
       "timings": {
-        "metadata": 195.5486249999958,
-        "attestation": 3233.933584000042,
-        "key-log": 324.5834160000086,
-        "encrypt": 5.846457999956328,
-        "send": 1963.8445000000065,
-        "signature": 623.940333000035,
-        "sdk-check": 3.766583999968134,
-        "proof": 4.497542000026442
+        "metadata": 342.569749999966,
+        "attestation": 4912.321791000024,
+        "key-log": 357.5627910000039,
+        "encrypt": 4.986207999987528,
+        "send": 3844.7318339999765,
+        "signature": 664.0540000000037,
+        "sdk-check": 6.737916000012774,
+        "proof": 6.759208999981638
       },
-      "totalMs": 6031.678500000038
+      "totalMs": 9782.743124999979
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 835,
+      "bytesReceived": 6208,
       "retries": 0,
       "timings": {
-        "metadata": 198.9076669999631,
-        "attestation": 3055.9271660000086,
-        "key-log": 547.3192500000005,
-        "encrypt": 6.484334000037052,
-        "send": 3015.87270800001,
-        "signature": 594.2254170000087,
-        "sdk-check": 3.5965829999768175,
-        "proof": 3.563834000029601
+        "metadata": 287.91008400003193,
+        "attestation": 4757.756707999972,
+        "key-log": 383.61033399996813,
+        "encrypt": 5.482666999974754,
+        "send": 27906.96895900002,
+        "signature": 2363.592209000024,
+        "sdk-check": 7.432125000050291,
+        "proof": 6.7683750000433065
       },
-      "totalMs": 6878.835833000019
+      "totalMs": 35336.447208
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 2363,
+      "bytesReceived": 2830,
       "retries": 0,
       "timings": {
-        "metadata": 192.45545799995307,
-        "attestation": 3293.3257919999887,
-        "key-log": 661.8021660000086,
-        "encrypt": 5.697249999968335,
-        "send": 24374.538916999998,
-        "signature": 605.7855829999899,
-        "sdk-check": 3.8065000000060536,
-        "proof": 3.8198340000235476
+        "metadata": 220.57629200001247,
+        "attestation": 3919.5901670000167,
+        "key-log": 408.3770000000368,
+        "encrypt": 4.843667000008281,
+        "send": 10532.446333000029,
+        "signature": 614.2429160000174,
+        "sdk-check": 4.26704200002132,
+        "proof": 4.327666000055615
       },
-      "totalMs": 28479.616666999995
+      "totalMs": 15300.65945799998
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1087,
+      "bytesReceived": 1876,
       "retries": 0,
       "timings": {
-        "metadata": 193.9987909999909,
-        "attestation": 3585.1349580000388,
-        "key-log": 318.4610419999808,
-        "encrypt": 5.591916999954265,
-        "send": 2719.4528750000172,
-        "signature": 631.6380830000271,
-        "sdk-check": 7.2015420000534505,
-        "proof": 6.562374999979511
+        "metadata": 198.2482500000042,
+        "attestation": 6372.9158330000355,
+        "key-log": 401.26204200001666,
+        "encrypt": 5.65929199999664,
+        "send": 13912.72120900004,
+        "signature": 653.2787080000271,
+        "sdk-check": 7.376416999963112,
+        "proof": 6.696540999982972
       },
-      "totalMs": 7149.899708000012
+      "totalMs": 21157.312624999962
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1089,
+      "bytesReceived": 866,
       "retries": 0,
       "timings": {
-        "metadata": 204.79387500003213,
-        "attestation": 3911.0084999999963,
-        "key-log": 393.28066699998453,
-        "encrypt": 5.497290999977849,
-        "send": 4424.640791999991,
-        "signature": 605.253458000021,
-        "sdk-check": 5.950666000018828,
-        "proof": 5.587291999952868
+        "metadata": 205.49816700001247,
+        "attestation": 6028.597667000024,
+        "key-log": 352.0103750000126,
+        "encrypt": 4.883833999978378,
+        "send": 2493.5152499999967,
+        "signature": 634.9236249999958,
+        "sdk-check": 7.463625000033062,
+        "proof": 8.188332999998238
       },
-      "totalMs": 9162.976708000002
+      "totalMs": 9383.458082999976
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 825,
+      "bytesReceived": 966,
       "retries": 0,
       "timings": {
-        "metadata": 204.66795900004217,
-        "attestation": 3387.373750000028,
-        "key-log": 337.92687500000466,
-        "encrypt": 4.974584000010509,
-        "send": 2662.5787080000155,
-        "signature": 578.5547910000314,
-        "sdk-check": 4.667916000005789,
-        "proof": 4.390416999987792
+        "metadata": 198.40916700003436,
+        "attestation": 4075.085291000025,
+        "key-log": 420.9887500000186,
+        "encrypt": 5.982166000001598,
+        "send": 3513.5185829999973,
+        "signature": 619.6253330000327,
+        "sdk-check": 8.100417000008747,
+        "proof": 6.839082999969833
       },
-      "totalMs": 6848.871584000008
+      "totalMs": 8428.00549999997
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1033,
+      "bytesReceived": 3700,
       "retries": 0,
       "timings": {
-        "metadata": 191.42887499998324,
-        "attestation": 3819.607665999967,
-        "key-log": 283.9731669999892,
-        "encrypt": 5.900250000006054,
-        "send": 5188.040749999986,
-        "signature": 593.768665999989,
-        "sdk-check": 8.63762500003213,
-        "proof": 4.251791999966372
+        "metadata": 195.59766600001603,
+        "attestation": 4843.767583000008,
+        "key-log": 718.5581670000101,
+        "encrypt": 5.385499999974854,
+        "send": 19276.489208000014,
+        "signature": 678.2317500000354,
+        "sdk-check": 7.297542000014801,
+        "proof": 6.908584000018891
       },
-      "totalMs": 9811.945792000042
+      "totalMs": 25014.070875000034
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 817,
+      "bytesReceived": 1108,
       "retries": 0,
       "timings": {
-        "metadata": 191.8499170000432,
-        "attestation": 3623.1467909999774,
-        "key-log": 358.4536669999943,
-        "encrypt": 5.023708000022452,
-        "send": 1923.3374170000316,
-        "signature": 1258.3940000000293,
-        "sdk-check": 3.1742080000112765,
-        "proof": 3.1172500000102445
+        "metadata": 191.53700000001118,
+        "attestation": 5139.897708999983,
+        "key-log": 699.4033330000238,
+        "encrypt": 5.384916999959387,
+        "send": 3291.4840419999673,
+        "signature": 922.0644170000451,
+        "sdk-check": 8.314000000013039,
+        "proof": 6.655750000034459
       },
-      "totalMs": 7008.238459000015
-    },
-    {
-      "outcome": "failed",
-      "step": "attestation",
-      "error": "the attestation step did not finish within 120 s",
-      "retries": 0,
-      "timings": {
-        "metadata": 519.9174589999602
-      },
-      "totalMs": 120525.116416
+      "totalMs": 9565.792750000022
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1049,
+      "bytesReceived": 904,
       "retries": 0,
       "timings": {
-        "metadata": 2171.640875000041,
-        "attestation": 7725.855333000014,
-        "key-log": 397.11108300002525,
-        "encrypt": 5.125416999973822,
-        "send": 5038.901916999952,
-        "signature": 612.5263329999289,
-        "sdk-check": 9.798500000033528,
-        "proof": 7.437541999970563
+        "metadata": 202.4301250000135,
+        "attestation": 4540.428709,
+        "key-log": 413.68766699999105,
+        "encrypt": 5.490124999952968,
+        "send": 2415.955750000023,
+        "signature": 717.4962500000256,
+        "sdk-check": 6.634124999982305,
+        "proof": 6.253625000012107
       },
-      "totalMs": 15571.605666999996
+      "totalMs": 7895.18399999995
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 2489,
+      "bytesReceived": 1114,
       "retries": 0,
       "timings": {
-        "metadata": 200.02674999996088,
-        "attestation": 3601.793166999938,
-        "key-log": 324.6596670000581,
-        "encrypt": 6.304000000003725,
-        "send": 21954.284291999997,
-        "signature": 679.8570410000393,
-        "sdk-check": 3.2690830000210553,
-        "proof": 3.5330420000245795
+        "metadata": 216.68433299998287,
+        "attestation": 5742.310541999992,
+        "key-log": 638.9785830000183,
+        "encrypt": 5.241416000004392,
+        "send": 3738.050042000017,
+        "signature": 597.774167000025,
+        "sdk-check": 3.0330830000457354,
+        "proof": 3.3620000000228174
       },
-      "totalMs": 26449.278792000026
+      "totalMs": 10306.866707999958
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 2175,
+      "bytesReceived": 1002,
       "retries": 0,
       "timings": {
-        "metadata": 194.07595800003037,
-        "attestation": 3591.2916249999544,
-        "key-log": 306.6147920000367,
-        "encrypt": 4.883749999920838,
-        "send": 11979.833417000016,
-        "signature": 592.5209579999791,
-        "sdk-check": 8.447582999942824,
-        "proof": 7.5125410000327975
+        "metadata": 195.87704200000735,
+        "attestation": 5144.707958000014,
+        "key-log": 396.3094999999739,
+        "encrypt": 4.731875000055879,
+        "send": 4598.643791999959,
+        "signature": 683.2050419999287,
+        "sdk-check": 3.5565829999977723,
+        "proof": 3.505875000031665
       },
-      "totalMs": 16378.837667000014
+      "totalMs": 10634.57145800005
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1107,
+      "bytesReceived": 1006,
       "retries": 0,
       "timings": {
-        "metadata": 192.2469160000328,
-        "attestation": 4687.847542000003,
-        "key-log": 315.3077920000069,
-        "encrypt": 5.090375000028871,
-        "send": 4106.502709000022,
-        "signature": 577.1458750000456,
-        "sdk-check": 5.029417000012472,
-        "proof": 12.555624999920838
+        "metadata": 250.1350000000093,
+        "attestation": 7037.211249999935,
+        "key-log": 574.9564170000376,
+        "encrypt": 5.692999999970198,
+        "send": 4092.9760840000818,
+        "signature": 1970.7320830000099,
+        "sdk-check": 6.8514999999897555,
+        "proof": 6.752957999939099
       },
-      "totalMs": 9586.982667000033
+      "totalMs": 13370.826125000021
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1450,
+      "bytesReceived": 1258,
       "retries": 0,
       "timings": {
-        "metadata": 188.8892080000369,
-        "attestation": 3375.5023339999607,
-        "key-log": 298.76895800000057,
-        "encrypt": 5.960124999983236,
-        "send": 7403.322209000005,
-        "signature": 603.9070000000065,
-        "sdk-check": 4.773916999925859,
-        "proof": 5.211499999975786
+        "metadata": 200.77854100009426,
+        "attestation": 4888.9058749999385,
+        "key-log": 1198.9110409999266,
+        "encrypt": 5.540999999968335,
+        "send": 6697.81787499995,
+        "signature": 661.3594590000575,
+        "sdk-check": 7.211291000014171,
+        "proof": 6.160000000032596
       },
-      "totalMs": 11587.799791999976
+      "totalMs": 12468.19870800001
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 825,
+      "bytesReceived": 832,
       "retries": 0,
       "timings": {
-        "metadata": 195.3543340000324,
-        "attestation": 3470.2594999999274,
-        "key-log": 351.6038329999428,
-        "encrypt": 6.124458000063896,
-        "send": 2528.311457999982,
-        "signature": 599.671667000046,
-        "sdk-check": 3.2271670000627637,
-        "proof": 3.5215839999727905
+        "metadata": 249.0460000000894,
+        "attestation": 4118.528333000024,
+        "key-log": 352.0353340000147,
+        "encrypt": 5.638708999962546,
+        "send": 2653.8047500000102,
+        "signature": 639.1767500001006,
+        "sdk-check": 5.356709000072442,
+        "proof": 5.36199999996461
       },
-      "totalMs": 6806.9836249999935
+      "totalMs": 7677.347291000071
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 835,
+      "bytesReceived": 840,
       "retries": 0,
       "timings": {
-        "metadata": 192.002208000049,
-        "attestation": 3575.8297500000335,
-        "key-log": 352.2047500000335,
-        "encrypt": 4.799708000035025,
-        "send": 3308.191292000003,
-        "signature": 628.2219170000171,
-        "sdk-check": 5.958457999979146,
-        "proof": 4.62237500003539
+        "metadata": 207.20374999998603,
+        "attestation": 4485.672208999982,
+        "key-log": 361.5326669999631,
+        "encrypt": 5.608416000031866,
+        "send": 3037.843790999963,
+        "signature": 652.6554999999935,
+        "sdk-check": 4.399749999982305,
+        "proof": 4.321416999911889
       },
-      "totalMs": 7719.839042000007
+      "totalMs": 8398.08920799999
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1261,
+      "bytesReceived": 976,
       "retries": 0,
       "timings": {
-        "metadata": 204.92433399998117,
-        "attestation": 4342.755165999988,
-        "key-log": 356.484375,
-        "encrypt": 5.285874999943189,
-        "send": 7682.4370000000345,
-        "signature": 602.7214999999851,
-        "sdk-check": 7.702583000063896,
-        "proof": 6.836667000083253
+        "metadata": 197.40116600005422,
+        "attestation": 4290.7202080000425,
+        "key-log": 330.4619170000078,
+        "encrypt": 5.786709000007249,
+        "send": 3871.4340000000084,
+        "signature": 630.6220420000609,
+        "sdk-check": 5.566209000069648,
+        "proof": 4.998958999989554
       },
-      "totalMs": 12852.92183300003
+      "totalMs": 9006.896375000011
     },
     {
       "outcome": "verified",
       "swappedRefused": true,
       "bytesSent": 293,
-      "bytesReceived": 1019,
+      "bytesReceived": 964,
       "retries": 0,
       "timings": {
-        "metadata": 196.96370800002478,
-        "attestation": 3720.4959580000723,
-        "key-log": 315.91345899994485,
-        "encrypt": 6.207333000027575,
-        "send": 4744.0802080000285,
-        "signature": 658.4599160000216,
-        "sdk-check": 5.143334000022151,
-        "proof": 4.715333000058308
+        "metadata": 201.0283749999944,
+        "attestation": 5309.4867080000695,
+        "key-log": 506.11462500004563,
+        "encrypt": 5.235749999992549,
+        "send": 1904.6870000000345,
+        "signature": 635.1345000000438,
+        "sdk-check": 5.090583999990486,
+        "proof": 5.197334000025876
       },
-      "totalMs": 9336.406582999974
+      "totalMs": 8066.283792000031
+    },
+    {
+      "outcome": "verified",
+      "swappedRefused": true,
+      "bytesSent": 293,
+      "bytesReceived": 1441,
+      "retries": 0,
+      "timings": {
+        "metadata": 216.59862499998417,
+        "attestation": 5417.5941250000615,
+        "key-log": 447.84279099991545,
+        "encrypt": 5.497041999944486,
+        "send": 8334.564415999921,
+        "signature": 601.374625000055,
+        "sdk-check": 7.4106250000186265,
+        "proof": 7.149499999941327
+      },
+      "totalMs": 14590.598667000071
     }
   ]
 }

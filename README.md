@@ -301,7 +301,7 @@ inherited" in [docs/CLAIMS.md](docs/CLAIMS.md)).
 
 ## What we do not claim
 
-25 things, each with its paragraph in [docs/CLAIMS.md](docs/CLAIMS.md#we-do-not-claim): why not, what the
+26 things, each with its paragraph in [docs/CLAIMS.md](docs/CLAIMS.md#we-do-not-claim): why not, what the
 code does instead, and where it was measured. The list here is the same list, by title. Five a reader should not miss:
 the weights are not verified, only the deployment is attested; what the model enclave keeps cannot be proven; the page
 is served by our server; the action log is a record, not a measurement; a mark in the log is not an approval.
@@ -331,6 +331,7 @@ is served by our server; the action log is a record, not a measurement; a mark i
 - **Side-channel protection.**
 - **An audited contract.**
 - **That the E2EE flag in a disclosed file is proven.**
+- **A streamed answer, or a long conversation sent whole.**
 
 Three known issues we inherited are described there too. The reply-key finding on NEAR AI's E2EE route
 ([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061)) is still open upstream. Since Nov 10 this
@@ -371,39 +372,44 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Metrics
 
-50 live runs one after another on Nov 11, 2026, from Node, direct to NEAR AI, with a one-line prompt and the deployment
+50 live runs one after another on Nov 13, 2026, from Node, direct to NEAR AI, with a one-line prompt and the deployment
 check on; every run's timings are in [`docs/metrics.json`](docs/metrics.json). To run it again:
 `pnpm demo:metrics --runs N --out <file>` (it needs `NEARAI_API_KEY` and spends N short replies; without `--out` it
 overwrites `docs/metrics.json`). The runs show that the sequence holds, not how the services behave over days: the same
-command had a median of 7.1 s on Nov 10 and 9.9 s on Nov 6, and the gap is in the network steps. How each number was
-measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
+command had a median of 8.9 s on Nov 11, 7.1 s on Nov 10 and 9.9 s on Nov 6, and the gap is in the network steps. How
+each number was measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 
 | Metric | Value (50 runs) |
 | --- | --- |
-| Verified, attestation to proof (the on-chain commit is measured once, below) | 49 of 50 |
-| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 49 of 50 |
+| Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
+| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 50 of 50 |
 | Honest request refused at the log check (window empty, key unlogged or deployment unlogged) | 0 of 50 |
 | Runs that needed an SDK retry | 0 of 50 |
-| Attestation (gateway + model, re-fetched, in Node) | median 3.6 s, p90 4.5 s |
-| Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.3 s, p90 0.5 s |
-| E2EE round trip to the model | median 3.8 s, p90 10.0 s |
-| Signature fetch | median 0.6 s, p90 0.8 s |
-| Whole run, evidence re-fetched (a real first message can be slower) | median 8.9 s, p90 15.6 s |
-| Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 4.8 s, p90 11.8 s |
-| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1019 B received |
+| Attestation (gateway + model, re-fetched, in Node) | median 4.8 s, p90 7.0 s |
+| Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.4 s, p90 0.7 s |
+| E2EE round trip to the model | median 3.3 s, p90 10.5 s |
+| Signature fetch | median 0.7 s, p90 0.9 s |
+| Whole run, evidence re-fetched (a real first message can be slower) | median 9.8 s, p90 19.5 s |
+| Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 4.5 s, p90 15.0 s |
+| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1002 B received |
 
-- **The run that did not verify** (41 of 50): its attestation step did not finish within the 120 s the runner allows, so
-  the run stopped there and nothing was sent; it reached neither the log check nor the swapped-key rule, so the
-  table's two log-check rows cover 49 runs. The model was slow that evening:
-  replies took up to 24 s here, and one message on the hosted chat at the same time waited 58 s for its answer.
-- **In a browser** (hosted demo, headless Chromium, four messages, a spot check): three first messages with nothing
-  cached took 6.3, 5.9 and 5.6 s; one later message with the attestation cached, 2.1 s.
-- **Over the log's history** ("honest request refused: 0 of 50" covers eleven minutes; this is `pnpm -F demo check-contract`
-  on Nov 10): an honest client would have found no entry younger than 24 hours during 13.6 of the 167 hours, all on
+- **A run that did not verify** has been seen once in the 150 runs of Nov 10, 11 and 13: on Nov 11 the attestation step
+  of one run did not finish within the 120 s the runner allows, so the run stopped there and nothing was sent. The slowest run
+  of Nov 13 took 35.3 s, 27.9 s of it waiting for the model.
+- **In a browser.** On the hosted demo (headless Chromium, four messages on Nov 10, a spot check): three first messages
+  with nothing cached took 6.3, 5.9 and 5.6 s; one later message with the attestation cached, 2.1 s. On a local server
+  on Nov 13, one conversation of 25 exchanges with one-line replies: every reply verified and the model still knew a
+  word from the first message; the first message took 10.0 s, the 24 after it 1.4 to 11.4 s, median 2.8 s.
+- **Long input and long answers** (Nov 13, one run each): from Node, a message of 7,526 tokens verified in about 10 s
+  and one of 130,526 tokens in 34.2 s, both signed by the key the client had checked. Answers are another matter: the
+  reply is not streamed, an answer of 120 words took 17 to 40 s that evening, and one open question took 148 and 203 s
+  ([docs/METRICS.md](docs/METRICS.md); the limits of the chat page are under [What we do not claim](#what-we-do-not-claim)).
+- **Over the log's history** ("honest request refused: 0 of 50" covers ten minutes; this is `pnpm -F demo check-contract`
+  on Nov 13): an honest client would have found no entry younger than 24 hours during 13.6 of the 240 hours, all on
   Nov 4–5, before the verifier ran on a server; none has been missing since. The count ignores the key and the quorum: it
   matches the client's decision only because the model's key did not change in that time and the quorum is 1, so a
   refusal caused by a key the verifier has not logged yet has not been observed. Nor has one caused by a deployment it
-  has not logged yet: the deployment check has been on since Nov 11, and the 49 runs that reached it here are all it has been measured on.
+  has not logged yet: the deployment check has been on since Nov 11, and the 99 runs that reached it on Nov 11 and 13 are all it has been measured on.
 - **The on-chain commit**, measured once: `commit_proof` burnt 2.41 TGas (0.00022 NEAR) and 161 bytes of prepaid storage
   (0.00161 NEAR).
 - **Tier 2** is a tally, not a benchmark: the twelve actions the agent has on testnet, all proposed by us, five of them from
