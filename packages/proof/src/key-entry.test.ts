@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildKeyEntryInput, composeHashOf, imageDigestsOf, readAppCompose, type BuildKeyEntryInputParams } from './key-entry.ts';
 import { entryHashOf } from './commit.ts';
+import { inputOf } from './log-chain.ts';
 import { sha256Hex } from './hash.ts';
 import { readRepoFile, readRepoJson } from './fixtures.ts';
 import type { RawReport } from './report.ts';
@@ -34,8 +35,7 @@ test('buildKeyEntryInput reproduces the test-vector input', () => {
 test('the replay\'s log entry is entry #0 as recorded on chain: same verifier, observed_at and entry_hash', () => {
   assert.deepEqual([sample.verifier, sample.observed_at, sample.prev_hash, sample.entry_hash], [onChain.verifier, onChain.observed_at, onChain.prev_hash, onChain.entry_hash]);
   // Its own fields too: everything the entry hash covers is what the recorded report gives (the test above hashes that to entry_hash).
-  const { index: _i, verifier: _v, prev_hash: _p, entry_hash: _h, block_height: _b, ...input } = sample;
-  assert.deepEqual(input, build({ observedAtMs: Number(sample.observed_at) }));
+  assert.deepEqual(inputOf(sample), build({ observedAtMs: Number(sample.observed_at) }));
 });
 
 test('with the recorded observed_at it hashes to the entry_hash logged on-chain for entry #0 (Rust and TS agree)', () => {

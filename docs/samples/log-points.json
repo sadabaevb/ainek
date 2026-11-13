@@ -1,0 +1,8 @@
+{
+  "_note": "Places of the public log on `contract`: an index and the hash the log had there, as the views `entry` and `head` returned them on the day named. `pnpm demo:log` checks that the log read now still holds each of them; see docs/samples/README.md.",
+  "contract": "ainek-log-dastan.testnet",
+  "points": [
+    { "index": 0, "entry_hash": "5b2e5e5b0e3314b8efc47188eef0c400c36842fdd87f050587fffecdc6116979", "seen": "2026-11-08" },
+    { "index": 80, "entry_hash": "b530269416ee6c7f63dabbac0ef211d87c3a6244757eacbd34eb8c734b057fa3", "seen": "2026-11-13" }
+  ]
+}
