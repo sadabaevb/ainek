@@ -1,7 +1,7 @@
-// `pnpm demo:metrics [--runs N] [--out <file>]`: N live Tier-1 runs for the README metrics table.
+// `pnpm demo:metrics [--runs N] [--out <file>]`: N live Tier-1 runs for the metrics table (docs/METRICS.md).
 // Each run is @ainek/tier1-node, what the chat does, from Node, direct to NEAR AI, nothing cached: a cold first message. On top, the
 // public-log rule is checked with a swapped key against the same log read, as the chat's tamper switch does. Per-run timings
-// and outcomes go to a JSON file; a markdown table is printed for the README. The on-chain commit is not part of a run (it
+// and outcomes go to a JSON file; a markdown table is printed for docs/METRICS.md. The on-chain commit is not part of a run (it
 // needs a wallet); its cost was measured once (docs/DEV-NOTES.md).
 import { existsSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

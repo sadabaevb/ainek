@@ -1,5 +1,5 @@
-// Who sees what (SPEC §8). The rows live in rows.json; a test in packages/proof keeps them equal to the README table.
-// Static and English only: it is the spec's table, quoted verbatim in the README.
+// Who sees what (SPEC §8). The rows live in rows.json; a test in packages/proof keeps them equal to the table in
+// docs/DETAILS.md. Static and English only: it is the spec's table, quoted verbatim there.
 import { StackTable, type Column } from '@/components/stack-table';
 import rows from './rows.json';
 

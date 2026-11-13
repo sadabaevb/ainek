@@ -126,7 +126,8 @@ cargo test                               contract tests (unit + near-sandbox)
 ## Definition of done for the submission (Nov 14)
 
 Public repo with LICENSE (MIT); README in the "do X -> see Y" format with: what/why, how NEAR fits,
-reproduce steps from a clean clone, the "NEAR provides / Ainek adds" table, the trust-boundary table,
-"What we do not claim", libraries and AI-generated-code disclosure, link to the diff between tags
-`pre-hackathon` and `hackathon-submission`, metrics, next steps. Hosted demo alive through Nov 25.
+reproduce steps from a clean clone, the limits, libraries and AI-generated-code disclosure, link to the diff between
+tags `pre-hackathon` and `hackathon-submission`. Since Nov 14 the README is one page built around one idea, and it
+links to the rest: the "NEAR provides / Ainek adds" table, the trust-boundary table and next steps in
+`docs/DETAILS.md`, "What we do not claim" in `docs/CLAIMS.md`, metrics in `docs/METRICS.md`. Hosted demo alive through Nov 25.
 X post with a 90-second video. Form submitted once (leave the `website` field empty — it is a spam trap).

@@ -70,6 +70,6 @@ What each tag needs:
 
 ## What no command here shows
 
-- The agent paths that have not run live: see the status above and "Tier 2 flow" in the [README](../README.md).
+- The agent paths that have not run live: see the status above and "The agent half" in [DETAILS.md](DETAILS.md#the-agent-half-tier-2).
 - What the model enclave does with data after inference, the model's weights, or anything about Intel's and NVIDIA's hardware: "We do not claim" in [CLAIMS.md](CLAIMS.md).
 - The comparison with other hackathon entries: it rests on reading their code on Nov 6, 2026. The table is in [PRIOR-ART.md](PRIOR-ART.md); the method and the full list are in [FIELD.md](FIELD.md).

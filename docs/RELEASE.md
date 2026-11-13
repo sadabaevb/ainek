@@ -2,7 +2,7 @@
 
 What stands behind a model's signing key on NEAR AI Cloud, how Ainek follows it to a source commit, what the key log
 records about it, and what we measured. Moved here from the README on Nov 13, 2026, with pointers adjusted. The limits named
-"What we do not claim" are in [CLAIMS.md](CLAIMS.md) and in the [README](../README.md#what-we-do-not-claim).
+"What we do not claim" are in [CLAIMS.md](CLAIMS.md); the README names the five that matter most under [Limits](../README.md#limits).
 
 One signing key can stand in front of many versions of the code. On NEAR AI Cloud the hash an enclave measures at boot
 covers a launcher; the containers that serve the model are deployed afterwards, and the enclave records each deployment in
