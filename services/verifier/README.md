@@ -69,6 +69,22 @@ The `verifier-image` GitHub Action builds this image when the verifier changes a
 it is, build the image yourself with the line above. Without `--once` the container loops; `--dry-run` needs no
 account at all.
 
+### From your own GitHub account
+
+No server, and no laptop left on: for a public repository GitHub runs one round an hour, free. Our second verifier runs
+this way.
+
+1. Make a public repository of your own, with a README so that it has a branch. Any name.
+2. In it, Settings → Secrets and variables → Actions → New repository secret: `VERIFIER_PRIVATE_KEY`, the function-call
+   key from above. It is a secret of your repository; we never see it.
+3. Add the file `.github/workflows/verifier.yml` with the contents of
+   [`github-workflow.example.yml`](github-workflow.example.yml), and put your account's name in `VERIFIER_ACCOUNT_ID`.
+4. Actions → verifier → Run workflow. The log of the run shows the lines below; from then on it runs by the schedule.
+
+The workflow checks this repository out at one commit, named in the file: what you run changes when you change that
+line, not when we push. GitHub starts scheduled runs late, by hours at times (ours ran with gaps of six to nine hours on
+Nov 12 and 13). One round a day is enough to stay inside the 24 hours a client looks back over.
+
 Expected output of a round:
 
 ```
