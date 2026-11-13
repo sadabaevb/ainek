@@ -39,3 +39,16 @@ Attested facts observed at capture time: gateway `tcb_status=UpToDate`, model `t
 evidence verified via NRAS (`nvidia_payload.arch=HOPPER`, 8 GPUs; NRAS reports GH100, `secboot=true`, `dbgstat=disabled`), `tlsBinding=attested`.
 
 The vectors in `docs/test-vectors/canonical.json` are hash inputs shared with the Rust tests. Their proof and entry still name the made-up `v1.ainek.testnet`, with commit `f415f768…`; the samples above are bound to the real entry #0 instead.
+
+## `outside/` (recorded 2026-11-13)
+
+What three parties outside the team had published about the model's enclave on that day, for the tests of
+`packages/proof/src/outside-readings.ts`. None of it is ours, and none of it is a secret.
+
+| File | What it is | How it was produced |
+| --- | --- | --- |
+| `countersign-entry-7.jwt`, `countersign-entry-8.jwt` | Two entries of [Countersign](https://github.com/greenlima/sealed-review)'s feed (Apache-2.0), verbatim: signed verdicts on the model's direct endpoint and on the route through the gateway, of Nov 12, 19:18 UTC | view call `entry({"seq": 7})` and `entry({"seq": 8})` on `sealed-review-feed.testnet`, through the public RPC |
+| `quill-policy.excerpt.json` | Two of the eleven pins in `enclave-go/sidecar/near_ai_policy.json` of [Quill Cloud](https://github.com/Lore-Hex/quill-cloud-proxy), unchanged: the one for `z-ai/glm-5.3-flash` and one for another model | `raw.githubusercontent.com`, branch `main` |
+| `teemoon-page.excerpt.md` | The heading and the verdict line of one review page of [teemoon audits](https://github.com/teemoonai/audits), each cut short: enough for the parser, not a copy of the review | the page for file hash `309c07af…6dd1` of `prod/GLM-5.3-Flash-SGL-TP2x4-W4AFP8-V12Q8.yaml` |
+
+The two JWTs are public data; `.gitleaks.toml` lists them, as it lists NVIDIA's recorded tokens.

@@ -5,7 +5,7 @@ import { fetchImageProvenance, getSdkError, verifyImageProvenance } from '@neara
 import { inspectRelease as inspect, type InspectReleaseParams, type ReleaseInspection } from '@ainek/proof/release-chain';
 
 export type * from '@ainek/proof/release-chain';
-export { COMPOSE_REPOSITORY, IMAGE_POLICIES, countText, describeRelease, failedChecks, leadTimes, releaseName, uncheckedChecks, utcText, verdictOf } from '@ainek/proof/release-chain';
+export { COMPOSE_REPOSITORY, IMAGE_POLICIES, attestedStateOf, countText, describeRelease, failedChecks, leadTimes, outsideReadings, releaseName, uncheckedChecks, utcText, verdictOf } from '@ainek/proof/release-chain';
 // `releaseMarksFor` is not wrapped here: a verifier does not depend on this package and calls it with its own SDK.
 
 /** The chain with this SDK's image checks. */
