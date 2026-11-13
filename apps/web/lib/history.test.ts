@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { prepareE2eeChatRequest } from '@nearai/inference-sdk';
 import { chatHistory, hasOtherThread, leftBehind, type HistoryTurn } from './history.ts';
 import { chatRequest, type ChatMessage } from './nearai-requests.ts';
-import { MAX_BODY_BYTES, MAX_MESSAGES, completionProblem } from './relay-guard.ts';
+import { MAX_BODY_BYTES, MAX_MESSAGES, REASONING_EFFORT, completionProblem } from './relay-guard.ts';
 
 const user = (content: string) => ({ role: 'user' as const, content });
 const TEE = 'private-model';
@@ -50,8 +50,9 @@ const threadOf = (n: number, question: (i: number) => string, reply: (i: number)
 /** The request the page would send for `next` after `thread`, as the relay receives it: encrypted for the private model, plain for the other. */
 async function requestFor(thread: HistoryTurn[], next: string, model = TEE): Promise<{ body: ArrayBuffer; headers: Headers; messages: ChatMessage[] }> {
   const messages = [...chatHistory(thread, model, TEE, next), user(next)];
-  const plain = chatRequest(BASE, model, messages);
-  const request = model === TEE ? (await prepareE2eeChatRequest({ request: plain, modelKey: { signingAlgo: 'ed25519', publicKey: MODEL_KEY } })).request : plain;
+  const request = model === TEE
+    ? (await prepareE2eeChatRequest({ request: chatRequest(BASE, model, messages, REASONING_EFFORT), modelKey: { signingAlgo: 'ed25519', publicKey: MODEL_KEY } })).request
+    : chatRequest(BASE, model, messages);
   return { body: await request.arrayBuffer(), headers: request.headers, messages };
 }
 
