@@ -8,14 +8,17 @@
 // browser but not a script.
 import { ainekConfigFromEnv } from '@ainek/proof';
 import { NextResponse } from 'next/server';
-import { ALLOWED_REQUEST_HEADERS, completionProblem, keyProblem, relayRequestProblem } from '@/lib/relay-guard';
+import { ALLOWED_REQUEST_HEADERS, MAX_BODY_BYTES, completionProblem, keyProblem, relayRequestProblem } from '@/lib/relay-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// A reply is not streamed, and a long answer takes minutes to write. The page waits 180 s for one (REPLY_TIMEOUT_MS in
+// lib/nearai-browser.ts) and then says so; the function has to live longer than that, or the platform would cut the
+// request first and the visitor would see its error and not ours.
+export const maxDuration = 200;
 
 // Hop-by-hop headers, cookies, and caching: no upstream answer may tell Vercel's CDN to keep it.
 const DROPPED_RESPONSE_HEADERS = new Set(['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'set-cookie', 'cache-control', 'cdn-cache-control', 'vercel-cdn-cache-control']);
-const MAX_BODY_BYTES = 64 * 1024;
 const RATE_LIMIT = { windowMs: 60_000, max: 30 };
 
 const cfg = ainekConfigFromEnv(process.env);
@@ -104,7 +107,16 @@ async function proxy(req: Request): Promise<Response> {
 
   // The query as the guard parsed and checked it, not the raw string, so upstream cannot read a parameter the guard did not see.
   const query = url.searchParams.toString();
-  const upstream = await fetch(`${upstreamOrigin}/${rest}${query ? `?${query}` : ''}`, { method: req.method, headers, body, redirect: 'manual' });
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${upstreamOrigin}/${rest}${query ? `?${query}` : ''}`, { method: req.method, headers, body, redirect: 'manual', signal: req.signal });
+  } catch (err) {
+    // The page stopped waiting (it gives a reply 180 s) or the visitor left. The request upstream goes with it, so the
+    // model does not go on writing, on the one key that pays for it, an answer nobody will read. Where the platform
+    // does not pass the disconnect on, the signal never fires and the request runs to its end as before.
+    if (req.signal.aborted) return new Response(null, { status: 499 });
+    throw err;
+  }
 
   const out = new Headers();
   upstream.headers.forEach((value, name) => {

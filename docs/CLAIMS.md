@@ -220,6 +220,13 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **That the E2EE flag in a disclosed file is proven.** The signature covers the request and response bytes; whether those
   bytes were ciphertext is the sender's claim, and `/auditor` labels it as such. A proof does not record the E2EE version
   either, and nothing in the signed bytes shows it.
+- **A streamed answer, or a long conversation sent whole.** The reply is not streamed: nothing arrives until the model
+  has written all of it, and the proof is made over the whole reply. The page waits 180 seconds and then says no reply
+  came; by then the request may have reached the model and been answered. On the evening of Nov 13 an answer of 120
+  words took 17 to 40 seconds, and one open question took 148 seconds and then 203, longer than the page waits. A
+  message is at most 4,000 characters. A conversation goes to the model as far as it fits one request to our relay
+  (50 messages, 64 KB): past that the earliest exchanges are no longer sent, the model does not see them, and the page
+  says how many the next message will leave behind.
 
 ## Known issues we inherited (say so)
 

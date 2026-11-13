@@ -16,3 +16,10 @@ export function describeError(err: unknown): string {
 export function looksLikeKeyLimit(reason: string): boolean {
   return /^chat completion failed: HTTP (402|429)\b/.test(reason);
 }
+
+/** The reason of a send that got no reply in the time the page waits (nearai-browser.ts). */
+export const noReplyReason = (ms: number): string => `no reply within ${ms / 1000} s`;
+/** Did the send end because the wait for the reply ran out? Then the card says what that can mean. Exactly the reason above, whatever the limit. */
+export function looksLikeNoReply(reason: string): boolean {
+  return /^no reply within [\d.]+ s$/.test(reason);
+}
