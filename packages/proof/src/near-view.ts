@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { isNetworkFailure, withRetry } from './retry.ts';
 import { bytesToBase64 } from './disclosure.ts';
-import { KeyEntry, ProofCommitRecord, hex64, u128String } from './schema.ts';
+import { KeyEntry, LogPoint, ProofCommitRecord, u128String } from './schema.ts';
 import { NEAR_ACCOUNT } from './trust-set.ts';
 import type { Check } from './verify.ts';
 
@@ -113,7 +113,7 @@ export function withinWindow(entries: readonly KeyEntry[], maxAgeNs: string, now
     return at >= oldest && at <= newest;
   });
 }
-const Head = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64 }).nullable();
+const Head = LogPoint.nullable();
 
 export interface KeyLogReader {
   /** `latest_keys(model, max_age_ns, verifier?)`: newest first, at most 100, the fail-closed window by default; with `verifier`, that account's entries only. */
@@ -123,7 +123,7 @@ export interface KeyLogReader {
   /** `entries_since(index, limit)`. */
   entriesSince(index: number, limit: number): Promise<KeyEntry[]>;
   /** `head()`; null while the log is empty. */
-  head(): Promise<{ index: number; entry_hash: string } | null>;
+  head(): Promise<LogPoint | null>;
   /** `verifiers()`: the accounts registered to write to the log. Being registered is not being trusted: that stays the client's choice. */
   verifiers(): Promise<string[]>;
 }

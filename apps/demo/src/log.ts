@@ -4,7 +4,7 @@
 // or given with --seen). A chain that holds says the entries fit each other; that they are the entries once written,
 // only an earlier place can say. The controls at the end show both halves on the entries just read.
 import { parseArgs } from 'node:util';
-import { DEMO_SWAPPED_KEY, chainBreak, hex64, isForeignAnswer, keyLogReader, pointStanding, readWholeLog, rewrittenFrom, shortHex as short, utcTextOfMs, walkLog, type KeyEntry, type LogPoint } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, LogPoint, chainBreak, isForeignAnswer, keyLogReader, oneLine, pointStanding, readWholeLog, rewrittenFrom, shortHex as short, utcTextOfMs, walkLog, type KeyEntry } from '@ainek/proof';
 import { loadLiveEnv } from './env.ts';
 import { readJson } from './evidence.ts';
 import { FAIL, NA, OK, describe, exitFlushed, head, line } from './term.ts';
@@ -27,9 +27,10 @@ const flags = (() => {
   }
 })();
 const given: SeenPoint[] = flags.seen.map((text) => {
-  const [index = '', hash = ''] = text.split(':');
-  if (!/^\d{1,9}$/.test(index) || !hex64.safeParse(hash).success) usage(`--seen takes <index>:<entry hash of 64 hex characters>, got "${text}"`);
-  return { index: Number(index), entry_hash: hash, from: 'given with --seen' };
+  // The whole argument, so that two pairs pasted together are not read as one; a hash copied in capitals is the same hash.
+  const [, index, hash] = /^(\d{1,9}):([0-9a-f]{64})$/i.exec(text) ?? [];
+  if (index === undefined || hash === undefined) usage(`--seen takes one <index>:<entry hash of 64 hex characters>, got "${text}"`);
+  return { index: Number(index), entry_hash: hash.toLowerCase(), from: 'given with --seen' };
 });
 
 const { cfg } = loadLiveEnv();
@@ -43,7 +44,12 @@ function recordedPoints(): SeenPoint[] {
     line(NA, `the places recorded in this repository are of ${recorded.contract}, not of this contract: not compared`);
     return [];
   }
-  return recorded.points.map(({ index, entry_hash, seen }) => ({ index, entry_hash, from: `recorded in this repository on ${seen} (docs/samples/${file})` }));
+  return recorded.points.map(({ seen, ...point }, i) => {
+    // The file is edited by hand: a place that is not an index and a hash would read as a rewritten log.
+    const parsed = LogPoint.safeParse(point);
+    if (!parsed.success) usage(`docs/samples/${file}: place ${i} is not an index and an entry hash of 64 lowercase hex characters`);
+    return { ...parsed.data, from: `recorded in this repository on ${seen} (docs/samples/${file})` };
+  });
 }
 
 const place = (p: LogPoint): string => `#${p.index} ${short(p.entry_hash)}`;
@@ -56,8 +62,9 @@ const report = (ok: boolean, text: string): void => {
 
 head('1. The chain, recomputed here');
 const whole = await readWholeLog(keyLogReader(cfg.rpcUrl, cfg.contract)).catch((err: unknown) => {
-  // An account with other code answers too; what it answers is not this log's views (SPEC §4.1).
-  line(FAIL, isForeignAnswer(err) ? `${cfg.contract} does not answer as the key log does: its head and entries are not the ones of SPEC §4.1` : `the log could not be read: ${describe(err)}`);
+  // An account with other code answers too, and an entry this client's schema refuses is an answer as well: either way
+  // the reason is kept, since it names the field.
+  line(FAIL, isForeignAnswer(err) ? `${cfg.contract} did not answer as the key log's views do (SPEC §4.1): ${oneLine(describe(err).replace(/\s+/g, ' '), 240)}` : `the log could not be read: ${describe(err)}`);
   return undefined;
 });
 const broken = whole && walkLog(whole);
@@ -85,7 +92,7 @@ if (!whole) {
     const standing = pointStanding(entries, p);
     if (standing === 'kept') report(true, `${place(p)}, ${p.from}: still there${p.index > 0 ? `, so no entry up to #${p.index} was changed, removed or put in since` : ''}`);
     else if (standing === 'changed') report(false, `${place(p)}, ${p.from}: entry #${p.index} now has the hash ${short(entries[p.index]!.entry_hash)}. A log that held that place was rewritten at or before #${p.index}`);
-    else report(false, `${place(p)}, ${p.from}: the log now ends at #${last.index}. A log that held that place has lost entries`);
+    else report(false, `${place(p)}, ${p.from}: the log read now ends at #${last.index}. Either this node is behind the one that gave the place (run it again), or a log that held it has lost entries`);
   }
   if (points.length === 0) line(NA, 'no earlier place to compare with: the chain above fits itself, which a rewritten log would too');
 
@@ -95,7 +102,8 @@ if (!whole) {
   const swapKey = (e: KeyEntry): KeyEntry => ({ ...e, signing_address: DEMO_SWAPPED_KEY });
   const control = (what: string, forged: KeyEntry[], wanted: number): void => {
     const found = chainBreak(forged);
-    report(found?.index === wanted, found ? `${what}: refused, ${found.reason}` : `${what}: the chain held, and it must not`);
+    if (found?.index === wanted) report(true, `${what}: refused, ${found.reason}`);
+    else report(false, found ? `${what}: refused at entry #${found.index}, where #${wanted} was expected (${found.reason})` : `${what}: the chain held, and it must not`);
   };
   control(`the signing key in entry #${at} replaced`, entries.map((e) => (e.index === at ? swapKey(e) : e)), at);
   if (at + 1 < entries.length) {
@@ -110,7 +118,8 @@ if (!whole) {
   }
 
   console.log();
-  line(NA, 'Not shown by this: that the log was the same before the earliest place above was taken, or that another RPC node gives everyone the same log. The contract account has a full-access key (docs/CLAIMS.md, "An immutable log")');
+  const covers = points.length ? 'A place covers the entries up to its own index, from the day it was taken: nothing after that index, and nothing before that day. ' : '';
+  line(NA, `${covers}One RPC node was read: that another gives everyone the same log is not shown. The contract account has a full-access key (docs/CLAIMS.md, "An immutable log")`);
   line(NA, `To compare a later log with this one: pnpm demo:log --seen ${top.index}:${top.entry_hash}`);
   const kept = points.length === 0 ? '' : `, and ${points.length === 1 ? 'the place seen earlier is' : `${points.length === 2 ? 'both' : `all ${points.length}`} places seen earlier are`} still in it`;
   console.log(failed ? `\nResult: FAILED. See the line marked ${FAIL} above.` : `\nResult: the chain holds from #0 to #${last.index}${kept}.`);

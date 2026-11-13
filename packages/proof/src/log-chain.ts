@@ -3,13 +3,7 @@
 // does not take the contract's word for it, and the result is compared with places of the log somebody saw earlier.
 import { entryHashOf } from './commit.ts';
 import type { KeyLogReader } from './near-view.ts';
-import type { KeyEntry, KeyEntryInput } from './schema.ts';
-
-/** A place in the log as somebody saw it: an index and the hash the log had there. `head()` returns one. */
-export interface LogPoint {
-  index: number;
-  entry_hash: string;
-}
+import type { KeyEntry, KeyEntryInput, LogPoint } from './schema.ts';
 
 /** The first entry at which the chain does not hold, and why. */
 export interface ChainBreak {
@@ -44,8 +38,9 @@ export function chainBreak(entries: readonly KeyEntry[]): ChainBreak | undefined
 
 /**
  * What became of a place seen earlier, in a log whose chain holds now: `kept` when the entry at that index still has
- * that hash, `changed` when it has another, `gone` when the log is now shorter. Each hash covers everything before it,
- * so `kept` says that no entry up to that index was changed, removed or inserted since the point was taken.
+ * that hash, `changed` when it has another, `gone` when the log read now is shorter. Each hash covers everything before
+ * it, so `kept` says that no entry up to that index was changed, removed or inserted since the place was taken. It says
+ * nothing of the entries after that index, nor of the time before the place was taken.
  */
 export function pointStanding(entries: readonly KeyEntry[], point: LogPoint): 'kept' | 'changed' | 'gone' {
   const now = entries[point.index];
@@ -77,8 +72,11 @@ const PAGE = 100;
 
 /**
  * The head first, then the entries up to it in pages. In that order a log that grows during the read only has more
- * entries than the head names, and they are left for the next read. A log that turns out shorter than its head comes
- * back short: `walkLog` reports it.
+ * entries than the head names, and they are left for the next read.
+ *
+ * The head and each page are separate reads, and a public RPC may answer them from nodes at different blocks. A node
+ * behind the one that gave the head returns fewer entries than the head names: that is thrown as a read that failed,
+ * to be made again, and never returned as a log that lost entries.
  */
 export async function readWholeLog(reader: Pick<KeyLogReader, 'head' | 'entriesSince'>): Promise<WholeLog> {
   const head = await reader.head();
@@ -86,18 +84,21 @@ export async function readWholeLog(reader: Pick<KeyLogReader, 'head' | 'entriesS
   if (!head) return { head, entries };
   while (entries.length <= head.index) {
     const page = await reader.entriesSince(entries.length, PAGE);
-    if (page.length === 0) break;
+    if (page.length === 0) throw new Error(`the node returned ${entries.length} of the ${head.index + 1} entries its head names: it may be behind the node that gave the head. Run it again`);
     entries.push(...page);
   }
   return { head, entries: entries.slice(0, head.index + 1) };
 }
 
-/** Where the chain of a whole log does not hold, the head the contract reported for it included. Nothing for a log that holds, and for an empty one. */
+/**
+ * Where the chain of a log does not hold, the head the contract reported for it included. Nothing for a log that holds
+ * (entries past the head, written since it was read, are walked like the rest), and for an empty one.
+ */
 export function walkLog({ head, entries }: WholeLog): ChainBreak | undefined {
   if (!head) return undefined;
   const broken = chainBreak(entries);
   if (broken) return broken;
-  if (entries.length !== head.index + 1) return { index: entries.length, reason: `the log ends before its head #${head.index}: entry #${entries.length} did not come back` };
-  if (entries[head.index]!.entry_hash !== head.entry_hash) return { index: head.index, reason: `the head names another hash than entry #${head.index} has` };
-  return undefined;
+  const at = entries[head.index];
+  if (!at) return { index: entries.length, reason: `the entries end at #${entries.length - 1}, before the head #${head.index}` };
+  return at.entry_hash === head.entry_hash ? undefined : { index: head.index, reason: `the head names another hash than entry #${head.index} has` };
 }

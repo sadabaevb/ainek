@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { entryHashOf } from './commit.ts';
 import { readRepoJson } from './fixtures.ts';
-import { chainBreak, inputOf, pointStanding, readWholeLog, rewrittenFrom, walkLog, type LogPoint } from './log-chain.ts';
-import type { KeyEntry } from './schema.ts';
+import { chainBreak, inputOf, pointStanding, readWholeLog, rewrittenFrom, walkLog } from './log-chain.ts';
+import { LogPoint, type KeyEntry } from './schema.ts';
 
 const { entry: first } = readRepoJson<{ entry: KeyEntry }>('docs/samples/key-entry.sample.json');
 
@@ -76,7 +76,9 @@ test('a point stays kept while the log only grows, and is gone from a log cut sh
 
 test('a head that does not fit the entries breaks the walk', () => {
   assert.deepEqual(walkLog({ head: { index: 5, entry_hash: 'ef'.repeat(32) }, entries: log }), { index: 5, reason: 'the head names another hash than entry #5 has' });
-  assert.deepEqual(walkLog({ head: headOf(log), entries: log.slice(0, 4) }), { index: 4, reason: 'the log ends before its head #5: entry #4 did not come back' });
+  assert.deepEqual(walkLog({ head: headOf(log), entries: log.slice(0, 4) }), { index: 4, reason: 'the entries end at #3, before the head #5' });
+  // Entries past the head are a log that grew since the head was read, not a break.
+  assert.equal(walkLog({ head: { index: 3, entry_hash: log[3]!.entry_hash }, entries: log }), undefined);
 });
 
 test('the whole log is read in pages up to the head taken first; entries written meanwhile are left out', async () => {
@@ -94,9 +96,8 @@ test('the whole log is read in pages up to the head taken first; entries written
   assert.equal(whole.entries.length, 202);
   assert.deepEqual(whole.head, { index: 201, entry_hash: long[201]!.entry_hash });
   assert.equal(walkLog(whole), undefined);
-  // A log that answers with less than its head names comes back short, and the walk says where it stopped.
-  const short = await readWholeLog({ ...reader, entriesSince: async (index) => (index === 0 ? long.slice(0, 100) : []) });
-  assert.deepEqual(walkLog(short), { index: 100, reason: 'the log ends before its head #201: entry #100 did not come back' });
+  // A node behind the one that gave the head answers with fewer entries: a read to make again, not a log that lost entries.
+  await assert.rejects(readWholeLog({ ...reader, entriesSince: async (index) => (index === 0 ? long.slice(0, 100) : []) }), /returned 100 of the 202 entries its head names.*Run it again/);
   assert.deepEqual(await readWholeLog({ head: async () => null, entriesSince: async () => long }), { head: null, entries: [] });
 });
 
@@ -106,7 +107,7 @@ test('the places recorded in the repository: the first is the recorded entry #0,
   assert.equal(contract, sample.contract);
   assert.deepEqual(points[0], { index: 0, entry_hash: first.entry_hash, seen: '2026-11-08' });
   for (const [i, p] of points.entries()) {
-    assert.match(p.entry_hash, /^[0-9a-f]{64}$/);
+    assert.ok(LogPoint.safeParse(p).success, `place ${i} is not an index and a hash of 64 lowercase hex characters`);
     assert.match(p.seen, /^\d{4}-\d{2}-\d{2}$/);
     if (i > 0) assert.ok(p.index > points[i - 1]!.index && p.seen >= points[i - 1]!.seen, `place ${i} goes back`);
   }

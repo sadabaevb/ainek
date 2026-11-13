@@ -20,6 +20,7 @@ export {
   Verdict,
   KeyEntryInput,
   KeyEntry,
+  LogPoint,
   SignatureResponse,
   ProofCommitRecord,
   SigningAlgo,
@@ -58,7 +59,7 @@ export type { TrustPreview, TrustSet } from './trust-set.ts';
 export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, latestKeysFor, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, isForeignAnswer, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
 export { chainBreak, inputOf, pointStanding, readWholeLog, rewrittenFrom, walkLog } from './log-chain.ts';
-export type { ChainBreak, LogPoint, WholeLog } from './log-chain.ts';
+export type { ChainBreak, WholeLog } from './log-chain.ts';
 export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, tokenAmountText } from './token.ts';
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';

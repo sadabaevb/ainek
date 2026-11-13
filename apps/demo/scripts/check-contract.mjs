@@ -74,17 +74,25 @@ try {
 } catch (err) {
   console.log(`  — could not check the /auditor sample: ${err instanceof Error ? err.message : String(err)}`);
 }
+// `entry_hash` as SPEC §4.1 defines it, over every entry up to the head, and every entry in the client's schema: a log
+// that cannot be read to its head fails here like any other method. `pnpm demo:log` adds the comparison with places of
+// the log seen earlier.
+const all = await (async () => {
+  try {
+    const whole = await readWholeLog(log);
+    const broken = walkLog(whole);
+    if (broken) bad(`hash chain: breaks at entry #${broken.index} (${broken.reason})`);
+    else if (whole.entries.length > 0) ok(`hash chain: ${whole.entries.length} entries up to the head, each hash recomputed here and each naming the one before it`);
+    return whole.entries;
+  } catch (err) {
+    bad(`hash chain: the log could not be read up to its head (${String(err instanceof Error ? err.message : err).replace(/\s+/g, ' ').slice(0, 240)})`);
+    return [];
+  }
+})();
 // Not an ABI check: over the log's whole history, how long would the chat have refused for lack of a fresh entry by a
 // verifier the site trusts? `observed_at` is the verifier's own clock, and the daemon re-logs an unchanged key about
 // every 6 hours, so pauses between entries are not downtime.
 try {
-  const whole = await readWholeLog(log);
-  const all = whole.entries;
-  // This one is an ABI check: `entry_hash` as SPEC §4.1 defines it, over every entry up to the head. `pnpm demo:log` adds
-  // the comparison with places of the log seen earlier.
-  const broken = walkLog(whole);
-  if (broken) bad(`hash chain: breaks at entry #${broken.index} (${broken.reason})`);
-  else if (all.length > 0) ok(`hash chain: ${all.length} entries up to the head, each hash recomputed here and each naming the one before it`);
   const mine = all.filter((e) => e.model === model && cfg.trustedVerifiers.includes(e.verifier));
   if (mine.length > 0) {
     const H = 3_600_000;
