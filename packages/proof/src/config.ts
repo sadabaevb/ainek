@@ -89,10 +89,24 @@ function list(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback).split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
+const warned = new Set<string>();
+/** Says a rejected setting once for each value: the config is read on every request of the web app. */
+function warnOnce(message: string): void {
+  if (warned.has(message)) return;
+  warned.add(message);
+  console.warn(message);
+}
+
+export function ainekConfigFromEnv(env: EnvLike, warn: (message: string) => void = warnOnce): AinekConfig {
   const network = env['NEAR_NETWORK'] === 'mainnet' ? 'mainnet' : 'testnet';
   const logSource = env['AINEK_LOG_SOURCE'] === 'sample' ? 'sample' : 'contract';
-  const quorumRaw = Number(env['AINEK_QUORUM'] ?? '1');
+  const trustedVerifiers = list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS);
+  // A typo ("2x") must not become 1, the weakest quorum: like the settings below, a bad value falls to the strict side,
+  // every trusted verifier and two at the least. Said aloud, because the refusals it causes point at the verifiers.
+  const quorumText = env['AINEK_QUORUM']?.trim() || '1';
+  const strictQuorum = Math.max(2, trustedVerifiers.length);
+  const quorumValid = /^\d+$/.test(quorumText) && Number(quorumText) >= 1;
+  if (!quorumValid) warn(`AINEK_QUORUM=${JSON.stringify(env['AINEK_QUORUM'])} is not a whole number of at least 1: using ${strictQuorum} (every trusted verifier, two at the least)`);
   const accepted = list(env['AINEK_ACCEPTED_TCB'], 'UpToDate').filter((s): s is TcbStatusName => (TCB_STATUSES as readonly string[]).includes(s));
   return {
     model: env['NEARAI_MODEL'] ?? 'z-ai/glm-5.3-flash',
@@ -103,8 +117,8 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     rpcUrl: env['NEAR_RPC_URL'] ?? (network === 'mainnet' ? 'https://rpc.mainnet.fastnear.com' : 'https://rpc.testnet.fastnear.com'),
     contract: env['AINEK_CONTRACT'] ?? 'ainek-log-dastan.testnet',
     logSource,
-    trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
-    quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
+    trustedVerifiers,
+    quorum: quorumValid ? Number(quorumText) : strictQuorum,
     requireLoggedDeployment: envFlag(env['AINEK_REQUIRE_DEPLOYMENT'], logSource !== 'sample' && REQUIRE_DEPLOYMENT_DEFAULT),
     requireLoggedRelease: envFlag(env['AINEK_REQUIRE_RELEASE'], REQUIRE_RELEASE_DEFAULT),
     releaseWaitMs: releaseWaitMs(env['AINEK_RELEASE_WAIT_MIN']),

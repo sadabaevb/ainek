@@ -161,6 +161,8 @@ p { margin: 0.75rem 0; }
 .card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem 1rem; margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 0.4rem; padding: 0.9rem var(--card-pad) 0.8rem; border-bottom: 1px solid var(--ink); }
 .card-head.ok, .trust-verdict.ok { --tone: var(--ok); --tone-bg: var(--ok-bg); }
 .card-head.fail, .trust-verdict.fail { --tone: var(--fail); --tone-bg: var(--fail-bg); }
+/* Consistent, not confirmed: neither verdict colour. */
+.card-head.skipped { --tone: var(--muted); --tone-bg: transparent; }
 .stamp { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.65rem; border: 2px solid var(--tone); border-radius: 2px; background: var(--tone-bg); color: var(--tone); font: 500 0.8rem/1.25 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; transform: rotate(-1.2deg); }
 .card-head .when { font: 400 0.78rem/1.4 var(--mono); color: var(--muted); }
 /* The number and the mark hold their own columns open: a line without a number gives that room back by itself. */

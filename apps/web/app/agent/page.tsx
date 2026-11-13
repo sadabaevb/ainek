@@ -299,7 +299,7 @@ const ActionItem = memo(function ActionItem({ record, agent, tokens, checks, com
   // The demo edits a copy in this browser: flip the verdict, keep the signature, and run the same checks.
   const flipped = record.decision.verdict === 'Deny' ? 'Allow' : 'Deny';
   const edited = useMemo(() => (tampered && commit ? checkActionRecord({ ...record, decision: { ...record.decision, verdict: flipped } }, commit) : null), [tampered, record, commit, flipped]);
-  const status = worstStatus(checks);
+  const status = worstStatus(edited ?? checks);
   const earlier = agent?.info && !decidedUnderCurrentPolicy(record, agent.info) ? ta.earlierPolicy : null;
   const isSample = sampleAction.actionId === record.action_id && sampleAction.teeSignature === record.tee_signature;
   return (

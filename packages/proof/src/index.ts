@@ -6,7 +6,8 @@ export type { SignedText } from './signed-text.ts';
 export { verifySignedText, decodeSignature } from './signature.ts';
 export type { SignatureCheck } from './signature.ts';
 export { commitOf, proofPayload, actionCommitOf, entryHashOf } from './commit.ts';
-export { verifyModelProof, withChecks } from './verify.ts';
+export { verifyModelProof, withChecks, standingOf, trustedVerifierCheck } from './verify.ts';
+export type { Standing } from './verify.ts';
 export type { VerifyReport, Check, CheckId, CheckStatus } from './verify.ts';
 export {
   ModelProof,

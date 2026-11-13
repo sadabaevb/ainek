@@ -83,6 +83,8 @@ test('evaluateRelease: a quorum counts distinct verifiers that logged the log as
   assert.deepEqual([short.status, short.confirmedBy], ['release-below-quorum', ['v1.testnet']]);
   assert.match(short.detail, /only 1 of 2 required verifiers marked the action log as it stands/);
   assert.equal(evaluateRelease([...one, entry(9, 'v2.testnet', marks)], at(LOG), { quorum: 2 }).status, 'ok');
+  // A quorum that is no number confirms nothing: NaN compares false both ways and used to let every state through.
+  assert.equal(evaluateRelease([...one, entry(9, 'v2.testnet', marks)], at(LOG), { quorum: Number.NaN }).status, 'release-below-quorum');
   // A verifier that saw an earlier state of the log does not count for the log as it stands.
   assert.equal(evaluateRelease([...one, entry(9, 'v2.testnet', [logMark(INSTANCE, LOG.slice(0, 2))])], at(LOG), { quorum: 2 }).status, 'release-below-quorum');
 });

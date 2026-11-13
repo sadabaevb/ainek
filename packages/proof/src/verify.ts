@@ -31,6 +31,7 @@ export type CheckId =
   | 'key-in-log'
   | 'commit'
   | 'log-entry' // the chain re-read of the entry the proof points at (resolveLogEntry)
+  | 'verifier-trusted' // whether the entry's verifier is in the reader's trust set (trustedVerifierCheck)
   | 'on-chain-commit' // the proof_commit record (checkProofCommit)
   // action proofs: the policy decision (checkPolicyOutput in policy.ts)
   | 'decision-signature'
@@ -70,7 +71,7 @@ export function verifyModelProof(
 
   // 1. Route: only a signature made inside the model TEE counts (SPEC §3.9).
   if (proof.signatureKind === 'provider_tee') {
-    push('route', 'ok', 'signed inside the model TEE (signature_kind = provider_tee)');
+    push('route', 'ok', 'the proof says the model TEE signed it (signature_kind = provider_tee); the signature and the log entry below decide whether that holds');
   } else {
     push('route', 'fail', `signature_kind is "${proof.signatureKind}": the answer went through a non-attested route; privacy is contractual only`);
   }
@@ -142,6 +143,35 @@ export function verifyModelProof(
     if (e.verifier !== p.verifier) problems.push(`entry was logged by ${e.verifier}, proof says ${p.verifier}`);
     push('key-in-log', problems.length === 0 ? 'ok' : 'fail', problems.length === 0 ? `key #${e.index} logged by ${e.verifier} (tcb ${e.tcb_status})` : problems.join('; '));
   }
+}
+
+/**
+ * Whether the reader's own trust set confirms the proof's key. Being registered in the contract is not being trusted:
+ * any registered account can log any key. And a proof names one entry, so it can show one verifier: a reader who asks
+ * for two or more gets no confirmation from it. A skip, not a failure: the file is not wrong, it is unconfirmed for
+ * this reader.
+ */
+export function trustedVerifierCheck(verifier: string | undefined, trust: { verifiers: readonly string[]; quorum: number }): Check {
+  const id = 'verifier-trusted';
+  if (verifier === undefined) return { id, status: 'skipped', detail: 'no proof to read the verifier from' };
+  if (!trust.verifiers.includes(verifier)) return { id, status: 'skipped', detail: `the entry is by ${verifier}, which is not in your trust set: for you the key is not confirmed` };
+  // Anything but exactly 1 (two, or a number that is no number) is more than one entry can show.
+  if (trust.quorum !== 1) return { id, status: 'skipped', detail: `the entry is by ${verifier}, in your trust set, but you ask for ${trust.quorum} verifiers and a proof names one entry` };
+  return { id, status: 'ok', detail: `the entry is by ${verifier}, which is in your trust set` };
+}
+
+/** What a report amounts to for the person reading it; the two in the middle are a file that agrees with itself and nothing more. */
+export type Standing = 'verified' | 'log-not-consulted' | 'trust-set-not-met' | 'failed';
+
+/**
+ * `verified` takes more than "no check failed": the public log itself must have returned the entry (an unreachable log
+ * falls back to the copy inside the file, the sender's word), and the reader's trust set must confirm the key.
+ * Otherwise a file written from scratch around a fresh key would read as verified.
+ */
+export function standingOf(report: { ok: boolean; checks: readonly Check[] }): Standing {
+  if (!report.ok) return 'failed';
+  const held = (id: CheckId) => report.checks.find((c) => c.id === id)?.status === 'ok';
+  return !held('log-entry') ? 'log-not-consulted' : !held('verifier-trusted') ? 'trust-set-not-met' : 'verified';
 }
 
 /** A report with checks made outside verifyModelProof folded in (the chain re-read, the on-chain commit); `ok` is recomputed. */

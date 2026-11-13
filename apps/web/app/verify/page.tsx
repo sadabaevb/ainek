@@ -2,14 +2,14 @@
 // Re-verify a proof yourself: from this browser's store (?id=), from a pasted proof JSON, from a disclosure file
 // (proof + raw bytes + log entry), or from a link that carries that file in its fragment (lib/proof-link.ts). Hashes are recomputed here; the log entry is re-read from the public log. An exchange
 // kept in this browser whose proof was never committed can be committed from here (SPEC §4.2), wallet connected on demand.
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
-import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import { ModelProof, isDisclosure, parseDisclosure, standingOf, trustedVerifierCheck, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
 import sampleAction from '../../../../docs/samples/action-proof.sample.json';
 import { ActionProofCard } from '@/components/action-proof-card';
-import { CardHead, CheckList } from '@/components/checks';
+import { CardHead, CheckList, STANDING_STATUS } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
 import { describeError } from '@/lib/errors';
@@ -22,7 +22,7 @@ import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { proofFromFragment } from '@/lib/proof-link';
 import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
 import { walletCommitter } from '@/lib/wallet';
-import { useConfig, useT } from '../providers';
+import { useConfig, useT, useTrust } from '../providers';
 
 /** Where the input came from; the wording follows the language toggle, so only the key is kept. */
 type Origin = keyof Dict['verify']['origin'];
@@ -39,7 +39,10 @@ interface Input {
 }
 
 interface Result {
+  /** Everything but the reader's trust set, which is applied at render: changing it must not read the chain again. */
   report: VerifyReport;
+  /** The account that logged the proof's key, when the proof was readable. */
+  verifier?: string;
   origin: Origin;
   stored?: StoredExchange;
 }
@@ -53,6 +56,7 @@ function VerifyInner() {
   const cfg = useConfig();
   const { t } = useT();
   const tv = t.verify;
+  const { trust } = useTrust(); // the same trust set as the chat
   const wallet = useNearWallet();
   const params = useSearchParams();
   const id = params.get('id');
@@ -89,7 +93,8 @@ function VerifyInner() {
       const parsed = ModelProof.safeParse(input.proof);
       const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
       const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
-      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin, ...(input.stored ? { stored: input.stored } : {}) });
+      const verifier = log?.entry?.verifier ?? (parsed.success ? parsed.data.verifier : undefined);
+      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin, ...(verifier ? { verifier } : {}), ...(input.stored ? { stored: input.stored } : {}) });
     })().catch((e: unknown) => {
       if (!cancelled) setError(describeError(e));
     });
@@ -170,6 +175,9 @@ function VerifyInner() {
 
   // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
   const proof = result?.stored?.proof ?? result?.report.proof;
+  const report = useMemo(() => result && withChecks(result.report, trustedVerifierCheck(result.verifier, trust)), [result, trust]);
+  const standing = report && standingOf(report);
+  const headline = { verified: tv.ok, failed: tv.failed, 'log-not-consulted': tv.unconfirmedLog, 'trust-set-not-met': tv.unconfirmedTrust };
   const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
   const action = commitAction((committable && commitStatus[committable.completionId]) ?? 'no-wallet', !!wallet.signedAccountId);
 
@@ -216,10 +224,10 @@ function VerifyInner() {
       {error && <RedCard title={error} />}
 
       {actionProof !== null && <ActionProofCard value={actionProof} />}
-      {result && (
+      {result && report && standing && (
         <section className="card">
-          <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>
-          <CheckList items={result.report.checks} />
+          <CardHead status={STANDING_STATUS[standing]} when={tv.source(tv.origin[result.origin])}>{headline[standing]}</CardHead>
+          <CheckList items={report.checks} />
           {proof && (
             <div className="actions">
               {proof.commitTx && <a className="btn" href={explorerTxUrl(cfg.explorer, proof.commitTx)} target="_blank" rel="noreferrer">{tv.commitTx}</a>}

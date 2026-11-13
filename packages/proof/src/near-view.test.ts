@@ -225,3 +225,45 @@ test('viewAccessKeys: the keys of an account as the RPC lists them, and an error
   globalThis.fetch = (async () => new Response(JSON.stringify({ jsonrpc: '2.0', id: '1', error: { message: 'Server error', data: 'invalid account id' } }), { status: 200 })) as typeof fetch;
   await assert.rejects(viewAccessKeys('http://rpc.test', 'Agent'), /access keys of Agent: invalid account id/);
 });
+
+test('withinWindow: the client keeps only entries its own clock places inside the window', async () => {
+  const { withinWindow, LOG_WINDOW_NS, ANY_AGE_NS, CLOCK_SKEW_MS } = await import('./near-view.ts');
+  const now = Date.UTC(2026, 10, 13, 12, 0, 0);
+  const hour = 3_600_000;
+  const at = (index: number, ms: number): KeyEntry => ({ ...sampleEntry, index, observed_at: String(ms) });
+  const entries = [
+    at(1, now - hour), // an ordinary fresh entry
+    at(2, now + CLOCK_SKEW_MS - 1), // a verifier's clock a little ahead of ours
+    at(3, now + CLOCK_SKEW_MS + 1), // ahead by more than clocks differ
+    at(4, Date.UTC(2500, 0, 1)), // dated centuries ahead: the contract would keep it in every window for good
+    at(5, now - 24 * hour - CLOCK_SKEW_MS + 1), // at the old edge
+    at(6, now - 24 * hour - CLOCK_SKEW_MS - 1), // an RPC answering from an old block passes these for fresh
+    at(7, Number.MAX_SAFE_INTEGER), // nanoseconds written where milliseconds belong
+  ];
+  assert.deepEqual(withinWindow(entries, LOG_WINDOW_NS, now).map((e) => e.index), [1, 2, 5]);
+  assert.deepEqual(withinWindow(entries, ANY_AGE_NS, now).map((e) => e.index), [1, 2, 5, 6], 'the whole history lifts the old edge only: nothing dated ahead of the clock counts');
+});
+
+// Wiring only: the rules are in the withinWindow test above.
+test('keyLogReader.latestKeys: an entry dated in the future never reaches the fail-closed check', async () => {
+  const { keyLogReader } = await import('./near-view.ts');
+  const now = Date.UTC(2026, 10, 13, 12, 0, 0);
+  rpcAnswering(viewResult([{ ...sampleEntry, index: 2, observed_at: String(Date.UTC(2500, 0, 1)) }, { ...sampleEntry, index: 1, observed_at: String(now - 60_000) }]));
+  const entries = await keyLogReader('http://rpc.test', 'ainek.testnet', () => now).latestKeys(sampleEntry.model);
+  assert.deepEqual(entries.map((e) => e.index), [1]);
+});
+
+test('latestKeysFor: a read the caller stopped gives no window, not a partial one', async () => {
+  const { latestKeysFor } = await import('./near-view.ts');
+  const stop = new AbortController();
+  // The first read comes back, then the caller stops: the workers leave their loop without an error of their own.
+  const reader = { latestKeys: async () => { stop.abort(); return [logEntry(1, 'a.testnet')]; } };
+  await assert.rejects(latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet', 'c.testnet'], undefined, stop.signal), /stopped before every read came back/);
+});
+
+test('a U64 in an entry is a U64: a longer run of digits is not an entry', async () => {
+  const { KeyEntry: Entry } = await import('./schema.ts');
+  assert.equal(Entry.safeParse({ ...sampleEntry, observed_at: String(2n ** 64n - 1n) }).success, true);
+  // Refused as a schema failure, never thrown: callers tell "the log answered badly" from an outage by the error's type.
+  for (const bad of [String(2n ** 64n), '9'.repeat(400), 'abc', '1.5', '12x', '']) assert.equal(Entry.safeParse({ ...sampleEntry, observed_at: bad }).success, false, bad.slice(0, 24));
+});

@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const hex64 = z.string().regex(/^[0-9a-f]{64}$/, 'expected 64 lowercase hex chars (sha256)');
 const nonEmpty = z.string().min(1);
 /** near-sdk serialises U64 / U128 as decimal strings in JSON. */
-const u64String = z.string().regex(/^\d+$/, 'expected a decimal string (near-sdk U64)');
+const u64String = z.string().regex(/^\d+$/, 'expected a decimal string (near-sdk U64)').refine((s) => !/^\d+$/.test(s) || (s.length <= 20 && BigInt(s) < 2n ** 64n), 'larger than a U64');
 export const u128String = z.string().regex(/^\d+$/, 'expected a decimal string (near-sdk U128)');
 
 export const SigningAlgo = z.enum(['ed25519', 'ecdsa']);

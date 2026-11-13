@@ -207,3 +207,13 @@ test('several reports behind one key: one unlogged compose refuses, whatever its
   const reports = [{ signingAddress: entry.signing_address, composeHash: composeA }, { signingAddress: 'ee'.repeat(32), composeHash: unknown }, { signingAddress: entry.signing_address.toUpperCase(), composeHash: composeB }, { signingAddress: entry.signing_address, composeHash: composeA }];
   assert.deepEqual(composesBehindKey(reports, entry.signing_address), [composeA, composeB]);
 });
+
+test('resolveLogEntry: an entry the chain holds but dated ahead of this clock confirms no proof', async () => {
+  const now = Number(entry.observed_at) + 60_000;
+  const ahead = { ...entry, observed_at: String(Date.UTC(2500, 0, 1)) };
+  // The verifier wrote the time, and the contract keeps whatever it wrote.
+  const r = await resolveLogEntry(reader(async () => ahead), ahead.index, { ...ahead }, 'ainek.testnet', now);
+  assert.equal(r.check.status, 'fail');
+  assert.match(r.check.detail, /dated ahead of this clock/);
+  assert.equal((await resolveLogEntry(reader(async () => entry), entry.index, { ...entry }, 'ainek.testnet', now)).check.status, 'ok');
+});

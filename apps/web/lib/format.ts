@@ -9,9 +9,10 @@ export function utcMinute(iso: string): string {
   return `${iso.slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-/** Milliseconds since epoch at minute precision, UTC. */
+/** Milliseconds since epoch at minute precision, UTC. A value no Date can hold (a log entry carries whatever its verifier wrote) is said, not thrown. */
 export function utcMinuteOf(ms: number): string {
-  return utcMinute(new Date(ms).toISOString());
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? 'an unreadable time' : utcMinute(date.toISOString());
 }
 
 /** A log entry's `observed_at` (ms since epoch, as a U64 string) at minute precision, UTC. */
