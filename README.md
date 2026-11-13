@@ -28,7 +28,8 @@ hackathon's field we did not find, as far as the readings go, an append-only key
 choice of whom to trust left to the viewer ([docs/PRIOR-ART.md](docs/PRIOR-ART.md)).
 
 **Limits, up front.** Testnet, not audited, and the contract account has a full-access key. Two of the three verifiers
-are ours; the third is a friend's, with a key we have not seen. More under [Limits](#limits).
+are ours. The third we do not operate: a friend of ours runs it, with his own key, from his own GitHub account. More
+under [Limits](#limits).
 
 <!-- TODO before submission: 90-second video link. -->
 
@@ -126,7 +127,7 @@ As of Nov 14, 2026.
 
 - **The key log and the client run end to end** on testnet and on the hosted demo: the contract
   `ainek-log-dastan.testnet`, the chat with its proof card, `/verify`, `/log`, `/auditor`. Three verifiers write to the
-  log, and the entries of the third, the friend's, name the same key and launchers for the model as ours do.
+  log, and the entries of the one we do not operate name the same key and launchers for the model as ours do.
 - **The agent is on testnet:** twelve actions, all proposed by us. Seven came from the agent service with a real model
   answer, six of them through a Telegram bot on Nov 7 and 11
   ([docs/DETAILS.md](docs/DETAILS.md#the-agent-half-tier-2)).
