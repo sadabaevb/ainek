@@ -72,7 +72,7 @@ account at all.
 ### From your own GitHub account
 
 No server, and no laptop left on: for a public repository GitHub runs one round an hour, free. Our second verifier runs
-this way.
+this way, and so does the one a friend of ours runs ([AnasKg/ainek-verifier](https://github.com/AnasKg/ainek-verifier)).
 
 1. Make a public repository of your own, with a README so that it has a branch. Any name.
 2. In it, Settings → Secrets and variables → Actions → New repository secret: `VERIFIER_PRIVATE_KEY`, the function-call

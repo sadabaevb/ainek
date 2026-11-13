@@ -112,10 +112,12 @@ As of Nov 13, 2026.
 - **Tier 2 is on testnet** and ran through the Telegram bot on Nov 7: what ran and what has not is under [Tier 2 flow](#tier-2-flow).
 - **Not there:** the contract lock (`docs/DEPLOY.md`), so the contract account still has a full-access key; a verifier
   run by someone we do not know.
-- **A third verifier since Nov 13,** `anas-verifier.testnet`: Anas, a friend of both of us, runs it on his own machine,
-  with a key we have not seen. We set it up together, sitting next to him. Its first entry (#84) names the same key and
-  launcher for the model as ours do, and carries release marks. It is a verifier outside the team, not an independent
-  party, and it is not in the site's default trust set: a visitor can add it on `/log`.
+- **A third verifier since Nov 13,** `anas-verifier.testnet`: Anas, a friend of both of us, runs it with a key we have
+  not seen. It started on his laptop and moved the same evening to his own GitHub account
+  ([AnasKg/ainek-verifier](https://github.com/AnasKg/ainek-verifier)), where it runs a fixed commit of this repository.
+  We set it up together, sitting next to him. Its entries name the same key and launchers for the model as ours do, and
+  carry release marks. It is a verifier outside the team, not an independent party, and it is not in the site's default
+  trust set: a visitor can add it on `/log`.
 - **On since Nov 11:** the deployment check. On Nov 12 we found that it sees the enclave's launcher, not the release
   that serves the model. `pnpm demo:attest` follows that release to a source commit, and so does the browser when asked
   (the proof card, `/log`). A verifier can now log what it checked behind a key, and the client can refuse an enclave

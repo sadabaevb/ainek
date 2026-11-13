@@ -167,19 +167,29 @@ artifacts (30 days).
 
 ### The third verifier, run by a friend (`anas-verifier.testnet`)
 
-Not ours to operate: Anas, a friend of both of us, runs it on his own machine, from a clone of this repository
-(`services/verifier/README.md`, "Run a verifier in 5 minutes"). What we did on Nov 13, sitting next to him: the owner
-(`1dastan.testnet`) called `register_verifier({"account_id": "anas-verifier.testnet"})`, and we read the commands out.
-What we did not do: see or hold his key. As the chain shows it (checked Nov 13): the account has the full-access key it
-was created with, in his keychain, and a function-call key for `log_key` on `ainek-log-dastan.testnet` with an
-allowance of 1 NEAR, which is the one the daemon uses. He set a GitHub token of his own, with no scopes.
+Not ours to operate: Anas, a friend of both of us, runs it. On Nov 13 he started it on his laptop, from a clone of this
+repository (`services/verifier/README.md`, "Run a verifier in 5 minutes"), and the same evening moved it to his own
+GitHub account, where it runs by a schedule: [AnasKg/ainek-verifier](https://github.com/AnasKg/ainek-verifier), one
+workflow file (`services/verifier/README.md`, "From your own GitHub account"). That workflow checks this repository out
+at one commit, `39c2f19`, so a push of ours does not change what he runs.
 
-Its first round wrote entries #84 to #86 on Nov 13, 17:19 to 17:21 UTC: one for `z-ai/glm-5.3-flash` (the key and the
-launcher our verifiers log, with release marks) and two for `deepseek-ai/DeepSeek-V4.1-Flash-1017`, the second model of
-`.env.example`, which our verifiers do not watch. It is not in the default trust set (`packages/proof/src/config.ts`),
-for the reason the second one is not: a trusted verifier that stalls across a key rotation reads as a split view. A
-visitor adds it on `/log`. We cannot restart it or see its logs; if its entries stop, the log shows that and nothing
-else does.
+What we did, sitting next to him: the owner (`1dastan.testnet`) called
+`register_verifier({"account_id": "anas-verifier.testnet"})`, we read the commands out, and we wrote the workflow file
+he copied. What we did not do: see or hold his key. It is a secret of his repository. As the chain shows it (checked
+Nov 13): the account has the full-access key it was created with, in his keychain, and a function-call key for
+`log_key` on `ainek-log-dastan.testnet` with an allowance of 1 NEAR, which is the one the verifier uses.
+
+- **From the laptop,** 17:19 to 17:21 UTC: entries #84 to #86, one for `z-ai/glm-5.3-flash` (the key and the launcher
+  our verifiers log, with release marks) and two for `deepseek-ai/DeepSeek-V4.1-Flash-1017`, the second model of
+  `.env.example`, which our verifiers do not watch.
+- **From his GitHub account,** 18:53 UTC, the first run there: entries #91 to #93, the three launchers behind the key of
+  `z-ai/glm-5.3-flash`, each with release marks. The run took 33 seconds; its log is public in his repository.
+
+It is not in the default trust set (`packages/proof/src/config.ts`), for the reason the second one is not: a trusted
+verifier that stalls across a key rotation reads as a split view. A visitor adds it on `/log`. Two of the three
+verifiers now run on GitHub's machines, ours and his; only the first of ours runs elsewhere. We cannot start or stop
+his: if its entries stop, the log and his repository's run list show it. The account on the explorer:
+https://testnet.nearblocks.io/address/anas-verifier.testnet
 
 ## Agent service (Tier 2)
 
