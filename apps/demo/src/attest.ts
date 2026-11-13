@@ -13,7 +13,7 @@ import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
 import { inspectRelease, leadTimes, outsideReadingsFor, verdictOf } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
 import { printLeadTimes, printOutside, printRelease } from './release-report.ts';
-import { FAIL, NA, OK, exitFlushed, head, line, out, seconds } from './term.ts';
+import { FAIL, NA, OK, exitFlushed, head, line, out, outageHint, seconds } from './term.ts';
 
 const flags = (() => {
   try {
@@ -49,7 +49,10 @@ const outcome = await runPreflight({
 let swappedRefused = false;
 let codeFailed = false;
 if (outcome.kind === 'failed') {
-  console.log(`\nResult: FAILED at ${outcome.step}. Nothing was sent.`);
+  // A step that could not be made is said apart from one that was made and failed. The exit code is 1 either way.
+  const outage = outageHint(outcome.reason);
+  if (outage) line(NA, outage);
+  console.log(`\nResult: ${outage ? 'NOT CHECKED' : 'FAILED'} at ${outcome.step}. Nothing was sent.`);
 } else {
   // The rule the chat's first demo switch shows, applied to the same log read: a key nobody logged is refused. Only "absent"
   // shows that rule; a split view refuses every key, and says nothing about this one.

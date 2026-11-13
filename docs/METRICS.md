@@ -1,6 +1,6 @@
 # Metrics: how they were measured
 
-The numbers the README quotes, with the method and the caveats in full. Moved here from the README on Nov 10, 2026, with pointers adjusted; the two tables stay in the README.
+The measurements, with the method and the caveats in full. The text moved here from the README on Nov 10, 2026, and the two tables on Nov 14; the README quotes three of the numbers.
 
 50 runs one after another on Nov 13, in about ten minutes ending 15:29 UTC, from one Mac at commit `079cacb` (the deployment check on), with
 `z-ai/glm-5.3-flash` and the one-line prompt `Reply with the single word: ok.` A long answer takes longer. Every run's
@@ -22,7 +22,21 @@ One run of the 150 on Nov 10, 11 and 13 did not verify: run 41 of Nov 11. Its at
 limit for a step, so it ended as failed before anything was sent and before the log check. Which request hung is not
 recorded.
 
-The table is in the [README](../README.md#metrics); it is what `pnpm demo:metrics` printed for these runs.
+What `pnpm demo:metrics` printed for these runs:
+
+| Metric | Value (50 runs) |
+| --- | --- |
+| Verified, attestation to proof (the on-chain commit is measured once, below) | 50 of 50 |
+| Log check refuses a swapped key (the chat's switch rule applied to each run's log read; nothing is sent) | 50 of 50 |
+| Honest request refused at the log check (window empty, key unlogged or deployment unlogged) | 0 of 50 |
+| Runs that needed an SDK retry | 0 of 50 |
+| Attestation (gateway + model, re-fetched, in Node) | median 4.8 s, p90 7.0 s |
+| Public log read (2 `latest_keys` views at once, rpc.testnet.fastnear.com) | median 0.4 s, p90 0.7 s |
+| E2EE round trip to the model | median 3.3 s, p90 10.5 s |
+| Signature fetch | median 0.7 s, p90 0.9 s |
+| Whole run, evidence re-fetched (a real first message can be slower) | median 9.8 s, p90 19.5 s |
+| Later message, attestation cached (not timed: each run's steps after attestation, added up) | median 4.5 s, p90 15.0 s |
+| Request and response body (encrypted fields plus plain metadata) | median 293 B sent, 1002 B received |
 
 Measured by `pnpm demo:metrics --runs N` (it overwrites `docs/metrics.json`; `--out` writes elsewhere): N runs of the Tier-1 sequence from Node 24, direct to NEAR AI (no relay), with
 the evidence re-fetched and re-verified on every run (HTTP connections may be reused between runs), the public-log check with the honest and a swapped key, one E2EE exchange, the signature
@@ -33,8 +47,9 @@ and the proof. The two log views are the model's 24-hour window and the trusted 
 honest client would have had no entry younger than 24 hours for 13.6 of 240 hours, all of it on Nov 4–5, before the
 daemon ran on a server; none missing in the 203 hours since Nov 5, 04:44 UTC (the longest pause between entries 7.0 h). The count looks only at whether a trusted entry existed, not at its key or at a
 quorum: it matches what the client decides only because the model's key did not change in that time and the quorum is 1.
-So a refusal caused by a key the verifier has not logged yet has not been observed. The times are the verifier's own
-clock.
+So a refusal caused by a key the verifier has not logged yet has not been observed. Nor has one caused by a deployment it
+has not logged yet: the deployment check has been on since Nov 11, and the 99 runs that reached it on Nov 11 and 13 are
+all it has been measured on. The times are the verifier's own clock.
 
 **Compose hashes behind the key** (the log on Nov 10): six since Nov 3, three of them in the last 24 hours. By their
 image digests the six are two builds: four hashes share one set of images, two share the other, so most new hashes are
@@ -63,7 +78,14 @@ came from the agent service with a real model answer (action 2 from `pnpm -F age
 Telegram bot); the other five (0, 1, 5, 6, 7) from scripts with a placeholder model proof (`docs/DEPLOY.md`). Times from
 message to transfer were not measured.
 
-The tally by decision and status is in the [README](../README.md#metrics).
+The tally by decision and status:
+
+| Decision signed in the enclave | Actions | Status the contract recorded |
+| --- | --- | --- |
+| Allow | 5 | 4 Executed; 1 Failed (the token refused: the receiver is not registered on it) |
+| NeedsApproval | 5 | 4 Executed after the owner's `approve`; 1 Rejected by the owner |
+| Deny | 2 | Denied |
+| Any whose status the signed decision does not allow (say, a Deny marked Executed) | 0 | each record's signature, the action hash in the decision and its status re-check |
 
 The script reads the contract's records, not the token's transfers. The totals agree with them: the contract holds
 8,394 AINEK, the 10,000 sent to it minus the 1,606 of the eight Executed actions. That does not rule out flows that
@@ -98,7 +120,7 @@ cancel out.
   ones that did not are read with the note on the connection below.
 - Reasoning effort, the same evening, in plaintext, direct. NEAR AI takes `reasoning_effort` for this model, and the chat
   page sets it to `low` for the private model since Nov 13. Everything above was measured with the default: the Node
-  runs, the table in the README among them, and the browser runs too (the conversation of 25 exchanges, the message of
+  runs, the table above among them, and the browser runs too (the conversation of 25 exchanges, the message of
   4,000 characters, the answer of 550 words), which were made before the page sent the field and were not repeated.
 
   | Task | default | `medium` | `low` |

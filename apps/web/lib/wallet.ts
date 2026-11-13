@@ -9,7 +9,7 @@ import type { Committer } from './flow';
 
 /**
  * The wallet list at a fixed commit of hot-dao/near-selector instead of its main branch; what this does and does not pin is in the
- * README's "Who sees what". Linked, not copied: that repo has no licence. To refresh: diff repository/manifest.json against a newer
+ * "Who sees what" (docs/DETAILS.md). Linked, not copied: that repo has no licence. To refresh: diff repository/manifest.json against a newer
  * commit (check `executor` and `permissions`), open the new URL to see that it serves the list (a wrong hash gives an empty wallet
  * dialog, silently), then replace the hash.
  */

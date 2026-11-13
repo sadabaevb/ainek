@@ -9,7 +9,7 @@ import { buildCheckedModelProof, composeHashOf, normalizeHex, shortHex as short,
 import { contractLog, nothingSent, replyOf, runTier1, type StepId, type Verified } from '@ainek/tier1-node';
 import { loadLiveEnv } from './env.ts';
 import { loadSampleLogEntry, samplesDir } from './evidence.ts';
-import { FAIL, NA, OK, exitFlushed, head, line, markOf, out, seconds } from './term.ts';
+import { FAIL, NA, OK, exitFlushed, head, line, markOf, out, seconds, outageHint } from './term.ts';
 
 const { values: flags } = parseArgs({ options: { record: { type: 'boolean', default: false }, disclose: { type: 'string' }, message: { type: 'string', default: 'Reply with exactly three words.' } }, strict: false });
 const record = flags.record === true;
@@ -48,7 +48,11 @@ if (outcome.kind === 'verified') {
 } else {
   // REFUSED is the fail-closed rule (the key is not in the log); anything else that stopped the run before the send is a failure, but still nothing left this process.
   if (outcome.kind === 'failed' && outcome.unverifiedCompletion) line(NA, `reply as it came, NOT verified: ${JSON.stringify(replyOf(outcome.unverifiedCompletion))}`);
-  console.log(outcome.kind === 'refused' ? '\nResult: REFUSED. Nothing was sent.' : nothingSent(outcome.step) ? '\nResult: FAILED before sending. Nothing was sent.' : '\nResult: FAILED.');
+  const outage = outcome.kind === 'failed' ? outageHint(outcome.reason) : undefined;
+  if (outage) line(NA, outage);
+  // Before the send, a step that could not be made is said apart from one that failed (as in demo:attest). After it, the
+  // message has gone and the run failed, whatever the reason.
+  console.log(outcome.kind === 'refused' ? '\nResult: REFUSED. Nothing was sent.' : nothingSent(outcome.step) ? `\nResult: ${outage ? 'NOT CHECKED' : 'FAILED'} before sending. Nothing was sent.` : '\nResult: FAILED.');
   if (record || discloseFile) console.log('nothing written: the run did not verify');
 }
 await exitFlushed(outcome.kind === 'verified' ? 0 : 1);
