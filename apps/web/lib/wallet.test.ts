@@ -7,13 +7,14 @@ test('the wallet list is pinned to a commit, not a branch', () => {
   assert.match(WALLET_MANIFEST_URL, /^https:\/\/raw\.githubusercontent\.com\/hot-dao\/near-selector\/[0-9a-f]{40}\/repository\/manifest\.json$/);
 });
 
-test('the wallet provider has a Suspense boundary right under it', () => {
-  // What the boundary prevents needs a browser and a slow connection to show: while the page is still arriving, React
-  // renders a provider with nothing committed under it over and over, and this provider makes a connector, and a request
-  // for the wallet list, on every render (measured: about 2,500 requests a page at 400 kbit/s, one with the boundary).
-  // Here only that nobody takes the boundary out.
-  const providers = readFileSync(new URL('../app/providers.tsx', import.meta.url), 'utf8');
-  assert.match(providers, /<NearProvider config=\{\{[^}]*\}\}><Suspense>\{children\}<\/Suspense><\/NearProvider>/);
+test('the wallet provider has a Suspense boundary right under it, and the trust set is read below that', () => {
+  // What the two guard against needs a browser and a slow connection to show (docs/DEV-NOTES.md, Nov 13): thousands of
+  // requests for the wallet list without the boundary, an empty page for a visitor with a trust set of their own when the
+  // store is read above it. Here only that nobody takes either out. Comments are dropped first, so a line left in one does not count.
+  const jsx = readFileSync(new URL('../app/providers.tsx', import.meta.url), 'utf8').replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(jsx, /<NearProvider\b[^>]*>\s*<Suspense\b[^>]*>\s*<TrustProvider\b[^>]*>\s*\{children\}\s*<\/TrustProvider>\s*<\/Suspense>\s*<\/NearProvider>/);
+  const providers = jsx.slice(jsx.indexOf('export function Providers('), jsx.indexOf('export function useConfig('));
+  assert.equal(providers.includes('useCustomTrust('), false, 'Providers itself must not read the trust store');
 });
 
 test('isDialogClosed: every way a wallet says it was closed, as an Error or as the plain value a sandbox hands over', () => {

@@ -1,8 +1,8 @@
 # Ainek — a glass box for private AI agents on NEAR
 
 > NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
-> Testnet only, not audited. Of the three verifiers that write to the log two are ours and one is a friend's (since
-> Nov 13); the site trusts one of ours by default. The contract account has a full-access key.
+> Testnet only, not audited. Two of the three verifiers that write to the log are ours; the third is a friend's (since
+> Nov 13). The contract account has a full-access key.
 > The client refuses on the key and the launcher; a rule that refuses on the release is written and off by default.
 > [What we do not claim](#what-we-do-not-claim) is part of the submission.
 
@@ -144,7 +144,7 @@ TEE keys yet". [Independent monitoring](https://confidentialinference.net/attest
 - **Is this key real?** The client sends nothing unless the model's signing key is in the public log on NEAR (fail-closed).
   A verifier logs a key only after checking the Intel TDX quote and the NVIDIA GPU evidence, and the client re-verifies the
   evidence itself as well, so the log is a second opinion, not the only one. If two trusted verifiers have no key in common for a model,
-  you see a split view, not an average. Today: two verifiers, both ours; the site trusts the first by default (why: SPEC §7.1).
+  you see a split view, not an average. Today: three verifiers, two of them ours and one a friend's; the site trusts the first of ours by default (why: SPEC §7.1).
 - **Did this answer come from there?** The enclave signs `sha256(request)` and `sha256(response)`. Ainek keeps the exact
   bytes, recomputes both hashes and checks the signature against the logged key. A salted hash of the proof is committed
   to NEAR by your wallet (`commit_proof`, from storage your account prepays); until you connect one it stays in this browser. The salt and your copy of the exchange live
@@ -262,7 +262,7 @@ pnpm -F web dev                  # keeps running, use a second terminal: http://
 
 At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev` running:
 
-1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet`, which the site trusts by default, and by `ainek-v2-dastan.testnet`, which you can add, on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
+1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet`, which the site trusts by default, and by `ainek-v2-dastan.testnet` and `anas-verifier.testnet`, which you can add, on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
 3. **See fail-closed:** the chat's first switch swaps the key (`/?tamper=1`, the first row of the table at the top; `pnpm demo:tamper` offline). The second (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
 4. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
