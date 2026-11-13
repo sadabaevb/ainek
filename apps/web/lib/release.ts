@@ -7,7 +7,7 @@
 // What it reads is the action log of the replica that attested to this browser. Replicas of a model share a signing key
 // and the gateway picks one per connection, so the replica that answers a message may be another one.
 import { fetchImageProvenance, getSdkError, verifyImageProvenance, type VerifiedModelAttestation } from '@nearai/inference-sdk';
-import { attestedStateOf, describeRelease, inspectRelease, outsideReadings, releaseName, utcText, verdictOf, type OutsideReading, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
+import { describeRelease, inspectRelease, releaseName, utcText, verdictOf, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
 
 export interface ReleaseCheck extends ReleaseVerdict {
   /** The release the log names for the model, when one was resolved. */
@@ -51,13 +51,11 @@ export async function checkRelease(attestation: Attested, model: string, fetch: 
 }
 
 /**
- * What three parties outside our team published about the state this report attests (outside-readings.ts in
- * @ainek/proof). Read once the visitor has asked for the release check, from their own address, with no token.
- * `inspection` is the one that check made: it names the release, and without it the readings by key and log still stand.
+ * What three parties outside our team published about the state a report attests (outside-readings.ts in @ainek/proof).
+ * Read once the visitor has asked for the release check, from their own address, with no token, and given the inspection
+ * that check made: it names the release. It never rejects.
  */
-export function readOutside(attestation: Pick<VerifiedModelAttestation, 'signer' | 'deployment'>, model: string, inspection?: ReleaseInspection): Promise<OutsideReading[]> {
-  return outsideReadings(attestedStateOf(attestation, model, inspection));
-}
+export { outsideReadingsFor as readOutside } from '@ainek/proof/release-chain';
 
 function present(inspection: ReleaseInspection | undefined, model: string): ReleaseCheck {
   if (!inspection) return { status: 'skipped', failures: [], unchecked: [], unresolved: 'this model report carries no action log', retry: false, history: [], lines: [] };

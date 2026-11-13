@@ -12,7 +12,7 @@
 // of the reading, and may be a warning. Their formats are theirs and may change, so a reading that cannot be made is
 // said and not guessed.
 import { base64UrlToBytes } from './disclosure.ts';
-import { normalizeHex, shortHex } from './hash.ts';
+import { normalizeHex, oneLine, shortHex } from './hash.ts';
 import { composeHashOf } from './key-entry.ts';
 import { eitherSignal, viewFunction } from './near-view.ts';
 import { isRepoPath } from './release.ts';
@@ -81,8 +81,8 @@ export const COUNTERSIGN = {
     MQLw81quH7bKRZPW_GNiuWIylUf8IkQv9n38iWNv8DA: { kty: 'EC', crv: 'P-256', x: '1fREPPJ-o06vVNADxX2TLTESR8CQXrX2ztcMhF0hG34', y: 'eGf5-h7eRVoZEU4aFwcKOv9MqdY_hHvxmmkPYlF0nKA' },
   } as Readonly<Record<string, { kty: 'EC'; crv: 'P-256'; x: string; y: string }>>,
 } as const;
-/** A feed with more routes than this is not read to the end: each route is one view call. */
-const MAX_ROUTES = 4;
+/** How many routes of the feed are read at most: two for a model today, the direct one and the one through the gateway. */
+const MAX_ROUTES = 6;
 
 /** One machine of a feed entry, as far as this client reads it. */
 export interface ReviewedMachine {
@@ -92,7 +92,7 @@ export interface ReviewedMachine {
   status: string;
   /** The ids of the reviewer's checks that did not pass. */
   open: string[];
-  /** The release files its action log left running, by path. */
+  /** The deployments its action log left running: one compose file can be there several times, once for each set of services. */
   deployments: Array<{ file: string; sha256: string; tag?: string | undefined }>;
 }
 export interface FeedEntry {
@@ -107,6 +107,9 @@ export interface FeedEntry {
 const record = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/** A word of theirs that a reading will quote (a host, a verdict, a tag, a check id): one line, bounded. */
+const quoted = (v: unknown): string => oneLine(text(v), 120);
+const reasonOf = (err: unknown): string => oneLine(err instanceof Error ? err.message : String(err), 200);
 const jsonOf = (base64url: string): Record<string, unknown> => record(JSON.parse(new TextDecoder().decode(base64UrlToBytes(base64url))));
 
 function machineOf(submod: unknown): ReviewedMachine {
@@ -115,9 +118,9 @@ function machineOf(submod: unknown): ReviewedMachine {
   return {
     signingKey: normalizeHex(text(claims['signing_key']).replace(/^ed25519:/, '')),
     composeHash: normalizeHex(text(claims['compose_hash'])),
-    status: text(m['ear_status']),
-    open: list(record(m['ear_verifier_claims'])['checks']).map(record).filter((c) => c['status'] !== 'pass').map((c) => text(c['id'])).filter(Boolean),
-    deployments: list(record(claims['workload'])['deployments']).map(record).map((d) => ({ file: text(d['file']), sha256: normalizeHex(text(d['sha256'])), tag: text(d['tag']) || undefined })),
+    status: quoted(m['ear_status']),
+    open: list(record(m['ear_verifier_claims'])['checks']).map(record).filter((c) => c['status'] !== 'pass').map((c) => quoted(c['id'])).filter(Boolean),
+    deployments: list(record(claims['workload'])['deployments']).map(record).map((d) => ({ file: text(d['file']), sha256: normalizeHex(text(d['sha256'])), tag: quoted(d['tag']) || undefined })),
   };
 }
 
@@ -130,7 +133,8 @@ export async function readFeedEntry(jws: string): Promise<FeedEntry> {
   const [head, body, signature, ...rest] = jws.split('.');
   if (!head || !body || !signature || rest.length > 0) throw new Error('not a signed entry');
   const header = jsonOf(head);
-  const jwk = header['alg'] === 'ES256' ? COUNTERSIGN.keys[text(header['kid'])] : undefined;
+  const kid = text(header['kid']);
+  const jwk = header['alg'] === 'ES256' && Object.hasOwn(COUNTERSIGN.keys, kid) ? COUNTERSIGN.keys[kid] : undefined;
   if (!jwk) throw new Error('signed by a key this client does not hold for the feed');
   const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
   const verified = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, base64UrlToBytes(signature), new TextEncoder().encode(`${head}.${body}`));
@@ -139,25 +143,27 @@ export async function readFeedEntry(jws: string): Promise<FeedEntry> {
   const seq = record(payload['sr_feed'])['seq'];
   const { iat, exp } = payload;
   if (typeof seq !== 'number' || typeof iat !== 'number' || typeof exp !== 'number') throw new Error('it carries no sequence number or no times');
-  return { seq, host: text(record(payload['sr_scope'])['host']), signedAtMs: iat * 1000, expiresAtMs: exp * 1000, machines: Object.values(record(payload['submods'])).map(machineOf) };
+  return { seq, host: quoted(record(payload['sr_scope'])['host']), signedAtMs: iat * 1000, expiresAtMs: exp * 1000, machines: Object.values(record(payload['submods'])).map(machineOf) };
 }
 
-/** The first entry, in the order given, that reviews a machine the test accepts, with that machine. */
-function firstWith(entries: readonly FeedEntry[], test: (m: ReviewedMachine) => boolean): { entry: FeedEntry; machine: ReviewedMachine } | undefined {
+/** The first entry, in the order given, that reviews a machine the test accepts, with every such machine of it. */
+function firstWith(entries: readonly FeedEntry[], test: (m: ReviewedMachine) => boolean): { entry: FeedEntry; machines: ReviewedMachine[] } | undefined {
   for (const entry of entries) {
-    const machine = entry.machines.find(test);
-    if (machine) return { entry, machine };
+    const machines = entry.machines.filter(test);
+    if (machines.length > 0) return { entry, machines };
   }
   return undefined;
 }
 
-/** Which release file the reviewer recorded for the file that serves the model now: nothing when either side names none. */
-function recordedRelease(machine: ReviewedMachine, release: AttestedState['release']): string {
-  const recorded = release && machine.deployments.find((d) => d.file === release.file);
+/** What the reviewer recorded of the file that serves the model now: nothing when either side names none. */
+function recordedRelease(machines: readonly ReviewedMachine[], release: AttestedState['release']): string {
   const ours = release?.fileSha256 && normalizeHex(release.fileSha256);
-  if (!recorded || !ours) return '';
-  if (recorded.sha256 === ours) return ' It recorded the release file that runs now.';
-  return ` It recorded release file ${shortHex(recorded.sha256)}${recorded.tag ? ` (${recorded.tag})` : ''}, another than the one that runs now (${shortHex(ours)}).`;
+  const recorded = machines.flatMap((m) => m.deployments.filter((d) => d.file === release?.file));
+  if (!ours || recorded.length === 0) return '';
+  // The file is recorded once for each set of services it left running, so the running release is looked for among all.
+  if (recorded.some((d) => d.sha256 === ours)) return ` It recorded the release file that runs now${machines.length > 1 ? ' on at least one of them' : ''}.`;
+  const names = [...new Set(recorded.map((d) => d.tag ?? shortHex(d.sha256)))];
+  return ` Of this release file it recorded ${names.slice(0, 5).join(', ')}${names.length > 5 ? ', …' : ''}: the one that runs now (${shortHex(ours)}) is not among them.`;
 }
 
 /** What the feed's current entries say about the attested key and launcher. Entries that could not be read are left out by the caller. */
@@ -172,14 +178,18 @@ export function countersignLine(state: AttestedState, entries: readonly FeedEntr
   const current = ordered.filter((e) => e.expiresAtMs > now);
   const hit = firstWith(current, sameMachine);
   if (hit) {
-    const { entry, machine } = hit;
-    const open = machine.open.length > 0 ? ` (not passed: ${machine.open.slice(0, 4).join(', ')}${machine.open.length > 4 ? ', …' : ''})` : '';
-    return seen(`entry ${entry.seq} of ${utcTextOfMs(entry.signedAtMs)} lists this signing key with this launcher for ${entry.host}; its verdict there is "${machine.status}"${open}, valid until ${utcTextOfMs(entry.expiresAtMs)}.${recordedRelease(machine, state.release)}`);
+    // Replicas share the key and the launcher, and the report does not say which one the reviewer met: all are quoted.
+    const { entry, machines } = hit;
+    const verdicts = [...new Set(machines.map((m) => `"${m.status}"`))].join(', ');
+    const verdict = machines.length === 1 ? `its verdict there is ${verdicts}` : `its verdicts on the ${machines.length} machines there with this key and launcher are ${verdicts}`;
+    const notPassed = [...new Set(machines.flatMap((m) => m.open))];
+    const open = notPassed.length > 0 ? ` (not passed: ${notPassed.slice(0, 4).join(', ')}${notPassed.length > 4 ? ', …' : ''})` : '';
+    return seen(`entry ${entry.seq} of ${utcTextOfMs(entry.signedAtMs)} lists this signing key with this launcher for ${entry.host}; ${verdict}${open}, valid until ${utcTextOfMs(entry.expiresAtMs)}.${recordedRelease(machines, state.release)}`);
   }
   const expired = firstWith(ordered.filter((e) => e.expiresAtMs <= now), sameMachine);
   if (expired) return notSeen(`its entry ${expired.entry.seq} listed this signing key with this launcher and expired on ${utcTextOfMs(expired.entry.expiresAtMs)}`);
-  const otherLauncher = firstWith(current, sameKey);
-  if (otherLauncher) return notSeen(`lists this signing key with another launcher (${shortHex(otherLauncher.machine.composeHash)}), not this one`);
+  const otherLauncher = firstWith(current, sameKey)?.machines[0];
+  if (otherLauncher) return notSeen(`lists this signing key with another launcher (${shortHex(otherLauncher.composeHash)}), not this one`);
   return notSeen(`none of its ${current.length} current entries lists this signing key`);
 }
 
@@ -190,19 +200,28 @@ interface Reading {
 }
 
 async function readCountersign(state: AttestedState, { now, signal }: Reading): Promise<Finding> {
-  const routes = list(await viewFunction(COUNTERSIGN.rpcUrl, COUNTERSIGN.contract, 'hosts', {}, signal)).map(record).slice(0, MAX_ROUTES);
+  const hosts = await viewFunction(COUNTERSIGN.rpcUrl, COUNTERSIGN.contract, 'hosts', {}, signal);
+  if (!Array.isArray(hosts) || hosts.length === 0) throw new Error('its list of routes is empty or not one this client reads');
+  // Each route is one view call, so a long list is not read to the end: the routes that name the model go first.
+  const namesModel = (route: Record<string, unknown>): number => Number(text(route['host']).includes(state.model));
+  const routes = hosts.map(record).sort((a, b) => namesModel(b) - namesModel(a));
   const read = await Promise.allSettled(
-    routes.map(async (route) => {
+    routes.slice(0, MAX_ROUTES).map(async (route) => {
       const seq = record(route['latest'])['seq'];
       if (typeof seq !== 'number') throw new Error('a route without a current entry');
       return readFeedEntry(text(await viewFunction(COUNTERSIGN.rpcUrl, COUNTERSIGN.contract, 'entry', { seq }, signal)));
     }),
   );
   const entries = read.filter((r) => r.status === 'fulfilled').map((r) => r.value);
-  const failed = read.find((r) => r.status === 'rejected');
-  // An entry that does not verify is not a reading: said, and the others still count.
-  if (entries.length === 0 && failed) throw failed.reason;
-  return countersignLine(state, entries, now);
+  const failed = read.filter((r) => r.status === 'rejected');
+  if (entries.length === 0 && failed[0]) throw failed[0].reason;
+  const found = countersignLine(state, entries, now);
+  // "Not seen" needs everything read. An entry that did not verify or did not arrive, or a route left unread, may be the one.
+  const unread = [
+    ...(failed[0] ? [`${failed.length} of its entries could not be read (${reasonOf(failed[0].reason)})`] : []),
+    ...(routes.length > MAX_ROUTES ? [`${routes.length - MAX_ROUTES} of its ${routes.length} routes were not read`] : []),
+  ];
+  return found.status === 'seen' || unread.length === 0 ? found : unknown(`${unread.join(', and ')}; among the rest, ${found.text}`);
 }
 
 const okOrThrow = (response: Response): Response => {
@@ -218,12 +237,15 @@ export function quillLine(state: AttestedState, policy: unknown): Finding {
   if (!Array.isArray(policy)) return unknown('its policy file is not the list of pins this client reads');
   const pins = policy.map(record).filter((p) => p['model'] === state.model);
   if (pins.length === 0) return notSeen('has no pin for this model');
-  const pin = pins.find((p) => normalizeHex(text(p['compose_hash'])) === normalizeHex(state.composeHash));
+  // Replicas share a launcher and each has an action log of its own, so the file may pin one launcher more than once.
+  const ofLauncher = pins.filter((p) => normalizeHex(text(p['compose_hash'])) === normalizeHex(state.composeHash));
+  const attested = state.actions && normalizeHex(state.actions.sha256);
+  const pin = ofLauncher.find((p) => normalizeHex(text(p['deployment_actions_sha256'])) === attested) ?? ofLauncher[0];
   if (!pin) return notSeen(`pins another launcher for this model (${[...new Set(pins.map((p) => shortHex(normalizeHex(text(p['compose_hash'])))))].join(', ')}), not this one`);
   const pinned = normalizeHex(text(pin['deployment_actions_sha256']));
   if (!pinned) return notSeen('pins this launcher without a state of its action log');
   if (!state.actions) return unknown(`pins this launcher at action log ${shortHex(pinned)}; this report carries no action log to compare`);
-  if (pinned === normalizeHex(state.actions.sha256)) return seen(`pins this launcher at exactly this state of the action log (${shortHex(pinned)}, ${state.actions.count} actions)`);
+  if (pinned === attested) return seen(`pins this launcher at exactly this state of the action log (${shortHex(pinned)}, ${state.actions.count} actions)`);
   const file = normalizeHex(text(pin['deployment_sha256']));
   return notSeen(`pins this launcher at another state of the action log (${shortHex(pinned)}${file ? `, release file ${shortHex(file)}` : ''}) than the one attested now (${shortHex(state.actions.sha256)}, ${state.actions.count} actions): nobody there has reviewed this state`);
 }
@@ -247,8 +269,9 @@ export function teemoonLine(release: NonNullable<AttestedState['release']>, page
   const which = `${shortHex(release.fileSha256 ?? '')}, ${release.name}`;
   if (page === null) return notSeen(`no review of this release file (${which})`);
   // The verdict is the page's own first words after its heading; this client quotes them and reads no further.
-  const verdict = /^## verdict:\s*(.+)$/m.exec(page)?.[1]?.split(' — ')[0]?.trim().slice(0, 60);
-  return seen(`a review of exactly this release file (${which})${verdict ? `; its verdict line begins "${verdict}"` : '; its verdict line was not found'}`);
+  const verdict = /^## verdict:\s*(.+)$/m.exec(page)?.[1]?.split(' — ')[0];
+  const begins = verdict && oneLine(verdict, 60);
+  return seen(`a review of exactly this release file (${which})${begins ? `; its verdict line begins "${begins}"` : '; its verdict line was not found'}`);
 }
 
 async function readTeemoon(state: AttestedState, { signal }: Reading): Promise<Finding> {
@@ -270,10 +293,18 @@ const READ_TIMEOUT_MS = 15_000;
 /** The three readings, each on its own, from the NEAR testnet RPC and raw.githubusercontent.com with no key and no token. One that cannot be made is `unknown` and says why. */
 export async function outsideReadings(state: AttestedState, { now = Date.now(), signal }: { now?: number; signal?: AbortSignal } = {}): Promise<OutsideReading[]> {
   const reading = { now, signal: eitherSignal(AbortSignal.timeout(READ_TIMEOUT_MS), signal) };
-  return Promise.all(
-    SOURCES.map(async ({ source, read }) => {
-      const found = await read(state, reading).catch((err: unknown) => unknown(`could not be read (${err instanceof Error ? err.message : String(err)})`));
-      return { source, ...found };
-    }),
-  );
+  return Promise.all(SOURCES.map(async ({ source, read }) => ({ source, ...(await read(state, reading).catch((err: unknown) => unknown(`could not be read (${reasonOf(err)})`))) })));
+}
+
+/**
+ * The readings for a verified report and the inspection made of it. It never rejects: these stand next to a check that
+ * has already been shown, and a report whose state cannot be worked out here (an action log this package cannot hash)
+ * must not undo that check. Then all three are `unknown`.
+ */
+export async function outsideReadingsFor(attested: Pick<AttestedReport, 'signer' | 'deployment'>, model: string, inspection?: ReleaseInspection, options?: { now?: number; signal?: AbortSignal }): Promise<OutsideReading[]> {
+  try {
+    return await outsideReadings(attestedStateOf(attested, model, inspection), options);
+  } catch (err) {
+    return SOURCES.map(({ source }) => ({ source, ...unknown(`could not be read (${reasonOf(err)})`) }));
+  }
 }

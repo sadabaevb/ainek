@@ -57,9 +57,11 @@ non-commercial use: no payments, ads or paid hosting on the site.
 11. - Pages: `/log` shows the live log; `/auditor` → "Use the sample file" → Check → "checks out".
     - Headers: `curl -sI $U` shows `Content-Security-Policy: frame-ancestors 'none'`.
     - Settings: Environment Variables lists only `NEARAI_API_KEY`, for Production only.
-    - The key, model metadata only: `curl -sI -H "Origin: $U" "$U/api/nearai/v1/model/z-ai%2Fglm-5.3-flash" | grep -i x-ainek-key`
-      → no such header means the server has a key; `x-ainek-key: absent` that it has none and forwarded the read without
-      one (the model is `NEARAI_MODEL`, `/` written as `%2F`).
+    - The key, model metadata only: `curl -s -o /dev/null -D - -H "Origin: $U" "$U/api/nearai/v1/model/z-ai%2Fglm-5.3-flash" | grep -iE '^HTTP|^x-ainek-key'`
+      → a `200` line alone means the server has a key; `200` and `x-ainek-key: absent` that it has none and forwarded
+      the read without one. Any other status is a refusal (the rate limit, the origin) and says nothing about the key.
+      A GET, not `curl -I`: the relay forwards no HEAD request and answers it 404 (the model is `NEARAI_MODEL`, `/`
+      written as `%2F`).
       Whether NEAR AI accepts the key shows only in the chat message.
     - The firewall (the relay refuses an empty body before it uses the key), for the path as the page writes it and for
       `/api/nearai/./v1/chat/completions`:

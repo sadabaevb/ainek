@@ -1,7 +1,7 @@
 import { afterEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readRepoJson, readRepoText } from './fixtures.ts';
-import { COUNTERSIGN, QUILL_POLICY_URL, countersignLine, outsideReadings, quillLine, readFeedEntry, teemoonLine, teemoonPageUrl, type AttestedState } from './outside-readings.ts';
+import { COUNTERSIGN, QUILL_POLICY_URL, countersignLine, outsideReadings, outsideReadingsFor, quillLine, readFeedEntry, teemoonLine, teemoonPageUrl, type AttestedState, type FeedEntry } from './outside-readings.ts';
 
 // Recorded on Nov 13, 2026 (docs/samples/README.md): two entries of Countersign's feed as its contract returned them,
 // two pins of Quill Cloud's policy file, and the first lines of one teemoon review page.
@@ -51,6 +51,11 @@ test('readFeedEntry: one changed character, another key or a string that is no e
   await assert.rejects(readFeedEntry(`${otherKey}.${body}.${signature}`), /a key this client does not hold/);
   const unsigned = Buffer.from(JSON.stringify({ alg: 'none', kid: Object.keys(COUNTERSIGN.keys)[0] })).toString('base64url');
   await assert.rejects(readFeedEntry(`${unsigned}.${body}.${signature}`), /a key this client does not hold/);
+  // A key id that names something every object inherits is still no key of the feed.
+  for (const kid of ['constructor', '__proto__', 'toString']) {
+    const inherited = Buffer.from(JSON.stringify({ alg: 'ES256', kid })).toString('base64url');
+    await assert.rejects(readFeedEntry(`${inherited}.${body}.${signature}`), /a key this client does not hold/, kid);
+  }
   await assert.rejects(readFeedEntry('not an entry'), /not a signed entry/);
 });
 
@@ -61,8 +66,24 @@ test('countersignLine: the feed lists this key and launcher, says what its revie
   assert.match(same.text, /entry 8 of 2026-11-12 19:18 UTC lists this signing key with this launcher for cloud-api\.near\.ai\/z-ai\/glm-5\.3-flash/);
   assert.match(same.text, /its verdict there is "warning" \(not passed: collateral_early, nvswitch\), valid until 2026-11-15 19:14 UTC/);
   assert.match(same.text, /It recorded the release file that runs now\.$/);
-  // After the next release the key and the launcher are the same, and the feed's record is of the earlier file.
-  assert.match(countersignLine(nov13, entries, WHILE_VALID).text, /It recorded release file 2d10ba2c…42df \(v0\.0\.567\), another than the one that runs now \(39bacef1…eac8\)\.$/);
+  // After the next release the key and the launcher are the same, and the feed's record is of the earlier releases.
+  assert.match(countersignLine(nov13, entries, WHILE_VALID).text, /Of this release file it recorded v0\.0\.567, v0\.0\.541, v0\.0\.554: the one that runs now \(39bacef1…eac8\) is not among them\.$/);
+  // The feed records the file once for each set of services it left running: the running release is found wherever it stands.
+  const third = { ...nov12, release: { name: 'v0.0.554', file: FILE, fileSha256: 'e88b040e8ecdb7869ac855880719f6d184c035f0199753bef64ed338f8622922' } };
+  assert.match(countersignLine(third, entries, WHILE_VALID).text, /It recorded the release file that runs now\.$/);
+});
+
+test('countersignLine: replicas share the key and the launcher, so every machine of the entry that has both is quoted', () => {
+  const machine = { signingKey: nov12.signingKey, composeHash: nov12.composeHash, open: ['nvswitch'], deployments: [{ file: FILE, sha256: nov12.release!.fileSha256!, tag: 'v0.0.567' }] };
+  const entry: FeedEntry = { seq: 9, host: 'cloud-api.near.ai/z-ai/glm-5.3-flash', signedAtMs: SIGNED, expiresAtMs: SIGNED + 3 * 86_400_000, machines: [
+    { ...machine, status: 'warning' },
+    { ...machine, status: 'contraindicated', open: ['tcb'], deployments: [] },
+    { ...machine, signingKey: 'ef'.repeat(32), status: 'affirming' },
+  ] };
+  const line = countersignLine(nov12, [entry], WHILE_VALID);
+  assert.equal(line.status, 'seen');
+  assert.match(line.text, /its verdicts on the 2 machines there with this key and launcher are "warning", "contraindicated" \(not passed: nvswitch, tcb\)/);
+  assert.match(line.text, /It recorded the release file that runs now on at least one of them\.$/);
 });
 
 test('countersignLine: another key, another launcher and an expired entry are "not seen"', async () => {
@@ -80,6 +101,11 @@ test('quillLine: the pin is of one state of the action log, and the next action 
   assert.equal(moved.status, 'not-seen');
   assert.match(moved.text, /another state of the action log \(e196ae72…0faa, release file 2d10ba2c…42df\) than the one attested now \(abababab…abab, 275 actions\): nobody there has reviewed this state/);
   assert.match(quillLine({ ...nov12, composeHash: 'cd'.repeat(32) }, policy).text, /pins another launcher for this model \(c900dc73…e2d0\)/);
+  // Two pins of one launcher, one for each replica's log: the pin of this state counts wherever it stands in the file.
+  const ours = (policy as Array<Record<string, unknown>>).find((p) => p['model'] === nov12.model)!;
+  const twoPins = [{ ...ours, deployment_actions_sha256: 'ab'.repeat(32) }, ours];
+  assert.equal(quillLine(nov12, twoPins).status, 'seen');
+  assert.equal(quillLine(nov12, [...twoPins].reverse()).status, 'seen');
   assert.match(quillLine({ ...nov12, model: 'someone/else' }, policy).text, /has no pin for this model/);
   // What cannot be compared is not "not seen": a report without an action log, a file that is no longer a list of pins.
   assert.deepEqual(quillLine({ ...nov12, actions: undefined }, policy), { status: 'unknown', text: 'pins this launcher at action log e196ae72…0faa; this report carries no action log to compare' });
@@ -107,7 +133,9 @@ afterEach(() => {
 const viewResult = (value: unknown): Response =>
   new Response(JSON.stringify({ jsonrpc: '2.0', id: '1', result: { result: Array.from(Buffer.from(JSON.stringify(value))), logs: [], block_height: 1 } }), { status: 200, headers: { 'content-type': 'application/json' } });
 
-function world({ feedDown = false, policyStatus = 200, pageStatus = 404 } = {}): string[] {
+const ROUTES = [{ host: 'glm-5-3-flash.completions.near.ai', latest: { seq: 7 } }, { host: 'cloud-api.near.ai/z-ai/glm-5.3-flash', latest: { seq: 8 } }];
+
+function world({ feedDown = false, policyStatus = 200, pageStatus = 404, routes = ROUTES as unknown, lostEntry = 0 } = {}): string[] {
   const asked: string[] = [];
   globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
     const target = String(url);
@@ -117,7 +145,8 @@ function world({ feedDown = false, policyStatus = 200, pageStatus = 404 } = {}):
       if (feedDown) return new Response(JSON.stringify({ jsonrpc: '2.0', id: '1', error: { message: 'the feed is down' } }), { status: 200 });
       const call = JSON.parse(String(init?.body)) as { params: { method_name: string; args_base64: string } };
       const args = JSON.parse(Buffer.from(call.params.args_base64, 'base64').toString()) as { seq?: number };
-      if (call.params.method_name === 'hosts') return viewResult([{ host: 'glm-5-3-flash.completions.near.ai', latest: { seq: 7 } }, { host: 'cloud-api.near.ai/z-ai/glm-5.3-flash', latest: { seq: 8 } }]);
+      if (call.params.method_name === 'hosts') return viewResult(routes);
+      if (args.seq === lostEntry) return viewResult('not an entry');
       return viewResult(args.seq === 7 ? entry7 : entry8);
     }
     if (target === QUILL_POLICY_URL) return new Response(JSON.stringify(policy), { status: policyStatus });
@@ -130,7 +159,7 @@ test('outsideReadings: on Nov 13 the key and the launcher had been looked at, th
   const asked = world();
   const lines = await outsideReadings(nov13, { now: WHILE_VALID });
   assert.deepEqual(lines.map((l) => [l.source.split(',')[0], l.status]), [['Countersign', 'seen'], ['Quill Cloud', 'not-seen'], ['teemoon audits', 'not-seen']]);
-  assert.match(lines[0]!.text, /another than the one that runs now/);
+  assert.match(lines[0]!.text, /the one that runs now \(39bacef1…eac8\) is not among them\.$/);
   assert.match(lines[1]!.text, /nobody there has reviewed this state$/);
   assert.match(lines[2]!.text, /^no review of this release file/);
   // Three view calls of the feed, the policy file and one page: nothing else, and nothing that carries a key.
@@ -146,4 +175,44 @@ test('outsideReadings: a source that does not answer is a line that says so, and
   assert.match(lines[0]!.text, /^could not be read \(.*the feed is down\)$/);
   assert.equal(lines[1]!.text, 'could not be read (HTTP 500)');
   assert.match(lines[2]!.text, /its verdict line begins "QUALIFIED PASS"/);
+});
+
+test('outsideReadings: "not seen" needs the whole feed read; an entry lost or a route left unread makes it "not known"', async () => {
+  const stranger = { ...nov12, signingKey: 'ab'.repeat(32) };
+  // Everything read, and the key is not there: not seen.
+  world();
+  assert.equal((await outsideReadings(stranger, { now: WHILE_VALID }))[0]!.status, 'not-seen');
+  // The entry of the gateway route does not arrive as an entry: the other one cannot speak for it.
+  world({ lostEntry: 8 });
+  const lost = (await outsideReadings(stranger, { now: WHILE_VALID }))[0]!;
+  assert.deepEqual(lost, { source: lost.source, status: 'unknown', text: '1 of its entries could not be read (not a signed entry); among the rest, none of its 1 current entries lists this signing key' });
+  // The same loss does not unmake a reading that was found.
+  world({ lostEntry: 7 });
+  assert.equal((await outsideReadings(nov12, { now: WHILE_VALID }))[0]!.status, 'seen');
+  // More routes than are read: the ones that name the model go first, and what was left unread is said.
+  const many = [...Array.from({ length: 6 }, (_, i) => ({ host: `other-${i}.completions.near.ai`, latest: { seq: 7 } })), ROUTES[1]];
+  world({ routes: many });
+  assert.equal((await outsideReadings(nov12, { now: WHILE_VALID }))[0]!.status, 'seen');
+  world({ routes: many });
+  const cut = (await outsideReadings(stranger, { now: WHILE_VALID }))[0]!;
+  assert.equal(cut.status, 'unknown');
+  assert.match(cut.text, /^1 of its 7 routes were not read; among the rest, none of its 6 current entries/);
+  // A list of routes that is no list, or is empty, is not "nobody has looked".
+  for (const routes of [{}, [], null]) {
+    world({ routes });
+    const none = (await outsideReadings(nov12, { now: WHILE_VALID }))[0]!;
+    assert.deepEqual([none.status, none.text], ['unknown', 'could not be read (its list of routes is empty or not one this client reads)']);
+  }
+});
+
+test('outsideReadingsFor: a report whose state cannot be worked out is three "not known" readings, never an error', async () => {
+  const asked = world();
+  // An action whose value is not text or a whole number has no canonical form here, so its hash cannot be computed.
+  const report = { signer: { signingAddress: nov12.signingKey }, deployment: { appCompose: '{}', composeManager: { actions: [{ action: 'compose_up', timestamp: 1.5 }] as never } } };
+  const readings = await outsideReadingsFor(report, nov12.model);
+  assert.deepEqual(readings.map((r) => r.status), ['unknown', 'unknown', 'unknown']);
+  assert.equal(asked.length, 0);
+  // And an ordinary report is read: this one has no action log and no release, its launcher is not the reviewed one.
+  const plain = await outsideReadingsFor({ signer: report.signer, deployment: { appCompose: '{}' } }, nov12.model, undefined, { now: WHILE_VALID });
+  assert.deepEqual(plain.map((r) => r.status), ['not-seen', 'not-seen', 'unknown']);
 });

@@ -10,7 +10,7 @@
 import { parseArgs } from 'node:util';
 import { DEMO_SWAPPED_KEY, composeHashOf, evaluateKeyLog, normalizeHex, releaseLineFor, releaseRuleOf, shortHex as short, withFinding } from '@ainek/proof';
 import { contractLog, runPreflight, type StepId } from '@ainek/tier1-node';
-import { attestedStateOf, inspectRelease, leadTimes, outsideReadings, verdictOf } from '@ainek/tier1-node/release';
+import { inspectRelease, leadTimes, outsideReadingsFor, verdictOf } from '@ainek/tier1-node/release';
 import { loadLiveEnv } from './env.ts';
 import { printLeadTimes, printOutside, printRelease } from './release-report.ts';
 import { FAIL, NA, OK, exitFlushed, head, line, out, seconds } from './term.ts';
@@ -79,7 +79,7 @@ if (outcome.kind === 'failed') {
     // GitHub's anonymous limit is what most often leaves a check unmade here, and here a token can be given.
     if (inspection?.retry && !githubToken) line(NA, 'GitHub or Sigstore did not answer for something above. GitHub allows 60 anonymous requests an hour from one address: GITHUB_TOKEN in .env raises that');
     // Who outside our team has looked at this key, this launcher and this state of the action log. It decides nothing here.
-    printOutside(await outsideReadings(attestedStateOf(m, model, inspection)));
+    printOutside(await outsideReadingsFor(m, model, inspection));
     const releaseFile = inspection?.file;
     if (flags.history && releaseFile && m.deployment.composeManager) printLeadTimes(releaseFile, await leadTimes(m.deployment.composeManager.actions, releaseFile, { githubToken }));
     // The card repeats names read from the log and from GitHub, so each of its lines goes through `out`.

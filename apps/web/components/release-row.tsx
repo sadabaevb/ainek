@@ -37,7 +37,7 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
       const check = await checkRelease(attestation, model);
       setState({ kind: 'done', check, attestation, at });
       // The row does not wait for the outside readings, and they land only on the check they were read for.
-      const outside = await readOutside(attestation, model, check.inspection).catch(() => []);
+      const outside = await readOutside(attestation, model, check.inspection);
       setState((s) => (s.kind === 'done' && s.at === at ? { ...s, outside } : s));
     } catch (err) {
       const refused = getSdkError(err);
