@@ -7,17 +7,17 @@
   },
   "scripts": {
     "dev": "pnpm -F web dev",
-    "demo": "pnpm -F demo replay",
-    "demo:tamper": "pnpm -F demo tamper",
-    "demo:controls": "pnpm -F demo controls",
-    "demo:policy": "pnpm -F demo policy",
-    "demo:live": "pnpm -F demo live",
-    "demo:attest": "pnpm -F demo attest",
-    "demo:reply-key": "pnpm -F demo reply-key",
+    "demo": "node scripts/need-node.cjs && pnpm -F demo replay",
+    "demo:tamper": "node scripts/need-node.cjs && pnpm -F demo tamper",
+    "demo:controls": "node scripts/need-node.cjs && pnpm -F demo controls",
+    "demo:policy": "node scripts/need-node.cjs && pnpm -F demo policy",
+    "demo:live": "node scripts/need-node.cjs && pnpm -F demo live",
+    "demo:attest": "node scripts/need-node.cjs && pnpm -F demo attest",
+    "demo:reply-key": "node scripts/need-node.cjs && pnpm -F demo reply-key",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
-    "demo:metrics": "pnpm -F demo metrics",
-    "demo:stop": "pnpm -F agent stop"
+    "test": "node scripts/need-node.cjs && pnpm -r test",
+    "typecheck": "node scripts/need-node.cjs && pnpm -r typecheck",
+    "demo:metrics": "node scripts/need-node.cjs && pnpm -F demo metrics",
+    "demo:stop": "node scripts/need-node.cjs && pnpm -F agent stop"
   }
 }

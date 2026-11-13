@@ -135,7 +135,7 @@ over the following rounds, which the deployment check (`AINEK_REQUIRE_DEPLOYMENT
 marks: at most one entry per key, compose and model per 6 h; with the six composes seen so far that is up to 24 entries
 a day for the one model, up to ~0.24 NEAR (one entry is about 1 KB, 0.01 NEAR). With release marks (SPEC §7.5) an entry
 is about 1.2 KB, and a change in an enclave's action log brings a new entry from each verifier that sees it, outside the
-6 h rule: about two a day for each replica, by the two action logs the README's figure rests on. On Nov 12
+6 h rule: about two a day for each replica, by the two action logs the figure in `docs/RELEASE.md` rests on. On Nov 12
 (17:11 UTC) the contract account held 10.4 NEAR, of which 3.7 NEAR were bound by 372 KB of storage: the 6.7 NEAR left
 pay for about 540 such entries. Dastan's estimate is that this lasts through Nov 25 with about 2 NEAR to spare, and
 Dastan tops the account up from the testnet faucet.

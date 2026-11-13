@@ -1,4 +1,4 @@
-# CLAIMS.md — what we claim, what we do not (paste into README verbatim)
+# CLAIMS.md — what we claim, what we do not (the README lists the titles of the second part and points here)
 
 Judges on this panel have audited TEE products and read the two independent registries that rate
 every private-inference provider at "stage 0". Overclaiming costs more than a missing feature.
@@ -105,8 +105,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   from a file in the public repository `nearai/cvm-compose-files`, and a new release of them changes neither the signing
   key nor that hash. Compose Manager records each such action in a log the enclave attests with a TDX quote of its own. On
   the CVM that answered us on Nov 12, 2026 that log held 21 releases of the model's compose file since Oct 21, and the image
-  of the proxy for `z-ai/glm-5.3-flash` had changed five times, twice after our log first held that CVM's compose hash: the
-  client would have refused neither. Since Nov 12 `pnpm demo:attest` reads this log and follows the release to a source
+  of the proxy for `z-ai/glm-5.3-flash` had changed four times (five images in all), twice after our log first held that
+  CVM's compose hash: the client would have refused neither. Since Nov 12 `pnpm demo:attest` reads this log and follows the release to a source
   commit, and the browser does the same when the visitor asks (the proof card, `/log`). By default that is a reading, not a
   rule: the client refuses on what an enclave deployed only when `AINEK_REQUIRE_RELEASE` is on, which works only against
   verifiers that write release marks (below), and a proof says which key signed and which launcher was attested, not which

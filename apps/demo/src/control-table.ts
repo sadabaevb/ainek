@@ -165,7 +165,7 @@ export function controlSet(rec: Recording): { unchanged: { what: string; attempt
       { heading: 4, what: 'a proof whose key is not in the log', expect: 'key-in-log', attempt: proofCheck(exchange.proof, exchange.rawResponse, null) },
 
       { heading: 5, what: 'the right key, logged with another launcher than the one attested', expect: 'unknown-deployment', attempt: logCheck(recorded.signer.signingAddress, DEMO_UNKNOWN_COMPOSE) },
-      { heading: 5, note: 'a new release of the serving containers behind the same launcher: not refused today. The client reads the action log on request and does not refuse on it (README, "What we do not claim")' },
+      { heading: 5, note: 'a new release of the serving containers behind the same launcher: not refused today. The client reads the action log on request and does not refuse on it (docs/CLAIMS.md, "We do not claim")' },
     ],
   };
 }
