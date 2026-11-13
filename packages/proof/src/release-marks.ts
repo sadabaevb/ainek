@@ -34,14 +34,12 @@ import { checked, type Checked } from './checked.ts';
 import { normalizeHex, sha256Hex, shortHex } from './hash.ts';
 import { composeHashOf } from './key-entry.ts';
 import { evaluateKeyLog, type KeyLogQuery, type KeyLogVerdict, type ReleaseRefusal } from './key-log.ts';
-import { releaseInLogLine, utcText, type ReleaseLine } from './release-lines.ts';
+import { MAX_TIME_MS, releaseInLogLine, utcTextOfMs, type ReleaseLine } from './release-lines.ts';
 import { sameInstance, wholeMinutes, type ManagerAction } from './release.ts';
 import type { KeyEntry } from './schema.ts';
 
 const RELEASE = /^release:([0-9a-f]{16}):([0-9a-f]{64})$/;
 const LOG = /^log:([0-9a-f]{16}):(\d{1,7}):([0-9a-f]{64})$/;
-/** The last millisecond of the year 9999: a time past it is not one a verifier's clock reads (microseconds or nanoseconds, say). */
-const MAX_TIME_MS = 253_402_300_799_999;
 
 /**
  * sha256 of an action log in the form the enclave quotes it and the SDK checks. Compose Manager defines that form as
@@ -199,7 +197,7 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
   const waits = `this client waits ${wholeMinutes(waitMs)} min`;
   if (since === undefined) return waiting ? refused('recent-mark', `${marked}, but too few of those marks carry a time that reads as one, so for how long is not known; ${waits}`, confirmedBy) : { status: 'ok', confirmedBy, detail: marked };
   const markedForMs = now - since;
-  const from = `${marked} since ${utcText(new Date(since).toISOString())}`;
+  const from = `${marked} since ${utcTextOfMs(since)}`;
   // A clock behind the verifiers' makes the time negative: without a wait that refuses nothing.
   if (waiting && !(markedForMs >= waitMs)) return { ...refused('recent-mark', `${from}, ${wholeMinutes(markedForMs)} min before this check; ${waits}`, confirmedBy), markedForMs };
   return { status: 'ok', confirmedBy, detail: from };

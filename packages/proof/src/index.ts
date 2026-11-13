@@ -37,7 +37,7 @@ export { E2EE_VERSION, e2eeVersionProblem, looksE2ee, requireE2eeVersion } from 
 export { PolicyInput, PolicyOutput, checkPolicyOutput, decidedAtMs, verifyActionProof, verifyDecisionSignature } from './policy.ts';
 export type { RetryOptions } from './retry.ts';
 export type { BuildModelProofInput } from './build.ts';
-export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes } from './disclosure.ts';
+export { Disclosure, toDisclosure, parseDisclosure, isDisclosure, bytesToBase64, base64ToBytes, base64UrlToBytes } from './disclosure.ts';
 export type { DisclosedExchange, ParsedDisclosure } from './disclosure.ts';
 export { buildKeyEntryInput, composeHashOf, imageDigestsOf, readAppCompose } from './key-entry.ts';
 export type { BuildKeyEntryInputParams, VerifiedModelEvidence } from './key-entry.ts';

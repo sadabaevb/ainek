@@ -57,7 +57,7 @@ test('readFeedEntry: one changed character, another key or a string that is no e
 test('countersignLine: the feed lists this key and launcher, says what its reviewer concluded, and which release it saw', async () => {
   const entries = [await readFeedEntry(entry7), await readFeedEntry(entry8)];
   const same = countersignLine(nov12, entries, WHILE_VALID);
-  assert.equal(same.status, 'ok');
+  assert.equal(same.status, 'seen');
   assert.match(same.text, /entry 8 of 2026-11-12 19:18 UTC lists this signing key with this launcher for cloud-api\.near\.ai\/z-ai\/glm-5\.3-flash/);
   assert.match(same.text, /its verdict there is "warning" \(not passed: collateral_early, nvswitch\), valid until 2026-11-15 19:14 UTC/);
   assert.match(same.text, /It recorded the release file that runs now\.$/);
@@ -65,27 +65,26 @@ test('countersignLine: the feed lists this key and launcher, says what its revie
   assert.match(countersignLine(nov13, entries, WHILE_VALID).text, /It recorded release file 2d10ba2c…42df \(v0\.0\.567\), another than the one that runs now \(39bacef1…eac8\)\.$/);
 });
 
-test('countersignLine: another key, another launcher and an expired entry are not "looked at"', async () => {
+test('countersignLine: another key, another launcher and an expired entry are "not seen"', async () => {
   const entries = [await readFeedEntry(entry7), await readFeedEntry(entry8)];
-  const otherKey = countersignLine({ ...nov12, signingKey: 'ab'.repeat(32) }, entries, WHILE_VALID);
-  assert.deepEqual([otherKey.status, /none of its 2 current entries lists this signing key/.test(otherKey.text)], ['skipped', true]);
-  const otherLauncher = countersignLine({ ...nov12, composeHash: 'cd'.repeat(32) }, entries, WHILE_VALID);
-  assert.deepEqual([otherLauncher.status, /lists this signing key with another launcher \(c900dc73…e2d0\)/.test(otherLauncher.text)], ['skipped', true]);
-  const expired = countersignLine(nov12, entries, Date.UTC(2026, 10, 16));
-  assert.deepEqual([expired.status, /its entry 8 listed this signing key with this launcher and expired on 2026-11-15 19:14 UTC/.test(expired.text)], ['skipped', true]);
+  assert.deepEqual(countersignLine({ ...nov12, signingKey: 'ab'.repeat(32) }, entries, WHILE_VALID), { status: 'not-seen', text: 'none of its 2 current entries lists this signing key' });
+  assert.deepEqual(countersignLine({ ...nov12, composeHash: 'cd'.repeat(32) }, entries, WHILE_VALID), { status: 'not-seen', text: 'lists this signing key with another launcher (c900dc73…e2d0), not this one' });
+  assert.deepEqual(countersignLine(nov12, entries, Date.UTC(2026, 10, 16)), { status: 'not-seen', text: 'its entry 8 listed this signing key with this launcher and expired on 2026-11-15 19:14 UTC' });
 });
 
 test('quillLine: the pin is of one state of the action log, and the next action leaves it behind', () => {
   const pinned = quillLine(nov12, policy);
-  assert.equal(pinned.status, 'ok');
+  assert.equal(pinned.status, 'seen');
   assert.match(pinned.text, /pins this launcher at exactly this state of the action log \(e196ae72…0faa, 271 actions\)/);
   const moved = quillLine(nov13, policy);
-  assert.equal(moved.status, 'skipped');
+  assert.equal(moved.status, 'not-seen');
   assert.match(moved.text, /another state of the action log \(e196ae72…0faa, release file 2d10ba2c…42df\) than the one attested now \(abababab…abab, 275 actions\): nobody there has reviewed this state/);
   assert.match(quillLine({ ...nov12, composeHash: 'cd'.repeat(32) }, policy).text, /pins another launcher for this model \(c900dc73…e2d0\)/);
   assert.match(quillLine({ ...nov12, model: 'someone/else' }, policy).text, /has no pin for this model/);
-  assert.match(quillLine({ ...nov12, actions: undefined }, policy).text, /this report carries no action log to compare/);
-  for (const notAPolicy of [null, {}, 'text', [1, 'x']]) assert.equal(quillLine(nov12, notAPolicy).status, 'skipped');
+  // What cannot be compared is not "not seen": a report without an action log, a file that is no longer a list of pins.
+  assert.deepEqual(quillLine({ ...nov12, actions: undefined }, policy), { status: 'unknown', text: 'pins this launcher at action log e196ae72…0faa; this report carries no action log to compare' });
+  for (const notAPolicy of [null, {}, 'text']) assert.deepEqual(quillLine(nov12, notAPolicy), { status: 'unknown', text: 'its policy file is not the list of pins this client reads' });
+  assert.equal(quillLine(nov12, [1, 'x']).status, 'not-seen');
 });
 
 test('teemoon: a page is looked up by the file and its hash, and its verdict is quoted, not interpreted', () => {
@@ -95,10 +94,8 @@ test('teemoon: a page is looked up by the file and its hash, and its verdict is 
   assert.match(teemoonPageUrl({ file: 'prod/a b?.yaml', fileSha256: nov12.release!.fileSha256 }) ?? '', /\/prod\/a%20b%3F\/sha256-/);
   assert.equal(teemoonPageUrl({ file: FILE, fileSha256: 'zz' }), undefined);
   assert.equal(teemoonPageUrl({ file: FILE }), undefined);
-  const reviewed = teemoonLine(nov12.release!, page);
-  assert.deepEqual([reviewed.status, /a review of exactly this release file \(2d10ba2c…42df, v0\.0\.567\); its verdict line begins "QUALIFIED PASS"/.test(reviewed.text)], ['ok', true]);
-  const none = teemoonLine(nov13.release!, null);
-  assert.deepEqual([none.status, /no review of this release file \(39bacef1…eac8, v0\.0\.581\)/.test(none.text)], ['skipped', true]);
+  assert.deepEqual(teemoonLine(nov12.release!, page), { status: 'seen', text: 'a review of exactly this release file (2d10ba2c…42df, v0.0.567); its verdict line begins "QUALIFIED PASS"' });
+  assert.deepEqual(teemoonLine(nov13.release!, null), { status: 'not-seen', text: 'no review of this release file (39bacef1…eac8, v0.0.581)' });
   assert.match(teemoonLine(nov12.release!, 'a page without that line').text, /its verdict line was not found/);
 });
 
@@ -116,7 +113,8 @@ function world({ feedDown = false, policyStatus = 200, pageStatus = 404 } = {}):
     const target = String(url);
     asked.push(target);
     if (target === COUNTERSIGN.rpcUrl) {
-      if (feedDown) return new Response('down', { status: 503 });
+      // An answer from the node, which the read does not retry: the retries of an outage are near-view's own tests.
+      if (feedDown) return new Response(JSON.stringify({ jsonrpc: '2.0', id: '1', error: { message: 'the feed is down' } }), { status: 200 });
       const call = JSON.parse(String(init?.body)) as { params: { method_name: string; args_base64: string } };
       const args = JSON.parse(Buffer.from(call.params.args_base64, 'base64').toString()) as { seq?: number };
       if (call.params.method_name === 'hosts') return viewResult([{ host: 'glm-5-3-flash.completions.near.ai', latest: { seq: 7 } }, { host: 'cloud-api.near.ai/z-ai/glm-5.3-flash', latest: { seq: 8 } }]);
@@ -131,10 +129,10 @@ function world({ feedDown = false, policyStatus = 200, pageStatus = 404 } = {}):
 test('outsideReadings: on Nov 13 the key and the launcher had been looked at, the state that ran had not', async () => {
   const asked = world();
   const lines = await outsideReadings(nov13, { now: WHILE_VALID });
-  assert.deepEqual(lines.map((l) => l.status), ['ok', 'skipped', 'skipped']);
-  assert.match(lines[0]!.text, /^Countersign, .*another than the one that runs now/);
-  assert.match(lines[1]!.text, /^Quill Cloud, .*nobody there has reviewed this state$/);
-  assert.match(lines[2]!.text, /^teemoon audits, .*no review of this release file/);
+  assert.deepEqual(lines.map((l) => [l.source.split(',')[0], l.status]), [['Countersign', 'seen'], ['Quill Cloud', 'not-seen'], ['teemoon audits', 'not-seen']]);
+  assert.match(lines[0]!.text, /another than the one that runs now/);
+  assert.match(lines[1]!.text, /nobody there has reviewed this state$/);
+  assert.match(lines[2]!.text, /^no review of this release file/);
   // Three view calls of the feed, the policy file and one page: nothing else, and nothing that carries a key.
   assert.equal(asked.filter((u) => u === COUNTERSIGN.rpcUrl).length, 3);
   assert.equal(asked.filter((u) => u.startsWith('https://raw.githubusercontent.com/')).length, 2);
@@ -144,8 +142,8 @@ test('outsideReadings: on Nov 13 the key and the launcher had been looked at, th
 test('outsideReadings: a source that does not answer is a line that says so, and the others are still read', async () => {
   world({ feedDown: true, policyStatus: 500, pageStatus: 200 });
   const lines = await outsideReadings(nov12, { now: WHILE_VALID });
-  assert.deepEqual(lines.map((l) => l.status), ['skipped', 'skipped', 'ok']);
-  assert.match(lines[0]!.text, /^Countersign, .*: could not be read \(/);
-  assert.match(lines[1]!.text, /^Quill Cloud, .*: could not be read \(HTTP 500\)$/);
+  assert.deepEqual(lines.map((l) => l.status), ['unknown', 'unknown', 'seen']);
+  assert.match(lines[0]!.text, /^could not be read \(.*the feed is down\)$/);
+  assert.equal(lines[1]!.text, 'could not be read (HTTP 500)');
   assert.match(lines[2]!.text, /its verdict line begins "QUALIFIED PASS"/);
 });

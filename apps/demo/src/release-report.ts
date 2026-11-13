@@ -2,7 +2,7 @@
 // It only prints. The words are `describeRelease` of @ainek/proof/release-chain, which the proof card shows too, and which
 // checks failed is `failedChecks` there: a line is marked failed, not checked or fine by the same `Checked` values.
 import { spanText } from '@ainek/proof';
-import { countText as count, describeRelease, utcText as utc, type LeadTime, type ReleaseInspection, type ReleaseLine } from '@ainek/tier1-node/release';
+import { countText as count, describeRelease, utcText as utc, type LeadTime, type OutsideReading, type ReleaseInspection, type ReleaseLine } from '@ainek/tier1-node/release';
 import { NA, head, line, markOf } from './term.ts';
 
 /**
@@ -16,13 +16,13 @@ export function printRelease(inspection: ReleaseInspection | undefined, { model,
   return summary;
 }
 
-/**
- * Prints what three outside parties say about the state this report attests. A check mark is "this party has looked at
- * exactly this"; what it concluded is in its line. None of it takes part in the result of the command.
- */
-export function printOutside(lines: readonly ReleaseLine[]): void {
+// Words, not the marks of our own checks: "seen" is not "held", and a party that has seen this may have warned about it.
+const SEEN = { seen: 'seen     ', 'not-seen': 'not seen ', unknown: 'not known' } as const satisfies Record<OutsideReading['status'], string>;
+
+/** Prints what three outside parties say about the state this report attests. None of it takes part in the result of the command. */
+export function printOutside(readings: readonly OutsideReading[]): void {
   head('Who else has looked at exactly this (three public readings, none of them ours; shown, not applied)');
-  for (const l of lines) line(markOf(l.status), l.text);
+  for (const r of readings) line(SEEN[r.status], `${r.source}: ${r.text}`);
 }
 
 /** The nearest thing to a typical value that is itself one of the measurements or the mean of the middle two. */

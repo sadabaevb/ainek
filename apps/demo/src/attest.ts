@@ -79,7 +79,7 @@ if (outcome.kind === 'failed') {
     // GitHub's anonymous limit is what most often leaves a check unmade here, and here a token can be given.
     if (inspection?.retry && !githubToken) line(NA, 'GitHub or Sigstore did not answer for something above. GitHub allows 60 anonymous requests an hour from one address: GITHUB_TOKEN in .env raises that');
     // Who outside our team has looked at this key, this launcher and this state of the action log. It decides nothing here.
-    printOutside(await outsideReadings(attestedStateOf({ model, signingKey: m.signer.signingAddress, composeHash: compose, actions: m.deployment.composeManager?.actions, inspection })));
+    printOutside(await outsideReadings(attestedStateOf(m, model, inspection)));
     const releaseFile = inspection?.file;
     if (flags.history && releaseFile && m.deployment.composeManager) printLeadTimes(releaseFile, await leadTimes(m.deployment.composeManager.actions, releaseFile, { githubToken }));
     // The card repeats names read from the log and from GitHub, so each of its lines goes through `out`.

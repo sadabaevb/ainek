@@ -91,7 +91,7 @@ async function proxy(req: Request): Promise<Response> {
   }
 
   // After the guards, so a request we would refuse is refused the same way with or without a key configured.
-  const apiKey = process.env.NEARAI_API_KEY || undefined;
+  const apiKey = process.env.NEARAI_API_KEY;
   const noKey = keyProblem(req.method, apiKey);
   if (noKey) return NextResponse.json({ error: noKey }, { status: 503 });
 

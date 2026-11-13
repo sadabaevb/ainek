@@ -7,8 +7,7 @@
 // What it reads is the action log of the replica that attested to this browser. Replicas of a model share a signing key
 // and the gateway picks one per connection, so the replica that answers a message may be another one.
 import { fetchImageProvenance, getSdkError, verifyImageProvenance, type VerifiedModelAttestation } from '@nearai/inference-sdk';
-import { composeHashOf } from '@ainek/proof';
-import { attestedStateOf, describeRelease, inspectRelease, outsideReadings, releaseName, utcText, verdictOf, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
+import { attestedStateOf, describeRelease, inspectRelease, outsideReadings, releaseName, utcText, verdictOf, type OutsideReading, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
 
 export interface ReleaseCheck extends ReleaseVerdict {
   /** The release the log names for the model, when one was resolved. */
@@ -21,6 +20,8 @@ export interface ReleaseCheck extends ReleaseVerdict {
   history: { name: string; commit: string; deployedAt: string }[];
   /** Every fact, in the words `pnpm demo:attest` prints. */
   lines: ReleaseLine[];
+  /** What the lines were worded from; absent when the report carried no action log. */
+  inspection?: ReleaseInspection;
 }
 
 type Attested = Pick<VerifiedModelAttestation, 'deployment' | 'report'>;
@@ -50,15 +51,12 @@ export async function checkRelease(attestation: Attested, model: string, fetch: 
 }
 
 /**
- * What three parties outside our team say about the state this report attests: Countersign's signed feed on NEAR, Quill
- * Cloud's policy file and teemoon's review pages (outside-readings.ts in @ainek/proof). Read when the visitor has asked
- * for the release check, from their own address: the NEAR testnet RPC and raw.githubusercontent.com, no token. Shown
- * next to the release and never applied; a reading that cannot be made is a line that says so.
+ * What three parties outside our team published about the state this report attests (outside-readings.ts in
+ * @ainek/proof). Read once the visitor has asked for the release check, from their own address, with no token.
+ * `inspection` is the one that check made: it names the release, and without it the readings by key and log still stand.
  */
-export async function readOutside(attestation: Attested & Pick<VerifiedModelAttestation, 'signer'>, model: string): Promise<ReleaseLine[]> {
-  // The inspection made for this report names the release; without one the readings keyed by the key and the log still stand.
-  const inspection = await inspections.get(attestation)?.catch(() => undefined);
-  return outsideReadings(attestedStateOf({ model, signingKey: attestation.signer.signingAddress, composeHash: composeHashOf(attestation.deployment), actions: attestation.deployment.composeManager?.actions, inspection }));
+export function readOutside(attestation: Pick<VerifiedModelAttestation, 'signer' | 'deployment'>, model: string, inspection?: ReleaseInspection): Promise<OutsideReading[]> {
+  return outsideReadings(attestedStateOf(attestation, model, inspection));
 }
 
 function present(inspection: ReleaseInspection | undefined, model: string): ReleaseCheck {
@@ -83,5 +81,6 @@ function present(inspection: ReleaseInspection | undefined, model: string): Rele
     // The log is oldest first.
     history: (served?.history ?? []).map((r) => ({ name: releaseName(r), commit: r.commit, deployedAt: utcText(r.deployedAt) })).reverse(),
     lines: describeRelease(inspection, { model }).lines,
+    inspection,
   };
 }

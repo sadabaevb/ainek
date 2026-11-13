@@ -539,6 +539,6 @@ export async function leadTimes(actions: readonly ManagerAction[], file: string,
 
 export { countText, describeRelease, releaseName, utcText } from './release-lines.ts';
 export { attestedStateOf, outsideReadings } from './outside-readings.ts';
-export type { AttestedState } from './outside-readings.ts';
+export type { AttestedState, OutsideReading } from './outside-readings.ts';
 export type { ReleaseLine } from './release-lines.ts';
 export type { Engine, ImageCheck, LeadTime, Provenance, ReleaseInspection, ServiceRelease, SourceChange } from './release-types.ts';

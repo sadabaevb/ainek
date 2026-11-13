@@ -34,7 +34,7 @@ export class ContractMethodNotFound extends Error {}
 
 /** A signal that aborts when either does. `AbortSignal.any` would do, but it is newer than the browsers Next.js targets
  *  (Safari 17.4, Chrome 116), and the log read runs in every visitor's browser. */
-function eitherSignal(first: AbortSignal, second?: AbortSignal): AbortSignal {
+export function eitherSignal(first: AbortSignal, second?: AbortSignal): AbortSignal {
   if (!second) return first;
   const both = new AbortController();
   for (const s of [first, second]) {
