@@ -1,7 +1,8 @@
 # Ainek — a glass box for private AI agents on NEAR
 
 > NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
-> Testnet only, not audited. Both verifiers that write to the log are ours. The contract account has a full-access key.
+> Testnet only, not audited. Of the three verifiers that write to the log two are ours and one is a friend's (since
+> Nov 13); the site trusts one of ours by default. The contract account has a full-access key.
 > The client refuses on the key and the launcher; a rule that refuses on the release is written and off by default.
 > [What we do not claim](#what-we-do-not-claim) is part of the submission.
 
@@ -69,8 +70,8 @@ pnpm demo:attest     # the model's evidence fetched now and verified here (Intel
                      #   them; then the code behind the key, from the enclave's own action log to a source commit on
                      #   GitHub. It stops before a message exists: nothing is encrypted, sent or signed
 pnpm demo:log        # the whole key log read from the contract and every hash of its chain recomputed here, then
-                     #   compared with two places of the log recorded in this repository → "Result: the chain holds
-                     #   from #0 to #80, and both places seen earlier are still in it." (the number grows with the log)
+                     #   compared with the places of the log recorded in this repository → "Result: the chain holds
+                     #   from #0 to #86, and all 3 places seen earlier are still in it." (the first number grows with the log)
 ```
 
 The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If it stops answering, run it locally
@@ -109,8 +110,12 @@ As of Nov 13, 2026.
 - **Tier 1 runs end to end:** the client, the proof package, the offline replay, `/verify`, `/log` and `/auditor`; the
   key-log contract on testnet with `commit_proof`; the verifier daemon on a server since Nov 6 (`docs/DEPLOY.md`).
 - **Tier 2 is on testnet** and ran through the Telegram bot on Nov 7: what ran and what has not is under [Tier 2 flow](#tier-2-flow).
-- **Not there:** a verifier run by someone outside the team; the contract lock (`docs/DEPLOY.md`), so the contract
-  account still has a full-access key.
+- **Not there:** the contract lock (`docs/DEPLOY.md`), so the contract account still has a full-access key; a verifier
+  run by someone we do not know.
+- **A third verifier since Nov 13,** `anas-verifier.testnet`: a friend of ours runs it on his own machine, with a key we
+  have not seen. We set it up together, sitting next to him. Its first entry (#84) names the same key and launcher for
+  the model as ours do, and carries release marks. It is a verifier outside the team, not an independent party, and it
+  is not in the site's default trust set: a visitor can add it on `/log`.
 - **On since Nov 11:** the deployment check. On Nov 12 we found that it sees the enclave's launcher, not the release
   that serves the model. `pnpm demo:attest` follows that release to a source commit, and so does the browser when asked
   (the proof card, `/log`). A verifier can now log what it checked behind a key, and the client can refuse an enclave
@@ -181,7 +186,7 @@ that serves the model").
 | --- | --- | --- |
 | Inference in TEE, attestation, response signatures, E2EE, JS SDK | NEAR AI Cloud, `@nearai/inference-sdk` | used as-is, in the browser: the SDK's TDX + GPU checks (NVIDIA's verdict fetched through NEAR AI's proxy and checked against NVIDIA's keys) and `prepareE2eeChatRequest` |
 | Verifying an answer | Verification Center (signature + fresh attestation; cannot recompute hashes; no allowlist) | local hash recomputation over the exact bytes; check against a **public log**, not the vendor's current answer; a card a non-technical user can read; `/verify` and `/auditor`; an offline replay (`pnpm demo`) that needs no key |
-| Key & measurement log | none (other entries: TEE Receipts' owner-registered signer list, Shade's registry filled by a quorum of watchers, Countersign's signed feed of reviewed machines; [docs/PRIOR-ART.md](docs/PRIOR-ART.md)) | append-only, hash-chained log in a NEAR contract designed for independent verifiers (today: two, both ours; registration is owner-gated); fail-closed client with a configurable trust set and quorum; split-view detection |
+| Key & measurement log | none (other entries: TEE Receipts' owner-registered signer list, Shade's registry filled by a quorum of watchers, Countersign's signed feed of reviewed machines; [docs/PRIOR-ART.md](docs/PRIOR-ART.md)) | append-only, hash-chained log in a NEAR contract designed for independent verifiers (today: three, two of them ours and one a friend's; registration is owner-gated); fail-closed client with a configurable trust set and quorum; split-view detection |
 | Deployment history | an action log in the model report, bound to a TDX quote; a public compose repository; signed image builds. The SDK authenticates the log and has provenance helpers, off by default | `pnpm demo:attest` follows the log to the release that serves the model and to the source commit of its proxy, and measures how long a release existed before it ran. The browser runs the same checks on request (the proof card, `/log`). A verifier can log the action log it checked, and the client can refuse one no trusted verifier logged (off by default). A proof does not record a release |
 | Agents in TEE | IronClaw runtime (no policies, limits or proofs); Shade Agents (deprecated Apr 2026) | (Tier 2) agent mandate + policy; decision signed inside TDX (OutLayer); contract executes; public proof without details; stop button |
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
@@ -195,8 +200,9 @@ runs on mainnet, AgentGuard is deployed and in use, and TEE Receipts checks the 
 entry, including two read on Nov 10, with where it is ahead and what Ainek adds, is in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
 Among those 26, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key, and none
-has independent verifiers writing to a public log of AI model keys. Neither do we: both verifiers that write to our log
-are ours. We do not claim this for entries we read only from their README, or for later ones.
+has independent verifiers writing to a public log of AI model keys. Neither do we: of the three verifiers that write to
+our log two are ours and the third is run by a friend of ours. We do not claim this for entries we read only from their
+README, or for later ones.
 
 By Nov 13 the gallery held 820 entries. The repositories of 51 entries had been read, by us or by delegated agents, and
 one agent read 25 more that a wider code search turned up. Not all 25 are in the gallery, and its report we checked only
@@ -236,7 +242,7 @@ pnpm demo:attest                 # no key, needs network (10 to 15 s): what demo
                                  #   exits 0 on WOULD SEND with no failed check
 pnpm demo:log                    # no key, needs network (about 2 s): reads every entry of the key log, recomputes each hash
                                  #   from the entry's fields and the hash before it, and compares the log with places seen
-                                 #   earlier: two recorded in docs/samples/log-points.json, and yours with
+                                 #   earlier: the ones recorded in docs/samples/log-points.json, and yours with
                                  #   --seen <index>:<entry hash> (the command prints the pair to keep). Then three controls on
                                  #   the entries just read; the third is a rewrite no walk catches, only an earlier place
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
@@ -340,7 +346,7 @@ client sends only E2EE v3, which binds the reply key, and on Nov 12 a control wi
 which does not rule out that a hop read a reply. The model CVMs report a dstack image on which a container can add
 events to the RTMR3 log, which is why the compose hash is taken from the app compose that MRCONFIGID binds. And neither
 the Verification Center nor the SDK ships a measurement allowlist, so our log is only as good as the verifiers that
-write to it, and every one of them is ours.
+write to it: two of ours and, since Nov 13, one run by a friend.
 
 ## Architecture
 
