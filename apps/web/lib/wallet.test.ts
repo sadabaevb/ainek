@@ -1,9 +1,19 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { WALLET_MANIFEST_URL, errorText, isDialogClosed, ownerDecide } from './wallet.ts';
 
 test('the wallet list is pinned to a commit, not a branch', () => {
   assert.match(WALLET_MANIFEST_URL, /^https:\/\/raw\.githubusercontent\.com\/hot-dao\/near-selector\/[0-9a-f]{40}\/repository\/manifest\.json$/);
+});
+
+test('the wallet provider has a Suspense boundary right under it', () => {
+  // What the boundary prevents needs a browser and a slow connection to show: while the page is still arriving, React
+  // renders a provider with nothing committed under it over and over, and this provider makes a connector, and a request
+  // for the wallet list, on every render (measured: about 2,500 requests a page at 400 kbit/s, one with the boundary).
+  // Here only that nobody takes the boundary out.
+  const providers = readFileSync(new URL('../app/providers.tsx', import.meta.url), 'utf8');
+  assert.match(providers, /<NearProvider config=\{\{[^}]*\}\}><Suspense>\{children\}<\/Suspense><\/NearProvider>/);
 });
 
 test('isDialogClosed: every way a wallet says it was closed, as an Error or as the plain value a sandbox hands over', () => {

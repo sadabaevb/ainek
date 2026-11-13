@@ -3,7 +3,7 @@
 // WALLET_MANIFEST_URL into sandboxed iframes, testnet only), the public config read on the server, and the UI language.
 import { NearProvider } from 'near-connect-hooks';
 import { useRouter } from 'next/navigation';
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { Suspense, createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { TrustSet } from '@ainek/proof';
 import type { PublicConfig } from '@/lib/config';
 import { WALLET_MANIFEST_URL } from '@/lib/wallet';
@@ -31,7 +31,12 @@ export function Providers({ config, lang, children }: { config: PublicConfig; la
     <ConfigContext.Provider value={stableConfig}>
       <TrustContext.Provider value={trust}>
         <LangContext.Provider value={{ lang, t: dict[lang], toggle }}>
-          <NearProvider config={{ network: stableConfig.network, manifest: WALLET_MANIFEST_URL }}>{children}</NearProvider>
+          {/* The boundary is what lets the wallet provider be committed once. near-connect-hooks builds its connector
+              inside a render, and the connector fetches the wallet list as it is built. While the page was still
+              arriving, the tree under the provider suspended, and with no boundary below it React rendered the provider
+              again and again until the document had loaded: one more connector and one more request each time, about
+              2,500 of them on a 400 kbit/s connection (docs/DEV-NOTES.md, Nov 13). */}
+          <NearProvider config={{ network: stableConfig.network, manifest: WALLET_MANIFEST_URL }}><Suspense>{children}</Suspense></NearProvider>
         </LangContext.Provider>
       </TrustContext.Provider>
     </ConfigContext.Provider>
