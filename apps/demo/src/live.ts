@@ -50,7 +50,9 @@ if (outcome.kind === 'verified') {
   if (outcome.kind === 'failed' && outcome.unverifiedCompletion) line(NA, `reply as it came, NOT verified: ${JSON.stringify(replyOf(outcome.unverifiedCompletion))}`);
   const outage = outcome.kind === 'failed' ? outageHint(outcome.reason) : undefined;
   if (outage) line(NA, outage);
-  console.log(outcome.kind === 'refused' ? '\nResult: REFUSED. Nothing was sent.' : nothingSent(outcome.step) ? '\nResult: FAILED before sending. Nothing was sent.' : '\nResult: FAILED.');
+  // Before the send, a step that could not be made is said apart from one that failed (as in demo:attest). After it, the
+  // message has gone and the run failed, whatever the reason.
+  console.log(outcome.kind === 'refused' ? '\nResult: REFUSED. Nothing was sent.' : nothingSent(outcome.step) ? `\nResult: ${outage ? 'NOT CHECKED' : 'FAILED'} before sending. Nothing was sent.` : '\nResult: FAILED.');
   if (record || discloseFile) console.log('nothing written: the run did not verify');
 }
 await exitFlushed(outcome.kind === 'verified' ? 0 : 1);

@@ -49,10 +49,10 @@ const outcome = await runPreflight({
 let swappedRefused = false;
 let codeFailed = false;
 if (outcome.kind === 'failed') {
-  // A service that did not answer is a check that could not be made, and is said apart from one that failed.
+  // A step that could not be made is said apart from one that was made and failed. The exit code is 1 either way.
   const outage = outageHint(outcome.reason);
   if (outage) line(NA, outage);
-  console.log(outage ? `\nResult: NOT CHECKED at ${outcome.step}: a service did not answer. Nothing was sent.` : `\nResult: FAILED at ${outcome.step}. Nothing was sent.`);
+  console.log(`\nResult: ${outage ? 'NOT CHECKED' : 'FAILED'} at ${outcome.step}. Nothing was sent.`);
 } else {
   // The rule the chat's first demo switch shows, applied to the same log read: a key nobody logged is refused. Only "absent"
   // shows that rule; a split view refuses every key, and says nothing about this one.

@@ -2,7 +2,8 @@
 
 What the [README](../README.md) says in a page, at full length: why the project exists, what each check does, what you
 will see, how NEAR is used, the agent half, who sees what, the architecture and what comes next. Moved here from the
-README on Nov 14, 2026, with pointers adjusted and nothing else changed. Measurements are in [METRICS.md](METRICS.md),
+README on Nov 14, 2026: the text is as it was, with pointers adjusted, three headings renamed and the notes on the
+commands gathered under one heading. Measurements are in [METRICS.md](METRICS.md),
 the neighbours in [PRIOR-ART.md](PRIOR-ART.md), the code behind a key in [RELEASE.md](RELEASE.md), and what we do not
 claim in [CLAIMS.md](CLAIMS.md).
 
@@ -69,6 +70,77 @@ that serves the model").
 | Agents in TEE | IronClaw runtime (no policies, limits or proofs); Shade Agents (deprecated Apr 2026) | (Tier 2) agent mandate + policy; decision signed inside TDX (OutLayer); contract executes; public proof without details; stop button |
 | Private team payments | NEAR Business, Trezu (human signers, Confidential Intents) | an *agent* signer with a verifiable mandate — a layer on top, not a replacement |
 | NEAR primitives | function-call keys, sub-accounts, NEP-141, NEP-297 events, `ed25519_verify` | sign-in asks the wallet for a function-call key limited to `commit_proof` (the wallet may widen it, see [What we do not claim](CLAIMS.md#we-do-not-claim)), so commits are signed without a popup; only the storage prepayment (`deposit_storage`, 0.1 NEAR for 50 to 68 commits depending on the account name, topped up when it runs out) goes through the wallet dialog |
+
+## The commands, in full
+
+Node 24 or newer and pnpm 10 (`corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack). Rust (rustup)
+is needed only for `contracts/ainek` (plus `cargo-near`) and `jobs/policy`; Docker only for the reproducible wasm
+builds ([REVIEW.md](REVIEW.md)). `pnpm demo:policy` also takes `--tamper` → "Result: REFUSED", and `--live`, which reads
+every run and its action again.
+
+Offline, about a second each:
+
+```bash
+git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
+pnpm demo            # recorded TDX + GPU evidence and two signed exchanges, re-verified → "Result: VERIFIED"
+pnpm demo:tamper     # the same recording with the key swapped → "Result: REFUSED", nothing is sent
+pnpm demo:policy     # recorded policy runs on OutLayer, the agent's seven live actions among them: Intel's quote, the
+                     #   published build, the decision → "Result: VERIFIED"
+```
+
+Live, with no key (they need the network):
+
+```bash
+pnpm demo:attest     # the model's evidence fetched now and verified here (Intel TDX, NVIDIA GPU), its key and launcher
+                     #   looked up in the log on NEAR → "Result: WOULD SEND", or "WOULD REFUSE" when the log does not have
+                     #   them; then the code behind the key, from the enclave's own action log to a source commit on
+                     #   GitHub. It stops before a message exists: nothing is encrypted, sent or signed
+pnpm demo:log        # the whole key log read from the contract and every hash of its chain recomputed here, then
+                     #   compared with the places of the log recorded in this repository → "Result: the chain holds
+                     #   from #0 to #86, and all 3 places seen earlier are still in it." (the second number grows with the log)
+```
+
+The rest:
+
+```bash
+# offline, no key
+pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
+                                 #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
+pnpm demo:controls               # negative controls on the recording `pnpm demo` accepts: 15 changes (a byte of the quote,
+                                 #   the nonce, the key, the launcher, the event log, the action log, the answer), each of
+                                 #   which must be refused for its own reason → "Result: REFUSED. 15 of 15 changes were refused,
+                                 #   each for its own reason." The same table runs in `pnpm test`
+
+# needs the network; demo:live and the chat also need NEARAI_API_KEY in .env (cp .env.example .env; cloud.near.ai → API Keys)
+pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attests the model with a fresh nonce, verifies the TDX + GPU
+                                 #   evidence and prints the key-log entry a registered verifier would append; sends nothing.
+                                 #   It retries what the SDK calls temporary (3 tries); if it still ends in
+                                 #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again;
+                                 #   demo:attest says so itself and ends "NOT CHECKED", which is not a failed check
+
+pnpm demo:attest                 # no key, needs network (10 to 15 s): what demo:live does up to the send, then the code behind the
+                                 #   key (above; seven or eight anonymous GitHub API requests on Nov 12, of the 60 an hour allowed;
+                                 #   GITHUB_TOKEN raises that). --history adds every release in the log, one request each;
+                                 #   exits 0 on WOULD SEND with no failed check
+pnpm demo:log                    # no key, needs network (about 2 s): reads every entry of the key log, recomputes each hash
+                                 #   from the entry's fields and the hash before it, and compares the log with places seen
+                                 #   earlier: the ones recorded in docs/samples/log-points.json, and yours with
+                                 #   --seen <index>:<entry hash> (the command prints the pair to keep). Then three controls on
+                                 #   the entries just read; the third is a rewrite no walk catches, only an earlier place
+pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
+                                 #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
+pnpm demo:reply-key              # needs NEARAI_API_KEY: a negative control. One normal exchange, then the same client behind a
+                                 #   hop that swaps the reply key in transit, and once more with the version header rewritten
+                                 #   from 3 to 2: both must get no reply; exits 0 on "Result: REFUSED"
+pnpm -F web dev                  # keeps running, use a second terminal: http://localhost:3000. Sending a message needs
+                                 #   NEARAI_API_KEY (server-side only). Everything before a message works without it: /log,
+                                 #   /verify, /auditor, /agent, /trust, the release check, and the two refusals on the first
+                                 #   screen, which verify the evidence and stop before anything is sent. Send "hello" → the
+                                 #   browser verifies the TEE evidence itself (a few seconds cold, longer when the attestation
+                                 #   services are slow, see "Metrics"; then cached 60 min), encrypts to the attested model key,
+                                 #   checks the signature and shows the proof card. Needs a log entry younger than 24 h (see
+                                 #   step 1); otherwise the red "Key not in the public log" card is the expected result
+```
 
 ## In a browser, step by step
 

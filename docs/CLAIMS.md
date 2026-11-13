@@ -1,4 +1,4 @@
-# CLAIMS.md — what we claim, what we do not (the README lists the titles of the second part and points here)
+# CLAIMS.md — what we claim, what we do not (the README names the five limits that matter most and points here)
 
 Read this before writing any text a user or a judge will see. Nothing in the README, on the site or in a command's
 output may say more than this file does.

@@ -25,7 +25,10 @@ test('docs/CLAIMS.md "We do not claim" is a list of titled items, and the README
 test('the README "Limits" are a handful of titled items that CLAIMS still backs', () => {
   const readme = mdSection(readRepoText('README.md'), 'Limits') ?? '';
   const mine = titlesOf(readme);
-  assert.ok(mine.length >= 4 && mine.length <= 6, `the README names ${mine.length} limits`);
+  assert.equal(mine.length, 5, 'the README says "these five matter most"');
+  assert.match(readme, /these five matter most/);
+  const longest = Math.max(...readme.split(/\n(?=- \*\*)/).slice(1).map((item) => item.trim().split('\n').length));
+  assert.ok(longest <= 5, `a limit in the README runs to ${longest} lines: its paragraph belongs in CLAIMS`);
   const titles = titlesOf(mdSection(readRepoText('docs/CLAIMS.md'), 'We do not claim') ?? '');
   for (const title of ['Verified model weights.', 'No retention inside the model enclave.', 'Protection from the server that serves the page.', 'An immutable log.', 'That a logged release is an approved one, or that the release rule closes this gap.', 'An audited contract.']) {
     assert.ok(titles.includes(title), `CLAIMS still has the item "${title}"`);
