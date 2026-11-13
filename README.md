@@ -1,35 +1,39 @@
 # Ainek — a glass box for private AI agents on NEAR
 
 > NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
-> Testnet only, not audited. [What we do not claim](#what-we-do-not-claim) is part of the submission.
+> Testnet only, not audited. Both verifiers that write to the log are ours. The contract account has a full-access key.
+> The client refuses on the key and the launcher; a rule that refuses on the release is written and off by default.
+> [What we do not claim](#what-we-do-not-claim) is part of the submission.
 
-A private model answers from inside a TEE and signs with a key the hardware vouches for. The key does not say which
-code stands behind it today. We watched one key on NEAR AI Cloud, in NEAR AI's own public evidence:
+A private model answers from inside a TEE, a sealed environment the hardware vouches for, and signs with a key bound to
+it. That key does not say which code runs behind it today. We watched one key on NEAR AI Cloud, in NEAR AI's own public
+evidence:
 
-- **The code behind one signing key changed five times in three weeks** (Oct 21 to Nov 12): five builds of the proxy
-  that decrypts prompts for `z-ai/glm-5.3-flash`, each with a valid signed build. The key did not change.
-- **A commit ran in the enclave a median of 12 minutes after it was made** (21 releases on the machine we looked at;
-  the shortest took 46 seconds).
-- **On Nov 13 a release went live 38 minutes after its commit.** The first mark in our public log saying that a
-  verifier had followed it to its source came 5 hours 28 minutes later.
+- **The code behind the key changed five times in three weeks** (Oct 21 to Nov 12, on the machine that answered us):
+  five builds of the proxy that decrypts prompts for `z-ai/glm-5.3-flash`. Each has a signed build record naming its
+  source commit, which says what was built, not what it does. The signing key did not change.
+- **A commit ran in the enclave a median of 12 minutes after it was made** (21 releases on that machine; the shortest
+  took 46 seconds).
+- **On Nov 13 a release went live on one replica 38 minutes after its commit.** The first entry in our public log saying
+  that a verifier had followed it to its source came 5 hours 28 minutes later, from the second of our two verifiers.
 
-`pnpm demo:attest` prints the same for the machine that answers you, with no key; the method and the limits are in
-[docs/RELEASE.md](docs/RELEASE.md). We are not the first to read this evidence. What Ainek adds is a public place to
-say who has checked it, and a client that asks there before a message leaves:
+`pnpm demo:attest --history` prints the same for the machine that answers you, with no key. The method and the limits
+are in [docs/RELEASE.md](docs/RELEASE.md). We are not the first to read this evidence. What Ainek adds is a public
+place to say who has checked it, and a client that asks there before a message leaves:
 
-- **Is this key real?** The model's key and its launcher must be in a **public, append-only log in a NEAR contract**,
-  written by verifiers that checked the Intel TDX and NVIDIA evidence. If they are not there, nothing is sent. Which
-  verifiers count, and how many must agree, is the viewer's choice on `/log`. Verifiers also follow each release behind
-  the key to a source commit and mark it in the same log, and a client can refuse a release nobody has marked.
+- **Is this key real?** The model's key and its launcher (the boot configuration the hardware measures) must be in a
+  **public, append-only log in a NEAR contract**. Verifiers, programs that check the Intel TDX and NVIDIA evidence,
+  write to it, and the client checks the same evidence again itself. If the key and the launcher are not there, nothing
+  is sent (fail-closed). Which verifiers count, and how many must agree, is the viewer's choice on `/log`. When a
+  verifier can follow the latest release behind the key to a source commit, it marks that in the same log.
 - **Did this answer come from there?** The message is encrypted to that key. The signed answer is checked in the
   browser against the exact bytes, and a salted hash of the proof can be committed to NEAR. Prompts and answers never
   go on chain.
-- **Did the agent do only what it was allowed to?** (Tier 2) A private policy decides inside Intel TDX (OutLayer); the
-  contract checks the signed decision, then pays, refuses or waits for a person.
+- **Did the agent do only what it was allowed to?** (Tier 2, the agent half) A private policy is evaluated inside Intel
+  TDX, on OutLayer, and the decision is signed there. The contract checks that signature, then pays, refuses or waits
+  for a person. It checks which key signed, not which build of the policy ran.
 
-Where it stands: both verifiers that write to the log are ours. The contract account still has a full-access key. The
-client refuses on the key and the launcher; the rule that refuses on the release is written and off by default, because
-on Nov 13 the marks came hours late. More under [Status](#status) and [Who sees what](#who-sees-what).
+What ran and what has not is under [Status](#status); who can see what, under [Who sees what](#who-sees-what).
 
 <!-- TODO before submission: 90-second video link. -->
 
@@ -46,7 +50,7 @@ No key, no wallet, nothing to set up.
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
-**From a clean clone** (Node 24+ and pnpm 10: `corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack). The three commands are offline, about a second each:
+**From a clean clone** (Node 24+ and pnpm 10: `corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack; `nvm use` reads the repo's `.nvmrc`, and the commands below say so when Node is older). The three commands are offline, about a second each:
 
 ```bash
 git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
@@ -126,7 +130,7 @@ recompute request/response hashes" and "does not compare measurements to an appr
 TEE keys yet". [Independent monitoring](https://confidentialinference.net/attestation) rates 0 of 95 provider checks
 "end-to-end verified".
 
-**What Ainek does.** Three questions, each answered by something you can re-run:
+**The three questions in detail,** each answered by something you can re-run:
 
 - **Is this key real?** The client sends nothing unless the model's signing key is in the public log on NEAR (fail-closed).
   A verifier logs a key only after checking the Intel TDX quote and the NVIDIA GPU evidence, and the client re-verifies the
@@ -191,7 +195,7 @@ the gallery held 820 entries, and 76 repositories had been read, by us or by del
 feed in a NEAR contract with no access keys, and a refusal before sending) and **Shade** (a key registry filled by a
 quorum of watchers). In those 76, as far as the readings go, we did not find an append-only key log for several verifiers with the trust
 set and the quorum at the viewer, or release marks in such a log. A private policy whose decision is signed in an OutLayer job and
-verified by the contract we did find, in Aegis. None of them has independent verifiers writing to a public log of AI
+verified by the contract we did find, in Aegis; Bouncer comes close. None of them has independent verifiers writing to a public log of AI
 model keys, and neither do we: both verifiers that write to our log are ours. The full statement, with who read what,
 is in [docs/CLAIMS.md](docs/CLAIMS.md).
 
@@ -284,7 +288,9 @@ inherited" in [docs/CLAIMS.md](docs/CLAIMS.md)).
 ## What we do not claim
 
 25 things, each with its paragraph in [docs/CLAIMS.md](docs/CLAIMS.md#we-do-not-claim): why not, what the
-code does instead, and where it was measured. The list here is the same list, by title.
+code does instead, and where it was measured. The list here is the same list, by title. Five a reader should not miss:
+the weights are not verified, only the deployment is attested; what the model enclave keeps cannot be proven; the page
+is served by our server; the action log is a record, not a measurement; a mark in the log is not an approval.
 
 - **That the decision key is tied to one build of the policy job.**
 - **Verified model weights.**
@@ -434,7 +440,7 @@ Tests:
 - Copied pattern: `contracts/demo-token/src/lib.rs` wires up `near-contract-standards` the way the official
   `near-examples/FT` example does (the token logic itself is that library).
 - Read at run time, with no code copied: Countersign's feed contract on NEAR testnet, Quill Cloud's policy file and
-  teemoon's review pages on GitHub ("Who else has looked at exactly this"). Two feed entries, two pins and the first lines
+  teemoon's review pages on GitHub ("Who else has looked at exactly this" in `docs/RELEASE.md`). Two feed entries, two pins and the first lines
   of one review page are recorded under `docs/samples/outside` for the tests.
 - Reference material followed (no other code copied so far; a file that copies code will say so): the `@nearai/inference-sdk`
   verification guide, `near-examples/nearai-cloud-verification-example`, `nearai/nearai-cloud-verifier`,
