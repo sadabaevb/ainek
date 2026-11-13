@@ -136,9 +136,11 @@ Can the client refuse a change until somebody it trusts has approved it?
   where two are required; a state marked ten minutes ago, for a client that waits an hour, and one that only one of two required verifiers has
   marked for long enough.
 - **Open.** A new release of the serving containers behind the same launcher is not refused by default: this is the
-  finding of Nov 12. The rule that refuses it is off until the verifiers a client trusts write release marks, and on
-  Nov 12 the verifier that writes to our log does not yet. Its controls are unit tests, not a run against the live
-  service. A mark covers the release that serves the model, not everything the same log deployed: the log does not
+  finding of Nov 12. The rule that refuses it is off by default. Both our verifiers have written release marks since
+  Nov 12, 17:10 UTC. On Nov 13 the log did not keep up: a release went live at 00:56 UTC, and three and a half hours
+  later the replica that answered us was still unmarked, so a client routed there with the rule on would have refused
+  all that time. Its controls are unit tests; against the live service the rule has accepted once (Nov 12, one
+  replica). A mark covers the release that serves the model, not everything the same log deployed: the log does not
   record which earlier services a later deployment replaced. A rollback is marked like any other release once a verifier
   has followed it. The wait counts from the verifiers' marks, by their clocks and the client's, not from when the code
   became public; it sees a day of the log, and no wait is the default. "Marked by a verifier" means followed to public
@@ -146,7 +148,8 @@ Can the client refuse a change until somebody it trusts has approved it?
 
 ## What would close the open items
 
-In the order we would take them: release marks from every verifier a client trusts and the release rule on by default,
-with a control against the live service; a proof that names the release that answered.
+In the order we would take them: marks that reach every replica soon after it changes (on Nov 13 one waited more than
+three hours), from every verifier a client trusts; then the release rule on by default, with a control against the live
+service; a proof that names the release that answered.
 None of that makes the action log a measurement. That needs the releases in the enclave's measurements, which is NEAR
 AI's to build.

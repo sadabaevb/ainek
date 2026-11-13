@@ -16,6 +16,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
   of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours.
   On Nov 10 we also read two later entries (posts, READMEs, parts of the code; `docs/PRIOR-ART.md`). CIPHERWORK refuses before sending and encrypts to the attested model key, with no public key log: it trusts one verifier key of its own. Provable AI Compliance refuses and encrypts at another layer, to an attested OutLayer enclave that then reaches the model over TLS; it has no key log, and when the model's evidence fails a check it records that and still delivers the answer. It binds its gateway's code, input, output and caller into one Intel quote per run, where our Tier 2 has two artifacts joined by hashes.
+  On Nov 13 the gallery held 820 entries. We read the text of 779 of their posts, searched GitHub for code that reads NEAR AI's evidence, and read the repositories of 23 more entries with Claude Code: Countersign directly, 22 through delegated agents. For Shade, Neslos, DNA Confidential and Oathline we then checked against the source what is said about them here and in `docs/PRIOR-ART.md`; the other 18 we know only as the agents reported them. The sentence about the 26 does not describe this later field. Countersign keeps a signed, hash-chained feed of reviewed NEAR AI machines in a NEAR contract and refuses before sending; its reviewer is its author, as our verifiers are ours. It is ahead of us on the contract (no access keys; ours has one), on boot measurements recomputed from the OS image and on published evidence. By its own method page it does not check response signatures, follow an image to its source or compare the release per request, and its encryption is version 2. Shade has a key registry that watchers fill by a quorum the contract enforces, a refusal before sending and receipts on chain; by its README the gateway in its demo is a mock and nothing is on testnet. In none of the 51 entries' repositories read so far did we find three things: an append-only, hash-chained key log for several verifiers with the trust set and the quorum at the viewer; release marks in such a log with a client rule on them; a policy kept private whose decision is signed inside an OutLayer job and verified by the contract. Charter, Neslos and a policy gate by the author of Provable AI Compliance each do part of the third; they and the other near neighbours are in `docs/PRIOR-ART.md`. That is a statement about 51 repositories as far as those readings go, not about 820 entries. Another 17 projects outside the hackathon were read the same day for one question, who else reads the enclave's action log; they are in a section of their own in `docs/PRIOR-ART.md`.
 - (`pnpm demo:attest` with no key; in the browser on request, from the proof card and `/log`) The **release behind the
   key is followed to a source commit.** The action log the
   model's enclave attests, which the SDK authenticates against a TDX quote of its own, names the latest `compose_up` for the
@@ -45,9 +46,10 @@ Honest limitations won prizes at previous NEAR hackathons.
   (`AINEK_RELEASE_WAIT_MIN`): it then sends only when the log has been marked as it stands for that many minutes by a
   quorum, so anything added to the log starts the wait again. `pnpm -F verifier dry-run` prints
   the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers; `/log`
-  shows the same line in the browser, without refusing on it. As of
-  Nov 12 the verifier that writes to our log has not been restarted with marks. What a mark does not say is under "We do
-  not claim".
+  shows the same line in the browser, without refusing on it. Both our
+  verifiers have written marks since Nov 12, 17:10 UTC (entries #73 and #74 were the first). On Nov 13 the log did not
+  keep up with a release: one went live at 00:56 UTC, and the replica that answered us was still unmarked three and a
+  half hours later. What a mark does not say is under "We do not claim".
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
@@ -107,27 +109,28 @@ Honest limitations won prizes at previous NEAR hackathons.
   shows that the record agrees with public sources at every link. It cannot show that the record is complete, or that the
   containers it names are the ones running.
 - **That a logged release is an approved one, or that the release rule closes this gap.** A release mark in the log says
-  that, at one state of an enclave's action log, a verifier followed the release that serves the model to public sources:
-  the latest release of the model's service in the compose file the log most recently deployed for it, the signed build
-  of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release. A client may
-  wait (`AINEK_RELEASE_WAIT_MIN`, no wait by default): it then sends only when the action log has been marked as it
-  stands for that many minutes, by as many verifiers as its quorum. That time counts from the verifiers' marks, not from
-  when the code became public; it is read off the verifiers' clocks and the client's, and off the day of the log the
-  client reads, so after a verifier has been away, or just after marks are turned on, a state that is days old waits
-  again. The verifier does not follow the engine image, or anything else that log brought up. The log does
-  not record the Compose project of a deployment, so it does not show which earlier services a later one replaced, and in
+  that, at one state of an enclave's action log, a verifier followed the release that serves the model to public
+  sources: the latest release of the model's service in the compose file the log most recently deployed for it, the
+  signed build of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release.
+  A client may wait (`AINEK_RELEASE_WAIT_MIN`, no wait by default): it then sends only when the action log has been
+  marked as it stands for that many minutes, by as many verifiers as its quorum. That time counts from the verifiers'
+  marks, not from when the code became public; it is read off the verifiers' clocks and the client's, and off the day of
+  the log the client reads, so after a verifier has been away, or just after marks are turned on, a state that is days
+  old waits again. The verifier does not follow the engine image, or anything else that log brought up. The log does not
+  record the Compose project of a deployment, so it does not show which earlier services a later one replaced, and in
   one of our recordings nine compose files in a single log define a service for this model. The rule
-  (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own record: the action log it attests must be exactly
-  one a trusted verifier marked. That does not make the record a measurement. A log shorter than one a verifier saw is
-  refused, and it is called rewritten only when its beginning differs from what was seen: lengths alone cannot tell a log
-  that was cut from an attestation older than the verifier's entry. Compose Manager itself starts from an empty log when
-  its file is missing or unreadable. The rule speaks for the moment of attestation, which is why the browser attests again
-  for every message while the rule is on. It checks the replica that attested, and the gateway picks the replica per
-  connection. Its cost is refusals: after every action in an enclave, until a verifier has seen that replica again. On the
-  two logs we hold that is about two windows a day for each replica. Live we have two entries and one run: entries #73
-  and #74 (Nov 12, 17:10 and 17:30 UTC) carry marks, one from each verifier, and with the rule on `pnpm demo:attest`
-  reported that it would send, for the one replica that answered. How often the rule refuses over a day we have not
-  measured.
+  (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own record: the action log it attests must be
+  exactly one a trusted verifier marked. That does not make the record a measurement. A log shorter than one a verifier
+  saw is refused, and it is called rewritten only when its beginning differs from what was seen: lengths alone cannot
+  tell a log that was cut from an attestation older than the verifier's entry. Compose Manager itself starts from an
+  empty log when its file is missing or unreadable. The rule speaks for the moment of attestation, which is why the
+  browser attests again for every message while the rule is on. It checks the replica that attested, and the gateway
+  picks the replica per connection. Its cost is refusals: after every action in an enclave, until a verifier has seen
+  that replica again. On the two logs we hold that is about two windows a day for each replica. Live we have one run
+  that would send and one window that would refuse. Entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC) were the first
+  with marks, one from each verifier, and with the rule on `pnpm demo:attest` reported that it would send, for the one
+  replica that answered. On Nov 13 a replica stayed unmarked for more than three hours after a release, and a client
+  routed there would have refused all that time. How often the rule refuses over a day we have not measured.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
@@ -205,5 +208,5 @@ Honest limitations won prizes at previous NEAR hackathons.
   so no log entry changes.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
   write to it. Every verifier in the demo is ours: one on a server since Nov 6, trusted by the site's default, and a second account
-  that wrote its first entry on Nov 10 and is not in the default yet (checked 2026-11-10). Nobody outside the team runs
+  that wrote its first entry on Nov 10 and is not in the default yet (checked 2026-11-13). Nobody outside the team runs
   one yet.
