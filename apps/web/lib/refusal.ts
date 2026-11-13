@@ -2,7 +2,10 @@
 import { shortHex, wholeMinutes, type KeyLogReason, type KeyLogVerdict } from '@ainek/proof';
 import type { Dict } from './i18n';
 
-export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLogReason, 'ok'>; title: string; body: string } {
+/** The refusals only the release rule gives (SPEC §7.5): with one of them on a card, the rule was on for that message. */
+const BY_RELEASE_RULE: ReadonlySet<KeyLogReason> = new Set(['unlogged-release', 'untied-log', 'unknown-release', 'shorter-log', 'release-below-quorum', 'rewritten-log', 'recent-mark']);
+
+export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLogReason, 'ok'>; title: string; body: string; byReleaseRule: boolean } {
   const reason = v.reason === 'ok' ? 'absent' : v.reason;
   const texts: Record<typeof reason, [string, string]> = {
     'split-view': [t.refusedSplitTitle, t.refusedSplitBody],
@@ -19,5 +22,5 @@ export function refusalText(t: Dict, v: KeyLogVerdict): { reason: Exclude<KeyLog
     absent: [t.refusedTitle, t.refusedBody],
   };
   const [title, body] = texts[reason];
-  return { reason, title, body };
+  return { reason, title, body, byReleaseRule: BY_RELEASE_RULE.has(reason) };
 }

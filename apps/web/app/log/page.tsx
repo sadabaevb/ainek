@@ -8,6 +8,7 @@ import { RedCard } from '@/components/red-card';
 import { ReleaseRow } from '@/components/release-row';
 import { StackTable, type Column } from '@/components/stack-table';
 import { TrustPanel } from '@/components/trust-panel';
+import { releaseTurnedOnBy } from '@/lib/key-log-line';
 import { describeError } from '@/lib/errors';
 import { fill } from '@/lib/fill';
 import { hoursSince, observedUtc, short, utcMinuteOf } from '@/lib/format';
@@ -87,11 +88,11 @@ export default function LogPage() {
   }, [cfg.model, cfg.acceptedTcbStatuses]);
   // The release rule (SPEC §7.5) on the entries this page read: shown under the release check, enforced only by the chat.
   // Null while the page has no read of the log, so that the line says so and does not go missing.
-  const { requireLoggedDeployment, releaseWaitMs } = cfg;
+  const { requireLoggedDeployment, releaseWaitMs, requireLoggedRelease } = cfg;
   const entries = log?.entries;
   const keyLog = useMemo(
-    () => (entries ? { entries, trust, rule: releaseRuleOf({ requireLoggedDeployment, releaseWaitMs }), enforced: releaseRule } : null),
-    [entries, trust, requireLoggedDeployment, releaseWaitMs, releaseRule],
+    () => (entries ? { entries, trust, rule: releaseRuleOf({ requireLoggedDeployment, releaseWaitMs }), enforced: releaseRule, turnedOnBy: releaseTurnedOnBy(requireLoggedRelease) } : null),
+    [entries, trust, requireLoggedDeployment, releaseWaitMs, releaseRule, requireLoggedRelease],
   );
   const deployments = useMemo(() => deploymentsSeen(log?.all ?? [], cfg.model), [log?.all, cfg.model]);
   // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.

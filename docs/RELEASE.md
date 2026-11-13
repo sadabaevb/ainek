@@ -78,7 +78,7 @@ Reading a release is not refusing one. Since Nov 12 both ends of a rule exist, a
   action log as it stood (instance, number of actions, hash) and the release of the model's service. The contract did not
   change: that field takes text, and a client that does not know the marks ignores them.
 - **The client can refuse** (`AINEK_REQUIRE_RELEASE=1`; in the browser a visitor can also turn the rule on for
-  themselves, with the switch "Stricter" in the chat). The action log the enclave attests must be exactly one that a
+  themselves, with the switch for the release rule in the chat). The action log the enclave attests must be exactly one that a
   quorum of the viewer's verifiers marked. An enclave deploys by adding to that log, so whatever it did after a verifier
   looked is refused until a verifier looks again: a release of the model's file, a deployment from another file, a restart
   of its manager. A log that no longer begins with what a verifier saw from the same instance is refused as rewritten.

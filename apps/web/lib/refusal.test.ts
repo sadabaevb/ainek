@@ -13,6 +13,9 @@ test('refusalText: every reason of the release rule has a card of its own, in bo
     const cards = reasons.map((reason) => refusalText(t, refused({ reason, releaseWait: { markedForMs: 0, waitMs: 60_000 } })));
     assert.equal(new Set(cards.map((c) => c.title)).size, reasons.length, 'no two reasons share a title');
     assert.ok(cards.every((c) => c.title && c.body), 'no card is empty');
+    assert.ok(cards.every((c) => c.byReleaseRule), 'each says the release rule was on for that message');
+    // A refusal on the key or the launcher says nothing about the rule: the card must not blame a switch for it.
+    assert.deepEqual((['absent', 'unknown-deployment', 'untrusted-only', 'below-quorum', 'split-view'] as const).map((reason) => refusalText(t, refused({ reason })).byReleaseRule), [false, false, false, false, false]);
   }
 });
 

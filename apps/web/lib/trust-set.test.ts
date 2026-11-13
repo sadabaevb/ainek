@@ -10,7 +10,8 @@ const KEY = 'ainek.release-rule.v1.testnet.log.testnet';
 /** A browser's storage and its window, as far as the store uses them. */
 let kept: Map<string, string>;
 let events: string[];
-let refuses = false;
+/** What the browser refuses: every use of storage (site data blocked), or only to change it. */
+let refuses: false | 'all' | 'writes' = false;
 const browser = globalThis as { localStorage?: unknown; window?: unknown };
 const before = { localStorage: browser.localStorage, window: browser.window };
 
@@ -18,14 +19,14 @@ beforeEach(() => {
   kept = new Map();
   events = [];
   refuses = false;
-  const guarded = <T>(op: () => T): T => {
-    if (refuses) throw new DOMException('storage is off', 'SecurityError');
+  const guarded = <T>(writes: boolean, op: () => T): T => {
+    if (refuses === 'all' || (writes && refuses === 'writes')) throw new DOMException('storage is off', 'SecurityError');
     return op();
   };
   browser.localStorage = {
-    getItem: (key: string) => guarded(() => kept.get(key) ?? null),
-    setItem: (key: string, value: string) => guarded(() => void kept.set(key, value)),
-    removeItem: (key: string) => guarded(() => void kept.delete(key)),
+    getItem: (key: string) => guarded(false, () => kept.get(key) ?? null),
+    setItem: (key: string, value: string) => guarded(true, () => void kept.set(key, value)),
+    removeItem: (key: string) => guarded(true, () => void kept.delete(key)),
   };
   browser.window = { dispatchEvent: (e: Event) => events.push(e.type) > 0 };
 });
@@ -53,10 +54,22 @@ test('the release switch: only the value the page writes turns it on', () => {
   }
 });
 
-test('the release switch: a browser that refuses storage keeps the site setting, and the page is told', () => {
-  refuses = true;
-  assert.equal(saveOwnReleaseRule(TESTNET, true), false);
-  assert.equal(ownReleaseRule(TESTNET), false);
+test('the release switch: a browser that keeps nothing still gets the stricter rule, for this page', () => {
+  refuses = 'all';
+  assert.equal(saveOwnReleaseRule(TESTNET, true), false, 'not kept, and the page is told');
+  assert.equal(ownReleaseRule(TESTNET), true, 'asked for and honoured all the same');
+  assert.equal(ownReleaseRule({ network: 'testnet', contract: 'another.testnet' }), false);
+  assert.equal(events.length, 1, 'readers on this page hear of it');
+  // Turned off again: nothing was kept, so nothing is left on, and there is nothing to report.
+  assert.equal(saveOwnReleaseRule(TESTNET, false), true);
+  assert.deepEqual([ownReleaseRule(TESTNET), events.length], [false, 2]);
+});
+
+test('the release switch: a rule the store still holds is not dropped on a write that did not happen', () => {
+  kept.set(KEY, '1');
+  refuses = 'writes';
+  assert.equal(saveOwnReleaseRule(TESTNET, false), false, 'the page is told the choice did not take');
+  assert.equal(ownReleaseRule(TESTNET), true);
   assert.equal(events.length, 0, 'nothing changed, so nothing is announced');
 });
 

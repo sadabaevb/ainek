@@ -19,11 +19,15 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
   const siteDefault = cfg.siteTrust;
   const selected = trust.verifiers;
 
-  const writers = new Map<string, { count: number; newest: KeyEntry }>();
+  // `marked`: the verifier's newest entry that carries a mark of an action log. Any of its entries in the window counts,
+  // as it does for the rule: a verifier writes one entry per replica, and the last of a round need not be a marked one.
+  type Writer = { count: number; newest: KeyEntry; marked?: KeyEntry };
+  const writers = new Map<string, Writer>();
   for (const e of entries ?? []) {
-    const seen = writers.get(e.verifier);
-    if (seen) seen.count += 1; // the contract answers newest first, so the first entry per verifier stays the newest
-    else writers.set(e.verifier, { count: 1, newest: e });
+    const seen: Writer = writers.get(e.verifier) ?? { count: 0, newest: e }; // the contract answers newest first, so the first entry per verifier stays the newest
+    seen.count += 1;
+    if (!seen.marked && marksActionLog(e)) seen.marked = e;
+    writers.set(e.verifier, seen);
   }
   const rows = [...new Set([...siteDefault.verifiers, ...(registered ?? []), ...writers.keys(), ...selected])];
 
@@ -53,9 +57,16 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
     if (preview.kind === 'nobody') return tt.verdict.nobody;
     if (preview.kind === 'no-entries') return tt.verdict.empty;
     const v = preview.verdict;
-    return v.status === 'ok' ? tt.verdict.send(short(preview.key), v.confirmedBy.join(', ')) : `${tt.verdict.refuse} ${refusalText(t, v).body}`;
+    if (v.status !== 'ok') return `${tt.verdict.refuse} ${refusalText(t, v).body}`;
+    if (!releaseRule) return tt.verdict.send(short(preview.key), v.confirmedBy.join(', '));
+    return unmarked ? `${tt.verdict.refuse} ${t.refusedNoReleaseBody}` : tt.verdict.sendIfMarked(short(preview.key), v.confirmedBy.join(', '));
   };
-  const willSend = preview?.kind === 'checked' && preview.verdict.status === 'ok';
+  const keyPasses = preview?.kind === 'checked' && preview.verdict.status === 'ok';
+  // The release rule needs an attestation, which a preview does not have. What the log alone says: when no entry that
+  // vouches for the key carries a mark of an action log, the chat refuses whatever attests (`unlogged-release`).
+  const unmarked = releaseRule && preview?.kind === 'checked' && !preview.verdict.matching.some(marksActionLog);
+  // Green only for what the preview can promise: with the rule on, a key that passes is not yet a message that goes.
+  const tone = !keyPasses || unmarked ? 'fail' : releaseRule ? 'open' : 'ok';
 
   const onlyWriter = writers.size === 1 ? [...writers.keys()][0] : undefined;
   // Unticking one side clears the chat's refusal, so the disagreement stays on screen even then.
@@ -72,8 +83,8 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
         {rows.map((account) => {
           const seen = writers.get(account);
           const activity = entries === null ? null : seen ? tt.seen(seen.count, observedUtc(seen.newest.observed_at)) : tt.notSeen;
-          // By its newest entry: only a verifier that marks the enclave's action log can satisfy the release rule (SPEC §7.5).
-          const marks = seen && marksActionLog(seen.newest) ? tt.marks : null;
+          // Only a verifier that marks the enclave's action log can satisfy the release rule (SPEC §7.5); the time says how fresh its word is.
+          const marks = seen?.marked ? tt.marks(observedUtc(seen.marked.observed_at)) : null;
           return (
             <li key={account}>
               <label>
@@ -101,7 +112,7 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
         {isCustom && <button type="button" className="btn small" onClick={() => save(null)}>{tt.reset}</button>}
       </div>
       {notSaved && <p className="small trust-bad" role="alert">{tt.notSaved}</p>}
-      {preview && <p className={`trust-verdict ${willSend ? 'ok' : 'fail'}`} role="status">{previewText()}</p>}
+      {preview && <p className={`trust-verdict ${tone}`} role="status">{previewText()}</p>}
       <p className="muted small">{tt.verdictNote}{cfg.requireLoggedDeployment && ` ${tt.verdictNoteDeployment}`}{releaseRule && ` ${tt.verdictNoteRelease}`}</p>
       {hiddenSplit && <p className="small" role="status">{tt.hiddenSplit(hiddenSplit.verifierA, hiddenSplit.verifierB)}</p>}
       {onlyWriter && <p className="muted small">{tt.oneWriter(onlyWriter)}</p>}

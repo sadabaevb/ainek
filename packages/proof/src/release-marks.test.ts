@@ -277,14 +277,15 @@ test('releaseInLogLine: what the rule says in one line, the same in the terminal
   const marked = evaluateRelease(seen, at(LOG), { now: T0 });
   assert.deepEqual([releaseInLogLine(marked, false), releaseInLogLine(marked, true)].map((l) => l.status), ['ok', 'ok']);
   assert.equal(releaseInLogLine(marked, false).text, 'key log: the action log as it stands (3 actions) is marked by v1.testnet since 2026-11-12 08:00 UTC');
-  // Not marked. A client that does not refuse by the rule only says what the rule would say, and how it turns the rule
-  // on: the setting in a terminal, whatever the caller names elsewhere. One that does refuse does not send, and that is
-  // a failure of the check, not a note; it does not say what turned the rule on.
+  // Not marked. A client that does not refuse by the rule only says what the rule would say. One that does refuse does
+  // not send, and that is a failure of the check, not a note. Both name what turns the rule on in that client: the
+  // setting in a terminal, whatever the caller names elsewhere.
   const added = evaluateRelease(seen, at([...LOG, up('2026-11-12T09:00:00Z', H2)]));
   assert.deepEqual([releaseInLogLine(added, false).status, releaseInLogLine(added, true).status], ['skipped', 'fail']);
   assert.match(releaseInLogLine(added, false).text, /^key log: the enclave's action log has 1 action since entry #7 .* \(the release rule is off: this client sends all the same; with it on, by AINEK_REQUIRE_RELEASE=1, it would not\)$/);
   assert.match(releaseInLogLine(added, false, 'the switch in the chat').text, /; with it on, by the switch in the chat, it would not\)$/);
-  assert.match(releaseInLogLine(added, true).text, /: this client does not send \(the release rule is on\)$/);
+  assert.match(releaseInLogLine(added, true).text, /: this client does not send \(the release rule is on, by AINEK_REQUIRE_RELEASE=1\)$/);
+  assert.match(releaseInLogLine(added, true, "the site's setting").text, /\(the release rule is on, by the site's setting\)$/);
   // A rewritten log is a failure either way, and no setting is quoted next to it.
   const edited = evaluateRelease(seen, at([LOG[0] as ManagerAction, up('2026-11-01T10:00:00Z', H2), LOG[2] as ManagerAction]));
   assert.deepEqual([releaseInLogLine(edited, false).status, /AINEK_REQUIRE_RELEASE/.test(releaseInLogLine(edited, false).text)], ['fail', false]);

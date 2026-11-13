@@ -109,7 +109,8 @@ export default function ChatPage() {
   const wallet = useNearWallet();
   const [model, setModel] = useState(cfg.model);
   const [tamper, setTamper] = useState<Tamper>(false);
-  const [ruleNotSaved, setRuleNotSaved] = useState(false);
+  /** A change of the release switch the browser did not keep, by what was asked: on holds for this page, off did not happen. */
+  const [ruleUnsaved, setRuleUnsaved] = useState<'on' | 'off' | null>(null);
   const [input, setInput] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -214,10 +215,11 @@ export default function ChatPage() {
           <label><input type="checkbox" checked={tamper === 'key'} onChange={(e) => setTamper(e.target.checked && 'key')} disabled={busy} /> {t.tamper}</label>
           <label><input type="checkbox" checked={tamper === 'deployment'} onChange={(e) => setTamper(e.target.checked && 'deployment')} disabled={busy} /> {t.tamperDeployment}</label>
           {/* Not a demo: the viewer's own rule. Where the site has it on, the box only shows that. */}
-          <label><input type="checkbox" checked={releaseRule} onChange={(e) => setRuleNotSaved(!saveOwnReleaseRule(cfg, e.target.checked))} disabled={busy || cfg.requireLoggedRelease} /> {t.releaseSwitch}</label>
+          <label><input type="checkbox" checked={releaseRule} onChange={(e) => setRuleUnsaved(saveOwnReleaseRule(cfg, e.target.checked) ? null : e.target.checked ? 'on' : 'off')} disabled={busy || cfg.requireLoggedRelease} /> {t.releaseSwitch}</label>
         </span>
       </div>
-      {ruleNotSaved && <p className="small trust-bad" role="alert">{t.log.trust.notSaved}</p>}
+      {ruleUnsaved && <p className="small trust-bad" role="alert">{ruleUnsaved === 'on' ? t.releaseSwitchUnsaved : t.log.trust.notSaved}</p>}
+      {releaseRule && model === cfg.incognitoModel && <p className="muted small">{t.releaseSwitchIncognito}</p>}
       {hasOtherThread(turns, model, cfg.model) && <p className="muted small">{t.ownThread}</p>}
       {behind > 0 && <p className="muted small">{t.longThread(behind)}</p>}
 

@@ -13,6 +13,11 @@ const keyOf = (cfg: Scope): string => `ainek.trust.v1.${cfg.network}.${cfg.contr
 const releaseKeyOf = (cfg: Scope): string => `ainek.release-rule.v1.${cfg.network}.${cfg.contract}`;
 /** The only value that turns the viewer's release rule on: anything else in the store reads as no choice. */
 const RELEASE_ON = '1';
+/**
+ * Switches the browser refused to keep, turned on all the same until the page is reloaded: asking for a stricter check
+ * needs no storage to be honoured. Other tabs do not hear of it.
+ */
+const heldHere = new Set<string>();
 
 function subscribe(onChange: () => void): () => void {
   window.addEventListener('storage', onChange);
@@ -68,12 +73,24 @@ export function useOwnReleaseRule(cfg: Scope): boolean {
   return useSyncExternalStore(subscribe, () => ownReleaseRule(cfg), () => false);
 }
 
-/** What the store holds right now. A browser that refuses storage has no switch: the site's setting applies. */
+/** What the viewer asked for: kept in the store, or held by this page when the browser would not keep it. */
 export function ownReleaseRule(cfg: Scope): boolean {
-  return read(releaseKeyOf(cfg)) === RELEASE_ON;
+  const key = releaseKeyOf(cfg);
+  return heldHere.has(key) || read(key) === RELEASE_ON;
 }
 
-/** False when the browser refused to keep the choice: the switch then stays where it was, and the caller says so. */
+/**
+ * False when the browser did not keep the choice and the caller has something to say. Turned on, the rule then holds for
+ * this page only. Turned off, it is still on, because the store still says so: a rule is never dropped on a write that
+ * did not happen.
+ */
 export function saveOwnReleaseRule(cfg: Scope, on: boolean): boolean {
-  return write(releaseKeyOf(cfg), on ? RELEASE_ON : null);
+  const key = releaseKeyOf(cfg);
+  const was = ownReleaseRule(cfg);
+  const saved = write(key, on ? RELEASE_ON : null);
+  if (on && !saved) heldHere.add(key);
+  else heldHere.delete(key);
+  const now = ownReleaseRule(cfg);
+  if (!saved && was !== now) window.dispatchEvent(new Event(CHANGED)); // `write` announces only what it stored
+  return saved || (!on && !now);
 }
