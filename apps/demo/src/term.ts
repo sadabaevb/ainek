@@ -1,6 +1,6 @@
 // Terminal output shared by the replay and live modes.
 import { oneLine } from '@ainek/proof';
-export { describeSdkError as describe } from '@ainek/tier1-node/errors'; // the subpath: the offline replay must not load the runner
+export { describeSdkError as describe, outageHint } from '@ainek/tier1-node/errors'; // the subpath: the offline replay must not load the runner
 
 export const OK = '✓';
 export const FAIL = '✗';

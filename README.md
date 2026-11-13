@@ -236,7 +236,8 @@ pnpm demo:controls               # negative controls on the recording `pnpm demo
 pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attests the model with a fresh nonce, verifies the TDX + GPU
                                  #   evidence and prints the key-log entry a registered verifier would append; sends nothing.
                                  #   It retries what the SDK calls temporary (3 tries); if it still ends in
-                                 #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again
+                                 #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again;
+                                 #   demo:attest says so itself and ends "NOT CHECKED", which is not a failed check
 
 pnpm demo:attest                 # no key, needs network (10 to 15 s): what demo:live does up to the send, then the code behind the
                                  #   key (above; seven or eight anonymous GitHub API requests on Nov 12, of the 60 an hour allowed;

@@ -1,8 +1,7 @@
 # CLAIMS.md — what we claim, what we do not (the README lists the titles of the second part and points here)
 
-Judges on this panel have audited TEE products and read the two independent registries that rate
-every private-inference provider at "stage 0". Overclaiming costs more than a missing feature.
-Honest limitations won prizes at previous NEAR hackathons.
+Read this before writing any text a user or a judge will see. Nothing in the README, on the site or in a command's
+output may say more than this file does.
 
 ## We claim
 
