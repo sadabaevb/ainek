@@ -1,4 +1,4 @@
-# CLAIMS.md — what we claim, what we do not (paste into README verbatim)
+# CLAIMS.md — what we claim, what we do not (the README lists the titles of the second part and points here)
 
 Judges on this panel have audited TEE products and read the two independent registries that rate
 every private-inference provider at "stage 0". Overclaiming costs more than a missing feature.
