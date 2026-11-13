@@ -54,10 +54,11 @@ Honest limitations won prizes at previous NEAR hackathons.
   same state is read and shown**: Countersign's signed feed in a NEAR testnet contract, by the signing key and the
   launcher; Quill Cloud's policy file, by the launcher and the hash of the action log; teemoon's review pages, by the
   hash of the release file. A feed entry is read only if its ES256 signature verifies under the feed's two public keys,
-  pinned in the client (the ones its contract returns and its repository publishes). A check mark says the party has
-  looked at exactly this; its conclusion is quoted in the line. On Nov 13, after release v0.0.581: the key and launcher
-  were in Countersign's feed with the verdict "warning" and the release before this one; Quill Cloud pinned the state
-  before this one; teemoon had no page for the file.
+  pinned in the client (the ones its contract returns and its repository publishes). Each reading is marked "seen", "not
+  seen" or "not known", in words and not with the check mark of our own checks: "seen" says the party has published
+  something about exactly this, and its conclusion is quoted next to it. On Nov 13, after release v0.0.581: the key and
+  launcher were in Countersign's feed with the verdict "warning" and the release before this one; Quill Cloud pinned
+  the state before this one; teemoon had no page for the file.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
   plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
@@ -173,13 +174,15 @@ Honest limitations won prizes at previous NEAR hackathons.
   each trusted verifier is still read on its own. A trusted verifier's key that leaks still lets its holder log a key of
   their choice, a day at a time.
 - **That an outside reading is a verifier of ours, or an endorsement.** The three readings are shown and never applied:
-  they take no part in the decision to send, and none of the parties is in a trust set, writes to our log, or knows
-  about Ainek. A check mark is "has looked", not "approves": Countersign's verdict on the machine we use is "warning",
-  for two checks our client does not make (Intel's early collateral rates the platform out of date; the report declares
-  four NVSwitches and carries no evidence for them). Its entries are signed by one person, by hand, and expire after
-  three days. Quill Cloud's file and teemoon's pages come over HTTPS from GitHub and are not signed: whoever can write
-  to those repositories, or GitHub, decides what the line says. The formats are theirs and may change without notice;
-  then the line says the reading could not be made.
+  they take no part in the decision to send, and none of the parties is in a trust set or writes to our log. They
+  publish for their own users, not for us. "Seen" is "has looked", not "approves": Countersign's verdict on the machine
+  we use is "warning", for two checks our client does not make (Intel's early collateral rates the platform out of
+  date; the report declares four NVSwitches and carries no evidence for them). Its entries are signed by one person, by
+  hand, and expire after three days. Which of its entries is the latest is the word of a public RPC: an older entry that has
+  not expired can be served as the current one. The feed's two keys are pinned as we compared them once, on Nov 13; a
+  key the feed retires after that is still accepted here. Quill Cloud's file and teemoon's pages come over HTTPS from
+  GitHub and are not signed: whoever can write to those repositories, or GitHub, decides what the reading says. The
+  formats are theirs and may change without notice; then the reading says it could not be made.
 - **A log that can grow without end.** `latest_keys` reads a model's whole history before it filters by verifier and
   age. Measured in near-sdk's unit-test environment, not on a node, that costs about 0.15 Tgas an entry, which reaches
   the 300 Tgas of a view call near 2,000 entries for one model; the log held 79 on Nov 13. Past that point every read

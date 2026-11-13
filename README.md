@@ -110,24 +110,14 @@ from the visitor's own address, so it never starts by itself. It shows the relea
 ### Who else has looked at exactly this
 
 Both verifiers that write to our log are ours. Other people check NEAR AI too, and three of them publish what they found
-under the same values the enclave attests: its signing key and launcher, the hash of its action log, the hash of its
-release file. `pnpm demo:attest` and the release check in the browser read those three and print them next to ours:
-
-| Read | What it is | Keyed by |
-| --- | --- | --- |
-| [Countersign](https://github.com/greenlima/sealed-review) | a reviewer's hash-chained feed, signed on a hardware key, in a NEAR testnet contract with no access keys (another entry in this hackathon). Each entry's signature is verified here against the feed's two public keys | the signing key and the launcher |
-| [Quill Cloud](https://github.com/Lore-Hex/quill-cloud-proxy) | the policy file of a gateway's enclave, public in its repository; a pin there follows a review by a person | the launcher and the hash of the action log |
-| [teemoon audits](https://github.com/teemoonai/audits) | source reviews in a public repository, a page for each hash of a release file | the hash of the release file |
-
-On Nov 13, a few hours after release v0.0.581 went live, the three lines read: Countersign lists this key with this
-launcher, verdict "warning" (two of its checks not passed, `collateral_early` and `nvswitch`, which our client does not
-make), and recorded the release before this one; Quill Cloud pins the state of the action log before this one, "nobody
-there has reviewed this state"; teemoon has no review of this release file. Our own marks were behind too. Nobody had
-looked at what was running.
-
-A check mark on such a line says that the party has looked at exactly this; what it concluded is in the line. These
-readings are shown and never applied: they take no part in the decision to send, none of the three is in a trust set,
-and none of them knows about Ainek. Their formats are theirs: a reading that cannot be made is a line that says so.
+under the same values the enclave attests: [Countersign](https://github.com/greenlima/sealed-review) (a reviewer's signed
+feed in a NEAR testnet contract, another entry in this hackathon), [Quill Cloud](https://github.com/Lore-Hex/quill-cloud-proxy)
+(a gateway's public policy file) and [teemoon audits](https://github.com/teemoonai/audits) (source reviews by the hash
+of a release file). `pnpm demo:attest` and the release check in the browser read the three and mark each "seen", "not
+seen" or "not known". "Seen" is not approval: on Nov 13 Countersign had seen the key and the launcher we use, and its
+verdict was "warning"; none of the three had looked at the release that had gone live a few hours before. The readings
+are shown and never applied, and a Countersign entry lasts three days, so its line may read "expired". What a reading
+says and does not say is in [docs/CLAIMS.md](docs/CLAIMS.md); the sources are in [docs/SPEC.md](docs/SPEC.md) §7.6.
 
 ![The code behind the key on /log: the release, each check and the releases in the replica's action log](docs/screenshots/code-behind-the-key.png)
 
@@ -450,13 +440,15 @@ inherited" below).
   each trusted verifier is still read on its own. A trusted verifier's key that leaks still lets its holder log a key of
   their choice, a day at a time.
 - **That an outside reading is a verifier of ours, or an endorsement.** The three readings are shown and never applied:
-  they take no part in the decision to send, and none of the parties is in a trust set, writes to our log, or knows
-  about Ainek. A check mark is "has looked", not "approves": Countersign's verdict on the machine we use is "warning",
-  for two checks our client does not make (Intel's early collateral rates the platform out of date; the report declares
-  four NVSwitches and carries no evidence for them). Its entries are signed by one person, by hand, and expire after
-  three days. Quill Cloud's file and teemoon's pages come over HTTPS from GitHub and are not signed: whoever can write
-  to those repositories, or GitHub, decides what the line says. The formats are theirs and may change without notice;
-  then the line says the reading could not be made.
+  they take no part in the decision to send, and none of the parties is in a trust set or writes to our log. They
+  publish for their own users, not for us. "Seen" is "has looked", not "approves": Countersign's verdict on the machine
+  we use is "warning", for two checks our client does not make (Intel's early collateral rates the platform out of
+  date; the report declares four NVSwitches and carries no evidence for them). Its entries are signed by one person, by
+  hand, and expire after three days. Which of its entries is the latest is the word of a public RPC: an older entry that has
+  not expired can be served as the current one. The feed's two keys are pinned as we compared them once, on Nov 13; a
+  key the feed retires after that is still accepted here. Quill Cloud's file and teemoon's pages come over HTTPS from
+  GitHub and are not signed: whoever can write to those repositories, or GitHub, decides what the reading says. The
+  formats are theirs and may change without notice; then the reading says it could not be made.
 - **A log that can grow without end.** `latest_keys` reads a model's whole history before it filters by verifier and
   age. Measured in near-sdk's unit-test environment, not on a node, that costs about 0.15 Tgas an entry, which reaches
   the 300 Tgas of a view call near 2,000 entries for one model; the log held 79 on Nov 13. Past that point every read
