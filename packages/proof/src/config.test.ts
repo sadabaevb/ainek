@@ -34,11 +34,15 @@ test('env overrides, lists and mainnet defaults', () => {
 test('quorum and TCB policy can never be weakened by a bad value', () => {
   // "2x" must not quietly become 1, the weakest quorum: a value that is no whole number of at least 1 asks for every
   // trusted verifier, and for two at the least, so with the default single verifier nothing passes until it is fixed.
-  for (const q of ['x', '0', '-1', '0.5', '2x', 'two']) {
-    assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }).quorum, 2, `quorum ${JSON.stringify(q)}`);
-    assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q, AINEK_TRUSTED_VERIFIERS: 'a.testnet,b.testnet,c.testnet' }).quorum, 3, `quorum ${JSON.stringify(q)} with three verifiers`);
+  // Plain digits only: "0x2", "1e1" and "2.0" are numbers to JavaScript and typos to a person.
+  const said: string[] = [];
+  for (const q of ['x', '0', '-1', '0.5', '2x', 'two', '0x2', '1e1', '+2', '2.0']) {
+    assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }, (m) => said.push(m)).quorum, 2, `quorum ${JSON.stringify(q)}`);
+    assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q, AINEK_TRUSTED_VERIFIERS: 'a.testnet,b.testnet,c.testnet' }, () => undefined).quorum, 3, `quorum ${JSON.stringify(q)} with three verifiers`);
   }
-  for (const q of ['', '  ']) assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }).quorum, 1, 'blank is the default');
+  assert.equal(said.length, 10, 'each rejected value is said');
+  assert.match(said[4] ?? '', /AINEK_QUORUM="2x" is not a whole number of at least 1: using 2/);
+  for (const q of ['', '  ']) assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }, () => assert.fail('blank is the default, not a mistake')).quorum, 1);
   assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: ' 3 ' }).quorum, 3);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: '' }).acceptedTcbStatuses, ['UpToDate']);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: 'UptoDate,bogus' }).acceptedTcbStatuses, ['UpToDate']);

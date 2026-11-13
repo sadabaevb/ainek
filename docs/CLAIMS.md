@@ -156,13 +156,14 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours
   old; the log has no revoke entry yet, and nothing unregisters a verifier. An entry's time is the one its verifier
   wrote: the contract does not compare it with the block's. Since Nov 13 the client applies its own clock as well, with
-  ten minutes of slack: an entry dated ahead of it counts in no check and is not shown, and one older than the window
-  does not count. So an entry dated years ahead no longer confirms a key for good. What this does not settle: such an
-  entry is dropped without a word, so a trusted verifier whose clock runs far ahead looks silent, its disagreement with
-  another verifier included, and a client whose own clock is far off refuses with "not in the public log". The contract
-  returns the newest 100 entries before the client filters, so a registered verifier that writes a hundred entries dated
-  ahead crowds the general read; each trusted verifier is still read on its own. A trusted verifier's key that leaks
-  still lets its holder log a key of their choice, a day at a time.
+  ten minutes of slack: an entry dated ahead of it is dropped from every read of the contract's window, is not shown,
+  and confirms no proof on `/verify` or `/auditor`; one older than the window does not count. So an entry dated years
+  ahead no longer confirms a key for good. What this does not settle: such an entry is dropped without a word, so a
+  trusted verifier whose clock runs far ahead looks silent, its disagreement with another verifier included, and a
+  client whose own clock is far off refuses with "not in the public log". The contract returns the newest 100 entries
+  before the client filters, so a registered verifier that writes a hundred entries dated ahead crowds the general read;
+  each trusted verifier is still read on its own. A trusted verifier's key that leaks still lets its holder log a key of
+  their choice, a day at a time.
 - **A log that can grow without end.** `latest_keys` reads a model's whole history before it filters by verifier and
   age. Measured in near-sdk's unit-test environment, not on a node, that costs about 0.15 Tgas an entry, which reaches
   the 300 Tgas of a view call near 2,000 entries for one model; the log held 79 on Nov 13. Past that point every read

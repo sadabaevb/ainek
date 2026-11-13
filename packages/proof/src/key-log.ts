@@ -3,7 +3,7 @@
 import { canonicalJson } from './canonical.ts';
 import { normalizeHex, shortHex } from './hash.ts';
 import { ZodError } from 'zod';
-import { ContractMethodNotFound, type KeyLogReader } from './near-view.ts';
+import { CLOCK_SKEW_MS, ContractMethodNotFound, type KeyLogReader } from './near-view.ts';
 import type { Check } from './verify.ts';
 import type { KeyEntry } from './schema.ts';
 
@@ -198,7 +198,7 @@ export interface ResolvedEntry {
  * stored exchange) when there is one. Missing or different is a failure. An unreachable log is a skip that falls back to
  * the embedded copy and says so, so a reader never mistakes the sender's copy for the chain's word.
  */
-export async function resolveLogEntry(reader: Pick<KeyLogReader, 'entry'>, logIndex: number, embedded?: KeyEntry, logName = 'the public log'): Promise<ResolvedEntry> {
+export async function resolveLogEntry(reader: Pick<KeyLogReader, 'entry'>, logIndex: number, embedded?: KeyEntry, logName = 'the public log', nowMs = Date.now()): Promise<ResolvedEntry> {
   const id = 'log-entry';
   let fromChain: KeyEntry | null;
   try {
@@ -212,6 +212,8 @@ export async function resolveLogEntry(reader: Pick<KeyLogReader, 'entry'>, logIn
   }
   if (!fromChain) return { entry: embedded ?? null, check: { id, status: 'fail', detail: `entry #${logIndex} is not in ${logName}${embedded ? ': the embedded entry cannot be confirmed' : ''}` } };
   if (embedded && canonicalJson(embedded) !== canonicalJson(fromChain)) return { entry: fromChain, check: { id, status: 'fail', detail: `entry #${logIndex} in ${logName} differs from the embedded entry` } };
+  // The time is the verifier's own: an entry dated ahead of this clock counts in no window (withinWindow), and it confirms no proof either.
+  if (Number(fromChain.observed_at) > nowMs + CLOCK_SKEW_MS) return { entry: fromChain, check: { id, status: 'fail', detail: `entry #${logIndex} in ${logName} is dated ahead of this clock: its verifier wrote a time that has not come` } };
   return { entry: fromChain, check: { id, status: 'ok', detail: `entry #${logIndex} re-read from ${logName}${embedded ? ', equal to the embedded entry' : ''}` } };
 }
 

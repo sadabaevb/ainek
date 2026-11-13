@@ -7,7 +7,7 @@ import { useT } from '@/app/providers';
 
 export type Status = 'ok' | 'fail' | 'skipped' | 'running';
 /** The tone of a verdict card for each standing of a report: a file that only agrees with itself gets neither colour. */
-export const STANDING_STATUS = { verified: 'ok', failed: 'fail', 'log-not-consulted': 'skipped', 'verifier-not-trusted': 'skipped' } as const satisfies Record<Standing, Status>;
+export const STANDING_STATUS = { verified: 'ok', failed: 'fail', 'log-not-consulted': 'skipped', 'trust-set-not-met': 'skipped' } as const satisfies Record<Standing, Status>;
 
 const MARK: Record<Status, string> = { ok: '✓', fail: '✗', skipped: '—', running: '…' };
 

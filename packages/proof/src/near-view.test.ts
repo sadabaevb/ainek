@@ -264,5 +264,6 @@ test('latestKeysFor: a read the caller stopped gives no window, not a partial on
 test('a U64 in an entry is a U64: a longer run of digits is not an entry', async () => {
   const { KeyEntry: Entry } = await import('./schema.ts');
   assert.equal(Entry.safeParse({ ...sampleEntry, observed_at: String(2n ** 64n - 1n) }).success, true);
-  for (const tooLarge of [String(2n ** 64n), '9'.repeat(400)]) assert.equal(Entry.safeParse({ ...sampleEntry, observed_at: tooLarge }).success, false, tooLarge.slice(0, 24));
+  // Refused as a schema failure, never thrown: callers tell "the log answered badly" from an outage by the error's type.
+  for (const bad of [String(2n ** 64n), '9'.repeat(400), 'abc', '1.5', '12x', '']) assert.equal(Entry.safeParse({ ...sampleEntry, observed_at: bad }).success, false, bad.slice(0, 24));
 });

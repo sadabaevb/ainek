@@ -11,7 +11,7 @@ test('a log entry\'s time is shown at minute precision, UTC', () => {
 test('a time no Date can hold is said, not thrown', () => {
   for (const value of ['8640000000000001', '1794511126000000000', '18446744073709551615']) {
     assert.equal(observedUtc(value), 'an unreadable time', value);
-    assert.match(hoursSince(value), /^(\d+\.\d|\?)$/, value);
+    assert.equal(hoursSince(value), '0.0', value); // clamped, like any time ahead of this clock
   }
   assert.equal(utcMinuteOf(Number.NaN), 'an unreadable time');
 });

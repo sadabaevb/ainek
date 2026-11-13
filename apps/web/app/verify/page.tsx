@@ -175,9 +175,9 @@ function VerifyInner() {
 
   // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
   const proof = result?.stored?.proof ?? result?.report.proof;
-  const report = useMemo(() => result && withChecks(result.report, trustedVerifierCheck(result.verifier, trust.verifiers)), [result, trust.verifiers]);
+  const report = useMemo(() => result && withChecks(result.report, trustedVerifierCheck(result.verifier, trust)), [result, trust]);
   const standing = report && standingOf(report);
-  const headline = { verified: tv.ok, failed: tv.failed, 'log-not-consulted': tv.unconfirmedLog, 'verifier-not-trusted': tv.unconfirmedTrust };
+  const headline = { verified: tv.ok, failed: tv.failed, 'log-not-consulted': tv.unconfirmedLog, 'trust-set-not-met': tv.unconfirmedTrust };
   const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
   const action = commitAction((committable && commitStatus[committable.completionId]) ?? 'no-wallet', !!wallet.signedAccountId);
 

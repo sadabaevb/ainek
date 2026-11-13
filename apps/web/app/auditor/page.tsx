@@ -4,7 +4,7 @@
 // hashes and the commit are recomputed here, the log entry is re-read from the chain, and the commit is looked up on
 // NEAR. Nothing leaves this browser except view calls to the NEAR RPC. The checks live in @ainek/proof; this page only
 // groups them into rows. Fields the TEE signature does not cover (`e2ee`, `commitTx`) are shown as the sender's claims.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { checkProofCommit, parseDisclosure, readProofCommit, standingOf, trustedVerifierCheck, verifyModelProof, withChecks, type Check, type CheckId, type ParsedDisclosure, type Standing, type VerifyReport } from '@ainek/proof';
 import sampleFile from '../../../../docs/samples/disclosure.sample.json';
 import sampleChain from '../../../../docs/samples/disclosure.sample.chain.json';
@@ -26,10 +26,18 @@ type Line = Omit<Check, 'id'>;
 /** Check details stay English (components/checks.tsx). This one asks the reader to act, so the card shows it translated. */
 const NEEDS_ACCOUNT = dict.en.auditor.enterAccount;
 
+/** What a click on Check found, before the reader's trust set is applied. */
+interface Checked {
+  d: ParsedDisclosure;
+  report: VerifyReport;
+  /** The account that logged the proof's key. */
+  verifier: string;
+}
+
 interface Result {
   d: ParsedDisclosure;
   report: VerifyReport;
-  /** "Checks out" only when the public log itself answered and the entry's verifier is one the reader trusts. */
+  /** "Checks out" only when the public log itself answered and the reader's trust set confirms the key. */
   standing: Standing;
 }
 
@@ -69,7 +77,7 @@ function VerdictCard({ d, report, standing, cfg }: Result & { cfg: PublicConfig 
   const logEntry = check('log-entry');
   const key = combine(`${keyInLog.detail}; ${logEntry.detail}`, keyInLog, logEntry, check('verifier-trusted'));
   const chain = check('on-chain-commit');
-  const title = { verified: ta.verdictOk, failed: ta.verdictFail, 'log-not-consulted': ta.verdictLocal, 'verifier-not-trusted': ta.verdictUntrusted }[standing];
+  const title = { verified: ta.verdictOk, failed: ta.verdictFail, 'log-not-consulted': ta.verdictLocal, 'trust-set-not-met': ta.verdictUntrusted }[standing];
 
   return (
     <section className="card">
@@ -145,7 +153,13 @@ export default function AuditorPage() {
   const [account, setAccount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<Result | null>(null);
+  const [checked, setChecked] = useState<Checked | null>(null);
+  // Applied at render: a reader who changes the trust set in another tab must not keep a green card from before.
+  const result = useMemo<Result | null>(() => {
+    if (!checked) return null;
+    const report = withChecks(checked.report, trustedVerifierCheck(checked.verifier, trust));
+    return { d: checked.d, report, standing: standingOf(report) };
+  }, [checked, trust]);
   // The sample's committer, filled in by its button, belongs to the sample only: any other text clears it.
   const loadText = (next: string) => {
     setText(next);
@@ -163,11 +177,9 @@ export default function AuditorPage() {
     try {
       const d = parseDisclosure(JSON.parse(text));
       const [log, chain] = await Promise.all([resolveLogEntry(cfg, d.proof.logIndex, d.logEntry), lookupCommit(cfg, d, account.trim())]);
-      const trusted = trustedVerifierCheck(log.entry?.verifier ?? d.proof.verifier, trust.verifiers);
-      const report = withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, trusted, chain);
-      setResult({ d, report, standing: standingOf(report) });
+      setChecked({ d, report: withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, chain), verifier: log.entry?.verifier ?? d.proof.verifier });
     } catch (err) {
-      setResult(null);
+      setChecked(null);
       setError(ta.notDisclosure(describeError(err)));
     } finally {
       setBusy(false);

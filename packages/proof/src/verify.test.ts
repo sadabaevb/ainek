@@ -79,7 +79,7 @@ test('malformed proof stops at the schema check', () => {
 test('a file that only agrees with itself is not "verified": the public log must answer and the verifier must be trusted', async () => {
   const { standingOf, trustedVerifierCheck, withChecks } = await import('./verify.ts');
   const report = verifyModelProof(proof, rawRequest, rawResponse, entry);
-  const trusted = trustedVerifierCheck(entry.verifier, [entry.verifier]);
+  const trusted = trustedVerifierCheck(entry.verifier, { verifiers: [entry.verifier], quorum: 1 });
   const fromChain = { id: 'log-entry', status: 'ok', detail: 'entry re-read from the public log' } as const;
   // The log could not be reached, so the entry is the copy inside the file: the sender's word. Anyone can write such a
   // file around a key they made up; it must not read as verified.
@@ -87,10 +87,16 @@ test('a file that only agrees with itself is not "verified": the public log must
   assert.equal(standingOf(withChecks(report, fromChain, trusted)), 'verified');
   assert.equal(standingOf(withChecks(report, embeddedOnly, trusted)), 'log-not-consulted');
   // Registered is not trusted: any registered account can log any key. An empty trust set confirms nothing.
-  for (const trustSet of [['someone-else.testnet'], []]) {
-    const outsider = trustedVerifierCheck(entry.verifier, trustSet);
+  for (const verifiers of [['someone-else.testnet'], []]) {
+    const outsider = trustedVerifierCheck(entry.verifier, { verifiers, quorum: 1 });
     assert.equal(outsider.status, 'skipped');
-    assert.equal(standingOf(withChecks(report, fromChain, outsider)), 'verifier-not-trusted');
+    assert.equal(standingOf(withChecks(report, fromChain, outsider)), 'trust-set-not-met');
+  }
+  // A proof names one entry, so it shows one verifier: a reader who asks for two, or whose quorum is no number, is not answered.
+  for (const quorum of [2, 0, Number.NaN]) {
+    const one = trustedVerifierCheck(entry.verifier, { verifiers: [entry.verifier, 'b.testnet'], quorum });
+    assert.equal(one.status, 'skipped', `quorum ${quorum}`);
+    assert.equal(standingOf(withChecks(report, fromChain, one)), 'trust-set-not-met');
   }
   // Neither check made at all (a caller that forgot them) is not verified either.
   assert.equal(standingOf(report), 'log-not-consulted');

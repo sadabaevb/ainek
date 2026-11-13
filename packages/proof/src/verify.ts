@@ -146,30 +146,32 @@ export function verifyModelProof(
 }
 
 /**
- * Whether the verifier that logged the proof's key is one the reader trusts. Being registered in the contract is not
- * being trusted: any registered account can log any key, so a proof whose entry comes from outside the reader's trust
- * set is consistent and nothing more. A skip, not a failure: the file is not wrong, it is unconfirmed for this reader.
+ * Whether the reader's own trust set confirms the proof's key. Being registered in the contract is not being trusted:
+ * any registered account can log any key. And a proof names one entry, so it can show one verifier: a reader who asks
+ * for two or more gets no confirmation from it. A skip, not a failure: the file is not wrong, it is unconfirmed for
+ * this reader.
  */
-export function trustedVerifierCheck(verifier: string | undefined, trustedVerifiers: readonly string[]): Check {
+export function trustedVerifierCheck(verifier: string | undefined, trust: { verifiers: readonly string[]; quorum: number }): Check {
   const id = 'verifier-trusted';
   if (verifier === undefined) return { id, status: 'skipped', detail: 'no proof to read the verifier from' };
-  return trustedVerifiers.includes(verifier)
-    ? { id, status: 'ok', detail: `${verifier} is in your trust set` }
-    : { id, status: 'skipped', detail: `${verifier} logged this key and is not in your trust set: for you the key is not confirmed` };
+  if (!trust.verifiers.includes(verifier)) return { id, status: 'skipped', detail: `the entry is by ${verifier}, which is not in your trust set: for you the key is not confirmed` };
+  // Anything but exactly 1 (two, or a number that is no number) is more than one entry can show.
+  if (trust.quorum !== 1) return { id, status: 'skipped', detail: `the entry is by ${verifier}, in your trust set, but you ask for ${trust.quorum} verifiers and a proof names one entry` };
+  return { id, status: 'ok', detail: `the entry is by ${verifier}, which is in your trust set` };
 }
 
 /** What a report amounts to for the person reading it; the two in the middle are a file that agrees with itself and nothing more. */
-export type Standing = 'verified' | 'log-not-consulted' | 'verifier-not-trusted' | 'failed';
+export type Standing = 'verified' | 'log-not-consulted' | 'trust-set-not-met' | 'failed';
 
 /**
  * `verified` takes more than "no check failed": the public log itself must have returned the entry (an unreachable log
- * falls back to the copy inside the file, the sender's word), and the entry's verifier must be one the reader trusts.
+ * falls back to the copy inside the file, the sender's word), and the reader's trust set must confirm the key.
  * Otherwise a file written from scratch around a fresh key would read as verified.
  */
 export function standingOf(report: { ok: boolean; checks: readonly Check[] }): Standing {
   if (!report.ok) return 'failed';
   const held = (id: CheckId) => report.checks.find((c) => c.id === id)?.status === 'ok';
-  return !held('log-entry') ? 'log-not-consulted' : !held('verifier-trusted') ? 'verifier-not-trusted' : 'verified';
+  return !held('log-entry') ? 'log-not-consulted' : !held('verifier-trusted') ? 'trust-set-not-met' : 'verified';
 }
 
 /** A report with checks made outside verifyModelProof folded in (the chain re-read, the on-chain commit); `ok` is recomputed. */
