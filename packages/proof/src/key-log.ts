@@ -2,8 +2,7 @@
 // `latest_keys(model, max_age)` returns the window; this file applies the client-side trust policy (TRUSTED_VERIFIERS + QUORUM) to it.
 import { canonicalJson } from './canonical.ts';
 import { normalizeHex, shortHex } from './hash.ts';
-import { ZodError } from 'zod';
-import { CLOCK_SKEW_MS, ContractMethodNotFound, type KeyLogReader } from './near-view.ts';
+import { CLOCK_SKEW_MS, isForeignAnswer, type KeyLogReader } from './near-view.ts';
 import type { Check } from './verify.ts';
 import type { KeyEntry } from './schema.ts';
 
@@ -207,7 +206,7 @@ export async function resolveLogEntry(reader: Pick<KeyLogReader, 'entry'>, logIn
     const why = err instanceof Error ? err.message : String(err);
     // The log answered, but not with an entry (no such view, or a shape the schema rejects): that is a failure of the
     // log, not an outage, and the embedded copy must not stand in for it.
-    if (err instanceof ContractMethodNotFound || err instanceof ZodError) return { entry: null, check: { id, status: 'fail', detail: `${logName} did not answer with a valid entry (${why})` } };
+    if (isForeignAnswer(err)) return { entry: null, check: { id, status: 'fail', detail: `${logName} did not answer with a valid entry (${why})` } };
     return { entry: embedded ?? null, check: { id, status: 'skipped', detail: `${logName} unavailable (${why})${embedded ? '; using the embedded entry, not re-read from the chain' : ''}` } };
   }
   if (!fromChain) return { entry: embedded ?? null, check: { id, status: 'fail', detail: `entry #${logIndex} is not in ${logName}${embedded ? ': the embedded entry cannot be confirmed' : ''}` } };

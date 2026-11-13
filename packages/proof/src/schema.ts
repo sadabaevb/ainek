@@ -160,6 +160,10 @@ export const KeyEntry = KeyEntryInput.extend({
 }).strict();
 export type KeyEntry = z.infer<typeof KeyEntry>;
 
+/** A place in the log as somebody saw it: an index and the hash the log had there. The view `head()` returns one. */
+export const LogPoint = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64 });
+export type LogPoint = z.infer<typeof LogPoint>;
+
 // ---- NEAR AI `GET /v1/signature/{id}` reply -------------------------------------------------------
 export const SignatureResponse = z.object({
   text: nonEmpty,

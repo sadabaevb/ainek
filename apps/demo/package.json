@@ -10,6 +10,7 @@
     "controls": "node src/controls.ts",
     "live": "node src/live.ts",
     "attest": "node src/attest.ts",
+    "log": "node src/log.ts",
     "reply-key": "node src/reply-key.ts",
     "record": "node scripts/record-evidence.mjs",
     "typecheck": "tsc --noEmit",

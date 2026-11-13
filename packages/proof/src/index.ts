@@ -20,6 +20,7 @@ export {
   Verdict,
   KeyEntryInput,
   KeyEntry,
+  LogPoint,
   SignatureResponse,
   ProofCommitRecord,
   SigningAlgo,
@@ -55,8 +56,10 @@ export { PolicyRun, checkPolicyRun, fmspcOf, outlayerWorkerOf, policyOutputOf, p
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
-export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, latestKeysFor, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
+export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, latestKeysFor, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, isForeignAnswer, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
+export { chainBreak, inputOf, pointStanding, readWholeLog, rewrittenFrom, walkLog } from './log-chain.ts';
+export type { ChainBreak, WholeLog } from './log-chain.ts';
 export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, tokenAmountText } from './token.ts';
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
@@ -64,7 +67,7 @@ export type { TcbStatusName } from './config.ts';
 export { logMark, marksOf, releaseLineFor, releaseMark, releaseRuleOf, releaseStanding, withReleaseRule } from './release-marks.ts';
 export type { ReleaseLogVerdict, ReleaseRule } from './release-marks.ts';
 // Light, unlike the rest of the release lines, which come with the chain (`@ainek/proof/release-chain`).
-export { withFinding } from './release-lines.ts';
+export { utcTextOfMs, withFinding } from './release-lines.ts';
 export type { ReleaseLine } from './release-lines.ts';
 export { checked } from './checked.ts';
 export type { Checked } from './checked.ts';

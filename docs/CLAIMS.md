@@ -161,8 +161,13 @@ Honest limitations won prizes at previous NEAR hackathons.
   FastNear endpoint (the "Who sees what" table).
 - **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
   previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
-  rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the
-  account has.
+  rewrite would show only to someone who kept an earlier `head`. `pnpm demo:log` is that reader: it recomputes every hash
+  from the first entry and compares the log with two places recorded in this repository (entry #0 as read on Nov 8, the
+  head #80 as read on Nov 13), so a clone of the repository holds an earlier head, and it prints the head of the day to
+  keep for a later run. A place covers the entries up to its own index from the day it was read, and nothing else: entry
+  #0 since Nov 8, entries #1 to #80 since Nov 13, later entries not until another place is kept. It reads one RPC node:
+  that another node gives another reader the same log is not shown. `pnpm -F demo check-agent` prints how many such keys
+  the account has.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours
   old; the log has no revoke entry yet, and nothing unregisters a verifier. An entry's time is the one its verifier
   wrote: the contract does not compare it with the block's. Since Nov 13 the client applies its own clock as well, with

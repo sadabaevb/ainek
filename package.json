@@ -13,6 +13,7 @@
     "demo:policy": "node scripts/need-node.cjs && pnpm -F demo policy",
     "demo:live": "node scripts/need-node.cjs && pnpm -F demo live",
     "demo:attest": "node scripts/need-node.cjs && pnpm -F demo attest",
+    "demo:log": "node scripts/need-node.cjs && pnpm -F demo log",
     "demo:reply-key": "node scripts/need-node.cjs && pnpm -F demo reply-key",
     "build": "pnpm -r build",
     "test": "node scripts/need-node.cjs && pnpm -r test",
