@@ -15,9 +15,9 @@ targetRules = ["jwt"]
 paths = ['''^docs/samples/nras-response\.json$''', '''^docs/samples/outside/countersign-entry-\d+\.jwt$''']
 
 [[allowlists]]
-description = "Hex fields of a recorded TDX report; the model's public signing key (it is in the key log on NEAR) in a relay test and in the recorded reply-key control; a public transaction hash in the canonical-JSON test vectors."
+description = "Hex fields of a recorded TDX report; the model's public signing key (it is in the key log on NEAR) in a relay test, in the test of the outside readings and in the recorded reply-key control; a public transaction hash in the canonical-JSON test vectors."
 targetRules = ["generic-api-key"]
-paths = ['''^docs/samples/attestation-report\.json$''', '''^apps/web/lib/relay-guard\.test\.ts$''', '''^docs/samples/reply-key-control\.json$''', '''^docs/test-vectors/canonical\.json$''']
+paths = ['''^docs/samples/attestation-report\.json$''', '''^apps/web/lib/relay-guard\.test\.ts$''', '''^packages/proof/src/outside-readings\.test\.ts$''', '''^docs/samples/reply-key-control\.json$''', '''^docs/test-vectors/canonical\.json$''']
 
 [[allowlists]]
 description = "The vendored NEAR AI skill's curl examples (.agents and its .claude copy): the bearer token is the literal text YOUR_API_KEY, and only that text is let through."
