@@ -21,6 +21,8 @@ jobs:
   round:
     runs-on: ubuntu-latest
     timeout-minutes: 45 # a round's own deadlines add up to 35 minutes (the count is in Ainek's verifier-v2.yml)
+    # No GitHub token is passed: the release check reads public data only, and from GitHub's runners it has worked
+    # without one (Ainek's own second verifier runs this way).
     env:
       VERIFIER_ACCOUNT_ID: your-account.testnet # the account the contract owner registered for you
       VERIFIER_PRIVATE_KEY: ${{ secrets.VERIFIER_PRIVATE_KEY }} # function-call key, log_key only
