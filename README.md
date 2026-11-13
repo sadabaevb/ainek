@@ -61,13 +61,16 @@ pnpm demo:policy     # recorded policy runs on OutLayer, the agent's seven live 
                      #   published build, the decision → "Result: VERIFIED"
 ```
 
-One more, live and still with no key (needs the network, 10 to 15 seconds):
+Two more, live and still with no key (they need the network; 10 to 15 seconds and about 2):
 
 ```bash
 pnpm demo:attest     # the model's evidence fetched now and verified here (Intel TDX, NVIDIA GPU), its key and launcher
                      #   looked up in the log on NEAR → "Result: WOULD SEND", or "WOULD REFUSE" when the log does not have
                      #   them; then the code behind the key, from the enclave's own action log to a source commit on
                      #   GitHub. It stops before a message exists: nothing is encrypted, sent or signed
+pnpm demo:log        # the whole key log read from the contract and every hash of its chain recomputed here, then
+                     #   compared with two places of the log recorded in this repository → "Result: the chain holds
+                     #   from #0 to #80, and both places seen earlier are still in it." (the number grows with the log)
 ```
 
 The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If it stops answering, run it locally
@@ -231,6 +234,11 @@ pnpm demo:attest                 # no key, needs network (10 to 15 s): what demo
                                  #   key (above; seven or eight anonymous GitHub API requests on Nov 12, of the 60 an hour allowed;
                                  #   GITHUB_TOKEN raises that). --history adds every release in the log, one request each;
                                  #   exits 0 on WOULD SEND with no failed check
+pnpm demo:log                    # no key, needs network (about 2 s): reads every entry of the key log, recomputes each hash
+                                 #   from the entry's fields and the hash before it, and compares the log with places seen
+                                 #   earlier: two recorded in docs/samples/log-points.json, and yours with
+                                 #   --seen <index>:<entry hash> (the command prints the pair to keep). Then three controls on
+                                 #   the entries just read; the third is a rewrite no walk catches, only an earlier place
 pnpm demo:live                   # needs NEARAI_API_KEY: the same checks live from Node (chat request pinned to the attested
                                  #   gateway's TLS key), one E2EE request, proof card; --disclose <file> writes an auditor file
 pnpm demo:reply-key              # needs NEARAI_API_KEY: a negative control. One normal exchange, then the same client behind a
@@ -414,7 +422,7 @@ measured, and what it does not show: [docs/METRICS.md](docs/METRICS.md).
 
 ```
 apps/web/            Next.js app: chat with the proof card, /verify, /log, /auditor, /agent, /trust; byte-exact relay to NEAR AI
-apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:controls, demo:attest, demo:live, demo:reply-key, demo:metrics, record / check-contract scripts
+apps/demo/           Node 24 CLI: pnpm demo (offline replay), demo:tamper, demo:controls, demo:attest, demo:log, demo:live, demo:reply-key, demo:metrics, record / check-contract scripts
 packages/proof/      shared TS: proof schema, canonical JSON, hashing, signatures, fail-closed rule, chain checks, tests
 packages/tier1-node/ shared TS for Node: the Tier-1 sequence (attest, log check, E2EE request, signature, proof) used by
                      demo:live, demo:metrics and the Tier 2 agent service, and up to the send, with no key, by demo:attest;
@@ -437,7 +445,7 @@ Tests:
 - `pnpm test`, `pnpm typecheck`: TypeScript (node:test) in `packages/proof`, `packages/tier1-node`, `services/verifier`, `services/agent`, `apps/web`
 - `contracts/ainek`: `cargo near build non-reproducible-wasm` builds it; `cargo test` runs unit tests and a `near-sandbox` integration test
 - `jobs/policy`: `cargo test`
-- `pnpm -F demo check-contract`: the deployed contract's ABI against SPEC §4.1
+- `pnpm -F demo check-contract`: the deployed contract's ABI against SPEC §4.1, the hash of every entry included
 - `pnpm -F demo check-agent`: the agent's keys, funds and recorded decisions on chain
 
 ## Disclosures
