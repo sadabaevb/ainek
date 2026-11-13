@@ -46,7 +46,7 @@ AnonRouter can refuse a release they have not approved. Brave's README, its gate
 review of Nov 12 we opened ourselves; the other two are as a delegated reader reported. In this hackathon Countersign,
 Neslos and DNA Confidential read it too ([PRIOR-ART.md](PRIOR-ART.md)). We add two things: a client that reads
 them in a browser and from a clean clone, and marks in a public log on NEAR, below, which several verifiers can write
-and a client can choose among (today both verifiers are ours, and a mark is not an approval). The log is a record, not a
+and a client can choose among (today two of the three verifiers are ours and the third is a friend's, and a mark is not an approval). The log is a record, not a
 measurement: a release leaves the enclave's measurements as they were, and the log is as good as the code that has run
 in that CVM. That limit and the others are under "What we do not claim"; the method is in `docs/DEV-NOTES.md`
 (Nov 12).
@@ -57,7 +57,7 @@ from the visitor's own address, so it never starts by itself. It shows the relea
 
 ## Who else has looked at exactly this
 
-Both verifiers that write to our log are ours. Other people check NEAR AI too, and three of them publish what they found
+Two of the three verifiers that write to our log are ours, and the third is run by a friend. Other people check NEAR AI too, and three of them publish what they found
 under the same values the enclave attests: [Countersign](https://github.com/greenlima/sealed-review) (a reviewer's signed
 feed in a NEAR testnet contract, another entry in this hackathon), [Quill Cloud](https://github.com/Lore-Hex/quill-cloud-proxy)
 (a gateway's public policy file) and [teemoon audits](https://github.com/teemoonai/audits) (source reviews by the hash

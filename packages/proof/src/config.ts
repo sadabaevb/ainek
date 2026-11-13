@@ -52,9 +52,10 @@ export interface AinekConfig {
 export type EnvLike = Record<string, string | undefined>;
 
 // The demo's trust policy for the live log; the replay's recorded entry #0 is by the same verifier (config.test.ts checks).
-// Our second verifier (ainek-v2-dastan.testnet) writes too but is not trusted by default yet: a trusted verifier that
-// stalls across a key rotation ends with no key in common with the other one, which reads as a split view and stops the
-// chat for everyone (SPEC §7.1). It joins once it has run on a schedule for a day; a visitor can add it on /log now.
+// Two more verifiers write to the log and are not trusted by default: our second (ainek-v2-dastan.testnet) and, since
+// Nov 13, a friend's (anas-verifier.testnet). A trusted verifier that stalls across a key rotation ends with no key in
+// common with the others, which reads as a split view and stops the chat for everyone (SPEC §7.1). Either joins once it
+// has written for a day without long gaps (docs/DECISIONS.md, Nov 10 and Nov 13); a visitor can add them on /log now.
 const DEFAULT_VERIFIERS = 'ainek-dev-dastan.testnet';
 
 // The deployment check for the browser, the Node runner and the /log preview, on the hosted demo too (it sets no public variables).
