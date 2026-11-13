@@ -262,7 +262,52 @@ are ours»). Остальные пункты выполнены: не прода
 верификаторов, с выбором и кворумом у посетителя; меток релиза в таком журнале и правила клиента по ним; закрытой
 политики, решение которой подписано в задаче OutLayer и проверено контрактом (Charter подписывает в OutLayer при
 открытом мандате; Neslos подписывает в своём анклаве, и его хранилище проверяет подпись). Это сказано про 23
-репозитория этого среза и 28 прочитанных раньше, не про все 820 заявок.
+репозитория этого среза и 28 прочитанных раньше, не про все 820 заявок. Третий пункт позже сужен: см. «Ещё 25
+репозиториев» ниже (Aegis, Bouncer).
+
+### Ещё 25 репозиториев: поиск по коду до конца (13 ноября, днём)
+
+Утром поиск (запросы в списке выше) брал первые сто результатов на запрос. Днём набор запросов был другой и шёл до
+конца, до тысячи результатов на запрос. Всего тринадцать:
+
+- по коду, который читает аттестацию NEAR AI: `compose_manager_attestation`, `model_attestations`,
+  `gateway_attestation`, `"attestation/report" near`, `X-Encryption-Version`, `x-no-aliasing`,
+  `"@nearai/inference-sdk"`;
+- по контрактам на near-sdk: `compose_hash`, `signing_address`, `register_signer`, `ed25519_verify attestation`,
+  `ecrecover attestation`, `request_execution outlayer`.
+
+Вместе они дали 383 репозитория, 86 из них созданы 19 октября или позже. 25, которых мы ещё не читали, прочитал
+агент-читатель (Claude) по клонам, по тому же заданию, что утром. Ничего не запускали. Его отчёт мы с исходниками не
+сверяли, кроме двух строк, Aegis и Bouncer: их мы потом открыли сами, потому что на них опирается правка в README. Не все
+25 есть в галерее: drouter подан на другой хакатон, у recordless-mobile и near-ai-vscode хакатон не упомянут.
+
+| Репозиторий | Что это (по отчёту) | Насколько близко к нам |
+| --- | --- | --- |
+| [nymiralabs/nymira](https://github.com/nymiralabs/nymira) | Предоплаченные кредиты NEAR AI как ZK-ноты в хранилище на NEAR; чат шифруется к аттестованному ключу модели | Ближе всех по клиенту: квота TDX проверяется в браузере (dcap-qvl в WASM), при неудаче ничего не шифруется и не уходит, шифрование версии 2. Журнала в цепочке нет: якорь доверия — один файл политики с измерениями и compose-хешами (не ключами), подписанный ключом команды; наблюдатель переподписывает его каждые 10 минут. Релиз не прослеживается |
+| [iamdflame/priced-in](https://github.com/iamdflame/priced-in) | Рынки предсказаний на mainnet, три присяжных на NEAR AI | Ключ модели записан в контракте (`register_model`: пишет владелец, один ключ на модель, перезаписывается). Контракт сам собирает запрос и проверяет подпись NEAR AI над ним. Реестр читает контракт при вердикте, а не клиент перед отправкой |
+| [thisisjoshford/recordless-mobile](https://github.com/thisisjoshford/recordless-mobile) | Приложение для заметок со встреч под iOS, ядро на Rust | Единственный из 25, кто идёт по журналу действий: проверяет вторую квоту менеджера, проигрывает журнал, берёт файлы из `nearai/cvm-compose-files` на записанном коммите и принимает только с тем sha256, что подписал анклав; дальше до ревизии весов и дайджестов образов. До тега, подписи сборки и коммита исходников не идёт. Цепочки нет, шифрования E2EE нет (привязка к TLS-ключу) |
+| [dcablorh/Aegis](https://github.com/dcablorh/Aegis) (сверено нами, коммит `41e9c6a`) | Хранилище, которое спасает заём на Burrow от ликвидации | Ближе всех по агентской части. Политика лежит в контракте как обязательство и шифртекст; контракт сам вызывает задачу OutLayer и проверяет подпись Ed25519 на решении (`rescue.rs`). Ключ подписи задача читает из секрета OutLayer (`AEGIS_SIGNING_KEY_HEX`), а «аттестация», которую сверяет контракт, — строка, которую задача сообщает о себе сама, по умолчанию `unattested-local`. Одобрения человеком нет: исполняет аккаунт-keeper |
+| [AduAkorful/bouncer](https://github.com/AduAkorful/bouncer) (сверено нами, коммит `6cdf602`) | Сторож в анклаве OutLayer сверяет счёт с закрытой книгой и подписывает вердикт | Контракт проверяет подпись сторожа по ключу, записанному для каждого хранилища (`verdict.rs`). По README ключ подписи — секрет OutLayer. Выплата автоматическая |
+| [plavutskyi/mask-wars](https://github.com/plavutskyi/mask-wars), [zakyirsyaad/foundling](https://github.com/zakyirsyaad/foundling) | Закрытый материал в OutLayer: тестовый набор судьи, параметры стратегии | Контракт вызывает OutLayer и верит ответу: подписи не проверяет |
+| [leomanza/delibera.xyz](https://github.com/leomanza/delibera.xyz) | Жюри из нескольких агентов для DAO | OutLayer как кошелёк агента: политику применяет сам OutLayer, контракт подпись не проверяет. Аттестация NEAR AI проверяется после ответа |
+| [thepigdestroyer/drouter](https://github.com/thepigdestroyer/drouter) | Маршрутизатор к анклавам Tinfoil на тестовой сети Arc (EVM); подан на другой хакатон | Реестр измерений узлов, в который пишут несколько проверяющих из списка владельца; браузер читает его перед отправкой. Недоступный реестр даёт «пропущено», а не отказ; кворум назван в коде симуляцией: все ключи у сервера демо |
+| [dhairya-pandya/sieve](https://github.com/dhairya-pandya/sieve), [Techkeyy/secondeyes](https://github.com/Techkeyy/secondeyes), [dev-doji/beeline-relay](https://github.com/dev-doji/beeline-relay), [HuRiKh4n/robinhoot-kingdom](https://github.com/HuRiKh4n/robinhoot-kingdom) | Контракт проверяет подпись модели-рецензента или судьи | Ключ в контракте пишет владелец: один ключ или список без истории (у sieve ключи копятся, каждый со сроком). Читает контракт, не клиент |
+| [EndPx/proofbill](https://github.com/EndPx/proofbill), [apexweb-adam/leash](https://github.com/apexweb-adam/leash) | Покупка результата ИИ; судья страниц | Проверка аттестации до запроса, на сервере, без журнала и без E2EE. У ProofBill в цепочке солёные обязательства и оплата после одобрения человеком |
+| [Mramaran/termwork](https://github.com/Mramaran/termwork), [VitalPointAI/near-ai-vscode](https://github.com/VitalPointAI/near-ai-vscode), [ryan-tobin/blindfold](https://github.com/ryan-tobin/blindfold), [dylantlwu/baitnet](https://github.com/dylantlwu/baitnet), [Victork19/swarm-for-hire](https://github.com/Victork19/swarm-for-hire), [nisargpatel7042lva/vouch](https://github.com/nisargpatel7042lva/vouch), [topmember-build/plumbline](https://github.com/topmember-build/plumbline) | Разное | Проверка после ответа, только привязка без квоты, или только наличие полей. Этот vouch — не Vouch из таблицы ближайших |
+| [Pradeeppilotdev/countersign](https://github.com/Pradeeppilotdev/countersign), [hey-research-lab/proof-of-ship-near](https://github.com/hey-research-lab/proof-of-ship-near), [jcarbonnell/nova](https://github.com/jcarbonnell/nova) | Счета продавцов; эскроу; своё хранилище в TEE | Пересечения нет. Этот countersign — не Countersign из раздела выше |
+
+Что из этого следует:
+
+1. **Журнала, как наш, по отчёту нет ни у кого из 25.** Ключ модели в контракте держат пятеро: priced-in, sieve,
+   secondeyes, beeline-relay, robinhoot-kingdom. Ближе всех к самому журналу drouter, и он не про NEAR.
+2. **Третий пункт «не нашли» сужен.** Решение, подписанное в задаче OutLayer при закрытой политике и проверенное
+   контрактом, есть у Aegis; Bouncer близок к этому. У нас сверх этого ключ решения рождается внутри анклава, и действие
+   выше лимита ждёт человека. Первые два пункта верны для всех 76 репозиториев, насколько их читали; третий только для
+   первых 51.
+3. **К тем, кто идёт по журналу действий** (раздел «Вне хакатона» ниже и Countersign), добавляется recordless-mobile.
+   Он доходит до ревизии весов, мы — до коммита исходников прокси.
+4. **Что у соседей сильнее и к сдаче не делается:** проверка квоты прямо в браузере, без прокси NEAR AI (nymira);
+   подпись ответа, проверенная контрактом над запросом, который он собрал сам (priced-in).
 
 ### Прежние строки: что изменилось с 6 и 10 ноября
 
