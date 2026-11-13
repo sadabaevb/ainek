@@ -32,6 +32,9 @@ export function keyScopeProblem(permission: unknown, contract: string): string |
 /** The deployed contract has no such method (contract v1 ships the log only; `commit_proof`/`proof_commit` come with SPEC §4.2). */
 export class ContractMethodNotFound extends Error {}
 
+/** The node answered, but not as this contract's views do: no such method, or a shape the schema rejects. An answer of another contract, not an outage. */
+export const isForeignAnswer = (err: unknown): boolean => err instanceof ContractMethodNotFound || err instanceof z.ZodError;
+
 /** A signal that aborts when either does. `AbortSignal.any` would do, but it is newer than the browsers Next.js targets
  *  (Safari 17.4, Chrome 116), and the log read runs in every visitor's browser. */
 export function eitherSignal(first: AbortSignal, second?: AbortSignal): AbortSignal {

@@ -55,10 +55,10 @@ export { PolicyRun, checkPolicyRun, fmspcOf, outlayerWorkerOf, policyOutputOf, p
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
-export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, latestKeysFor, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
+export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, latestKeysFor, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, isForeignAnswer, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
 export { chainBreak, inputOf, pointStanding, readWholeLog, rewrittenFrom, walkLog } from './log-chain.ts';
-export type { ChainBreak, LogPoint, LogWalk, WholeLog } from './log-chain.ts';
+export type { ChainBreak, LogPoint, WholeLog } from './log-chain.ts';
 export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, tokenAmountText } from './token.ts';
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';

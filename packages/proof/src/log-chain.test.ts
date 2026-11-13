@@ -27,8 +27,8 @@ test('the entry recorded from the chain carries the hash of its own fields', () 
 
 test('a log hashed as the contract hashes it holds, up to the head', () => {
   assert.equal(chainBreak(log), undefined);
-  assert.deepEqual(walkLog({ head: headOf(log), entries: log }), { status: 'held', head: headOf(log) });
-  assert.deepEqual(walkLog({ head: null, entries: [] }), { status: 'empty' });
+  assert.equal(walkLog({ head: headOf(log), entries: log }), undefined);
+  assert.equal(walkLog({ head: null, entries: [] }), undefined);
 });
 
 test('a changed field breaks the chain at that entry, whichever field it is', () => {
@@ -61,7 +61,7 @@ test('a rewrite with every later hash recomputed holds as a chain, and only a po
   const seen = headOf(log);
   const rewritten = rewrittenFrom(log, 2, otherKey);
   assert.equal(chainBreak(rewritten), undefined);
-  assert.deepEqual(walkLog({ head: headOf(rewritten), entries: rewritten }), { status: 'held', head: headOf(rewritten) });
+  assert.equal(walkLog({ head: headOf(rewritten), entries: rewritten }), undefined);
   assert.equal(pointStanding(rewritten, seen), 'changed');
   // A point taken before the rewritten entry is still there: it says nothing about what came after it.
   assert.equal(pointStanding(rewritten, { index: 1, entry_hash: log[1]!.entry_hash }), 'kept');
@@ -75,8 +75,8 @@ test('a point stays kept while the log only grows, and is gone from a log cut sh
 });
 
 test('a head that does not fit the entries breaks the walk', () => {
-  assert.deepEqual(walkLog({ head: { index: 5, entry_hash: 'ef'.repeat(32) }, entries: log }), { status: 'broken', at: { index: 5, reason: 'the head names another hash than entry #5 has' } });
-  assert.deepEqual(walkLog({ head: headOf(log), entries: log.slice(0, 4) }), { status: 'broken', at: { index: 4, reason: 'the log ends before its head #5: entry #4 did not come back' } });
+  assert.deepEqual(walkLog({ head: { index: 5, entry_hash: 'ef'.repeat(32) }, entries: log }), { index: 5, reason: 'the head names another hash than entry #5 has' });
+  assert.deepEqual(walkLog({ head: headOf(log), entries: log.slice(0, 4) }), { index: 4, reason: 'the log ends before its head #5: entry #4 did not come back' });
 });
 
 test('the whole log is read in pages up to the head taken first; entries written meanwhile are left out', async () => {
@@ -92,10 +92,11 @@ test('the whole log is read in pages up to the head taken first; entries written
   const whole = await readWholeLog(reader);
   assert.deepEqual(asked, [0, 100, 200]);
   assert.equal(whole.entries.length, 202);
-  assert.deepEqual(walkLog(whole), { status: 'held', head: { index: 201, entry_hash: long[201]!.entry_hash } });
+  assert.deepEqual(whole.head, { index: 201, entry_hash: long[201]!.entry_hash });
+  assert.equal(walkLog(whole), undefined);
   // A log that answers with less than its head names comes back short, and the walk says where it stopped.
   const short = await readWholeLog({ ...reader, entriesSince: async (index) => (index === 0 ? long.slice(0, 100) : []) });
-  assert.equal(walkLog(short).status, 'broken');
+  assert.deepEqual(walkLog(short), { index: 100, reason: 'the log ends before its head #201: entry #100 did not come back' });
   assert.deepEqual(await readWholeLog({ head: async () => null, entriesSince: async () => long }), { head: null, entries: [] });
 });
 

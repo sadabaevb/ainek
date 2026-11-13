@@ -83,23 +83,21 @@ const PAGE = 100;
 export async function readWholeLog(reader: Pick<KeyLogReader, 'head' | 'entriesSince'>): Promise<WholeLog> {
   const head = await reader.head();
   const entries: KeyEntry[] = [];
-  while (head && entries.length <= head.index) {
+  if (!head) return { head, entries };
+  while (entries.length <= head.index) {
     const page = await reader.entriesSince(entries.length, PAGE);
     if (page.length === 0) break;
     entries.push(...page);
   }
-  return { head, entries: head ? entries.slice(0, head.index + 1) : [] };
+  return { head, entries: entries.slice(0, head.index + 1) };
 }
 
-export type LogWalk = { status: 'empty' } | { status: 'held'; head: LogPoint } | { status: 'broken'; at: ChainBreak };
-
-/** The chain of a whole log, ending at the head the contract reported for it. */
-export function walkLog({ head, entries }: WholeLog): LogWalk {
-  if (!head) return { status: 'empty' };
-  const at = chainBreak(entries);
-  if (at) return { status: 'broken', at };
-  const last = entries.at(-1);
-  if (entries.length !== head.index + 1 || !last) return { status: 'broken', at: { index: entries.length, reason: `the log ends before its head #${head.index}: entry #${entries.length} did not come back` } };
-  if (last.entry_hash !== head.entry_hash) return { status: 'broken', at: { index: head.index, reason: `the head names another hash than entry #${head.index} has` } };
-  return { status: 'held', head };
+/** Where the chain of a whole log does not hold, the head the contract reported for it included. Nothing for a log that holds, and for an empty one. */
+export function walkLog({ head, entries }: WholeLog): ChainBreak | undefined {
+  if (!head) return undefined;
+  const broken = chainBreak(entries);
+  if (broken) return broken;
+  if (entries.length !== head.index + 1) return { index: entries.length, reason: `the log ends before its head #${head.index}: entry #${entries.length} did not come back` };
+  if (entries[head.index]!.entry_hash !== head.entry_hash) return { index: head.index, reason: `the head names another hash than entry #${head.index} has` };
+  return undefined;
 }
