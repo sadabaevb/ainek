@@ -114,20 +114,23 @@ Honest limitations won prizes at previous NEAR hackathons.
   signed build of its proxy, and Compose Manager's. Nobody read that code. A rollback is marked like any other release.
   A client may wait (`AINEK_RELEASE_WAIT_MIN`, no wait by default): it then sends only when the action log has been
   marked as it stands for that many minutes, by as many verifiers as its quorum. That time counts from the verifiers'
-  marks, not from when the code became public; it is read off the verifiers' clocks and the client's, and off the day of
-  the log the client reads, so after a verifier has been away, or just after marks are turned on, a state that is days
-  old waits again. The verifier does not follow the engine image, or anything else that log brought up. The log does not
-  record the Compose project of a deployment, so it does not show which earlier services a later one replaced, and in
-  one of our recordings nine compose files in a single log define a service for this model. The rule
+  marks, not from when the code became public; it is read off the verifiers' clocks and the client's (at a quorum of 1,
+  off the earliest mark of any trusted verifier, so one of them that dates its mark back shortens the wait), and off the
+  day of the log the client reads, so after a verifier has been away, or just after marks are turned on, a state that is
+  days old waits again. The verifier does not follow the engine image, or anything else that log brought up. The log
+  does not record the Compose project of a deployment, so it does not show which earlier services a later one replaced,
+  and in one of our recordings nine compose files in a single log define a service for this model. The rule
   (`AINEK_REQUIRE_RELEASE`, off by default) holds an enclave to its own record: the action log it attests must be
   exactly one a trusted verifier marked. That does not make the record a measurement. A log shorter than one a verifier
   saw is refused, and it is called rewritten only when its beginning differs from what was seen: lengths alone cannot
-  tell a log that was cut from an attestation older than the verifier's entry. Compose Manager itself starts from an
-  empty log when its file is missing or unreadable. The rule speaks for the moment of attestation, which is why the
-  browser attests again for every message while the rule is on. It checks the replica that attested, and the gateway
-  picks the replica per connection. Its cost is refusals: after every action in an enclave, until a verifier has seen
-  that replica again. On the two logs we hold that is about two windows a day for each replica. Live we have one run
-  that would send and one window that would refuse. Entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC) were the first
+  tell a log that was cut from an attestation older than the verifier's entry. A log cut back to the last state a
+  verifier marked passes when the longer state got no mark: a verifier that meets a state it cannot follow to public
+  sources writes nothing about it, so the key log keeps no trace that the longer log existed. Compose Manager itself
+  starts from an empty log when its file is missing or unreadable. The rule speaks for the moment of attestation, which
+  is why the browser attests again for every message while the rule is on. It checks the replica that attested, and the
+  gateway picks the replica per connection. Its cost is refusals: after every action in an enclave, until a verifier has
+  seen that replica again. On the two logs we hold that is about two windows a day for each replica. Live we have one
+  run that would send and one window that would refuse. Entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC) were the first
   with marks, one from each verifier, and with the rule on `pnpm demo:attest` reported that it would send, for the one
   replica that answered. On Nov 13 a replica stayed unmarked for more than three hours after a release, and a client
   routed there would have refused all that time. How often the rule refuses over a day we have not measured.
@@ -150,8 +153,17 @@ Honest limitations won prizes at previous NEAR hackathons.
   previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
   rewrite would show only to someone who kept an earlier `head`. `pnpm -F demo check-agent` prints how many such keys the
   account has.
-- **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours old;
-  the log has no revoke entry yet.
+- **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours
+  old; the log has no revoke entry yet, and nothing unregisters a verifier. An entry's time is the one its verifier
+  wrote: the contract does not compare it with the block's. Since Nov 13 the client also drops entries that its own
+  clock places ahead of now or behind the window, with ten minutes of slack, so an entry dated years ahead no longer
+  counts for good, and a client whose clock is far off refuses. A trusted verifier's key that leaks still lets its
+  holder log a key of their choice, a day at a time.
+- **A log that can grow without end.** `latest_keys` reads a model's whole history before it filters by verifier and
+  age. Measured in near-sdk's unit-test environment, not on a node, that costs about 0.15 Tgas an entry, which reaches
+  the 300 Tgas of a view call near 2,000 entries for one model; the log held 79 on Nov 13. Past that point every read
+  fails and the client refuses everything until the contract is replaced. A verifier writes an entry for every
+  attestation a report carries, with no cap for a round.
 - **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants. Meteor allowed
   every method of the contract, with a 0.25 NEAR gas allowance, in our Nov 5 testnet run. A function-call key still cannot attach a deposit or call
   another contract, and for an ordinary account the other methods either reject it or only read. The page keeps the key in localStorage, so a script on
