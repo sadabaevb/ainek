@@ -30,8 +30,9 @@ answers you):
   it was made; the shortest was 46 seconds, and 17 of 21 took under an hour. Compose Manager can refuse a tag younger
   than a set age, 48 hours by its own default. The measured compose of that CVM sets it to `${CM_MIN_TAG_AGE_HOURS:-0}`:
   zero unless the operator's environment says otherwise, and that value is not measured.
-- **The image of the proxy that decrypts prompts for `z-ai/glm-5.3-flash` changed five times** (Oct 21, Oct 24, Nov 6,
-  Nov 8, Nov 12), each build with valid provenance from `nearai/inference-proxy`. The signing key did not change.
+- **Five images of the proxy that decrypts prompts for `z-ai/glm-5.3-flash` ran there in turn** (from Oct 21, Oct 24,
+  Nov 6, Nov 8 and Nov 12; the log opens with the first, so the image changed four times), each build with valid
+  provenance from `nearai/inference-proxy`. The signing key did not change.
 - **Our deployment check did not see it.** It compares the launcher's compose hash. After that CVM's hash first appeared
   in our log (Nov 8, 11:20 UTC) the proxy changed twice, and the client would have refused neither.
 - **Each replica has a log of its own.** The same command three hours later was answered by another replica (launcher
