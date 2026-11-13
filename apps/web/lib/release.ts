@@ -7,7 +7,8 @@
 // What it reads is the action log of the replica that attested to this browser. Replicas of a model share a signing key
 // and the gateway picks one per connection, so the replica that answers a message may be another one.
 import { fetchImageProvenance, getSdkError, verifyImageProvenance, type VerifiedModelAttestation } from '@nearai/inference-sdk';
-import { describeRelease, inspectRelease, releaseName, utcText, verdictOf, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
+import { composeHashOf } from '@ainek/proof';
+import { attestedStateOf, describeRelease, inspectRelease, outsideReadings, releaseName, utcText, verdictOf, type ReleaseInspection, type ReleaseLine, type ReleaseVerdict } from '@ainek/proof/release-chain';
 
 export interface ReleaseCheck extends ReleaseVerdict {
   /** The release the log names for the model, when one was resolved. */
@@ -46,6 +47,18 @@ export async function checkRelease(attestation: Attested, model: string, fetch: 
   }
   // Worded on every call: the lines say how long ago, and a kept inspection grows older.
   return present(await running, model);
+}
+
+/**
+ * What three parties outside our team say about the state this report attests: Countersign's signed feed on NEAR, Quill
+ * Cloud's policy file and teemoon's review pages (outside-readings.ts in @ainek/proof). Read when the visitor has asked
+ * for the release check, from their own address: the NEAR testnet RPC and raw.githubusercontent.com, no token. Shown
+ * next to the release and never applied; a reading that cannot be made is a line that says so.
+ */
+export async function readOutside(attestation: Attested & Pick<VerifiedModelAttestation, 'signer'>, model: string): Promise<ReleaseLine[]> {
+  // The inspection made for this report names the release; without one the readings keyed by the key and the log still stand.
+  const inspection = await inspections.get(attestation)?.catch(() => undefined);
+  return outsideReadings(attestedStateOf({ model, signingKey: attestation.signer.signingAddress, composeHash: composeHashOf(attestation.deployment), actions: attestation.deployment.composeManager?.actions, inspection }));
 }
 
 function present(inspection: ReleaseInspection | undefined, model: string): ReleaseCheck {

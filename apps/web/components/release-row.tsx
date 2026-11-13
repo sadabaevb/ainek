@@ -7,6 +7,7 @@ import { getSdkError, isVerificationError, type VerifiedModelAttestation } from 
 import { useT } from '@/app/providers';
 import { describeError } from '@/lib/errors';
 import { withKeyLog, type KeyLogContext } from '@/lib/key-log-line';
+import type { ReleaseLine } from '@ainek/proof/release-chain';
 import type { ReleaseCheck } from '@/lib/release';
 import { CheckLine, Row } from './checks';
 
@@ -15,7 +16,7 @@ import { CheckLine, Row } from './checks';
  * A finished check keeps the report it read and when, so that the key-log line follows the log and the viewer's trust set
  * as they change without checking the release again, and still speaks for the moment of that check.
  */
-type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation; at: number } | { kind: 'error'; why: string; failed: boolean };
+type State = { kind: 'idle' } | { kind: 'running' } | { kind: 'done'; check: ReleaseCheck; attestation: VerifiedModelAttestation; at: number; /** What outside parties say about this state; absent while it is being read. */ outside?: ReleaseLine[] } | { kind: 'error'; why: string; failed: boolean };
 
 /**
  * `attest` gives the verified report to read: the card hands over the one it already holds, /log verifies one when asked.
@@ -31,9 +32,12 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
   const run = async () => {
     setState({ kind: 'running' });
     try {
-      const [{ checkRelease }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
+      const [{ checkRelease, readOutside }, attestation] = await Promise.all([import('@/lib/release'), attest()]);
       const at = Date.now(); // the report is as fresh as it will be; the key-log line is read as of now
       setState({ kind: 'done', check: await checkRelease(attestation, model), attestation, at });
+      // The row does not wait for the outside readings, and they land only on the check they were read for.
+      const outside = await readOutside(attestation, model).catch(() => []);
+      setState((s) => (s.kind === 'done' && s.attestation === attestation && s.at === at ? { ...s, outside } : s));
     } catch (err) {
       const refused = getSdkError(err);
       setState({ kind: 'error', why: describeError(err), failed: isVerificationError(refused) && !refused.retryable });
@@ -43,11 +47,19 @@ export function ReleaseRow({ attest, model, hint, history = false, keyLog }: { a
   const check = useMemo(() => (state.kind !== 'done' ? undefined : keyLog === undefined ? state.check : withKeyLog(state.check, state.attestation, model, keyLog, state.at)), [state, keyLog, model]);
   const status = check ? check.status : state.kind === 'running' ? 'running' : state.kind === 'error' && state.failed ? 'fail' : 'skipped';
   const again = <button type="button" className="btn small" onClick={run}>{t.codeAgain}</button>;
+  const outside = state.kind === 'done' ? state.outside : undefined;
   const detail = check && (
     <>
       {open && (
         <ul className="mono checks" lang="en">
           {check.lines.map((l, i) => <CheckLine key={i} status={l.status}>{l.text}</CheckLine>)}
+        </ul>
+      )}
+      <p className="small history-title">{t.outsideTitle}</p>
+      <p className="muted small">{outside ? t.outsideNote : t.outsideLoading}</p>
+      {outside && outside.length > 0 && (
+        <ul className="mono checks" lang="en">
+          {outside.map((l, i) => <CheckLine key={i} status={l.status}>{l.text}</CheckLine>)}
         </ul>
       )}
       {history && check.history.length > 0 && (
