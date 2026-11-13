@@ -7,7 +7,10 @@ import { e2eeVersionProblem, looksE2ee } from '@ainek/proof';
  *  everything else (cookies, platform-injected forwarding headers, user agent). */
 export const ALLOWED_REQUEST_HEADERS: ReadonlySet<string> = new Set(['accept', 'content-type', 'x-no-aliasing', 'x-model-pub-key', 'x-client-pub-key', 'x-signing-algo', 'x-encryption-version', 'x-encrypt-all-fields']);
 
-const MAX_MESSAGES = 50;
+/** The largest chat request the relay forwards: this many messages, and this many bytes of body (encrypted, a message
+ *  takes two bytes for each byte of its text). The page fits the history it sends to both (lib/history.ts). */
+export const MAX_MESSAGES = 50;
+export const MAX_BODY_BYTES = 64 * 1024;
 const NO_PARAMS: ReadonlySet<string> = new Set();
 /** The top-level fields of the page's chat request (the E2EE wrapper keeps them; only contents are encrypted). */
 const CHAT_FIELDS: ReadonlySet<string> = new Set(['model', 'messages', 'stream']);

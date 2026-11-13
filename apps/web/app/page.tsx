@@ -6,7 +6,7 @@ import { useNearWallet } from 'near-connect-hooks';
 import { ProofCard } from '@/components/proof-card';
 import { CheckList, mark } from '@/components/checks';
 import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
-import { chatHistory, hasOtherThread } from '@/lib/history';
+import { chatHistory, hasOtherThread, leftBehind } from '@/lib/history';
 import type { Dict } from '@/lib/i18n';
 import { walletCommitter, type Consent } from '@/lib/wallet';
 import { useConfig, useT, useTrust } from './providers';
@@ -167,7 +167,7 @@ export default function ChatPage() {
     setTamper(opts.tamper);
     setInput('');
     setBusy(true);
-    const messages = [...chatHistory(turns, opts.model, cfg.model), { role: 'user' as const, content }];
+    const messages = [...chatHistory(turns, opts.model, cfg.model, content), { role: 'user' as const, content }];
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, model: opts.model, steps: [] }]);
     try {
@@ -192,6 +192,10 @@ export default function ChatPage() {
     void send(t.intro.prompts[chip], { model: chip === 'incognito' ? cfg.incognitoModel : cfg.model, tamper: TAMPER_OF[chip] ?? false });
   }
 
+  // What the next message will leave behind for lack of room in one request, by what is typed so far to the model
+  // chosen now. A retry of an earlier message sends that message's own text, which can leave behind a few more.
+  const behind = leftBehind(turns, model, cfg.model, input);
+
   return (
     <main className="page chat">
       {turns.length === 0 ? <Intro onPick={pick} /> : <h1 className="compact">{t.hero.join(' ')}</h1>}
@@ -210,6 +214,7 @@ export default function ChatPage() {
         </span>
       </div>
       {hasOtherThread(turns, model, cfg.model) && <p className="muted small">{t.ownThread}</p>}
+      {behind > 0 && <p className="muted small">{t.longThread(behind)}</p>}
 
       <section className="thread">
         {turns.map((turn, i) => <TurnView key={i} turn={turn} idx={i} canRetry={!busy && i === turns.length - 1} onCommit={onCommitClick} onRetry={onRetryClick} />)}

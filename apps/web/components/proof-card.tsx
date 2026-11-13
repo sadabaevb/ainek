@@ -10,7 +10,7 @@ import { canCommitNow, commitAction, failurePhase, type ChatOutcome, type Verifi
 import { commitLabel } from '@/lib/commit-label';
 import { DEPOSIT_NEAR } from '@/lib/wallet';
 import { downloadJson } from '@/lib/encoding';
-import { looksLikeKeyLimit } from '@/lib/errors';
+import { looksLikeKeyLimit, looksLikeNoReply } from '@/lib/errors';
 import { observedUtc, seconds, short, utcMinute } from '@/lib/format';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { proofFragment } from '@/lib/proof-link';
@@ -30,7 +30,8 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   if (outcome.kind === 'failed') {
     const phase = failurePhase(outcome.step);
     const [title, body] = phase === 'answered' ? [t.failedAfterSendTitle, t.failedAfterSendBody] : phase === 'sent' ? [t.failedSentTitle, t.failedSentBody] : [t.failedTitle, undefined];
-    return <RedCard title={title} body={body} {...(looksLikeKeyLimit(outcome.reason) ? { note: t.keyLimitNote } : {})} lines={[`${outcome.step}: ${outcome.reason}`]} />;
+    const note = looksLikeKeyLimit(outcome.reason) ? t.keyLimitNote : looksLikeNoReply(outcome.reason) ? t.noReplyNote : undefined;
+    return <RedCard title={title} body={body} {...(note ? { note } : {})} lines={[`${outcome.step}: ${outcome.reason}`]} />;
   }
   if (outcome.kind === 'refused') {
     // The decision is the same (nothing sent); the wording follows the verdict's reason, decided once in @ainek/proof.

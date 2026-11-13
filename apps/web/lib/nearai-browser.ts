@@ -17,6 +17,7 @@ import {
   type VerifiedModelAttestation,
 } from '@nearai/inference-sdk';
 import { parseChatCompletion, requireE2eeVersion, withRetry } from '@ainek/proof';
+import { noReplyReason } from './errors';
 import { chatRequest, relayAttestationClient, type ChatMessage } from './nearai-requests';
 import { deleteDeployment, getDeployment, putDeployment } from './store';
 
@@ -173,20 +174,44 @@ export async function prepareE2ee(model: string, messages: ChatMessage[], modelA
   return { prepared, requestBody: new Uint8Array(await prepared.request.clone().arrayBuffer()) };
 }
 
+/**
+ * How long the page waits for a reply. The request is not streamed: nothing arrives until the model has written the whole
+ * answer, and at ten to twenty tokens a second a long one takes minutes. Without a limit a reply that never comes left
+ * the page waiting for good, with the composer locked. The Node runner gives every step 120 s (packages/tier1-node).
+ * The relay's function lives a little longer than this (`maxDuration` in app/api/nearai/[...path]/route.ts).
+ */
+const REPLY_TIMEOUT_MS = 180_000;
+
+/** Runs the exchange under that limit, headers and body alike; a wait that ran out is reported as such (`looksLikeNoReply`). */
+async function awaitingReply<T>(exchange: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const signal = AbortSignal.timeout(REPLY_TIMEOUT_MS);
+  try {
+    return await exchange(signal);
+  } catch (err) {
+    // Only the wait running out: an error of its own that happens to arrive after the limit keeps its own reason.
+    if (err === signal.reason || (err instanceof DOMException && err.name === 'TimeoutError')) throw new Error(noReplyReason(REPLY_TIMEOUT_MS));
+    throw err;
+  }
+}
+
 /** From here on the message has left the browser: send through the proxy, keep the exact bytes, decrypt the reply. */
-export async function transmitE2ee({ prepared, requestBody }: PreparedE2ee): Promise<Exchange> {
-  const encrypted = await fetch(prepared.request);
-  if (!encrypted.ok) throw await httpError(encrypted); // error bodies are plain JSON, not ciphertext
-  return toExchange(requestBody, encrypted.clone(), await prepared.decryptResponse(encrypted));
+export function transmitE2ee({ prepared, requestBody }: PreparedE2ee): Promise<Exchange> {
+  return awaitingReply(async (signal) => {
+    const encrypted = await fetch(prepared.request, { signal });
+    if (!encrypted.ok) throw await httpError(encrypted); // error bodies are plain JSON, not ciphertext
+    return toExchange(requestBody, encrypted.clone(), await prepared.decryptResponse(encrypted));
+  });
 }
 
 /** Plaintext request for the user-chosen Incognito model (no model attestation): no E2EE is possible, only a gateway signature. */
 export async function sendPlain(model: string, messages: ChatMessage[]): Promise<Exchange> {
   const request = chatRequest(baseUrl(), model, messages);
   const requestBody = new Uint8Array(await request.clone().arrayBuffer());
-  const response = await fetch(request);
-  if (!response.ok) throw await httpError(response);
-  return toExchange(requestBody, response.clone(), response);
+  return awaitingReply(async (signal) => {
+    const response = await fetch(request, { signal });
+    if (!response.ok) throw await httpError(response);
+    return toExchange(requestBody, response.clone(), response);
+  });
 }
 
 /** The signature is cached on the node that served the completion, so a lookup can land elsewhere for a moment: the SDK marks that retryable. */
