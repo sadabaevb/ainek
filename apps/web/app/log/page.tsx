@@ -27,7 +27,7 @@ interface LogWindow {
 
 export default function LogPage() {
   const cfg = useConfig();
-  const { trust } = useTrust();
+  const { trust, releaseRule } = useTrust();
   const { t } = useT();
   const tl = t.log;
   const [log, setLog] = useState<LogWindow | null>(null);
@@ -87,11 +87,11 @@ export default function LogPage() {
   }, [cfg.model, cfg.acceptedTcbStatuses]);
   // The release rule (SPEC §7.5) on the entries this page read: shown under the release check, enforced only by the chat.
   // Null while the page has no read of the log, so that the line says so and does not go missing.
-  const { requireLoggedDeployment, releaseWaitMs, requireLoggedRelease } = cfg;
+  const { requireLoggedDeployment, releaseWaitMs } = cfg;
   const entries = log?.entries;
   const keyLog = useMemo(
-    () => (entries ? { entries, trust, rule: releaseRuleOf({ requireLoggedDeployment, releaseWaitMs }), enforced: requireLoggedRelease } : null),
-    [entries, trust, requireLoggedDeployment, releaseWaitMs, requireLoggedRelease],
+    () => (entries ? { entries, trust, rule: releaseRuleOf({ requireLoggedDeployment, releaseWaitMs }), enforced: releaseRule } : null),
+    [entries, trust, requireLoggedDeployment, releaseWaitMs, releaseRule],
   );
   const deployments = useMemo(() => deploymentsSeen(log?.all ?? [], cfg.model), [log?.all, cfg.model]);
   // The chat's own rule per deployment (deploymentStanding in @ainek/proof), once per answer from the log or change of the trust set.

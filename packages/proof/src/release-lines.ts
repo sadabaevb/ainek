@@ -138,8 +138,8 @@ export function describeRelease(inspection: ReleaseInspection, { model, now = Da
 export function releaseInLogLine(inLog: ReleaseLogVerdict, enforced: boolean): ReleaseLine {
   if (inLog.status === 'ok') return { status: 'ok', text: `key log: ${inLog.detail}` };
   if (inLog.status === 'rewritten-log') return { status: 'fail', text: `key log: the enclave's action log was rewritten: ${inLog.detail}` };
-  if (enforced) return { status: 'fail', text: `key log: ${inLog.detail}: this client does not send (the release rule, AINEK_REQUIRE_RELEASE, is on)` };
-  return { status: 'skipped', text: `key log: ${inLog.detail} (the release rule, AINEK_REQUIRE_RELEASE, is off: this client sends all the same; with it on it would not)` };
+  if (enforced) return { status: 'fail', text: `key log: ${inLog.detail}: this client does not send (the release rule is on)` };
+  return { status: 'skipped', text: `key log: ${inLog.detail} (the release rule is off: this client sends all the same; with it on, by AINEK_REQUIRE_RELEASE=1 or by the switch on the chat page, it would not)` };
 }
 
 /**

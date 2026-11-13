@@ -26,7 +26,7 @@ test('withKeyLog: the key log\'s standing is one more line under the release che
   // Today's log: the key is there, no entry marks an action log. The line says so, and the check's own verdict stands.
   const unmarked = withKeyLog(check, report, MODEL, log([entry([])]), AT);
   assert.deepEqual(unmarked.lines.slice(0, -1), check.lines);
-  assert.deepEqual(unmarked.lines.at(-1), { status: 'skipped', text: "key log: none of the 1 log entry for this key and launcher carries a mark of the enclave's action log (the release rule, AINEK_REQUIRE_RELEASE, is off: this client sends all the same; with it on it would not)" });
+  assert.deepEqual(unmarked.lines.at(-1), { status: 'skipped', text: "key log: none of the 1 log entry for this key and launcher carries a mark of the enclave's action log (the release rule is off: this client sends all the same; with it on, by AINEK_REQUIRE_RELEASE=1 or by the switch on the chat page, it would not)" });
   assert.deepEqual([unmarked.status, unmarked.failures], ['ok', []]);
   // A verifier that writes marks, and the log as it stood then: a check mark on the line.
   const marked = [entry([logMark(INSTANCE, actions)])];
@@ -47,7 +47,7 @@ test('withKeyLog: the line never goes missing, and what refuses the chat fails t
   // With the rule on, the chat does not send to a log nobody marked: the row is not green then.
   const enforced = withKeyLog(check, report, MODEL, log([entry([])], { enforced: true }), AT);
   assert.equal(enforced.status, 'fail');
-  assert.match(enforced.failures.at(-1) ?? '', /^key log: none of the 1 log entry .*: this client does not send \(the release rule, AINEK_REQUIRE_RELEASE, is on\)$/);
+  assert.match(enforced.failures.at(-1) ?? '', /^key log: none of the 1 log entry .*: this client does not send \(the release rule is on\)$/);
   assert.equal(withKeyLog(check, report, MODEL, log([entry([logMark(INSTANCE, actions)])], { enforced: true }), AT).status, 'ok', 'and green when the log is marked as it stands');
 });
 

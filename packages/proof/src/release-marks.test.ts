@@ -245,18 +245,45 @@ test('withReleaseRule: on top of a key that passed, for every report that carrie
   assert.equal(withReleaseRule(absent, entries, query, [reportOf(LOG)], { withLauncher: true }), absent);
 });
 
+test('withReleaseRule: the choice of verifiers decides; one that writes no marks cannot satisfy the rule, one more that does can', () => {
+  // The state of the public log on Nov 13, 2026: the verifier of the default trust set logs the key and the launcher
+  // with no marks, and a verifier outside that set marks the action log as well.
+  const unmarking = recorded;
+  const marking = { ...recorded, index: recorded.index + 1, verifier: 'marks.testnet', image_digests: [...recorded.image_digests, releaseMark(FILE, H1), logMark(INSTANCE, LOG)] };
+  const entries = [unmarking, marking];
+  const ruleFor = (trustedVerifiers: string[], quorum = 1) => {
+    const query = { model: recorded.model, signingAddress: recorded.signing_address, trustedVerifiers, quorum };
+    const key = evaluateKeyLog(entries, { ...query, composeHash: recorded.compose_hash });
+    return { key, verdict: withReleaseRule(key, entries, query, [reportOf(LOG)], { withLauncher: true }) };
+  };
+  // Without the rule this key passes. With it, the same trust set refuses: nobody the client trusts marked the log.
+  const byDefault = ruleFor([recorded.verifier]);
+  assert.equal(byDefault.key.status, 'ok');
+  assert.deepEqual([byDefault.verdict.status, byDefault.verdict.reason], ['not-logged', 'unlogged-release']);
+  // The viewer adds the verifier that marks: one confirmation is enough at a quorum of one, and the key verdict stands.
+  const widened = ruleFor([recorded.verifier, 'marks.testnet']);
+  assert.equal(widened.verdict, widened.key);
+  assert.equal(widened.verdict.status, 'ok');
+  // At a quorum of two both must have marked the log as it stands, and only one has.
+  assert.deepEqual([ruleFor([recorded.verifier, 'marks.testnet'], 2).verdict.reason, ruleFor([recorded.verifier, 'marks.testnet'], 2).verdict.confirmedBy], ['release-below-quorum', ['marks.testnet']]);
+  // The mark vouches for the log it names, not for what the enclave did afterwards.
+  const query = { model: recorded.model, signingAddress: recorded.signing_address, trustedVerifiers: [recorded.verifier, 'marks.testnet'], quorum: 1 };
+  assert.equal(withReleaseRule(widened.key, entries, query, [reportOf([...LOG, up('2026-11-02T10:00:00Z', H2)])], { withLauncher: true }).reason, 'unknown-release');
+});
+
 test('releaseInLogLine: what the rule says in one line, the same in the terminal and on /log', () => {
   const seen = [entry(7, 'v1.testnet', [logMark(INSTANCE, LOG)])];
   // Marked as it stands: a check mark, whatever the setting.
   const marked = evaluateRelease(seen, at(LOG), { now: T0 });
   assert.deepEqual([releaseInLogLine(marked, false), releaseInLogLine(marked, true)].map((l) => l.status), ['ok', 'ok']);
   assert.equal(releaseInLogLine(marked, false).text, 'key log: the action log as it stands (3 actions) is marked by v1.testnet since 2026-11-12 08:00 UTC');
-  // Not marked. A client that does not refuse by the rule only says what the rule would say. One that does refuse does
-  // not send, and that is a failure of the check, not a note.
+  // Not marked. A client that does not refuse by the rule only says what the rule would say, and how the rule is turned
+  // on. One that does refuse does not send, and that is a failure of the check, not a note: it does not say which of the
+  // two turned the rule on, because in the browser it may be the viewer's own switch.
   const added = evaluateRelease(seen, at([...LOG, up('2026-11-12T09:00:00Z', H2)]));
   assert.deepEqual([releaseInLogLine(added, false).status, releaseInLogLine(added, true).status], ['skipped', 'fail']);
-  assert.match(releaseInLogLine(added, false).text, /^key log: the enclave's action log has 1 action since entry #7 .* \(the release rule, AINEK_REQUIRE_RELEASE, is off: this client sends all the same; with it on it would not\)$/);
-  assert.match(releaseInLogLine(added, true).text, /: this client does not send \(the release rule, AINEK_REQUIRE_RELEASE, is on\)$/);
+  assert.match(releaseInLogLine(added, false).text, /^key log: the enclave's action log has 1 action since entry #7 .* \(the release rule is off: this client sends all the same; with it on, by AINEK_REQUIRE_RELEASE=1 or by the switch on the chat page, it would not\)$/);
+  assert.match(releaseInLogLine(added, true).text, /: this client does not send \(the release rule is on\)$/);
   // A rewritten log is a failure either way, and no setting is quoted next to it.
   const edited = evaluateRelease(seen, at([LOG[0] as ManagerAction, up('2026-11-01T10:00:00Z', H2), LOG[2] as ManagerAction]));
   assert.deepEqual([releaseInLogLine(edited, false).status, /AINEK_REQUIRE_RELEASE/.test(releaseInLogLine(edited, false).text)], ['fail', false]);

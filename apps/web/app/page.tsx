@@ -8,6 +8,7 @@ import { CheckList, mark } from '@/components/checks';
 import { canCommitNow, commitAction, commitOutcome, consentFor, runChat, type ChatMessage, type ChatOutcome, type ChatParams, type StepEvent, type Tamper, type VerifiedOutcome } from '@/lib/flow';
 import { chatHistory, hasOtherThread, leftBehind } from '@/lib/history';
 import type { Dict } from '@/lib/i18n';
+import { saveOwnReleaseRule } from '@/lib/trust-set';
 import { walletCommitter, type Consent } from '@/lib/wallet';
 import { useConfig, useT, useTrust } from './providers';
 
@@ -103,11 +104,12 @@ function Intro({ onPick }: { onPick: (chip: Chip) => void }) {
 
 export default function ChatPage() {
   const cfg = useConfig();
-  const { trust } = useTrust();
+  const { trust, releaseRule } = useTrust();
   const { t } = useT();
   const wallet = useNearWallet();
   const [model, setModel] = useState(cfg.model);
   const [tamper, setTamper] = useState<Tamper>(false);
+  const [ruleNotSaved, setRuleNotSaved] = useState(false);
   const [input, setInput] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -171,7 +173,7 @@ export default function ChatPage() {
     const idx = turns.length;
     setTurns((prev) => [...prev, { message: { role: 'user', content }, model: opts.model, steps: [] }]);
     try {
-      const outcome = await runChat(cfg, { ...opts, trust, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
+      const outcome = await runChat(cfg, { ...opts, trust, releaseRule, messages, onStep: (e) => setTurns(atTurn(idx, withStep(e))) }); // never throws
       setTurns(atTurn(idx, withOutcome(outcome)));
       if (outcome.kind === 'verified') void commitTurn(idx, outcome, 'none');
     } finally {
@@ -211,8 +213,11 @@ export default function ChatPage() {
         <span className="demo-switches muted">
           <label><input type="checkbox" checked={tamper === 'key'} onChange={(e) => setTamper(e.target.checked && 'key')} disabled={busy} /> {t.tamper}</label>
           <label><input type="checkbox" checked={tamper === 'deployment'} onChange={(e) => setTamper(e.target.checked && 'deployment')} disabled={busy} /> {t.tamperDeployment}</label>
+          {/* Not a demo: the viewer's own rule, kept in this browser like their trust set. Where the site has the rule on, the box only shows it. */}
+          <label><input type="checkbox" checked={releaseRule} onChange={(e) => setRuleNotSaved(!saveOwnReleaseRule(cfg, e.target.checked))} disabled={busy || cfg.requireLoggedRelease} /> {t.releaseSwitch}</label>
         </span>
       </div>
+      {ruleNotSaved && <p className="small trust-bad" role="alert">{t.log.trust.notSaved}</p>}
       {hasOtherThread(turns, model, cfg.model) && <p className="muted small">{t.ownThread}</p>}
       {behind > 0 && <p className="muted small">{t.longThread(behind)}</p>}
 

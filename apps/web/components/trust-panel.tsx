@@ -2,7 +2,7 @@
 // The trust set as the viewer's own decision (SPEC §7.1): the log is open, and who counts is up to the client. Every change
 // applies at once, and the preview runs the same check the chat runs, so the consequence is visible before any message.
 import { useState, type FormEvent } from 'react';
-import { NEAR_ACCOUNT, chooseTrust, findSplitView, previewTrust, type KeyEntry, type TrustSet } from '@ainek/proof';
+import { NEAR_ACCOUNT, chooseTrust, findSplitView, marksOf, previewTrust, type KeyEntry, type TrustSet } from '@ainek/proof';
 import { useConfig, useT, useTrust } from '@/app/providers';
 import { observedUtc, short } from '@/lib/format';
 import { refusalText } from '@/lib/refusal';
@@ -12,7 +12,7 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
   const cfg = useConfig();
   const { t } = useT();
   const tt = t.log.trust;
-  const { trust, isCustom } = useTrust();
+  const { trust, isCustom, releaseRule } = useTrust();
   const [draft, setDraft] = useState('');
   const [badDraft, setBadDraft] = useState(false);
   const [notSaved, setNotSaved] = useState(false);
@@ -72,13 +72,15 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
         {rows.map((account) => {
           const seen = writers.get(account);
           const activity = entries === null ? null : seen ? tt.seen(seen.count, observedUtc(seen.newest.observed_at)) : tt.notSeen;
+          // By its newest entry: only a verifier that marks the enclave's action log can satisfy the release rule (SPEC §7.5).
+          const marks = seen && marksOf(seen.newest.image_digests).logs.length > 0 ? tt.marks : null;
           return (
             <li key={account}>
               <label>
                 <input type="checkbox" checked={selected.includes(account)} onChange={() => toggle(account)} />
                 <span className="mono">{account}</span>
               </label>
-              <span className="muted small">{[activity, tagOf(account)].filter(Boolean).join(' · ')}</span>
+              <span className="muted small">{[activity, marks, tagOf(account)].filter(Boolean).join(' · ')}</span>
             </li>
           );
         })}
@@ -100,7 +102,7 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
       </div>
       {notSaved && <p className="small trust-bad" role="alert">{tt.notSaved}</p>}
       {preview && <p className={`trust-verdict ${willSend ? 'ok' : 'fail'}`} role="status">{previewText()}</p>}
-      <p className="muted small">{tt.verdictNote}{cfg.requireLoggedDeployment && ` ${tt.verdictNoteDeployment}`}{cfg.requireLoggedRelease && ` ${tt.verdictNoteRelease}`}</p>
+      <p className="muted small">{tt.verdictNote}{cfg.requireLoggedDeployment && ` ${tt.verdictNoteDeployment}`}{releaseRule && ` ${tt.verdictNoteRelease}`}</p>
       {hiddenSplit && <p className="small" role="status">{tt.hiddenSplit(hiddenSplit.verifierA, hiddenSplit.verifierB)}</p>}
       {onlyWriter && <p className="muted small">{tt.oneWriter(onlyWriter)}</p>}
       <p className="muted small">{tt.hostNote}</p>
