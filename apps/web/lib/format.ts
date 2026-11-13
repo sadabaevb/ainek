@@ -9,9 +9,10 @@ export function utcMinute(iso: string): string {
   return `${iso.slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-/** Milliseconds since epoch at minute precision, UTC. */
+/** Milliseconds since epoch at minute precision, UTC. A value no Date can hold (a log entry carries whatever its verifier wrote) is said, not thrown. */
 export function utcMinuteOf(ms: number): string {
-  return utcMinute(new Date(ms).toISOString());
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? 'an unreadable time' : utcMinute(date.toISOString());
 }
 
 /** A log entry's `observed_at` (ms since epoch, as a U64 string) at minute precision, UTC. */
@@ -21,5 +22,6 @@ export function observedUtc(observedAtMs: string): string {
 
 /** Clamped at zero: the verifier's clock may run slightly ahead of this browser's. */
 export function hoursSince(observedAtMs: string): string {
-  return (Math.max(0, Date.now() - Number(observedAtMs)) / 3_600_000).toFixed(1);
+  const ms = Date.now() - Number(observedAtMs);
+  return Number.isFinite(ms) ? (Math.max(0, ms) / 3_600_000).toFixed(1) : '?';
 }
