@@ -16,6 +16,15 @@ export function printRelease(inspection: ReleaseInspection | undefined, { model,
   return summary;
 }
 
+/**
+ * Prints what three outside parties say about the state this report attests. A check mark is "this party has looked at
+ * exactly this"; what it concluded is in its line. None of it takes part in the result of the command.
+ */
+export function printOutside(lines: readonly ReleaseLine[]): void {
+  head('Who else has looked at exactly this (three public readings, none of them ours; shown, not applied)');
+  for (const l of lines) line(markOf(l.status), l.text);
+}
+
 /** The nearest thing to a typical value that is itself one of the measurements or the mean of the middle two. */
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
