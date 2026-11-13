@@ -261,8 +261,8 @@ Honest limitations won prizes at previous NEAR hackathons.
   is taken from the app compose text, which the SDK checks against MRCONFIGID. In every report we have seen the two agree,
   so no log entry changes.
 - The Verification Center and the SDK do not ship a measurement allowlist; our log is only as good as the verifiers that
-  write to it. Two of the three verifiers in the demo are ours: one on a server since Nov 6, trusted by the site's default,
-  and a second account that wrote its first entry on Nov 10 and is not in the default. The third, `anas-verifier.testnet`,
-  wrote its first entries on Nov 13 (#84 to #86): Anas, a friend of both of us, runs it on his own machine with a key we
-  have not seen, and we set it up together. That is a verifier outside the team and not an independent one, and it is not in the
-  default either (checked 2026-11-13). Nobody we do not know runs one yet.
+  write to it. Two of the three verifiers in the demo are ours: one on a server since Nov 6, trusted by the site's
+  default, and a second account that wrote its first entry on Nov 10 and is not in the default. The third,
+  `anas-verifier.testnet`, wrote its first entries on Nov 13 (#84 to #86): Anas, a friend of both of us, runs it on his
+  own machine with a key we have not seen, and we set it up together. That is a verifier outside the team and not an
+  independent one, and it is not in the default either (checked 2026-11-13). Nobody we do not know runs one yet.
