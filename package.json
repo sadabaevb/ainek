@@ -16,8 +16,8 @@
     "demo:reply-key": "node scripts/need-node.cjs && pnpm -F demo reply-key",
     "build": "pnpm -r build",
     "test": "node scripts/need-node.cjs && pnpm -r test",
-    "typecheck": "pnpm -r typecheck",
-    "demo:metrics": "pnpm -F demo metrics",
-    "demo:stop": "pnpm -F agent stop"
+    "typecheck": "node scripts/need-node.cjs && pnpm -r typecheck",
+    "demo:metrics": "node scripts/need-node.cjs && pnpm -F demo metrics",
+    "demo:stop": "node scripts/need-node.cjs && pnpm -F agent stop"
   }
 }

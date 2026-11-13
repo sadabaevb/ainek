@@ -9,16 +9,16 @@ A private model answers from inside a TEE, a sealed environment the hardware vou
 it. That key does not say which code runs behind it today. We watched one key on NEAR AI Cloud, in NEAR AI's own public
 evidence:
 
-- **The code behind the key changed five times in three weeks** (Oct 21 to Nov 12, on the machine that answered us):
-  five builds of the proxy that decrypts prompts for `z-ai/glm-5.3-flash`. Each has a signed build record naming its
-  source commit, which says what was built, not what it does. The signing key did not change.
-- **A commit ran in the enclave a median of 12 minutes after it was made** (21 releases on that machine; the shortest
-  took 46 seconds).
+- **Five builds of the code ran behind one signing key in three weeks** (Oct 21 to Nov 12, on the machine that
+  answered us): five images of the proxy that decrypts prompts for `z-ai/glm-5.3-flash`. Each has a signed build record
+  naming its source commit, which says what was built, not what it does. The signing key did not change.
+- **A release ran in the enclave a median of 12 minutes after its commit** to NEAR AI's public repository of compose
+  files (21 releases of the model's file on that machine; the shortest took 46 seconds).
 - **On Nov 13 a release went live on one replica 38 minutes after its commit.** The first entry in our public log saying
   that a verifier had followed it to its source came 5 hours 28 minutes later, from the second of our two verifiers.
 
-`pnpm demo:attest --history` prints the same for the machine that answers you, with no key. The method and the limits
-are in [docs/RELEASE.md](docs/RELEASE.md). We are not the first to read this evidence. What Ainek adds is a public
+`pnpm demo:attest --history` prints the releases and their times for the machine that answers you, with no key. The
+method and the limits are in [docs/RELEASE.md](docs/RELEASE.md). We are not the first to read this evidence. What Ainek adds is a public
 place to say who has checked it, and a client that asks there before a message leaves:
 
 - **Is this key real?** The model's key and its launcher (the boot configuration the hardware measures) must be in a
@@ -50,7 +50,8 @@ No key, no wallet, nothing to set up.
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
-**From a clean clone** (Node 24+ and pnpm 10: `corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack; `nvm use` reads the repo's `.nvmrc`, and the commands below say so when Node is older). The three commands are offline, about a second each:
+**From a clean clone** (Node 24+ and pnpm 10: `corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack; `nvm use` reads the repo's `.nvmrc`, and the root `pnpm demo…`, `pnpm test` and `pnpm typecheck` commands say so when
+Node is older). The three commands are offline, about a second each:
 
 ```bash
 git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
@@ -154,7 +155,7 @@ TEE keys yet". [Independent monitoring](https://confidentialinference.net/attest
 
 A fourth: **unknown deployment → nothing is sent.** The key is real, but the enclave that attests to the
 client booted from a launcher configuration no trusted verifier has logged in the last 24 hours. `/?tamper=deployment` shows the refusal; `/log` lists
-the compose hashes verifiers have seen behind the key. What it does not see is the release that serves the model: "What we do not claim".
+the compose hashes verifiers have seen behind the key. What it does not see is the release that serves the model: [docs/CLAIMS.md](docs/CLAIMS.md#we-do-not-claim).
 
 | Proof card after a verified reply (`/`) | Swapped key: nothing is sent (`/?tamper=1`) |
 | --- | --- |
@@ -168,7 +169,8 @@ the compose hashes verifiers have seen behind the key. What it does not see is t
 
 The card's compose hash comes from the attestation checked before sending, and its log entry is the newest one with that
 key and that compose; with the deployment check switched off and no such entry in the window, it is the newest for the
-key and the card says so. See "What we do not claim".
+key and the card says so ([docs/CLAIMS.md](docs/CLAIMS.md#we-do-not-claim), "That the deployment check sees the code
+that serves the model").
 
 ## How NEAR is used
 
@@ -189,15 +191,19 @@ open their demos, and they may have moved on since. Several are ahead of Ainek i
 runs on mainnet, AgentGuard is deployed and in use, and TEE Receipts checks the answer's signature in the contract. Each
 entry, including two read on Nov 10, with where it is ahead and what Ainek adds, is in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
-Among those 26, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. By Nov 13
-the gallery held 820 entries, and 76 repositories had been read, by us or by delegated agents;
-[docs/PRIOR-ART.md](docs/PRIOR-ART.md) says which. The nearest are **Countersign** (a reviewer's signed, hash-chained
-feed in a NEAR contract with no access keys, and a refusal before sending) and **Shade** (a key registry filled by a
-quorum of watchers). In those 76, as far as the readings go, we did not find an append-only key log for several verifiers with the trust
-set and the quorum at the viewer, or release marks in such a log. A private policy whose decision is signed in an OutLayer job and
-verified by the contract we did find, in Aegis; Bouncer comes close. None of them has independent verifiers writing to a public log of AI
-model keys, and neither do we: both verifiers that write to our log are ours. The full statement, with who read what,
-is in [docs/CLAIMS.md](docs/CLAIMS.md).
+Among those 26, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key, and none
+has independent verifiers writing to a public log of AI model keys. Neither do we: both verifiers that write to our log
+are ours. We do not claim this for entries we read only from their README, or for later ones.
+
+By Nov 13 the gallery held 820 entries. The repositories of 51 entries had been read, by us or by delegated agents, and
+one agent read 25 more that a wider code search turned up. Not all 25 are in the gallery, and its report we checked only
+for the two named below. The nearest neighbours are **Countersign** (a reviewer's signed, hash-chained feed in a NEAR
+contract with no access keys, and a refusal before sending) and **Shade** (a key registry that watchers fill by a
+quorum the contract enforces; by its README nothing is on testnet). In those 76 repositories, as far as the readings
+go, we did not find an append-only key log for several verifiers with the trust set and the quorum at the viewer, or
+release marks in such a log. A private policy whose decision is signed in an OutLayer job and verified by the contract
+we did find, in Aegis; Bouncer comes close. The full statement, with who read what, is in
+[docs/CLAIMS.md](docs/CLAIMS.md), and each neighbour has a row in [docs/PRIOR-ART.md](docs/PRIOR-ART.md).
 
 ## Try it (do X → see Y)
 
@@ -318,10 +324,14 @@ is served by our server; the action log is a record, not a measurement; a mark i
 - **An audited contract.**
 - **That the E2EE flag in a disclosed file is proven.**
 
-Two known issues we inherited are described there too: the reply-key finding on NEAR AI's E2EE route
-([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061)), closed for our client by E2EE v3 and tested
-with `pnpm demo:reply-key`; and the RTMR3 event log of the dstack image the model CVMs report, which is why the compose
-hash is taken from the app compose that MRCONFIGID binds.
+Three known issues we inherited are described there too. The reply-key finding on NEAR AI's E2EE route
+([nearai/cloud-api#1061](https://github.com/nearai/cloud-api/issues/1061)) is still open upstream. Since Nov 10 this
+client sends only E2EE v3, which binds the reply key, and on Nov 12 a control with a swapped reply key got no reply
+(`pnpm demo:reply-key`: one model, one day). The recording behind `pnpm demo` and every proof made before Nov 10 is v2,
+which does not rule out that a hop read a reply. The model CVMs report a dstack image on which a container can add
+events to the RTMR3 log, which is why the compose hash is taken from the app compose that MRCONFIGID binds. And neither
+the Verification Center nor the SDK ships a measurement allowlist, so our log is only as good as the verifiers that
+write to it, and every one of them is ours.
 
 ## Architecture
 
