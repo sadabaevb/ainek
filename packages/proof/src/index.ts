@@ -6,7 +6,8 @@ export type { SignedText } from './signed-text.ts';
 export { verifySignedText, decodeSignature } from './signature.ts';
 export type { SignatureCheck } from './signature.ts';
 export { commitOf, proofPayload, actionCommitOf, entryHashOf } from './commit.ts';
-export { verifyModelProof, withChecks } from './verify.ts';
+export { verifyModelProof, withChecks, standingOf, trustedVerifierCheck } from './verify.ts';
+export type { Standing } from './verify.ts';
 export type { VerifyReport, Check, CheckId, CheckStatus } from './verify.ts';
 export {
   ModelProof,
@@ -54,7 +55,7 @@ export { PolicyRun, checkPolicyRun, fmspcOf, outlayerWorkerOf, policyOutputOf, p
 export type { PolicyRunEvidence, QuoteVerifier, VerifiedQuote } from './policy-run.ts';
 export { NEAR_ACCOUNT, chooseTrust, parseTrustSet, previewTrust } from './trust-set.ts';
 export type { TrustPreview, TrustSet } from './trust-set.ts';
-export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, latestKeysFor, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS } from './near-view.ts';
+export { AGENT_KEY_METHODS, keyScopeProblem, viewAccessKeys, viewFunction, keyLogReader, latestKeysFor, readProofCommit, readStorageBalance, checkProofCommit, isAlreadyCommitted, ContractMethodNotFound, LOG_WINDOW_NS, ANY_AGE_NS, CLOCK_SKEW_MS, withinWindow } from './near-view.ts';
 export type { KeyLogReader, ProofCommitLookup } from './near-view.ts';
 export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, tokenAmountText } from './token.ts';
 export type { TokenInfo } from './token.ts';

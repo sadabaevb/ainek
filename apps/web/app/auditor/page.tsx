@@ -5,7 +5,7 @@
 // NEAR. Nothing leaves this browser except view calls to the NEAR RPC. The checks live in @ainek/proof; this page only
 // groups them into rows. Fields the TEE signature does not cover (`e2ee`, `commitTx`) are shown as the sender's claims.
 import { useState } from 'react';
-import { checkProofCommit, parseDisclosure, readProofCommit, verifyModelProof, withChecks, type Check, type CheckId, type ParsedDisclosure, type VerifyReport } from '@ainek/proof';
+import { checkProofCommit, parseDisclosure, readProofCommit, standingOf, trustedVerifierCheck, verifyModelProof, withChecks, type Check, type CheckId, type ParsedDisclosure, type VerifyReport } from '@ainek/proof';
 import sampleFile from '../../../../docs/samples/disclosure.sample.json';
 import sampleChain from '../../../../docs/samples/disclosure.sample.chain.json';
 import { CardHead, CheckList, Row } from '@/components/checks';
@@ -19,7 +19,7 @@ import { fill } from '@/lib/fill';
 import { dict } from '@/lib/i18n';
 import { resolveLogEntry } from '@/lib/key-log';
 import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
-import { useConfig, useT } from '../providers';
+import { useConfig, useT, useTrust } from '../providers';
 
 type Line = Omit<Check, 'id'>;
 
@@ -65,15 +65,17 @@ function VerdictCard({ d, report, cfg }: Result & { cfg: PublicConfig }) {
   const signed = combine(ta.signedOk(proof.signingAlgo, short(proof.signingAddress)), check('route'), check('signed-text'), check('signature'));
   const keyInLog = check('key-in-log');
   const logEntry = check('log-entry');
-  const key = combine(`${keyInLog.detail}; ${logEntry.detail}`, keyInLog, logEntry);
+  const key = combine(`${keyInLog.detail}; ${logEntry.detail}`, keyInLog, logEntry, check('verifier-trusted'));
   const chain = check('on-chain-commit');
-  // "Checks out" only when the public log itself answered: an internally consistent file whose key was confirmed by
-  // nothing but the sender's own copy of the entry is a weaker thing, and the headline says so.
-  const title = !report.ok ? ta.verdictFail : logEntry.status === 'ok' ? ta.verdictOk : ta.verdictLocal;
+  // "Checks out" only when the public log itself answered and the entry's verifier is one the reader trusts: an
+  // internally consistent file whose key was confirmed by nothing but the sender's own copy of the entry, or by an
+  // account anyone could have registered, is a weaker thing, and the headline and its colour say so.
+  const standing = standingOf(report);
+  const title = standing === 'failed' ? ta.verdictFail : standing === 'verified' ? ta.verdictOk : logEntry.status === 'ok' ? ta.verdictUntrusted : ta.verdictLocal;
 
   return (
     <section className="card">
-      <CardHead status={report.ok ? 'ok' : 'fail'} when={ta.when(utcMinute(proof.verifiedAt), utcMinute(d.disclosedAt))}>{title}</CardHead>
+      <CardHead status={standing === 'verified' ? 'ok' : standing === 'failed' ? 'fail' : 'skipped'} when={ta.when(utcMinute(proof.verifiedAt), utcMinute(d.disclosedAt))}>{title}</CardHead>
       <Row status={commit.status} label={ta.rowCommit}>{commit.detail}</Row>
       <Row status={bytes.status} label={ta.rowBytes}>{bytes.detail}</Row>
       <Row status={signed.status} label={ta.rowSigned}>{signed.detail}</Row>
@@ -117,16 +119,17 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
 
 function Claims({ d, report }: Result) {
   const ta = useT().t.auditor;
+  const standing = standingOf(report);
   return (
     <section>
       <h2>{ta.provesTitle}</h2>
-      {report.ok ? (
+      {standing === 'verified' ? (
         <ul>
           <li>{ta.proves1(d.proof.model)}</li>
           <li>{fill(ta.proves2, { method: <span className="mono">proof_commit</span> })}</li>
         </ul>
       ) : (
-        <p>{ta.provesNothing}</p>
+        <p>{standing === 'failed' ? ta.provesNothing : ta.provesUnconfirmed}</p>
       )}
       <h2>{ta.notProvesTitle}</h2>
       <ul>
@@ -140,6 +143,7 @@ export default function AuditorPage() {
   const cfg = useConfig();
   const { t } = useT();
   const ta = t.auditor;
+  const { trust } = useTrust();
   const [text, setText] = useState('');
   const [account, setAccount] = useState('');
   const [busy, setBusy] = useState(false);
@@ -162,7 +166,8 @@ export default function AuditorPage() {
     try {
       const d = parseDisclosure(JSON.parse(text));
       const [log, chain] = await Promise.all([resolveLogEntry(cfg, d.proof.logIndex, d.logEntry), lookupCommit(cfg, d, account.trim())]);
-      setResult({ d, report: withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, chain) });
+      const trusted = trustedVerifierCheck(log.entry?.verifier ?? d.proof.verifier, trust.verifiers);
+      setResult({ d, report: withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, trusted, chain) });
     } catch (err) {
       setResult(null);
       setError(ta.notDisclosure(describeError(err)));

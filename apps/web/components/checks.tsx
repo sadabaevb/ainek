@@ -41,7 +41,7 @@ export function CheckList({ items }: { items: ReadonlyArray<{ id: string; status
 }
 
 /** The head of a result card: the verdict as a stamp. Tone and glyph follow the status, so a card can never look green by omission. */
-export function CardHead({ status, when, children }: { status: 'ok' | 'fail'; when?: ReactNode; children: ReactNode }) {
+export function CardHead({ status, when, children }: { status: 'ok' | 'fail' | 'skipped'; when?: ReactNode; children: ReactNode }) {
   return (
     <header className={`card-head ${status}`}>
       <span className="stamp"><span className={`tick ${status}`} aria-hidden>{mark(status)}</span> {children}</span>

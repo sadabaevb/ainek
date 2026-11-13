@@ -6,7 +6,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useNearWallet } from 'near-connect-hooks';
-import { ModelProof, isDisclosure, parseDisclosure, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
+import { ModelProof, isDisclosure, parseDisclosure, standingOf, trustedVerifierCheck, verifyModelProof, withChecks, type DisclosedExchange, type KeyEntry, type VerifyReport } from '@ainek/proof';
 import sampleAction from '../../../../docs/samples/action-proof.sample.json';
 import { ActionProofCard } from '@/components/action-proof-card';
 import { CardHead, CheckList } from '@/components/checks';
@@ -22,7 +22,7 @@ import { explorerTxUrl, verificationCenterUrl } from '@/lib/links';
 import { proofFromFragment } from '@/lib/proof-link';
 import { getExchange, listExchanges, type StoredExchange } from '@/lib/store';
 import { walletCommitter } from '@/lib/wallet';
-import { useConfig, useT } from '../providers';
+import { useConfig, useT, useTrust } from '../providers';
 
 /** Where the input came from; the wording follows the language toggle, so only the key is kept. */
 type Origin = keyof Dict['verify']['origin'];
@@ -53,6 +53,9 @@ function VerifyInner() {
   const cfg = useConfig();
   const { t } = useT();
   const tv = t.verify;
+  // Who counts as a verifier is the reader's choice here as in the chat: a key logged by an account outside it is not confirmed.
+  const { trust } = useTrust();
+  const trustedKey = trust.verifiers.join(',');
   const wallet = useNearWallet();
   const params = useSearchParams();
   const id = params.get('id');
@@ -89,14 +92,15 @@ function VerifyInner() {
       const parsed = ModelProof.safeParse(input.proof);
       const log = parsed.success ? await resolveLogEntry(cfg, parsed.data.logIndex, input.embeddedEntry) : null;
       const report = verifyModelProof(input.proof, input.requestBody, input.responseBody, log?.entry ?? null);
-      if (!cancelled) setResult({ report: log ? withChecks(report, log.check) : report, origin: input.origin, ...(input.stored ? { stored: input.stored } : {}) });
+      const trusted = trustedVerifierCheck(log?.entry?.verifier ?? (parsed.success ? parsed.data.verifier : undefined), trustedKey.split(',').filter(Boolean));
+      if (!cancelled) setResult({ report: log ? withChecks(report, log.check, trusted) : report, origin: input.origin, ...(input.stored ? { stored: input.stored } : {}) });
     })().catch((e: unknown) => {
       if (!cancelled) setError(describeError(e));
     });
     return () => {
       cancelled = true;
     };
-  }, [input, cfg]);
+  }, [input, cfg, trustedKey]);
 
   function check(source: string) {
     setError('');
@@ -170,6 +174,9 @@ function VerifyInner() {
 
   // The stored row carries the transaction once committed; the report's proof is the one that was verified (equal apart from commitTx).
   const proof = result?.stored?.proof ?? result?.report.proof;
+  // Green needs the public log's own answer and a verifier the reader trusts; a file that only agrees with itself gets neither colour.
+  const standing = result ? standingOf(result.report) : null;
+  const logAnswered = result?.report.checks.find((c) => c.id === 'log-entry')?.status === 'ok';
   const committable = result?.stored && result.report.ok && !result.stored.proof.commitTx ? result.stored : null;
   const action = commitAction((committable && commitStatus[committable.completionId]) ?? 'no-wallet', !!wallet.signedAccountId);
 
@@ -218,7 +225,9 @@ function VerifyInner() {
       {actionProof !== null && <ActionProofCard value={actionProof} />}
       {result && (
         <section className="card">
-          <CardHead status={result.report.ok ? 'ok' : 'fail'} when={tv.source(tv.origin[result.origin])}>{result.report.ok ? tv.ok : tv.failed}</CardHead>
+          <CardHead status={standing === 'verified' ? 'ok' : standing === 'failed' ? 'fail' : 'skipped'} when={tv.source(tv.origin[result.origin])}>
+            {standing === 'verified' ? tv.ok : standing === 'failed' ? tv.failed : logAnswered ? tv.unconfirmedTrust : tv.unconfirmedLog}
+          </CardHead>
           <CheckList items={result.report.checks} />
           {proof && (
             <div className="actions">

@@ -74,3 +74,25 @@ test('malformed proof stops at the schema check', () => {
   assert.equal(r.checks.length, 1);
   assert.equal(status(r, 'schema'), 'fail');
 });
+
+// ---- What a report amounts to for the reader (standingOf): /verify and /auditor colour their verdict by it ----
+test('a file that only agrees with itself is not "verified": the public log must answer and the verifier must be trusted', async () => {
+  const { standingOf, trustedVerifierCheck, withChecks } = await import('./verify.ts');
+  const report = verifyModelProof(proof, rawRequest, rawResponse, entry);
+  const trusted = trustedVerifierCheck(entry.verifier, [entry.verifier]);
+  const fromChain = { id: 'log-entry', status: 'ok', detail: 'entry re-read from the public log' } as const;
+  // The log could not be reached, so the entry is the copy inside the file: the sender's word. Anyone can write such a
+  // file around a key they made up; it must not read as verified.
+  const embeddedOnly = { id: 'log-entry', status: 'skipped', detail: 'the public log unavailable; using the embedded entry' } as const;
+  assert.equal(standingOf(withChecks(report, fromChain, trusted)), 'verified');
+  assert.equal(standingOf(withChecks(report, embeddedOnly, trusted)), 'unconfirmed');
+  // Registered is not trusted: any registered account can log any key.
+  const outsider = trustedVerifierCheck(entry.verifier, ['someone-else.testnet']);
+  assert.equal(outsider.status, 'skipped');
+  assert.equal(standingOf(withChecks(report, fromChain, outsider)), 'unconfirmed');
+  assert.equal(standingOf(withChecks(report, fromChain, trustedVerifierCheck(entry.verifier, []))), 'unconfirmed', 'an empty trust set confirms nothing');
+  // Neither check made at all (a caller that forgot them) is not verified either.
+  assert.equal(standingOf(report), 'unconfirmed');
+  const broken = verifyModelProof(proof, rawRequest, new TextEncoder().encode('another answer'), entry);
+  assert.equal(standingOf(withChecks(broken, fromChain, trusted)), 'failed');
+});
