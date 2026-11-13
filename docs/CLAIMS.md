@@ -226,7 +226,11 @@ Honest limitations won prizes at previous NEAR hackathons.
   words took 17 to 40 seconds, and one open question took 148 seconds and then 203, longer than the page waits. A
   message is at most 4,000 characters. A conversation goes to the model as far as it fits one request to our relay
   (50 messages, 64 KB): past that the earliest exchanges are no longer sent, the model does not see them, and the page
-  says how many the next message will leave behind.
+  says how many the next message will leave behind. Since Nov 13 the chat page asks the private model to reason little
+  before it answers (`reasoning_effort: "low"`, a field in the clear beside the encrypted messages), which brought that
+  open question down to half a minute. It costs correctness: of eight arithmetic questions asked that way three came
+  back wrong, one of them in the chat with a card that says "verified". The card says where an answer came from, not
+  that it is right.
 
 ## Known issues we inherited (say so)
 

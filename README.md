@@ -281,7 +281,7 @@ The trust boundary from `docs/SPEC.md` §8, also shown on `/trust`. We say "our 
 
 | Party | Sees | Does not see | Guarantee |
 | --- | --- | --- | --- |
-| Relay (our server) | ciphertext, size, timing, IP, API key; model id, message count and roles, token usage, completion ids | prompt, response and tool-call contents | E2EE to the model key from the verified attestation report |
+| Relay (our server) | ciphertext, size, timing, IP, API key; model id, message count and roles, the reasoning-effort setting, token usage, completion ids | prompt, response and tool-call contents | E2EE to the model key from the verified attestation report |
 | Relay on the Incognito demo route (user-chosen) | the plaintext prompts and replies of that route, and no earlier turn sent to the private model | — | none (no model key to encrypt to); the red card says so |
 | Hosting (Vercel), hosted demo only | what the relay sees, since the relay runs there, plus request logs (IP, path, time) and the API key in the project's settings | on the E2EE route, prompt, response and tool-call contents (on the Incognito route it sees the plaintext, as the relay does) | E2EE, as for the relay; it also serves the page's code, so you trust it to serve this repo's (`pnpm -F web dev` from a clean clone removes that) |
 | NEAR AI gateway and proxy | ciphertext, token accounting; the browser's IP during collateral and NRAS calls | contents | E2EE; the gateway is attested; the proxy cannot forge the NVIDIA verdict (checked against NVIDIA's keys) |
@@ -402,8 +402,10 @@ each number was measured, and what it does not show: [docs/METRICS.md](docs/METR
   word from the first message; the first message took 10.0 s, the 24 after it 1.4 to 11.4 s, median 2.8 s.
 - **Long input and long answers** (Nov 13, one run each): from Node, a message of 7,526 tokens verified in about 10 s
   and one of 130,526 tokens in 34.2 s, both signed by the key the client had checked. Answers are another matter: the
-  reply is not streamed, an answer of 120 words took 17 to 40 s that evening, and one open question took 148 and 203 s
-  ([docs/METRICS.md](docs/METRICS.md); the limits of the chat page are under [What we do not claim](#what-we-do-not-claim)).
+  reply is not streamed, an answer of 120 words took 17 to 40 s that evening, and one open question took 148 and 203 s.
+  The chat page now asks the model to reason little, which brought that question to half a minute and cost three wrong
+  answers in eight on arithmetic ([docs/METRICS.md](docs/METRICS.md); the limits of the chat page are under
+  [What we do not claim](#what-we-do-not-claim)).
 - **Over the log's history** ("honest request refused: 0 of 50" covers ten minutes; this is `pnpm -F demo check-contract`
   on Nov 13): an honest client would have found no entry younger than 24 hours during 13.6 of the 240 hours, all on
   Nov 4–5, before the verifier ran on a server; none has been missing since. The count ignores the key and the quorum: it

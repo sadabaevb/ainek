@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { prepareE2eeChatRequest } from '@nearai/inference-sdk';
 import { chatRequest, relayAttestationClient } from './nearai-requests.ts';
-import { ALLOWED_REQUEST_HEADERS, completionProblem, relayRequestProblem } from './relay-guard.ts';
+import { ALLOWED_REQUEST_HEADERS, REASONING_EFFORT, completionProblem, relayRequestProblem } from './relay-guard.ts';
 
 const MODEL = 'z-ai/glm-5.3-flash';
 const INCOGNITO = 'anthropic/claude-haiku-5-5';
@@ -44,10 +44,16 @@ test('every request the page makes through the relay passes, with every header i
   }
   assert.equal(seen.length, 4, 'one request per call');
   const messages = [{ role: 'user' as const, content: 'hello' }];
-  const e2ee = await prepareE2eeChatRequest({ request: chatRequest(BASE, MODEL, messages), modelKey: { signingAlgo: 'ed25519', publicKey: MODEL_KEY } });
+  const e2ee = await prepareE2eeChatRequest({ request: chatRequest(BASE, MODEL, messages, REASONING_EFFORT), modelKey: { signingAlgo: 'ed25519', publicKey: MODEL_KEY } });
   // The SDK marks its request as E2EE v3 (packages/proof/src/e2ee.ts says why that matters); the relay check below then
   // passes it. A downgraded SDK fails here instead of in the hosted chat.
   assert.equal(e2ee.request.headers.get('x-encryption-version'), '3');
+  // The encrypted request asks for little reasoning, in the clear beside the ciphertext; the plaintext one, to another
+  // vendor's model, does not carry the field.
+  const sent = JSON.parse(await e2ee.request.clone().text()) as { reasoning_effort?: unknown; messages: Array<{ content: string }> };
+  assert.equal(sent.reasoning_effort, REASONING_EFFORT);
+  assert.notEqual(sent.messages[0]?.content, 'hello');
+  assert.equal('reasoning_effort' in JSON.parse(await chatRequest(BASE, INCOGNITO, messages).text()), false);
   seen.push(e2ee.request, chatRequest(BASE, INCOGNITO, messages));
   for (const r of seen) assert.equal(await relayVerdict(r), null);
 });
@@ -66,6 +72,8 @@ test('the chat body: only the page\'s fields, our models, not streamed', () => {
   assert.equal(problem(bytes({ ...ok, model: 'openai/gpt-x' })), 'model not allowed');
   assert.equal(problem(bytes({ ...ok, stream: true })), 'streaming not allowed');
   assert.equal(problem(bytes({ ...ok, stream: 'true' })), 'streaming not allowed');
+  assert.equal(problem(bytes({ ...ok, reasoning_effort: REASONING_EFFORT })), null);
+  for (const effort of ['high', 'medium', '', null, { level: 'low' }]) assert.equal(problem(bytes({ ...ok, reasoning_effort: effort })), 'reasoning effort not allowed');
   assert.equal(problem(bytes({ ...ok, messages: [] })), 'messages must be 1..50');
   assert.equal(problem(bytes([ok])), 'body is not a JSON object');
   assert.equal(problem(new TextEncoder().encode('{').buffer as ArrayBuffer), 'body is not JSON');

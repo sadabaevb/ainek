@@ -12,8 +12,16 @@ export const ALLOWED_REQUEST_HEADERS: ReadonlySet<string> = new Set(['accept', '
 export const MAX_MESSAGES = 50;
 export const MAX_BODY_BYTES = 64 * 1024;
 const NO_PARAMS: ReadonlySet<string> = new Set();
+/**
+ * How much the page asks the private model to reason before it answers: little. With the default, GLM 5.3 Flash wrote
+ * thousands of reasoning tokens before an open question and took two and a half to three and a half minutes, longer
+ * than the page waits; with this, half a minute (docs/METRICS.md, Nov 13). The price: of eight arithmetic questions it
+ * got three wrong, where the default got none wrong of three. The field travels in the clear beside the encrypted
+ * messages and says nothing of them.
+ */
+export const REASONING_EFFORT = 'low';
 /** The top-level fields of the page's chat request (the E2EE wrapper keeps them; only contents are encrypted). */
-const CHAT_FIELDS: ReadonlySet<string> = new Set(['model', 'messages', 'stream']);
+const CHAT_FIELDS: ReadonlySet<string> = new Set(['model', 'messages', 'stream', 'reasoning_effort']);
 
 function decoded(segment: string): string | null {
   try {
@@ -87,6 +95,7 @@ export function completionProblem(body: ArrayBuffer, models: ReadonlySet<string>
   if (Object.keys(json).some((k) => !CHAT_FIELDS.has(k))) return 'field not allowed';
   if (typeof json.model !== 'string' || !models.has(json.model)) return 'model not allowed';
   if (json.stream !== undefined && json.stream !== false) return 'streaming not allowed';
+  if (json.reasoning_effort !== undefined && json.reasoning_effort !== REASONING_EFFORT) return 'reasoning effort not allowed';
   if (!Array.isArray(json.messages) || json.messages.length === 0 || json.messages.length > MAX_MESSAGES) return `messages must be 1..${MAX_MESSAGES}`;
   if (looksE2ee(headers)) {
     const problem = e2eeVersionProblem(headers);

@@ -19,6 +19,7 @@ import {
 import { parseChatCompletion, requireE2eeVersion, withRetry } from '@ainek/proof';
 import { noReplyReason } from './errors';
 import { chatRequest, relayAttestationClient, type ChatMessage } from './nearai-requests';
+import { REASONING_EFFORT } from './relay-guard';
 import { deleteDeployment, getDeployment, putDeployment } from './store';
 
 export type { ChatMessage };
@@ -167,7 +168,7 @@ export interface PreparedE2ee {
 export async function prepareE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation): Promise<PreparedE2ee> {
   if (modelAttestation.signingPublicKey === undefined) throw new Error('verified model report has no E2EE public key');
   const prepared = await prepareE2eeChatRequest({
-    request: chatRequest(baseUrl(), model, messages),
+    request: chatRequest(baseUrl(), model, messages, REASONING_EFFORT),
     modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelAttestation.signingPublicKey },
   });
   requireE2eeVersion(prepared.request.headers);
