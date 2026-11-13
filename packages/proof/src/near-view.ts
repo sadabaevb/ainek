@@ -93,6 +93,24 @@ class Transient extends Error {}
 export const LOG_WINDOW_NS = '86400000000000';
 /** u64::MAX: `latest_keys` subtracts it with saturation, so this asks for every entry of a model, newest first. */
 export const ANY_AGE_NS = '18446744073709551615';
+/** How far a verifier's clock may differ from this client's before its entry stops counting as inside the window. */
+export const CLOCK_SKEW_MS = 10 * 60_000;
+
+/**
+ * The entries of a window by this client's own clock. The contract keeps an entry while its `observed_at` is no older
+ * than the window by block time, and `observed_at` is whatever the verifier wrote: an entry dated in the future would
+ * stay in every window for good, and an RPC answering from an old block would pass stale entries for fresh ones. So the
+ * client drops what is ahead of its clock or behind the window, give or take `CLOCK_SKEW_MS`. A client whose own clock is
+ * off by more than that sees fewer entries and refuses: fail-closed.
+ */
+export function withinWindow(entries: readonly KeyEntry[], maxAgeNs: string, nowMs: number): KeyEntry[] {
+  if (maxAgeNs === ANY_AGE_NS) return [...entries];
+  const windowMs = Number(BigInt(maxAgeNs) / 1_000_000n);
+  return entries.filter((e) => {
+    const at = Number(e.observed_at);
+    return at <= nowMs + CLOCK_SKEW_MS && at >= nowMs - windowMs - CLOCK_SKEW_MS;
+  });
+}
 const Head = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64 }).nullable();
 
 export interface KeyLogReader {
@@ -108,10 +126,11 @@ export interface KeyLogReader {
   verifiers(): Promise<string[]>;
 }
 
-export function keyLogReader(rpcUrl: string, contractId: string): KeyLogReader {
+export function keyLogReader(rpcUrl: string, contractId: string, now: () => number = Date.now): KeyLogReader {
   const view = (method: string, args: Record<string, unknown>, signal?: AbortSignal) => viewFunction(rpcUrl, contractId, method, args, signal);
   return {
-    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS, signal, verifier) => KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs, ...(verifier === undefined ? {} : { verifier }) }, signal)),
+    latestKeys: async (model, maxAgeNs = LOG_WINDOW_NS, signal, verifier) =>
+      withinWindow(KeyEntry.array().parse(await view('latest_keys', { model, max_age_ns: maxAgeNs, ...(verifier === undefined ? {} : { verifier }) }, signal)), maxAgeNs, now()),
     entry: async (index) => {
       const raw = await view('entry', { index });
       return raw == null ? null : KeyEntry.parse(raw);
@@ -155,6 +174,8 @@ export async function latestKeysFor(reader: Pick<KeyLogReader, 'latestKeys'>, mo
     stop.abort();
     throw err;
   }
+  // A caller that stopped the reads gets no window at all: the workers leave their loop quietly when the signal fires.
+  if (signals.aborted) throw new Error('the log read was stopped before every read came back');
   return [...byIndex.values()].sort((x, y) => y.index - x.index);
 }
 
