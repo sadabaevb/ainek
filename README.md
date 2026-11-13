@@ -92,8 +92,12 @@ answers you):
   minutes earlier.
 
 The evidence is NEAR AI's own and public by design: the action log, the compose repository and the signed builds are
-theirs, and the SDK can authenticate them. What we add is a client that reads them. The log is a record, not a
-measurement: a release leaves the enclave's measurements as they were, and the log is as good as the code that has run in
+theirs, and the SDK can authenticate them. We are not the first to read them: Brave's near-verifier, Quill Cloud,
+AnonRouter and the Hermes confidential-mode plugin each follow this log for a gateway or a user of their own, and all
+but AnonRouter can refuse a release they have not approved; in this hackathon Countersign and Neslos read it too
+([docs/PRIOR-ART.md](docs/PRIOR-ART.md)). What we add is a client that reads them in a browser and from a clean clone,
+and a place for the approval that is not one operator's list: marks in a public log on NEAR, below. The log is a record,
+not a measurement: a release leaves the enclave's measurements as they were, and the log is as good as the code that has run in
 that CVM. That limit and the others are under "What we do not claim"; the method is in `docs/DEV-NOTES.md` (Nov 12).
 
 The same chain runs in the browser, on request: the proof card has a line "Code behind the key" with a button, and `/log`
@@ -138,7 +142,10 @@ more. The action log is a record, so the rule holds an enclave to what its own r
 followed the release that serves the model to public sources, not that anybody read the code, and not that the verifier
 followed everything that log deployed: the log does not say which earlier services a later deployment replaced. The
 first marks are in the live log: entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC), one from each verifier. With the
-rule switched on, `pnpm demo:attest` then reported that it would send, for the one replica that answered.
+rule switched on, `pnpm demo:attest` then reported that it would send, for the one replica that answered. Those marks
+have an outside reading to compare with: Quill Cloud's public review of the same day pins the same instance
+(`19aea169…`) at the same hash of its 271-action history (`e196ae72…`) and the same hash of the release file
+(`2d10ba2c…`). We learned of that review on Nov 13.
 
 The first measured window came the next night. Release v0.0.581 of the model's file went live on one replica on Nov 13
 at 00:56 UTC, 38 minutes after its commit. Three and a half hours later that replica answered us and no entry marked
@@ -239,7 +246,7 @@ entry, including two read on Nov 10, with where it is ahead and what Ainek adds,
 
 Among those 26 entries, none combines a public log of TEE keys, a refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None of them has independent verifiers writing to a public log of AI model keys, and neither do we: both verifiers that write to our log are ours. On Nov 10 we also read two later entries (posts, READMEs, parts of the code; `docs/PRIOR-ART.md`). CIPHERWORK refuses before sending and encrypts to the attested model key, with no public key log: it trusts one verifier key of its own. Provable AI Compliance refuses and encrypts at another layer, to an attested OutLayer enclave that then reaches the model over TLS; it has no key log, and when the model's evidence fails a check it records that and still delivers the answer. It binds its gateway's code, input, output and caller into one Intel quote per run, where our Tier 2 has two artifacts joined by hashes.
 
-On Nov 13 the gallery held 820 entries. We read the text of 779 of their posts, searched GitHub for code that reads NEAR AI's evidence, and read 23 more repositories with Claude Code (Countersign directly, 22 by delegated agents under one brief; what is said here about the nearest was then checked against the source a second time). The sentence about the 26 does not describe this later field. **Countersign** keeps a signed, hash-chained feed of reviewed NEAR AI machines in a NEAR contract and refuses before sending; its reviewer is its author, as our verifiers are ours. It is ahead of us on the contract (no access keys; ours has one), on boot measurements recomputed from the OS image and on published evidence. By its own method page it does not check response signatures, follow an image to its source or compare the release per request, and its encryption is version 2. **Shade** has a key registry that watchers fill by a quorum the contract enforces, a refusal before sending and receipts on chain; by its README the gateway in its demo is a mock and nothing is on testnet. **Neslos** follows the enclave's action log to the public compose file and to image provenance, as we do, and pins one reviewed state in a file. **DNA Confidential** runs the same client path as ours in the browser, with no key log and no contract. In none of the 51 repositories read so far did we find three things: an append-only, hash-chained key log for several verifiers with the trust set and the quorum at the viewer; release marks in such a log with a client rule on them; a policy kept private whose decision is signed inside an OutLayer job and verified by the contract (Charter signs in OutLayer under a public mandate; Neslos signs in an enclave of its own, and its vault verifies the signature). That is a statement about 51 repositories, not about 820 entries.
+On Nov 13 the gallery held 820 entries. We read the text of 779 of their posts, searched GitHub for code that reads NEAR AI's evidence, and read 23 more repositories with Claude Code (Countersign directly, 22 by delegated agents under one brief; what is said here about the nearest was then checked against the source a second time). The sentence about the 26 does not describe this later field. **Countersign** keeps a signed, hash-chained feed of reviewed NEAR AI machines in a NEAR contract and refuses before sending; its reviewer is its author, as our verifiers are ours. It is ahead of us on the contract (no access keys; ours has one), on boot measurements recomputed from the OS image and on published evidence. By its own method page it does not check response signatures, follow an image to its source or compare the release per request, and its encryption is version 2. **Shade** has a key registry that watchers fill by a quorum the contract enforces, a refusal before sending and receipts on chain; by its README the gateway in its demo is a mock and nothing is on testnet. **Neslos** follows the enclave's action log to the public compose file and to image provenance, as we do, and pins one reviewed state in a file. **DNA Confidential** runs the same client path as ours in the browser, with no key log and no contract. In none of the 51 repositories read so far did we find three things: an append-only, hash-chained key log for several verifiers with the trust set and the quorum at the viewer; release marks in such a log with a client rule on them; a policy kept private whose decision is signed inside an OutLayer job and verified by the contract (Charter signs in OutLayer under a public mandate; Neslos signs in an enclave of its own, and its vault verifies the signature; outside the gallery, the policy gate by the author of Provable AI Compliance verifies an OutLayer verdict on chain under public rule packs). That is a statement about 51 repositories, not about 820 entries.
 
 ## Try it (do X → see Y)
 
@@ -612,6 +619,9 @@ Tests:
 - Starting the hardware check when the chat opens, so the first message does not wait three to four seconds for it. Written
   and held back: the first proof card would then say "from the cache" where it now shows the check, and every visit would
   reach NEAR AI and NVIDIA before the visitor sends anything.
+- The log as a check other clients can call. Local proxies that verify and encrypt for NEAR AI exist (teep,
+  near-e2ee-proxy); they trust allowlists compiled into them or nothing beyond the SDK's checks, and none consults a
+  public log.
 - Hidden settlement with NEAR Confidential Intents; the relay itself inside an attested OutLayer job.
 - Integrations: Sputnik DAO and Trezu as the human approver of agent actions.
 
