@@ -86,6 +86,11 @@ export function marksOf(imageDigests: readonly string[]): ReleaseMarks {
   return marks;
 }
 
+/** Whether an entry carries a mark of an action log: only such entries can satisfy the release rule. */
+export function marksActionLog(entry: Pick<KeyEntry, 'image_digests'>): boolean {
+  return marksOf(entry.image_digests).logs.length > 0;
+}
+
 /**
  * - `ok`: the action log the enclave attests is exactly one that enough trusted verifiers marked.
  * - `unlogged-release`: the entries that vouch for the key carry no log mark at all (verifiers that do not write them yet).
@@ -166,7 +171,7 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
     }
   }
   if (entries.length === 0) return refused('unlogged-release', "no log entry vouches for this key and launcher, so none marks the enclave's action log");
-  if (!entries.some((entry) => marksOf(entry.image_digests).logs.length > 0)) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher carries a mark of the enclave's action log`);
+  if (!entries.some(marksActionLog)) return refused('unlogged-release', `none of the ${entries.length} log entr${entries.length === 1 ? 'y' : 'ies'} for this key and launcher carries a mark of the enclave's action log`);
   if (attested.instance.status !== 'ok') return refused('untied-log', `the action log cannot be tied to the enclave that holds the key: ${attested.instance.why}`);
 
   // Either this attestation is older than that entry, and the enclave has moved on, or the log lost actions. The lengths
@@ -228,10 +233,11 @@ export function releaseStanding(entries: readonly KeyEntry[], query: Omit<KeyLog
 
 /**
  * The line that says where the key log stands on one verified report's action log: `releaseStanding` in the words of
- * `releaseInLogLine`. `pnpm demo:attest` prints it and /log shows it, so that the two cannot read the log differently.
+ * `releaseInLogLine`. `pnpm demo:attest` prints it and /log shows it, so that the two cannot read the log differently;
+ * they differ only in how each says its rule is turned on (`turnedOnBy`).
  */
-export function releaseLineFor(entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, report: AttestedReport, rule: ReleaseRule, enforced: boolean): ReleaseLine {
-  return releaseInLogLine(releaseStanding(entries, query, report, rule), enforced);
+export function releaseLineFor(entries: readonly KeyEntry[], query: Omit<KeyLogQuery, 'composeHash'>, report: AttestedReport, rule: ReleaseRule, enforced: boolean, turnedOnBy?: string): ReleaseLine {
+  return releaseInLogLine(releaseStanding(entries, query, report, rule), enforced, turnedOnBy);
 }
 
 /**

@@ -31,6 +31,18 @@ function read(key: string): string | null {
   }
 }
 
+/** `null` removes the key. False when the browser refused: nothing changed, so nothing is announced. */
+function write(key: string, value: string | null): boolean {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    return false;
+  }
+  window.dispatchEvent(new Event(CHANGED));
+  return true;
+}
+
 export function useCustomTrust(cfg: Scope): TrustSet | null {
   const key = keyOf(cfg);
   const raw = useSyncExternalStore(subscribe, () => read(key), () => null);
@@ -42,16 +54,9 @@ export function useCustomTrust(cfg: Scope): TrustSet | null {
  * would not survive being read back (a site verifier that is no valid account, too long a list), and the caller says so.
  */
 export function saveCustomTrust(cfg: Scope, next: TrustSet | null): boolean {
-  const key = keyOf(cfg);
-  if (next && !parseTrustSet(JSON.stringify(next))) return false;
-  try {
-    if (next) localStorage.setItem(key, JSON.stringify(next));
-    else localStorage.removeItem(key);
-  } catch {
-    return false;
-  }
-  window.dispatchEvent(new Event(CHANGED));
-  return true;
+  const text = next && JSON.stringify(next);
+  if (text && !parseTrustSet(text)) return false;
+  return write(keyOf(cfg), text);
 }
 
 /**
@@ -70,13 +75,5 @@ export function ownReleaseRule(cfg: Scope): boolean {
 
 /** False when the browser refused to keep the choice: the switch then stays where it was, and the caller says so. */
 export function saveOwnReleaseRule(cfg: Scope, on: boolean): boolean {
-  const key = releaseKeyOf(cfg);
-  try {
-    if (on) localStorage.setItem(key, RELEASE_ON);
-    else localStorage.removeItem(key);
-  } catch {
-    return false;
-  }
-  window.dispatchEvent(new Event(CHANGED));
-  return true;
+  return write(releaseKeyOf(cfg), on ? RELEASE_ON : null);
 }

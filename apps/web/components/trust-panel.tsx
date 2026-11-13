@@ -2,7 +2,7 @@
 // The trust set as the viewer's own decision (SPEC §7.1): the log is open, and who counts is up to the client. Every change
 // applies at once, and the preview runs the same check the chat runs, so the consequence is visible before any message.
 import { useState, type FormEvent } from 'react';
-import { NEAR_ACCOUNT, chooseTrust, findSplitView, marksOf, previewTrust, type KeyEntry, type TrustSet } from '@ainek/proof';
+import { NEAR_ACCOUNT, chooseTrust, findSplitView, marksActionLog, previewTrust, type KeyEntry, type TrustSet } from '@ainek/proof';
 import { useConfig, useT, useTrust } from '@/app/providers';
 import { observedUtc, short } from '@/lib/format';
 import { refusalText } from '@/lib/refusal';
@@ -73,7 +73,7 @@ export function TrustPanel({ entries, registered }: { /** Null until the log ans
           const seen = writers.get(account);
           const activity = entries === null ? null : seen ? tt.seen(seen.count, observedUtc(seen.newest.observed_at)) : tt.notSeen;
           // By its newest entry: only a verifier that marks the enclave's action log can satisfy the release rule (SPEC §7.5).
-          const marks = seen && marksOf(seen.newest.image_digests).logs.length > 0 ? tt.marks : null;
+          const marks = seen && marksActionLog(seen.newest) ? tt.marks : null;
           return (
             <li key={account}>
               <label>

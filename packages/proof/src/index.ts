@@ -64,7 +64,7 @@ export { fromMinimalUnits, toMinimalUnits, readTokenBalance, readTokenInfo, toke
 export type { TokenInfo } from './token.ts';
 export { TCB_STATUSES } from './config.ts';
 export type { TcbStatusName } from './config.ts';
-export { logMark, marksOf, releaseLineFor, releaseMark, releaseRuleOf, releaseStanding, withReleaseRule } from './release-marks.ts';
+export { logMark, marksActionLog, marksOf, releaseLineFor, releaseMark, releaseRuleOf, releaseStanding, withReleaseRule } from './release-marks.ts';
 export type { ReleaseLogVerdict, ReleaseRule } from './release-marks.ts';
 // Light, unlike the rest of the release lines, which come with the chain (`@ainek/proof/release-chain`).
 export { utcTextOfMs, withFinding } from './release-lines.ts';

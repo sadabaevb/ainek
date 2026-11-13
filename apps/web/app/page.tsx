@@ -210,10 +210,10 @@ export default function ChatPage() {
             <option value={cfg.incognitoModel}>{cfg.incognitoModel} · {t.incognitoModel}</option>
           </select>
         </label>
-        <span className="demo-switches muted">
+        <span className="switches muted">
           <label><input type="checkbox" checked={tamper === 'key'} onChange={(e) => setTamper(e.target.checked && 'key')} disabled={busy} /> {t.tamper}</label>
           <label><input type="checkbox" checked={tamper === 'deployment'} onChange={(e) => setTamper(e.target.checked && 'deployment')} disabled={busy} /> {t.tamperDeployment}</label>
-          {/* Not a demo: the viewer's own rule, kept in this browser like their trust set. Where the site has the rule on, the box only shows it. */}
+          {/* Not a demo: the viewer's own rule. Where the site has it on, the box only shows that. */}
           <label><input type="checkbox" checked={releaseRule} onChange={(e) => setRuleNotSaved(!saveOwnReleaseRule(cfg, e.target.checked))} disabled={busy || cfg.requireLoggedRelease} /> {t.releaseSwitch}</label>
         </span>
       </div>

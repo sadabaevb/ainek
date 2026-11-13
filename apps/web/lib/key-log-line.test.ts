@@ -26,7 +26,7 @@ test('withKeyLog: the key log\'s standing is one more line under the release che
   // Today's log: the key is there, no entry marks an action log. The line says so, and the check's own verdict stands.
   const unmarked = withKeyLog(check, report, MODEL, log([entry([])]), AT);
   assert.deepEqual(unmarked.lines.slice(0, -1), check.lines);
-  assert.deepEqual(unmarked.lines.at(-1), { status: 'skipped', text: "key log: none of the 1 log entry for this key and launcher carries a mark of the enclave's action log (the release rule is off: this client sends all the same; with it on, by AINEK_REQUIRE_RELEASE=1 or by the switch on the chat page, it would not)" });
+  assert.deepEqual(unmarked.lines.at(-1), { status: 'skipped', text: "key log: none of the 1 log entry for this key and launcher carries a mark of the enclave's action log (the release rule is off: this client sends all the same; with it on, by the switch \"Stricter\" in the chat, it would not)" });
   assert.deepEqual([unmarked.status, unmarked.failures], ['ok', []]);
   // A verifier that writes marks, and the log as it stood then: a check mark on the line.
   const marked = [entry([logMark(INSTANCE, actions)])];
