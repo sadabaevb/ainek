@@ -8,7 +8,7 @@
 // browser but not a script.
 import { ainekConfigFromEnv } from '@ainek/proof';
 import { NextResponse } from 'next/server';
-import { ALLOWED_REQUEST_HEADERS, completionProblem, relayRequestProblem } from '@/lib/relay-guard';
+import { ALLOWED_REQUEST_HEADERS, completionProblem, keyProblem, relayRequestProblem } from '@/lib/relay-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -91,10 +91,13 @@ async function proxy(req: Request): Promise<Response> {
   }
 
   // After the guards, so a request we would refuse is refused the same way with or without a key configured.
-  const apiKey = process.env.NEARAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'NEARAI_API_KEY is not set on the server' }, { status: 503 });
+  const apiKey = process.env.NEARAI_API_KEY || undefined;
+  const noKey = keyProblem(req.method, apiKey);
+  if (noKey) return NextResponse.json({ error: noKey }, { status: 503 });
 
-  const headers = new Headers({ authorization: `Bearer ${apiKey}`, 'accept-encoding': 'identity' }); // the browser hashes these exact bytes
+  const headers = new Headers({ 'accept-encoding': 'identity' }); // the browser hashes these exact bytes
+  // Without a key the reads still go out, unauthenticated: a wrong key would have NEAR AI refuse even its public endpoints.
+  if (apiKey) headers.set('authorization', `Bearer ${apiKey}`);
   req.headers.forEach((value, name) => {
     if (ALLOWED_REQUEST_HEADERS.has(name)) headers.set(name, value);
   });
@@ -108,6 +111,7 @@ async function proxy(req: Request): Promise<Response> {
     if (!DROPPED_RESPONSE_HEADERS.has(name)) out.set(name, value);
   });
   out.set('cache-control', 'no-store');
+  if (!apiKey) out.set('x-ainek-key', 'absent'); // docs/DEPLOY.md reads this: a read answers 200 with or without a key
   return new Response(upstream.body, { status: upstream.status, headers: out });
 }
 

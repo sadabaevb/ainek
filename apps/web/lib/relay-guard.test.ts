@@ -117,3 +117,11 @@ test('the query: only the parameters the SDK sets, once each, and only our model
   assert.equal(check('POST', 'v1/chat/completions', 'stream=true'), 'query parameter not allowed');
   assert.equal(check('GET', 'v1/model/z-ai%2Fglm-5.3-flash', 'x=1'), 'query parameter not allowed');
 });
+
+test('a relay with no key forwards the reads and refuses a message', async () => {
+  const { KEY_MISSING, keyProblem } = await import('./relay-guard.ts');
+  // The evidence and the model's metadata are public: the checks before sending work from a clean clone with no key.
+  assert.equal(keyProblem('GET', undefined), null);
+  assert.equal(keyProblem('POST', undefined), KEY_MISSING);
+  for (const method of ['GET', 'POST']) assert.equal(keyProblem(method, 'a-key'), null);
+});
