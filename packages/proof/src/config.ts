@@ -92,7 +92,9 @@ function list(value: string | undefined, fallback: string): string[] {
 export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
   const network = env['NEAR_NETWORK'] === 'mainnet' ? 'mainnet' : 'testnet';
   const logSource = env['AINEK_LOG_SOURCE'] === 'sample' ? 'sample' : 'contract';
-  const quorumRaw = Number(env['AINEK_QUORUM'] ?? '1');
+  // A typo here must not quietly become 1, the weakest quorum there is.
+  const quorumRaw = Number(env['AINEK_QUORUM']?.trim() || '1');
+  if (!Number.isInteger(quorumRaw) || quorumRaw < 1) throw new Error(`AINEK_QUORUM must be a whole number of at least 1, got ${JSON.stringify(env['AINEK_QUORUM'])}`);
   const accepted = list(env['AINEK_ACCEPTED_TCB'], 'UpToDate').filter((s): s is TcbStatusName => (TCB_STATUSES as readonly string[]).includes(s));
   return {
     model: env['NEARAI_MODEL'] ?? 'z-ai/glm-5.3-flash',
@@ -104,7 +106,7 @@ export function ainekConfigFromEnv(env: EnvLike): AinekConfig {
     contract: env['AINEK_CONTRACT'] ?? 'ainek-log-dastan.testnet',
     logSource,
     trustedVerifiers: list(env['AINEK_TRUSTED_VERIFIERS'], DEFAULT_VERIFIERS),
-    quorum: Number.isInteger(quorumRaw) && quorumRaw >= 1 ? quorumRaw : 1,
+    quorum: quorumRaw,
     requireLoggedDeployment: envFlag(env['AINEK_REQUIRE_DEPLOYMENT'], logSource !== 'sample' && REQUIRE_DEPLOYMENT_DEFAULT),
     requireLoggedRelease: envFlag(env['AINEK_REQUIRE_RELEASE'], REQUIRE_RELEASE_DEFAULT),
     releaseWaitMs: releaseWaitMs(env['AINEK_RELEASE_WAIT_MIN']),

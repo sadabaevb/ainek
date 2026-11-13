@@ -32,8 +32,11 @@ test('env overrides, lists and mainnet defaults', () => {
 });
 
 test('quorum and TCB policy can never be weakened by a bad value', () => {
-  for (const q of ['x', '0', '-1', '0.5', '']) assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }).quorum, 1, `quorum ${JSON.stringify(q)}`);
-  assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: '3' }).quorum, 3);
+  // A value that is set and is not a whole number of at least 1 stops the start: "2x" must not quietly become 1, the weakest quorum.
+  for (const q of ['x', '0', '-1', '0.5', '2x', 'two']) assert.throws(() => ainekConfigFromEnv({ AINEK_QUORUM: q }), /AINEK_QUORUM must be a whole number of at least 1/, `quorum ${JSON.stringify(q)}`);
+  for (const q of ['', '  ']) assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }).quorum, 1, 'blank is the default');
+  assert.equal(ainekConfigFromEnv({}).quorum, 1);
+  assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: ' 3 ' }).quorum, 3);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: '' }).acceptedTcbStatuses, ['UpToDate']);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: 'UptoDate,bogus' }).acceptedTcbStatuses, ['UpToDate']);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: 'OutOfDate,bogus' }).acceptedTcbStatuses, ['OutOfDate']);
