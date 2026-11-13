@@ -99,16 +99,15 @@ export const CLOCK_SKEW_MS = 10 * 60_000;
 /**
  * The entries of a window by this client's own clock. The contract keeps an entry while its `observed_at` is no older
  * than the window by block time, and `observed_at` is whatever the verifier wrote: an entry dated in the future would
- * stay in every window for good, and an RPC answering from an old block would pass stale entries for fresh ones. So the
- * client drops what is ahead of its clock or behind the window, give or take `CLOCK_SKEW_MS`. A client whose own clock is
- * off by more than that sees fewer entries and refuses: fail-closed.
+ * stay in every window for good, and an RPC answering from an old block would pass entries older than the window. An
+ * entry dated ahead of the clock is dropped whatever the window; `ANY_AGE_NS` lifts only the old edge.
  */
 export function withinWindow(entries: readonly KeyEntry[], maxAgeNs: string, nowMs: number): KeyEntry[] {
-  if (maxAgeNs === ANY_AGE_NS) return [...entries];
-  const windowMs = Number(BigInt(maxAgeNs) / 1_000_000n);
+  const newest = nowMs + CLOCK_SKEW_MS;
+  const oldest = maxAgeNs === ANY_AGE_NS ? 0 : nowMs - Number(BigInt(maxAgeNs) / 1_000_000n) - CLOCK_SKEW_MS;
   return entries.filter((e) => {
     const at = Number(e.observed_at);
-    return at <= nowMs + CLOCK_SKEW_MS && at >= nowMs - windowMs - CLOCK_SKEW_MS;
+    return at >= oldest && at <= newest;
   });
 }
 const Head = z.object({ index: z.number().int().nonnegative(), entry_hash: hex64 }).nullable();
@@ -174,7 +173,7 @@ export async function latestKeysFor(reader: Pick<KeyLogReader, 'latestKeys'>, mo
     stop.abort();
     throw err;
   }
-  // A caller that stopped the reads gets no window at all: the workers leave their loop quietly when the signal fires.
+  // The workers leave their loop quietly when the signal fires.
   if (signals.aborted) throw new Error('the log read was stopped before every read came back');
   return [...byIndex.values()].sort((x, y) => y.index - x.index);
 }

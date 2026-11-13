@@ -241,9 +241,10 @@ test('withinWindow: the client keeps only entries its own clock places inside th
     at(7, Number.MAX_SAFE_INTEGER), // nanoseconds written where milliseconds belong
   ];
   assert.deepEqual(withinWindow(entries, LOG_WINDOW_NS, now).map((e) => e.index), [1, 2, 5]);
-  assert.deepEqual(withinWindow(entries, ANY_AGE_NS, now).map((e) => e.index), [1, 2, 3, 4, 5, 6, 7], 'the whole history is asked for as it is');
+  assert.deepEqual(withinWindow(entries, ANY_AGE_NS, now).map((e) => e.index), [1, 2, 5, 6], 'the whole history lifts the old edge only: nothing dated ahead of the clock counts');
 });
 
+// Wiring only: the rules are in the withinWindow test above.
 test('keyLogReader.latestKeys: an entry dated in the future never reaches the fail-closed check', async () => {
   const { keyLogReader } = await import('./near-view.ts');
   const now = Date.UTC(2026, 10, 13, 12, 0, 0);
@@ -258,4 +259,10 @@ test('latestKeysFor: a read the caller stopped gives no window, not a partial on
   // The first read comes back, then the caller stops: the workers leave their loop without an error of their own.
   const reader = { latestKeys: async () => { stop.abort(); return [logEntry(1, 'a.testnet')]; } };
   await assert.rejects(latestKeysFor(reader, 'm', ['a.testnet', 'b.testnet', 'c.testnet'], undefined, stop.signal), /stopped before every read came back/);
+});
+
+test('a U64 in an entry is a U64: a longer run of digits is not an entry', async () => {
+  const { KeyEntry: Entry } = await import('./schema.ts');
+  assert.equal(Entry.safeParse({ ...sampleEntry, observed_at: String(2n ** 64n - 1n) }).success, true);
+  for (const tooLarge of [String(2n ** 64n), '9'.repeat(400)]) assert.equal(Entry.safeParse({ ...sampleEntry, observed_at: tooLarge }).success, false, tooLarge.slice(0, 24));
 });

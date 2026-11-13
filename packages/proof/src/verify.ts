@@ -158,18 +158,18 @@ export function trustedVerifierCheck(verifier: string | undefined, trustedVerifi
     : { id, status: 'skipped', detail: `${verifier} logged this key and is not in your trust set: for you the key is not confirmed` };
 }
 
-/** What a report amounts to for the person reading it. */
-export type Standing = 'verified' | 'unconfirmed' | 'failed';
+/** What a report amounts to for the person reading it; the two in the middle are a file that agrees with itself and nothing more. */
+export type Standing = 'verified' | 'log-not-consulted' | 'verifier-not-trusted' | 'failed';
 
 /**
- * `verified` takes more than "no check failed". The public log itself must have returned the entry (an unreachable log
- * falls back to the copy inside the file, which is the sender's word), and the entry's verifier must be one the reader
- * trusts. Without both, a file made up from scratch around a fresh key would read as verified.
+ * `verified` takes more than "no check failed": the public log itself must have returned the entry (an unreachable log
+ * falls back to the copy inside the file, the sender's word), and the entry's verifier must be one the reader trusts.
+ * Otherwise a file written from scratch around a fresh key would read as verified.
  */
 export function standingOf(report: { ok: boolean; checks: readonly Check[] }): Standing {
   if (!report.ok) return 'failed';
   const held = (id: CheckId) => report.checks.find((c) => c.id === id)?.status === 'ok';
-  return held('log-entry') && held('verifier-trusted') ? 'verified' : 'unconfirmed';
+  return !held('log-entry') ? 'log-not-consulted' : !held('verifier-trusted') ? 'verifier-not-trusted' : 'verified';
 }
 
 /** A report with checks made outside verifyModelProof folded in (the chain re-read, the on-chain commit); `ok` is recomputed. */

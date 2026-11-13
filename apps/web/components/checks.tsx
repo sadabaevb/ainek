@@ -2,9 +2,12 @@
 // One place for the ✓ / ✗ / — glyphs and the check list used by the chat steps, the card and /verify. The details are
 // English whatever the UI language (they come from @ainek/proof), hence lang="en" on the list.
 import type { ReactNode } from 'react';
+import type { Standing } from '@ainek/proof';
 import { useT } from '@/app/providers';
 
 export type Status = 'ok' | 'fail' | 'skipped' | 'running';
+/** The tone of a verdict card for each standing of a report: a file that only agrees with itself gets neither colour. */
+export const STANDING_STATUS = { verified: 'ok', failed: 'fail', 'log-not-consulted': 'skipped', 'verifier-not-trusted': 'skipped' } as const satisfies Record<Standing, Status>;
 
 const MARK: Record<Status, string> = { ok: '✓', fail: '✗', skipped: '—', running: '…' };
 

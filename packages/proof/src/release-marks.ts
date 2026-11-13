@@ -181,7 +181,7 @@ export function evaluateRelease(entries: readonly KeyEntry[], attested: { action
     const last = actions.at(-1);
     return refused('unknown-release', `the enclave's action log has ${added} action${added === 1 ? '' : 's'} since entry #${behind.entry.index} by ${behind.entry.verifier} marked it (the latest: ${last?.action ?? '?'} at ${last?.timestamp ?? '?'}); no trusted verifier has marked the log as it stands`);
   }
-  const need = Math.max(1, quorum);
+  const need = Number.isFinite(quorum) ? Math.max(1, quorum) : Infinity; // NaN would compare false and let every state through
   if (confirmedBy.length < need) return refused('release-below-quorum', `only ${confirmedBy.length} of ${need} required verifiers marked the action log as it stands`, confirmedBy);
 
   // The log is marked as it stands. Since when: each of those verifiers' earliest entry with this mark, and of them the

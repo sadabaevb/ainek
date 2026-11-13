@@ -5,10 +5,10 @@
 // NEAR. Nothing leaves this browser except view calls to the NEAR RPC. The checks live in @ainek/proof; this page only
 // groups them into rows. Fields the TEE signature does not cover (`e2ee`, `commitTx`) are shown as the sender's claims.
 import { useState } from 'react';
-import { checkProofCommit, parseDisclosure, readProofCommit, standingOf, trustedVerifierCheck, verifyModelProof, withChecks, type Check, type CheckId, type ParsedDisclosure, type VerifyReport } from '@ainek/proof';
+import { checkProofCommit, parseDisclosure, readProofCommit, standingOf, trustedVerifierCheck, verifyModelProof, withChecks, type Check, type CheckId, type ParsedDisclosure, type Standing, type VerifyReport } from '@ainek/proof';
 import sampleFile from '../../../../docs/samples/disclosure.sample.json';
 import sampleChain from '../../../../docs/samples/disclosure.sample.chain.json';
-import { CardHead, CheckList, Row } from '@/components/checks';
+import { CardHead, CheckList, Row, STANDING_STATUS } from '@/components/checks';
 import { JsonTextarea, LoadFileButton } from '@/components/json-file-input';
 import { RedCard } from '@/components/red-card';
 import { KvTable } from '@/components/stack-table';
@@ -29,6 +29,8 @@ const NEEDS_ACCOUNT = dict.en.auditor.enterAccount;
 interface Result {
   d: ParsedDisclosure;
   report: VerifyReport;
+  /** "Checks out" only when the public log itself answered and the entry's verifier is one the reader trusts. */
+  standing: Standing;
 }
 
 /** The on-chain record for this commit (SPEC §4.2), or why it was not looked up. English like every other check detail. */
@@ -55,7 +57,7 @@ function combine(okText: string, ...lines: Line[]): Line {
   return { status: 'ok', detail: okText };
 }
 
-function VerdictCard({ d, report, cfg }: Result & { cfg: PublicConfig }) {
+function VerdictCard({ d, report, standing, cfg }: Result & { cfg: PublicConfig }) {
   const { t } = useT();
   const ta = t.auditor;
   const { proof } = d;
@@ -67,15 +69,11 @@ function VerdictCard({ d, report, cfg }: Result & { cfg: PublicConfig }) {
   const logEntry = check('log-entry');
   const key = combine(`${keyInLog.detail}; ${logEntry.detail}`, keyInLog, logEntry, check('verifier-trusted'));
   const chain = check('on-chain-commit');
-  // "Checks out" only when the public log itself answered and the entry's verifier is one the reader trusts: an
-  // internally consistent file whose key was confirmed by nothing but the sender's own copy of the entry, or by an
-  // account anyone could have registered, is a weaker thing, and the headline and its colour say so.
-  const standing = standingOf(report);
-  const title = standing === 'failed' ? ta.verdictFail : standing === 'verified' ? ta.verdictOk : logEntry.status === 'ok' ? ta.verdictUntrusted : ta.verdictLocal;
+  const title = { verified: ta.verdictOk, failed: ta.verdictFail, 'log-not-consulted': ta.verdictLocal, 'verifier-not-trusted': ta.verdictUntrusted }[standing];
 
   return (
     <section className="card">
-      <CardHead status={standing === 'verified' ? 'ok' : standing === 'failed' ? 'fail' : 'skipped'} when={ta.when(utcMinute(proof.verifiedAt), utcMinute(d.disclosedAt))}>{title}</CardHead>
+      <CardHead status={STANDING_STATUS[standing]} when={ta.when(utcMinute(proof.verifiedAt), utcMinute(d.disclosedAt))}>{title}</CardHead>
       <Row status={commit.status} label={ta.rowCommit}>{commit.detail}</Row>
       <Row status={bytes.status} label={ta.rowBytes}>{bytes.detail}</Row>
       <Row status={signed.status} label={ta.rowSigned}>{signed.detail}</Row>
@@ -117,9 +115,8 @@ function Disclosed({ d }: { d: ParsedDisclosure }) {
   );
 }
 
-function Claims({ d, report }: Result) {
+function Claims({ d, standing }: Result) {
   const ta = useT().t.auditor;
-  const standing = standingOf(report);
   return (
     <section>
       <h2>{ta.provesTitle}</h2>
@@ -167,7 +164,8 @@ export default function AuditorPage() {
       const d = parseDisclosure(JSON.parse(text));
       const [log, chain] = await Promise.all([resolveLogEntry(cfg, d.proof.logIndex, d.logEntry), lookupCommit(cfg, d, account.trim())]);
       const trusted = trustedVerifierCheck(log.entry?.verifier ?? d.proof.verifier, trust.verifiers);
-      setResult({ d, report: withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, trusted, chain) });
+      const report = withChecks(verifyModelProof(d.proof, d.requestBody, d.responseBody, log.entry), log.check, trusted, chain);
+      setResult({ d, report, standing: standingOf(report) });
     } catch (err) {
       setResult(null);
       setError(ta.notDisclosure(describeError(err)));

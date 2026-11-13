@@ -32,10 +32,13 @@ test('env overrides, lists and mainnet defaults', () => {
 });
 
 test('quorum and TCB policy can never be weakened by a bad value', () => {
-  // A value that is set and is not a whole number of at least 1 stops the start: "2x" must not quietly become 1, the weakest quorum.
-  for (const q of ['x', '0', '-1', '0.5', '2x', 'two']) assert.throws(() => ainekConfigFromEnv({ AINEK_QUORUM: q }), /AINEK_QUORUM must be a whole number of at least 1/, `quorum ${JSON.stringify(q)}`);
+  // "2x" must not quietly become 1, the weakest quorum: a value that is no whole number of at least 1 asks for every
+  // trusted verifier, and for two at the least, so with the default single verifier nothing passes until it is fixed.
+  for (const q of ['x', '0', '-1', '0.5', '2x', 'two']) {
+    assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }).quorum, 2, `quorum ${JSON.stringify(q)}`);
+    assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q, AINEK_TRUSTED_VERIFIERS: 'a.testnet,b.testnet,c.testnet' }).quorum, 3, `quorum ${JSON.stringify(q)} with three verifiers`);
+  }
   for (const q of ['', '  ']) assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: q }).quorum, 1, 'blank is the default');
-  assert.equal(ainekConfigFromEnv({}).quorum, 1);
   assert.equal(ainekConfigFromEnv({ AINEK_QUORUM: ' 3 ' }).quorum, 3);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: '' }).acceptedTcbStatuses, ['UpToDate']);
   assert.deepEqual(ainekConfigFromEnv({ AINEK_ACCEPTED_TCB: 'UptoDate,bogus' }).acceptedTcbStatuses, ['UpToDate']);
