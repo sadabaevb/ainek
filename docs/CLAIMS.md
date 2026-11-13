@@ -62,7 +62,7 @@ Honest limitations won prizes at previous NEAR hackathons.
   the state before this one; teemoon had no page for the file.
 - Requests are **end-to-end encrypted** to the model's attested key, including tool definitions and
   tool calls (`X-Encrypt-All-Fields`). Our relay and the NEAR AI gateway see ciphertext, size, timing, IP and the request's
-  plaintext metadata (model id, message roles, token usage, completion ids), never the contents. For replies this rests on
+  plaintext metadata (model id, message roles, the reasoning-effort setting, token usage, completion ids), never the contents. For replies this rests on
   E2EE v3 and on NEAR AI's proxy refusing a swapped reply key, which we tested once, on Nov 12, with a request of our own: see the first item under "Known issues we inherited".
 - Every response is **signed inside the enclave** over `sha256(request)` and `sha256(response)`. We keep the
   raw bytes locally and recompute both hashes — the step NEAR's own Verification Center says it cannot do.
@@ -223,14 +223,14 @@ Honest limitations won prizes at previous NEAR hackathons.
 - **A streamed answer, or a long conversation sent whole.** The reply is not streamed: nothing arrives until the model
   has written all of it, and the proof is made over the whole reply. The page waits 180 seconds and then says no reply
   came; by then the request may have reached the model and been answered. On the evening of Nov 13 an answer of 120
-  words took 17 to 40 seconds, and one open question took 148 seconds and then 203, longer than the page waits. A
-  message is at most 4,000 characters. A conversation goes to the model as far as it fits one request to our relay
+  words took 17 to 40 seconds, and one open question took 148 seconds and, asked again, 203, which is longer than the
+  page waits. A message is at most 4,000 characters. A conversation goes to the model as far as it fits one request to our relay
   (50 messages, 64 KB): past that the earliest exchanges are no longer sent, the model does not see them, and the page
   says how many the next message will leave behind. Since Nov 13 the chat page asks the private model to reason little
-  before it answers (`reasoning_effort: "low"`, a field in the clear beside the encrypted messages), which brought that
-  open question down to half a minute. It costs correctness: of eight arithmetic questions asked that way three came
-  back wrong, one of them in the chat with a card that says "verified". The card says where an answer came from, not
-  that it is right.
+  before it answers (`reasoning_effort: "low"`, a field in the clear beside the encrypted messages). The same open
+  question then took 25, 41 and 46 seconds. It costs correctness: two arithmetic questions, asked eight times in all
+  with that setting, got three wrong answers, one of them in the chat with a card that says "verified"; with the
+  default the same two got none wrong in three. The card says where an answer came from, not that it is right.
 
 ## Known issues we inherited (say so)
 

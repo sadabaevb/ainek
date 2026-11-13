@@ -97,21 +97,23 @@ cancel out.
   wait was found (180 s now, SPEC §3.4). The model wrote 10 to 25 tokens a second in the runs that completed. The
   ones that did not are read with the note on the connection below.
 - Reasoning effort, the same evening, in plaintext, direct. NEAR AI takes `reasoning_effort` for this model, and the chat
-  page sets it to `low` for the private model since Nov 13; the Node runs above, the table in the README among them, use
-  the default.
+  page sets it to `low` for the private model since Nov 13. Everything above was measured with the default: the Node
+  runs, the table in the README among them, and the browser runs too (the conversation of 25 exchanges, the message of
+  4,000 characters, the answer of 550 words), which were made before the page sent the field and were not repeated.
 
   | Task | default | `medium` | `low` |
   | --- | --- | --- | --- |
   | about 300 words | 63.5 s, 40.2 s | not run | 27.7 s, 36.5 s |
-  | "What is a TEE and why would I run my AI inside one?" | 147.7 s, 203.4 s | no answer in 240 s, twice | 41.2 s, 24.6 s |
-  | two arithmetic questions, answers right | 3 of 3 | 4 of 4 | 5 of 8 |
+  | "What is a TEE and why would I run my AI inside one?" | 147.7 s, 203.4 s | no answer in 240 s, twice (see the connection, below) | 41.2 s, 24.6 s |
+  | two arithmetic questions asked several times, answers right | 3 of 3 | 4 of 4 | 5 of 8 (six direct, two through the page) |
 
   The times of the answers that came are the model's: the default wrote 3,655 and 4,377 tokens for that question, most
   of them reasoning, and `low` 646 and 626. Asked as a stream with the default, the same question brought reasoning
   steadily for 135 s, four to five pieces a second with no gap over 1.7 s, and not a word of the answer. With `low` the
   model sometimes does not reason at all (one reasoning token), and two of the three wrong answers were of that kind:
   298 minutes where 191 was right, 310 som of change where 160 was; the third, 170 som, came in the chat page with a
-  green card. Through the page with `low`, encrypted: the question about a TEE verified in 46.2 s.
+  green card. Through the page with `low`, encrypted, one run: the question about a TEE verified in 46.2 s. Of the two
+  runs of that question with the default, one was within the 180 s the page waits and one was not.
 
   **The connection these runs were made over was not steady,** and that limits what the failures say. It was a café's.
   A hundred small reads over two minutes had a median of 0.25 s and none over a second. A watch of four hosts over five

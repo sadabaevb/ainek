@@ -23,6 +23,7 @@ import {
   type Exchange,
   type VerifiedDeployment,
 } from './nearai-browser';
+import { REASONING_EFFORT } from './relay-guard';
 import { getExchange, putExchange, type StoredExchange } from './store';
 import { DEPOSIT_NEAR, errorText, isDialogClosed, isMethodNotFound, isNoDeposit, type Consent } from './wallet';
 import { seconds, short } from './format';
@@ -183,7 +184,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   emit({ id: 'key-log', status: 'ok', detail: `${keyVerdict.detail} (${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} in window, source: ${log.source})` });
 
   // 3. Encrypt to the verified key (nothing leaves the browser yet), then send through the proxy and decrypt the reply.
-  const prepared = await runStep(emit, 'encrypt', 'encrypting to the attested model key', () => prepareE2ee(model, messages, modelAttestation), (p) => `${p.requestBody.length} B encrypted to the attested model key`);
+  const prepared = await runStep(emit, 'encrypt', 'encrypting to the attested model key', () => prepareE2ee(model, messages, modelAttestation, model === cfg.model ? REASONING_EFFORT : undefined), (p) => `${p.requestBody.length} B encrypted to the attested model key`);
   const exchange = await runStep(emit, 'send', 'sending through our relay', () => transmitE2ee(prepared), (x) => `completion ${x.completionId}, ${x.requestBody.length} B sent, ${x.responseBody.length} B received (ciphertext kept)`);
   progress.reply = exchange.reply;
 

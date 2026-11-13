@@ -19,7 +19,7 @@ import {
 import { parseChatCompletion, requireE2eeVersion, withRetry } from '@ainek/proof';
 import { noReplyReason } from './errors';
 import { chatRequest, relayAttestationClient, type ChatMessage } from './nearai-requests';
-import { REASONING_EFFORT } from './relay-guard';
+import type { REASONING_EFFORT } from './relay-guard';
 import { deleteDeployment, getDeployment, putDeployment } from './store';
 
 export type { ChatMessage };
@@ -165,10 +165,10 @@ export interface PreparedE2ee {
   requestBody: Uint8Array;
 }
 
-export async function prepareE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation): Promise<PreparedE2ee> {
+export async function prepareE2ee(model: string, messages: ChatMessage[], modelAttestation: VerifiedModelAttestation, reasoningEffort?: typeof REASONING_EFFORT): Promise<PreparedE2ee> {
   if (modelAttestation.signingPublicKey === undefined) throw new Error('verified model report has no E2EE public key');
   const prepared = await prepareE2eeChatRequest({
-    request: chatRequest(baseUrl(), model, messages, REASONING_EFFORT),
+    request: chatRequest(baseUrl(), model, messages, reasoningEffort),
     modelKey: { signingAlgo: modelAttestation.signer.signingAlgo, publicKey: modelAttestation.signingPublicKey },
   });
   requireE2eeVersion(prepared.request.headers);
@@ -177,7 +177,7 @@ export async function prepareE2ee(model: string, messages: ChatMessage[], modelA
 
 /**
  * How long the page waits for a reply. The request is not streamed: nothing arrives until the model has written the whole
- * answer, and at ten to twenty tokens a second a long one takes minutes. Without a limit a reply that never comes left
+ * answer, and at ten to twenty-five tokens a second a long one takes minutes. Without a limit a reply that never comes left
  * the page waiting for good, with the composer locked. The Node runner gives every step 120 s (packages/tier1-node).
  * The relay's function lives a little longer than this (`maxDuration` in app/api/nearai/[...path]/route.ts).
  */

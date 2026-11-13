@@ -12,13 +12,9 @@ export const ALLOWED_REQUEST_HEADERS: ReadonlySet<string> = new Set(['accept', '
 export const MAX_MESSAGES = 50;
 export const MAX_BODY_BYTES = 64 * 1024;
 const NO_PARAMS: ReadonlySet<string> = new Set();
-/**
- * How much the page asks the private model to reason before it answers: little. With the default, GLM 5.3 Flash wrote
- * thousands of reasoning tokens before an open question and took two and a half to three and a half minutes, longer
- * than the page waits; with this, half a minute (docs/METRICS.md, Nov 13). The price: of eight arithmetic questions it
- * got three wrong, where the default got none wrong of three. The field travels in the clear beside the encrypted
- * messages and says nothing of them.
- */
+/** How much the page asks the private model to reason before it answers: little, so that an open question is answered
+ *  in well under a minute and not in two or three, at a cost in correctness (the runs are in docs/METRICS.md, Nov 13).
+ *  The field travels in the clear beside the encrypted messages and says nothing of them. */
 export const REASONING_EFFORT = 'low';
 /** The top-level fields of the page's chat request (the E2EE wrapper keeps them; only contents are encrypted). */
 const CHAT_FIELDS: ReadonlySet<string> = new Set(['model', 'messages', 'stream', 'reasoning_effort']);
@@ -80,22 +76,29 @@ export function relayRequestProblem(method: string, rawPath: string, query: URLS
   return null;
 }
 
-/** The page's chat request and nothing more: its three fields, one of our models, not streamed, a bounded number of messages.
+/** The page's chat request and nothing more: its fields, one of our models, not streamed, a bounded number of messages,
+ *  and written the way the page writes it. The relay forwards the bytes it was sent and not what it parsed, so a body
+ *  that names a field twice (a refused model first, an allowed one last) would be checked as one thing and read upstream
+ *  as another: the body must be exactly the JSON that `JSON.stringify` gives for what was parsed, which is what the page
+ *  and the SDK's E2EE wrapper produce. The setting for reasoning goes only with the attested model.
  *  A request with any E2EE header must be a complete one of the current version, and the attested model is taken only that
  *  way; the Incognito model may be plaintext by design (SPEC §3.9). The relay reads the SDK's marks, not the body: this
  *  stops a tab on an older build from sending an unbound reply key, it does not prove the contents are ciphertext. */
 export function completionProblem(body: ArrayBuffer, models: ReadonlySet<string>, headers: { get(name: string): string | null }, attestedModel: string): string | null {
+  const text = new TextDecoder().decode(body);
   let json: Record<string, unknown>;
   try {
-    json = JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
+    json = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return 'body is not JSON';
   }
   if (typeof json !== 'object' || json === null || Array.isArray(json)) return 'body is not a JSON object';
+  if (JSON.stringify(json) !== text) return 'body is not the JSON the page writes';
   if (Object.keys(json).some((k) => !CHAT_FIELDS.has(k))) return 'field not allowed';
   if (typeof json.model !== 'string' || !models.has(json.model)) return 'model not allowed';
   if (json.stream !== undefined && json.stream !== false) return 'streaming not allowed';
-  if (json.reasoning_effort !== undefined && json.reasoning_effort !== REASONING_EFFORT) return 'reasoning effort not allowed';
+  // A tab on another build is the one honest way to get here, hence the same advice as for the E2EE version below.
+  if (json.reasoning_effort !== undefined && (json.reasoning_effort !== REASONING_EFFORT || json.model !== attestedModel)) return 'reasoning effort not allowed. Reload the page: it may be running another build';
   if (!Array.isArray(json.messages) || json.messages.length === 0 || json.messages.length > MAX_MESSAGES) return `messages must be 1..${MAX_MESSAGES}`;
   if (looksE2ee(headers)) {
     const problem = e2eeVersionProblem(headers);

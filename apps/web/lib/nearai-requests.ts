@@ -15,11 +15,11 @@ export function relayAttestationClient(base: string): AttestationClient {
 
 // No Accept-Encoding here: browsers drop it as a forbidden header; the proxy asks upstream for identity itself.
 /** The plaintext Chat Completions request; prepareE2eeChatRequest encrypts it for the TEE models. `reasoningEffort` is
- *  given for the encrypted route only (see REASONING_EFFORT): the other model is another vendor's, and takes its default. */
+ *  given for the configured private model only (see REASONING_EFFORT): another model takes its own default. */
 export function chatRequest(base: string, model: string, messages: ChatMessage[], reasoningEffort?: typeof REASONING_EFFORT): Request {
   return new Request(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', [NO_ALIASING_HEADER]: 'true' },
-    body: JSON.stringify({ model, messages, stream: false, ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}) }),
+    body: JSON.stringify({ model, messages, stream: false, reasoning_effort: reasoningEffort }), // an undefined field is left out
   });
 }

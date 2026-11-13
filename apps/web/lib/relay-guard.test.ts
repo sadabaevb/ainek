@@ -73,10 +73,27 @@ test('the chat body: only the page\'s fields, our models, not streamed', () => {
   assert.equal(problem(bytes({ ...ok, stream: true })), 'streaming not allowed');
   assert.equal(problem(bytes({ ...ok, stream: 'true' })), 'streaming not allowed');
   assert.equal(problem(bytes({ ...ok, reasoning_effort: REASONING_EFFORT })), null);
-  for (const effort of ['high', 'medium', '', null, { level: 'low' }]) assert.equal(problem(bytes({ ...ok, reasoning_effort: effort })), 'reasoning effort not allowed');
+  for (const effort of ['high', 'medium', '', null, { level: 'low' }]) assert.match(problem(bytes({ ...ok, reasoning_effort: effort })) ?? '', /^reasoning effort not allowed\. Reload the page/);
+  // The setting goes with the attested model only: the page never sends it to the other one.
+  assert.match(completionProblem(bytes({ ...ok, model: INCOGNITO, reasoning_effort: REASONING_EFFORT }), MODELS, PLAIN, MODEL) ?? '', /^reasoning effort not allowed/);
   assert.equal(problem(bytes({ ...ok, messages: [] })), 'messages must be 1..50');
   assert.equal(problem(bytes([ok])), 'body is not a JSON object');
   assert.equal(problem(new TextEncoder().encode('{').buffer as ArrayBuffer), 'body is not JSON');
+});
+
+test('the chat body is checked as it will be forwarded: a field named twice, or JSON the page would not write, is refused', () => {
+  const raw = (text: string) => completionProblem(new TextEncoder().encode(text).buffer as ArrayBuffer, MODELS, E2EE, MODEL);
+  const messages = '[{"role":"user","content":"x"}]';
+  assert.equal(raw(`{"model":"${MODEL}","messages":${messages},"stream":false}`), null);
+  // JSON.parse keeps the last of two equal keys; a parser upstream may keep the first. The relay forwards the bytes.
+  for (const twice of [
+    `{"model":"openai/gpt-x","model":"${MODEL}","messages":${messages},"stream":false}`,
+    `{"model":"${MODEL}","messages":${messages},"stream":true,"stream":false}`,
+    `{"model":"${MODEL}","messages":${messages},"stream":false,"reasoning_effort":"high","reasoning_effort":"low"}`,
+    `{"model":"${MODEL}","messages":[{"role":"system","role":"user","content":"x"}],"stream":false}`,
+  ]) assert.equal(raw(twice), 'body is not the JSON the page writes', twice);
+  assert.equal(raw(`{ "model":"${MODEL}","messages":${messages},"stream":false}`), 'body is not the JSON the page writes');
+  assert.equal(raw(`{"model":"${MODEL}","messages":${messages},"stream":false}\n`), 'body is not the JSON the page writes');
 });
 
 test('the attested model goes through only as complete E2EE v3; the Incognito model may be plaintext', () => {
