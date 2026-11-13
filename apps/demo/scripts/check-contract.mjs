@@ -3,7 +3,7 @@
 // Prints ✓/✗ per method and validates every returned entry against the KeyEntry schema from @ainek/proof.
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import { LOG_WINDOW_NS, ainekConfigFromEnv, checkProofCommit, freshCoverage, keyLogReader, parseDisclosure, readProofCommit, resolveLogEntry } from '@ainek/proof';
+import { LOG_WINDOW_NS, ainekConfigFromEnv, chainBreak, checkProofCommit, freshCoverage, keyLogReader, parseDisclosure, readProofCommit, resolveLogEntry } from '@ainek/proof';
 
 const cfg = ainekConfigFromEnv(process.env);
 const [account = cfg.contract, rpc = cfg.rpcUrl, model = cfg.model] = process.argv.slice(2);
@@ -84,6 +84,11 @@ try {
     if (page.length === 0) break;
     all.push(...page);
   }
+  // This one is an ABI check: `entry_hash` as SPEC §4.1 defines it, over every entry. `pnpm demo:log` adds the comparison
+  // with places of the log seen earlier.
+  const broken = chainBreak(all);
+  if (broken) bad(`hash chain: breaks at entry #${broken.index} (${broken.reason})`);
+  else if (all.length > 0) ok(`hash chain: ${all.length} entries, each hash recomputed here and each naming the one before it`);
   const mine = all.filter((e) => e.model === model && cfg.trustedVerifiers.includes(e.verifier));
   if (mine.length > 0) {
     const H = 3_600_000;
