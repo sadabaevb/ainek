@@ -167,7 +167,7 @@ artifacts (30 days).
 
 ### The third verifier, run by a friend (`anas-verifier.testnet`)
 
-Not ours to operate: a friend of both of us runs it on his own machine, from a clone of this repository
+Not ours to operate: Anas, a friend of both of us, runs it on his own machine, from a clone of this repository
 (`services/verifier/README.md`, "Run a verifier in 5 minutes"). What we did on Nov 13, sitting next to him: the owner
 (`1dastan.testnet`) called `register_verifier({"account_id": "anas-verifier.testnet"})`, and we read the commands out.
 What we did not do: see or hold his key. As the chain shows it (checked Nov 13): the account has the full-access key it
