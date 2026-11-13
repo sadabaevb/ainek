@@ -1,0 +1,43 @@
+# A verifier of your own on GitHub's machines, with no server and no laptop left on (services/verifier/README.md,
+# "From your own GitHub account"). Copy this file into a public repository of yours as .github/workflows/verifier.yml,
+# put your account's name below and your key into the repository's secrets, and GitHub runs one round an hour, free.
+#
+# The key stays yours: it is a secret of your repository, and nobody at Ainek sees it. Make it a function-call key that
+# can only call `log_key` (the README shows the command), so the worst a leak can do is write entries in your name.
+#
+# The code is checked out at one commit, the one named in `ref`. A push to Ainek's main therefore changes nothing in
+# what you run until you change that line yourself.
+name: verifier
+on:
+  schedule:
+    - cron: '37 * * * *' # any minute will do; GitHub starts scheduled runs late, sometimes by hours
+  workflow_dispatch:
+concurrency:
+  group: verifier # two rounds with one key would race and could write the same entry twice
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  round:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45 # a round's own deadlines add up to 35 minutes (the count is in Ainek's verifier-v2.yml)
+    # No GitHub token is passed: the release check reads public data only, and from GitHub's runners it has worked
+    # without one (Ainek's own second verifier runs this way).
+    env:
+      VERIFIER_ACCOUNT_ID: your-account.testnet # the account the contract owner registered for you
+      VERIFIER_PRIVATE_KEY: ${{ secrets.VERIFIER_PRIVATE_KEY }} # function-call key, log_key only
+      VERIFIER_MODELS: z-ai/glm-5.3-flash
+      AINEK_CONTRACT: ainek-log-dastan.testnet
+      NEAR_NETWORK: testnet
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: sadabaevb/ainek
+          ref: 39c2f192863b4872899c02e81c823af74efeb628 # main on Nov 13, 2026
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -F verifier once
