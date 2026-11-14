@@ -14,12 +14,13 @@ wrote on Oct 15, 2026 that there is "no public log of TEE keys yet".
 key and deployment they see (the deployment is the launcher, the boot configuration the hardware measures) in an
 append-only log in a NEAR contract. If the one answering you is not there, your message never leaves the browser.
 Verifiers also trace the release behind the key to a source commit, and one switch makes the client refuse a release
-they have not recorded. The same rule governs agents: no payment without a decision signed inside the enclave.
+they have not recorded. The same rule governs agents: no payment without a decision signed by the policy's key, which
+is generated inside the enclave.
 
 | | Without Ainek | With Ainek |
 | --- | --- | --- |
-| **Sending a prompt** | You trust that the enclave runs what it ran yesterday | Not sent unless a verifier you chose logged this key and this deployment |
-| **An agent paying** | You trust the agent's key | Not paid unless the policy inside the enclave signed this exact action |
+| **A prompt to the private model** | You trust that the enclave runs what it ran yesterday | Not sent unless a verifier you chose logged this key and this deployment and, with one switch, this release |
+| **An agent paying** | You trust the agent's key | Not paid unless the policy's key, generated inside the enclave, signed a decision for this exact action |
 
 | The key is in the log: an answer with a proof you can re-check | The key is not: nothing is sent |
 | --- | --- |
