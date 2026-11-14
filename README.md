@@ -118,10 +118,11 @@ What to know before trusting any of this. There are 26 in all, each with its rea
 - **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log and
   acted on only for a visitor who turns the rule on in the chat. On Nov 13 the first mark for a new release came five
   and a half hours after it went live. It came from a verifier outside the site's default trust set. The site's default
-  verifier wrote no release mark for almost 32 hours, until Nov 14, 08:13 UTC, because its release check had used up
-  GitHub's limit for requests without a token. With the rule on for everyone, the hosted chat would have refused all
-  that time. With the box ticked it did refuse that morning, and it answered at 09:28 UTC, once the marks were back
-  ([docs/RELEASE.md](docs/RELEASE.md)).
+  verifier wrote no release mark for almost 32 hours, until Nov 14, 08:13 UTC; by its operator's report, its release
+  check had used up GitHub's limit for requests without a token. With the rule on for everyone, the hosted chat would
+  have refused for much of that time: on a replica once its action log grew past the last mark, and on every replica
+  once those marks were a day old. With the box ticked it did refuse on the morning of Nov 14, and it answered at
+  09:28 UTC, once the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
 - **The deployment is attested, the model is not verified.** Weights are not checked, what the enclave keeps cannot be
   proven, and the page is served by our server.
 
@@ -215,7 +216,7 @@ Tests:
   [`pre-hackathon...hackathon-submission`](https://github.com/sadabaevb/ainek/compare/pre-hackathon...hackathon-submission).
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
   project of his own, built apart from this one: [NearBy](https://github.com/dastansam/nearby) (Dastan) and ushak (Bektur).
-  <!-- TODO before submission: the link for ushak; check that both links open without a login; drop any not submitted -->
+  <!-- TODO before submission: push the tag `hackathon-submission` (the compare link above needs it); the link for ushak; check that both links open without a login; drop any not submitted -->
 
 ## License
 

@@ -146,8 +146,9 @@ output may say more than this file does.
   with marks, one from each verifier, and with the rule on `pnpm demo:attest` reported that it would send, for the one
   replica that answered. On Nov 13 a replica stayed unmarked for about five and a half hours after a release, and a client
   routed there would have refused all that time. The verifier in the site's default trust set wrote no release mark for
-  almost 32 hours on Nov 13 and 14: a client that trusts only it and has the rule on would have refused all that time,
-  and the one we tried that morning did. One message with the rule on has been sent end to end on the hosted site, on
+  almost 32 hours on Nov 13 and 14: a client that trusts only it and has the rule on would have refused for much of
+  that time (on a replica whose action log had grown since the last mark, and on every replica once those marks were a
+  day old), and the one we tried on the morning of Nov 14 did. One message with the rule on has been sent end to end on the hosted site, on
   Nov 14, after the marks were back (times and entries in `docs/RELEASE.md`). How often the rule refuses over a day we
   have not measured.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are

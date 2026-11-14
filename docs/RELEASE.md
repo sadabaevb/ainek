@@ -114,10 +114,14 @@ The first measured window came the next night. On Nov 13 at 00:56 UTC release v0
 one replica, 38 minutes after its commit. The mark for that state came at 06:24 UTC, 5 hours 28 minutes later, and from
 the second verifier only: GitHub ran its hourly schedule at 23:28 and next at 06:24. The verifier on our server, the
 only one in the site's default trust set as of Nov 14, wrote no release mark from Nov 13, 00:18 UTC (entry #77) to
-Nov 14, 08:13 UTC (entry #106). That is almost 32 hours and thirteen entries without one. Its operator read the cause
-in the daemon's log on Nov 14. The daemon ran without a GitHub token and used up the 60 requests an hour that GitHub
-gives one address. It then stayed over the limit, because a read that fails is not remembered and every report of a
-round asks again. With the rule on for everyone, the hosted chat would have refused all that time.
+Nov 14, 08:13 UTC (entry #106). That is almost 32 hours and thirteen entries without one. The cause is its operator's report of
+Nov 14, which we have not checked against the daemon's log: the daemon ran without a GitHub token, and a dry run of the
+same image on the same server marked two of the three deployments and then met GitHub's limit of 60 requests an hour
+for one address. A read that fails is not remembered, so every report of a round asks again
+(`packages/proof/src/release-chain.ts`). He wrote that he was setting a token; what changed on the server before the marks returned he
+has not told us yet. With the rule on for everyone, the hosted chat would have refused for much of that time: on the replica
+with the new release from 00:56 UTC, when its action log grew past the last mark, and on every replica from Nov 14,
+00:18 UTC, when those marks were a day old and no longer counted.
 
 A visitor's own switch has been in the chat since Nov 14. With it on, the chat did refuse, as recorded that morning at
 about 07:40 UTC, 31 hours into the gap. A visitor who also trusted `anas-verifier.testnet` saw the release check on
