@@ -42,7 +42,7 @@ Spike (`tmp/spike/run.sh`, ed25519): what we saw:
   (an action log `compose_up` with tag/commit/`file_sha256`), `ohttp_attestation`. The gateway's `event_log` is a string, the model's is an array of 31 entries.
 - For ed25519 `signing_address` == `signing_public_key` == the hex of the 32-byte key (the gateway has no `signing_public_key`).
   For ecdsa these are an eth address and a secp256k1 key respectively. In `KeyEntryInput` the field `signing_public_key` duplicates the address for ed25519: fine.
-- `app_compose` lies in `info.tcb_info.app_compose` (a JSON string of the dstack manifest: `name: dstack-nvidia-0.5.11`,
+- `app_compose` is at `info.tcb_info.app_compose` (a JSON string of the dstack manifest: `name: dstack-nvidia-0.5.11`,
   `docker_compose_file`, `kms_enabled`, `allowed_envs`…). `info.tcb_info.compose_hash` = sha256 of this string; the SDK independently
   checks that the quote's MRCONFIGID = `01 || sha256(app_compose) || 00×15`.
 - `client.verify()` (dcap-qvl + NRAS + binding): 14.4 s the first time, 7.3 s the second (network; the SDK cache is 60 min inside the process).
@@ -63,7 +63,7 @@ model (this is stated in the SDK docs). Consequence: SPEC §7.1 step 2 "an entry
 `compose_hash` is required" will fire falsely when the client hit a node whose compose the verifier has not yet seen. Options:
 (a) the verifier logs every pair (address, compose): then `log_key` has to be called for every new compose, and the client
 checks the pair; (b) fail-closed only on `signing_address` (+`tcb_status`), and we show `compose_hash` in the card as
-"deployment X, seen by the verifier / not". I lean to (a) with deduplication by `(signing_address, compose_hash)` in the contract. To be decided on Nov 3.
+"deployment X, seen by the verifier / not". I prefer (a), with deduplication by `(signing_address, compose_hash)` in the contract. To be decided on Nov 3.
 
 **Mini-spike: 20 reports in a row (Nov 2, 22:30, `tmp/spike/fleet-scan.mjs`, raw rows in `tmp/spike/out/fleet-scan.json`).**
 20 calls of `GET /v1/attestation/report?model=z-ai/glm-5.3-flash&signing_algo=ed25519&nonce=<fresh>` with concurrency 4.
@@ -82,7 +82,7 @@ the images are the same.
 
 What this means for the ABI (for the Nov 3 sync):
 - `compose_hash` (= MRCONFIGID) is the identity of the **host**, not of the deployment. There are as many pairs (address, compose) as there are hosts; to log
-  all of them the verifier has to "wait out" every host (the second one came up 3 times out of 20; a third with a 5% share would need about 60 calls).
+  all of them the verifier has to keep calling until every host has answered (the second one came up 3 times out of 20; a third with a 5% share would need about 60 calls).
 - The signing key is one per model, and it is what confirms the signature of the response. I propose: the client's fail-closed is on `signing_address`
   (+ `tcb_status`, + `image_digests` from the compose, which are the same on the hosts); we keep `compose_hash` in `KeyEntry` as a fact
   ("a host with such a MRCONFIGID was seen by the verifier"), and we show a mismatch in yellow "host not yet seen by verifiers", not in red.
@@ -403,7 +403,7 @@ Facts per the points of the prompt (from the docs and live data):
   `ed25519-dalek`. Binding to a build: `--build <wasm sha256>` ("one build only"). The format of the `ed25519` value in env is not in the docs,
   to be checked live. Alternative: the host interface `outlayer:signing-keys` (the key never enters the module), **WASI P2 only**.
 - (b) The output limit ≤ 900 bytes is confirmed (docs + "truncated in explorer").
-- (c) The input is **public**: `input_data` lies in full in the `execution_requested` event on NEAR (visible in our txs) and in the
+- (c) The input is **public**: `input_data` appears in full in the `execution_requested` event on NEAR (visible in our txs) and in the
   coordinator's DB. For us: `Action` is visible anyway in `propose_action`; the policy goes only through secrets, never through stdin.
 - (d) Yes, if `PROTECTED_…:ed25519` gives a seed/key in env (see (a)); the attestation commits `wasm_hash`, the hash of the input and of the output, and the TDX quote.
 - Payment: the HTTPS API needs a payment key (stablecoin ≥ $1, on testnet `keys topup --usd`); NEAR mode pays NEAR from the account and works without a key.
@@ -426,7 +426,7 @@ OutLayer is still stuck on the 502 from `test.fastfs.io` (checked at 21:45), the
 
 - The `commit` step is `commitOutcome` in `lib/flow.ts`; the page only passes a committer callback built from the wallet hook, and starts
   the step after the card is already on the screen (the input field does not wait for the transaction). The commit status (`no-wallet` / `not-deployed` /
-  `failed` / `committed`) lies on the outcome, and the card takes its text from it, not from the current state of the wallet. `commit_proof` is called
+  `failed` / `committed`) is kept on the outcome, and the card takes its text from it, not from the current state of the wallet. `commit_proof` is called
   with the FC key (`lib/wallet.ts`); on the path through the wallet popup a `Failure` in the outcome is counted as an error, otherwise a failed transaction
   would look like a ✓. While the method is absent, `ContractMethodNotFoundError` → "commit_proof is not in the contract yet", and the card does not
   turn red. There is one wallet button in the navigation for all pages; the wallet session is restored asynchronously, so before deciding
@@ -546,7 +546,7 @@ a phrase saying that this is fail-closed, not a breakage. Checked by substitutin
 
 ## 2026-11-04, design pass: mobile layout, RU for the pages, screenshots (Bektur)
 
-- The navigation wraps to a second line on narrow screens: the wallet and the language switch lie in `.nav .right`
+- The navigation wraps to a second line on narrow screens: the wallet and the language switch are in `.nav .right`
   with `margin-left: auto`, and the buttons do not break by words (`white-space: nowrap`). At 375 px the RU button used to be beyond the edge of
   the screen, and the model select in the chat stretched the page: now it is in `label.field` (a column, `select { width: 100% }`).
 - The `/log` and `/trust` tables at width ≤ 640 px fold into blocks: the component `components/stack-table.tsx` draws
@@ -570,7 +570,7 @@ a phrase saying that this is fail-closed, not a breakage. Checked by substitutin
   dictionary at render time, so that switching the language changes it too. One-off errors from handlers (`setError`)
   stay in the language of the moment.
 - Favicon: `app/icon.svg` (Next picks up the file by itself; the 404 on `/favicon.ico` in the console is gone).
-- The screenshots for the README lie in `docs/screenshots/` and were taken with Playwright in EN at width 900 px (`/log`: 1000 px):
+- The screenshots for the README are in `docs/screenshots/` and were taken with Playwright in EN at width 900 px (`/log`: 1000 px):
   `proof-card.png` (a live reply of glm-5.3-flash, a live entry in the log), `refused.png` (`/?tamper=1`), `log.png`,
   `auditor.png` (the sample file).
   Retaking after a change of the card: `pnpm -F web dev`, open the page, wait a couple of seconds after the text appears,
@@ -617,7 +617,7 @@ a phrase saying that this is fail-closed, not a breakage. Checked by substitutin
   "Disclose to auditor" saying that the file has no plaintext. The `.row` grid now places label/value/hint explicitly into the second
   column, and the checkmark stretches over three rows: with automatic placement the value ended up in the narrow first column.
 - **The log verdict**: `KeyLogVerdict` got `reason` (`split-view | below-quorum | untrusted-only | absent | ok`) and
-  `loggedByUntrusted` (verifiers outside the trusted set that wrote exactly this key). The red card takes its
+  `loggedByUntrusted` (verifiers outside the trust set that wrote exactly this key). The red card takes its
   heading from `reason`, and the precedence rule lives only in `evaluateKeyLog`; before, all cases were called "Key not in
   the public log". The English `detail`
   also names the foreign verifier. It surfaced on the test server in sample mode with `AINEK_TRUSTED_VERIFIERS` from `.env`:
@@ -1033,7 +1033,7 @@ Meteor, account `ainek-bektur.testnet`, contract `ainek-log-dastan.testnet`. Rea
 0.25 NEAR (the same finding as on Nov 2). For an ordinary account this changes nothing today: `register_verifier` checks the owner,
 `log_key` checks the verifier, `deposit_storage` without a deposit fails, and an FC key cannot attach a deposit. The other methods only read.
 
-**Question for Dastan: the key in the browser and the `predecessor` check.** The private part of the key lies in the page's localStorage (`access_key::plugin`).
+**Question for Dastan: the key in the browser and the `predecessor` check.** The private part of the key is in the page's localStorage (`access_key::plugin`).
 The app's own code signs with it without a window only `commit_proof`: `function-call-key-plugin` lets through only the requested methods
 without a deposit, everything else goes to the wallet. But the chain checks not this list but `method_names: []`, so a foreign script on the page (XSS,
 a dependency) can sign any contract method without a deposit with this key, with the same `predecessor`:
@@ -1184,14 +1184,14 @@ NEAR specifics in plain words:
 - **1 yoctoNEAR.** NEP-141 requires attaching exactly 1 yocto to `ft_transfer`. The agent's FC key cannot attach anything,
   so the yocto is paid by the contract itself from its balance.
 - **`env::ed25519_verify`** is a host function of the node, the signature is checked natively. In the sandbox test it is checked by a real node.
-- The contract is the sender of the transfer: the tokens lie on the contract's account, and it must be registered in the token
+- The contract is the sender of the transfer: the tokens are held on the contract's account, and it must be registered in the token
   (`storage_deposit`), like the receivers.
 
 Decisions beyond the original SPEC (put into §4.3):
 - **The contract recomputes `nonce`** from its own accounting of `spent_today` and from `expires_at − 10 min` (see the entry on the policy job).
   The agent cannot get Allow by lying to the job about "spent 0", and cannot request a decision for a time from the future
   (`expires_at` is capped from above: block time + 10 min + 2 min for clock skew).
-- **`spent_today` also counts the ones waiting for approval**: the amount is reserved at `Allow` and `NeedsApproval`, returned on
+- **`spent_today` also counts actions that are waiting for approval**: the amount is reserved at `Allow` and `NeedsApproval`, returned on
   `reject` and on the token's refusal. Otherwise a queue of `NeedsApproval` would bypass the daily limit. A day is UTC by block time.
 - **`nonce` is counted per agent** (`"<agent>/<nonce>"`), so that two agents do not interfere with each other.
 - **Pause blocks `approve` too**: the stop button stops also what is already waiting for approval. So does `update_policy`:
@@ -1229,7 +1229,7 @@ limited to `propose_action`: Deny, replay, action substitution, verdict edit, Ne
   passes (so the refusal was exactly because of the pause). `spent_today` before each decision is read from the contract, as in the
   agent service. The earlier gap ("a successful transfer is not checked") is closed
   for the sandbox; it has not been run on testnet yet.
-- **The v2 → v3 migration was rehearsed:** the wasm that stands on `ainek-log-dastan.testnet` (downloaded through `view_code`) was
+- **The v2 → v3 migration was rehearsed:** the wasm that is deployed on `ainek-log-dastan.testnet` (downloaded through `view_code`) was
   deployed to the sandbox, filled (a verifier, log entries, storage credit, a proof commit), then upgraded with the new code
   and `migrate`. `head`, `entry`, `proof_commit`, `storage_balance_of`, `verifiers`, `latest_keys` matched before and after,
   the old methods work, `register_agent` is available, a repeated `migrate` from outside is rejected. The test is one-off, it is not in
@@ -1674,7 +1674,7 @@ ordinary account, otherwise after the keys are deleted there will be no one to c
   Nightly and NEAR CLI. The wallets' code at the links from the list is not pinned: Meteor, Ledger and NEAR CLI are branches of their own
   repositories, Intear is its own site, and Nightly is the `main` branch of the same `hot-dao/near-selector`.
 - There is no fallback source any more: if GitHub did not answer, the connector will silently show an empty list, and a connected user
-  will turn out to be signed out. Before, the list would have come from jsDelivr, but the code of Meteor, Ledger and NEAR CLI lies on GitHub anyway.
+  will turn out to be signed out. Before, the list would have come from jsDelivr, but the code of Meteor, Ledger and NEAR CLI is on GitHub anyway.
 - Still bypassing the list: a browser-extension wallet (the `near-wallet-injected` event), a wallet added by hand in the
   dialog's settings (stored in the browser, loaded on every visit), and a page that embedded our site in an iframe:
   the connector accepts its `postMessage` from any origin and connects by itself. The last one was closed the same day by the
@@ -2434,7 +2434,7 @@ ordinary account, otherwise after the keys are deleted there will be no one to c
   record of the live run is printed. The release chain is read from GitHub: its negative checks are unit tests with a fake
   GitHub. On "Operator access" we restrict nothing, and the line says so. A new release behind the same launcher is not
   rejected today, and that is printed too.
-- **A detail about the quote.** The Intel collateral in the record lies under the hash of the quote, so a changed quote
+- **A detail about the quote.** The Intel collateral in the record is stored under the hash of the quote, so a changed quote
   gets the collateral of the original: otherwise the check would fail on "no collateral" and not on the signature. The
   substitution is made only inside the check itself, the shared call (`verifyRecordedModelReport`, which `pnpm demo` uses
   too) does not do it. The expected refusal: `quote.verification_failed` with the words "signature is invalid".
@@ -2656,14 +2656,14 @@ ordinary account, otherwise after the keys are deleted there will be no one to c
   the caption). The checkmark, the cross and the dash are drawn in CSS by the same rules: in a frame (`.mark`) and
   without it, the size of the text (`.tick`, in the lists of checks and in the stamp). Plex has no ✓ and ✗, and
   a fallback font would draw them differently on every system; the glyph itself stays in the markup for a page without
-  styles. For the same reason the corner of the scenario and of the agent log item are drawn: Plex also has no right
+  styles. For the same reason the corner of the scenario and of the agent's ledger item are drawn: Plex also has no right
   arrows and small triangles. In the lists of checks only the mark is coloured, the text is in ink; only a failed row
   goes red as a whole. The sign is a window of four panes, one filled with the accent.
 - **Where it lies.** Tokens and all styles: `apps/web/app/globals.css` (the light theme by default; the dark one
   overrides the same tokens and applies only on screen, print is always light; add a new colour only as a token). Three
   places cannot read CSS variables: the link image (`app/opengraph-image.tsx`), the colour of the browser frame
   (`viewport` in `layout.tsx`) and the icon file (`app/icon.svg`). The light colours and the geometry of the sign for
-  them lie in `apps/web/lib/look.ts`; `look.test.ts` fails if they diverge from the styles or from the icon file. The
+  them are in `apps/web/lib/look.ts`; `look.test.ts` fails if they diverge from the styles or from the icon file. The
   sign is drawn by `components/logo.tsx`, both on the page and in the link image. The image reads three `.woff` files
   from `public/fonts`, because its renderer cannot read `.woff2`. The route is static: the image is drawn at build time.
 - **Fonts.** `@fontsource/ibm-plex-{sans,serif,mono}` 5.3.0 in the devDependencies of `apps/web`; the needed files are
@@ -2702,12 +2702,12 @@ ordinary account, otherwise after the keys are deleted there will be no one to c
   `log` (width 1100 px, only the two tables), `auditor`, `agent`, `agent-action`, `code-behind-the-key`.
   `proof-card.png` stayed in its previous form until a live message (retaken later the same day). The recipe is the
   same as before (the section of 2026-11-04): hide `.nav`, `.composer` and `.skip`, remove `nextjs-portal`, shoot the
-  element (`.card.red`, `section.card`, `.agent-card`, the agent log item `#4`, the section "The code behind the key"
+  element (`.card.red`, `section.card`, `.agent-card`, the agent's ledger item `#4`, the section "The code behind the key"
   with the checks expanded).
 - **What the reviews fixed.** `/simplify`: the status of a mark is said in one way (a class on the mark itself, not on
-  the row as well); the rules between the cells of the two grids of the home page are drawn by the grid itself (`gap:
-  1px` and the colour of the grid), not by cell borders that were switched on and off by the cell's place; a pending
-  agent action no longer gets the number "01". `/code-review`:
+  the row as well); the rules between the cells of the two grids of the home page are drawn by the grid itself
+  (`gap: 1px` and the colour of the grid), not by cell borders that were switched on and off by the cell's place; a
+  pending agent action no longer gets the number "01". `/code-review`:
   - the word for the screen reader stands inside lists with `lang="en"`, and a Russian word would be read in an English
     voice: the mark itself says its language;
   - the "To the content" link led under the sticky header and in some browsers did not move the focus: the target has
@@ -3220,7 +3220,7 @@ All times are UTC. The key was spent with Bektur's permission; everything togeth
   it will be shown only by a message sent there. A streaming reply would solve the wait, but our proof is computed over
   the whole body of the reply, so this is not a change for the last evening.
 - **gitleaks.** The new test at first repeated the model's public key as a string, and the scanner took it for a secret
-  (the key lies in the log on NEAR; the same string in `relay-guard.test.ts` has long been in the exclusions). The test
+  (the key is in the log on NEAR; the same string in `relay-guard.test.ts` has long been in the exclusions). The test
   now reads the key from `docs/samples/key-entry.sample.json`. The branch with that string managed to go to GitHub under
   the name `fix/long-chat-and-metrics`; the PR goes from the rebuilt `fix/long-chat`, where the string is not in the
   history either.
@@ -3409,13 +3409,13 @@ All times are UTC.
   refusal by release is off. The rule cannot be turned on for everyone: on Nov 13 the mark of the new release arrived after five and a half
   hours and not from a verifier in the default set, and the chat would have refused all that time. But the rule is written and checked, and
   it can be shown live without changing the default behavior: the visitor turns it on for themselves.
-- **What was done.** On the chat page there is a third checkbox: "Stricter: send only if this state of the enclave has been marked by a
+- **What was done.** On the chat page there is a third switch: "Stricter: send only if this state of the enclave has been marked by a
   verifier you trust (the release rule)". The choice is stored in `localStorage`
   (`ainek.release-rule.v1.<network>.<contract>`, value `1`), next to the trust set and in the same way
   (`apps/web/lib/trust-set.ts`), so it survives going to `/log` and back and reaches the chat in a neighboring tab.
   `useTrust()` now returns `releaseRule` as well: the site setting or the switch. The chat flow (`teeRoute`) takes the rule from a
   parameter and adds the site setting itself (`releaseRuleFor`), so a caller can only add the rule, not
-  remove it. With `AINEK_REQUIRE_RELEASE=1` the checkbox is checked and cannot be unchecked.
+  remove it. With `AINEK_REQUIRE_RELEASE=1` the switch is on and cannot be turned off.
 - **`/log`.** The line "key log: …" under the release check and the note under the preview follow the same switch. In
   the list "Whom you trust", a verifier that has an entry with a `log` mark in the window now has a label
   "writes release marks, latest <time>": without it, after a refusal it is unclear whom to add, and the time shows whose word is fresh
@@ -3427,11 +3427,11 @@ All times are UTC.
   refused: the rule requires an attestation, which the preview does not have. Now it applies what is visible from the log: no marks
   in the entries that vouch for the key, "the chat will refuse"; if there are, "the key check passes, the rule will be decided on
   send", in a neutral color.
-- **What else was fixed after the review.** (1) With the Incognito model the checkbox would promise too much: this model has no enclave, and
+- **What else was fixed after the review.** (1) With the Incognito model the switch would promise too much: this model has no enclave, and
   the message goes out as before; the page says this under the switches. (2) If the browser does not store the site's data, before, the
-  checkbox simply did not turn on, and the message went out under the usual rule. Now the rule applies until the page is
+  switch simply did not turn on, and the message went out under the usual rule. Now the rule applies until the page is
   reloaded, and the page says so: a request for a stricter check must not depend on storage. (3) The refusal card
-  for a rule that the visitor turned on themselves says that it is their checkbox: otherwise someone who ticked it a week
+  for a rule that the visitor turned on themselves says that it is their switch: otherwise someone who turned it on a week
   ago sees a chat that refuses everything and does not understand why. (4) DETAILS had "with either of the two verifiers the
   message goes through"; for v2 this is wrong, it marked two replicas of three.
 - **Not done from the review's remarks.** With the rule on, every message first goes through the full attestation, even
@@ -3443,16 +3443,16 @@ All times are UTC.
   setting or the switch in the chat (`turnedOnBy` of `releaseInLogLine`). Otherwise the text is shared.
 - **Checked in the browser** on a local server without a key (everything works up to the send, no money is spent), on Nov 14 at about
   02:10 Bishkek time (Nov 13 20:10 UTC), log head #93:
-  - the checkbox on, the default set (`ainek-dev-dastan.testnet`) → a red card "No verifier has marked this
+  - the switch on, the default set (`ainek-dev-dastan.testnet`) → a red card "No verifier has marked this
     state of the enclave. Message not sent." (reason `unknown-release`: the server verifier still has marks in the window
     of the earlier state of the action log, entries #75–#77, the latest from Nov 13 00:18 UTC; the present state it has not marked).
     After Nov 14 00:18 UTC these entries will leave the 24-hour window, the reason will become `unlogged-release`, and the heading
     "No release mark in the log. Message not sent.". That is why the README does not quote the exact heading;
   - on `/log`, `ainek-v2-dastan.testnet` and `anas-verifier.testnet` have "writes release marks" (the server one did not have it in the first
     version; after the fix from the review it has it, with the time of its latest mark);
-  - `anas-verifier.testnet` added, quorum 1, the checkbox stayed on after returning to the chat → the log check
+  - `anas-verifier.testnet` added, quorum 1, the switch stayed on after returning to the chat → the log check
     passed, the flow reached the send and got the refusal on the send itself that is expected for a server without a key;
-  - the checkbox turned off → the key was removed from `localStorage`; the Russian version at 390 px width without horizontal scrolling.
+  - the switch turned off → the key was removed from `localStorage`; the Russian version at 390 px width without horizontal scrolling.
 - **Not checked.** A paid message with the rule on, up to the card with the proof: this needs a key and Bektur's "yes". The difference from an ordinary
   message is one: the attestation is passed again, not taken from the cache.
 - **What the visitor will see depends on.** The log at that minute. Today the default set with the rule
@@ -3477,7 +3477,7 @@ All times are UTC.
 
 ## 2026-11-14, the morning of submission day: what the log showed after the switch was merged (Bektur)
 
-- **After merging #108** (`e78eed7`, 09:56 Bishkek time). The site updated. Checked without a single send: the checkbox is in place;
+- **After merging #108** (`e78eed7`, 09:56 Bishkek time). The site updated. Checked without a single send: the switch is in place;
   with it and the default set, the preview on `/log` writes "The chat would refuse…" (the server verifier has no marks
   in the window any more, the reason is now `unlogged-release`); with `anas-verifier.testnet` added, "The key check passes…"
   in a neutral color.
@@ -3499,7 +3499,7 @@ All times are UTC.
   tx `Bw3RDR9T…` at 10:24 UTC and tx `HoLzFiCh…` at 15:33 UTC, both without `migrate`; after them only `set_owner` on Nov 11.
   The first replacement is in Dastan's entry of Nov 10 with the hash `643dad81…`, the second is mentioned in the entry on
   `action_count()` without a hash. The table in DEPLOY.md was corrected. The build is non-reproducible, so the hash cannot be recomputed from the repository; from
-  which commit the second was built, Dastan knows (by the journal it is `7b7292a`, `action_count`).
+  which commit the second was built, Dastan knows (by this journal it is `7b7292a`, `action_count`).
 
 ## 2026-11-14, submission day: Dastan's answers, the server verifier's marks, the video (Bektur)
 
@@ -3554,12 +3554,12 @@ All times are UTC.
   restarted on the same image `6f2ff98`; in the first round, at 08:14 UTC, all 15 attestations passed the release check,
   #106 (`c900dc73`, 280 actions), #107 (`e8416a02`, 215) and #108 (`a7de0bba`, 260) were written. He describes the cause
   like this: the failed check was repeated on every call and ate 60 anonymous requests per hour, so the daemon could not
-  get out by itself; with a token the limit is 5000. He will also fix `docs/DEPLOY.md`: the token is now required for the
+  recover by itself; with a token the limit is 5000. He will also fix `docs/DEPLOY.md`: the token is now required for the
   daemon. He will answer about the lock separately.
 - **The voice in the video was replaced (Bektur: "too AI-sounding").** Instead of the macOS system voice it is now Kokoro,
   an open speech model run on the laptop, voice `af_heart`; the text and timings are the same. For four phrases the
-  model spoke 20% faster to fit into the scene, the rest were sped up by 10% in mixing. Bektur ran the synthesis: the
-  permission check blocked the run for the agent. The voice remains synthetic, and `docs/DEMO-SCRIPT.md` says so.
+  model spoke 20% faster to fit into the scene, the rest were sped up by 10% in mixing. Bektur ran the synthesis himself,
+  because the permission check blocked the agent's run. The voice remains synthetic, and `docs/DEMO-SCRIPT.md` says so.
 - **The first message with the release rule on, to the end (09:28 UTC, with Bektur's "yes").** The site ainek.vercel.app,
   the "Stricter" switch, the default trust set, a question of one sentence. The recording browser let exactly one
   `chat/completions` request through (it would have cut off the others), the hardware check took 5.2 s, the answer came
@@ -3592,7 +3592,7 @@ All times are UTC.
   heading: "**Video (90 s):** link to the X post"; in the table row about the "Stricter" switch, the phrase "The video
   shows both results, recorded on Nov 14"; in Disclosures, the phrase that the video was assembled by the agent from
   recordings of the site and voiced by a synthetic voice (`docs/DEMO-SCRIPT.md`). They were removed from the branch,
-  because one cannot refer to a video without a link.
+  because the README cannot point to a video that has no link yet.
 - **Not touched in `docs/DEPLOY.md`:** the lines about the contents of `verifier.env` (they still say "only the account
   and the key"). Dastan promised to add the GitHub token himself.
 - **What the fact check of the documents branch (`/code-review`) found.** "With the rule for everyone, the chat would have

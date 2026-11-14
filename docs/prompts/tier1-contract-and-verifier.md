@@ -34,7 +34,7 @@ Read CLAUDE.md, docs/SPEC.md §3.1, §3.2, §4.1, §4.2, §5 and docs/DEV-NOTES.
 After that update docs/SPEC.md if the ABI changed, and write in DEV-NOTES.md what Bektur should check on the client (the contract address, the names of the view methods, the format of the events).
 
 **Additionally (docs/FIELD.md, SPEC §3.2 and §4.1):**
-- The verifier must be runnable by other people's hands: a Dockerfile (multi-stage, Node 24), the image `ghcr.io/sadabaevb/ainek-verifier`
+- Other people must be able to run the verifier: a Dockerfile (multi-stage, Node 24), the image `ghcr.io/sadabaevb/ainek-verifier`
   through a GitHub Action, and `npx ainek-verify` (a bin in `services/verifier/package.json`). The config is env only:
   `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `AINEK_CONTRACT`, `NEARAI_API_KEY`, `MODELS`. A README section
   "Run a verifier in 5 minutes" with three commands. Check it yourself from a clean machine/container.

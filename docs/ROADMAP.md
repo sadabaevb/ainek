@@ -60,7 +60,7 @@ Bektur
   `ed25519_verify`, cross-contract `ft_transfer`, invariants) → NEP-141 demo token + registration of recipients;
   **reproducible build of the policy job** (`rust-toolchain.toml`, `Cargo.lock`, CI prints `wasm_hash`; matches the
   attestation): the basis of the line "retention is impossible by construction" (SPEC §3.5)
-- Dastan (in the same session, before the policy job): the verifier packaged for other people's hands: `docker run ghcr.io/sadabaevb/ainek-verifier`
+- Dastan (in the same session, before the policy job): the verifier packaged so that other people can run it: `docker run ghcr.io/sadabaevb/ainek-verifier`
   and/or `npx ainek-verify --account v3.ainek.testnet`, the README section "Run a verifier in 5 minutes"; we do not
   do open registration (DECISIONS, Nov 7)
 - Both: find a person from outside the team who will run `v3` (an acquaintance developer, a member of the hackathon Discord); the goal is

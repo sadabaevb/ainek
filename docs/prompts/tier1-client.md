@@ -47,5 +47,5 @@ Mobile layout is mandatory. The card's texts are in English (the judges), with a
   non-attested model; privacy only by contract". For the demo add a model switch to the Incognito tier (for example
   `anthropic/claude-sonnet-5` through the gateway): one request there in the video.
 - Replay mode: `pnpm demo` without keys on `docs/samples/` (reports, signed responses, raw bytes, proofs); offline verification
-  + view calls of the log; `pnpm demo:live` with a key; `pnpm demo:tamper`: key replacement and refusal. This is the main entry point for
+  plus view calls of the log; `pnpm demo:live` with a key; `pnpm demo:tamper`: key replacement and refusal. This is the main entry point for
   AI screening: make it first, before the nice UI.
