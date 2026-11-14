@@ -74,7 +74,8 @@ that serves the model").
 ## The commands, in full
 
 Node 24 or newer and pnpm 10 (`corepack enable`, or `npm i -g pnpm@10` where Node ships without corepack). Rust (rustup)
-is needed only for `contracts/ainek` (plus `cargo-near`) and `jobs/policy`; Docker only for the reproducible wasm
+is needed only for `contracts/ainek` (plus `cargo-near`: `cargo install cargo-near --version 0.21.1 --locked`; its sandbox
+tests call `cargo near` and fail without it) and `jobs/policy`; Docker only for the reproducible wasm
 builds ([REVIEW.md](REVIEW.md)). `pnpm demo:policy` also takes `--tamper` → "Result: REFUSED", and `--live`, which reads
 every run and its action again.
 
