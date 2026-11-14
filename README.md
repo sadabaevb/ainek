@@ -249,8 +249,10 @@ Tests:
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   [`pre-hackathon...hackathon-submission`](https://github.com/sadabaevb/ainek/compare/pre-hackathon...hackathon-submission).
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
-  project of his own, built apart from this one: [NearBy](https://github.com/dastansam/nearby) (Dastan) and ushak (Bektur).
-  <!-- TODO before submission: push the tag `hackathon-submission` (the compare link above needs it); the link for ushak; check that both links open without a login; drop any not submitted -->
+  project of his own, built apart from this one: [NearBy](https://github.com/dastansam/nearby) (Dastan) and
+  [Gossip Market](https://github.com/sadabaevb/gossip-market) (Bektur). The hackathon allows one person two independent
+  projects when each README names the other (its Q-015).
+  <!-- TODO before submission: push the tag `hackathon-submission` (the compare link above needs it) -->
 
 ## License
 
