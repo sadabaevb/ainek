@@ -212,8 +212,8 @@ Tests:
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   <!-- TODO link compare pre-hackathon...hackathon-submission -->
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
-  project of his own, built apart from this one: nearby (Dastan) and ushak (Bektur).
-  <!-- TODO before submission: links and exact spelling of both names; drop any not submitted -->
+  project of his own, built apart from this one: [NearBy](https://github.com/dastansam/nearby) (Dastan) and ushak (Bektur).
+  <!-- TODO before submission: the link for ushak; check that both links open without a login; drop any not submitted -->
 
 ## License
 
