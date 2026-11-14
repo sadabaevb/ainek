@@ -3650,7 +3650,7 @@ All times are UTC.
   `GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc` is a `DeleteKey` of `ed25519:C6bSQV12…tt67y`, signed by the account
   itself, and it succeeded. `contracts/ainek/src` has no call that deploys code or adds a key.
 - **The texts Dastan's entry above lists.** The README's first limit was "we can replace the contract"; it is now "the
-  locked contract is not a reproducible build", and the lock is named under "What works today" and "How NEAR is used"
+  locked code cannot be rebuilt to its hash", and the lock is named under "What works today" and "How NEAR is used"
   with the transaction. `docs/CLAIMS.md` has a claim "locked", and "An immutable log" says what the lock does not
   prove: that the locked code is the source (a non-reproducible build of `7b7292a`), and that nothing was rewritten
   before the lock (only a place of the log kept earlier shows that). `docs/REVIEW.md`, step 6 in `docs/DEPLOY.md`, the

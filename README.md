@@ -44,9 +44,10 @@ is generated inside the enclave.
   them count is your choice (the site starts from one of ours). In the 76 repositories read for our survey of this
   hackathon, we found no other append-only key log for several verifiers that leaves that choice to the viewer
   ([docs/PRIOR-ART.md](docs/PRIOR-ART.md)).
-- **It runs without us.** `pnpm i && pnpm demo` replays the checks offline with no API key, and 434 tests pass from a
-  clean clone. The log's contract is locked: its account has had no access key since Nov 14, so nobody, us included,
+- **The log's contract is locked.** The last access key of its account was deleted on Nov 14, so nobody, us included,
   can sign a new deployment for it.
+- **It runs without us.** `pnpm i && pnpm demo` replays the checks offline with no API key, and 434 tests pass from a
+  clean clone.
 
 **Where it stops.** Testnet, not audited, and not yet as independent as Certificate Transparency: two of the three
 verifiers are ours, and only our client requires the log. Every limit, with its reason, is under [Limits](#limits).
@@ -140,9 +141,8 @@ Each question at full length, with screenshots: [docs/DETAILS.md](docs/DETAILS.m
   used as it is, in the browser.
 - **A NEAR contract**, [`ainek-log-dastan.testnet`](https://testnet.nearblocks.io/address/ainek-log-dastan.testnet),
   holds the key log (hash-chained, `log_key` only appends), the salted commits of proofs, and the
-  agent's actions with their signed decisions. Its account has had no access key since Nov 14
-  ([the transaction that deleted the last one](https://testnet.nearblocks.io/txns/GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc)); `pnpm demo:log` reads that
-  from the chain.
+  agent's actions with their signed decisions. The last access key of its account was deleted on Nov 14
+  ([tx](https://testnet.nearblocks.io/txns/GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc)); `pnpm demo:log` reads the account's keys from the chain.
 - **NEAR accounts and function-call keys** keep each writer narrow: a verifier needs only a key for `log_key`, the
   agent's key can only propose an action and commit a proof hash, and the browser asks the wallet for one limited to
   `commit_proof`.
@@ -157,9 +157,9 @@ what: [docs/DETAILS.md](docs/DETAILS.md#who-sees-what), also on `/trust`.
 What Ainek does not prove yet. There are 26 in all, each with its reason, in
 [docs/CLAIMS.md](docs/CLAIMS.md#we-do-not-claim); these five matter most.
 
-- **Testnet, not audited, and the locked contract is not a reproducible build.** Nobody can sign a new deployment for
+- **Testnet, not audited, and the locked code cannot be rebuilt to its hash.** Nobody can sign a new deployment for
   the contract account, so nobody can fix a bug in it either. That the code deployed there is the source at commit
-  `7b7292a` is our statement: a reader cannot rebuild it to the same hash
+  `7b7292a` is our statement: the build is not reproducible, so a reader cannot rebuild it to the same hash
   ([docs/DEPLOY.md](docs/DEPLOY.md#locking-the-contract-dastan-done-on-nov-14)).
 - **The verifiers are not independent.** Two of the three are ours. The third is run by a friend of ours from his own
   GitHub account ([docs/DEPLOY.md](docs/DEPLOY.md)). The site trusts one of ours by default; you can change that on `/log`.

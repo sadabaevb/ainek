@@ -173,11 +173,11 @@ output may say more than this file does.
   log read. The signed commit transaction goes to a second endpoint: the wallet connector broadcasts it through its own
   FastNear endpoint (the "Who sees what" table).
 - **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
-  previous one. Since Nov 14 the contract account has no access key, so nobody can sign a new deployment for it, and
-  the source has no method that deploys code or adds a key. Two things the lock does not prove. That the locked code is
-  that source: it is a non-reproducible build of commit `7b7292a`, deployed on Nov 10 (code hash
+  previous one. Since Nov 14 the contract account has no access key, so nobody can sign a new deployment for it. Two
+  things the lock does not prove. First, that the locked code is the source in this repository, which has no method
+  that deploys code or adds a key: it is a non-reproducible build of commit `7b7292a`, deployed on Nov 10 (code hash
   `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk`), and a reader cannot rebuild it to the same hash, so this is our
-  statement. And that nothing was rewritten before the lock, while we held the key: a
+  statement. Second, that nothing was rewritten before the lock, while we held the key: a
   rewrite would show only to someone who kept an earlier `head`. `pnpm demo:log` is that reader: it recomputes every hash
   from the first entry and compares the log with the places recorded in `docs/samples/log-points.json` (the first read on
   Nov 8, the others on Nov 13 and Nov 14), so a

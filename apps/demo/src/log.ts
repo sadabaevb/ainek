@@ -121,11 +121,13 @@ if (!whole) {
   const covers = points.length ? 'A place covers the entries up to its own index, from the day it was taken: nothing after that index, and nothing before that day. ' : '';
   // Who can still sign for the account that keeps this log: the chain's own list of its keys, asked now. Any key counts,
   // not only a full-access one: `migrate` is `#[private]`, and a function-call key of the account can call it.
-  const keys = await viewAccessKeys(cfg.rpcUrl, cfg.contract).catch((err: unknown) => describe(err));
-  if (typeof keys === 'string') line(NA, `The keys of the contract account could not be read, so who can replace its code is not shown: ${oneLine(keys.replace(/\s+/g, ' '), 240)}`);
-  else if (keys.length === 0) line(OK, 'The contract account has no access key: nobody can sign a new deployment for it');
-  else line(NA, `The contract account has ${keys.length === 1 ? 'an access key' : `${keys.length} access keys`}: whoever holds one can sign for the account, and with a full-access key replace its code`);
-  line(NA, `${covers}One RPC node was read: that another gives everyone the same log is not shown. Nor that the code deployed there was built from this repository: the build is not reproducible (docs/CLAIMS.md, "An immutable log")`);
+  const keys = await viewAccessKeys(cfg.rpcUrl, cfg.contract).catch((err: unknown) => {
+    line(NA, `The keys of the contract account could not be read, so who can replace its code is not shown: ${oneLine(describe(err).replace(/\s+/g, ' '), 240)}`);
+    return undefined;
+  });
+  if (keys?.length === 0) line(OK, 'The contract account has no access key: nobody can sign a new deployment for it');
+  else if (keys) line(NA, `The contract account has ${keys.length === 1 ? 'an access key' : `${keys.length} access keys`}: whoever holds one can sign for the account, and with a full-access key replace its code`);
+  line(NA, `${covers}One RPC node was read: that another gives everyone the same log is not shown. Nor that the code deployed there was built from this repository (docs/CLAIMS.md, "An immutable log")`);
   line(NA, `To compare a later log with this one: pnpm demo:log --seen ${top.index}:${top.entry_hash}`);
   const kept = points.length === 0 ? '' : `, and ${points.length === 1 ? 'the place seen earlier is' : `${points.length === 2 ? 'both' : `all ${points.length}`} places seen earlier are`} still in it`;
   console.log(failed ? `\nResult: FAILED. See the line marked ${FAIL} above.` : `\nResult: the chain holds from #0 to #${last.index}${kept}.`);
