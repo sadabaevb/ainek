@@ -9,9 +9,9 @@ Live at https://ainek.vercel.app since Nov 8, 2026: the Vercel project `ainek` i
 built from `main`. The web app is a plain Next.js 16 app; `pnpm -F web build` passes from a clean clone. The demo must
 stay up through Nov 25.
 
-**Hobby plan and a private repository.** While the repository is private, Hobby builds only the owner's commits
-(matched by GitHub login): anyone else's branch gets a failed Vercel check, which is not a code failure, and a PR merged
-by anyone else reaches production with the owner's next merge. Making the repository public ends this. Hobby is for
+**Hobby plan and a private repository.** While the repository was private (until Nov 13), Hobby built only the owner's
+commits (matched by GitHub login): anyone else's branch got a failed Vercel check, which is not a code failure, and a PR
+merged by anyone else reached production with the owner's next merge. The repository is public now, which ended this. Hobby is for
 non-commercial use: no payments, ads or paid hosting on the site.
 
 **On the import form** (Vercel → Add New → Project → `sadabaevb/ainek`):
@@ -124,16 +124,17 @@ ssh <server> 'docker logs --tail 20 ainek-verifier'       # what the last rounds
 ```
 
 To update: repeat the first two commands (the first one replaces `src/`, so files deleted in git do not linger in the
-image; `verifier.env` is outside it), then `docker stop ainek-verifier && docker rm ainek-verifier` (stop lets a round
-in progress finish) and the `docker run` again. The reports stay in
+image; `verifier.env` is outside it), then `docker stop ainek-verifier && docker rm ainek-verifier` (stop ends the
+daemon after ten seconds, in the middle of a round if one is running; a `log_key` already sent may still land, and the
+next round finds it and does not write it twice) and the `docker run` again. The reports stay in
 the `ainek-verifier-data` volume. `--restart unless-stopped` restarts the daemon after a crash, and after a reboot
 because the Docker service is enabled at boot on this server (`systemctl is-enabled docker`); the reboot itself has not
 been tried. Run one daemon per verifier account: two with the same key race and can write the same entry twice.
 Since Nov 10 a round fetches `VERIFIER_REPORTS_PER_ROUND` reports (default 5, nothing to set in `verifier.env`): each
 request reaches one replica behind the gateway's balancer, so this is how every replica's deployment gets logged
 over the following rounds, which the deployment check (`AINEK_REQUIRE_DEPLOYMENT`) depends on. Storage, before release
-marks: at most one entry per key, compose and model per 6 h; with the six composes seen so far that is up to 24 entries
-a day for the one model, up to ~0.24 NEAR (one entry is about 1 KB, 0.01 NEAR). With release marks (SPEC §7.5) an entry
+marks: at most one entry per key, compose and model per 6 h; with the seven composes seen so far that is up to 28 entries
+a day for the one model, up to ~0.28 NEAR (one entry is about 1 KB, 0.01 NEAR). With release marks (SPEC §7.5) an entry
 is about 1.2 KB, and a change in an enclave's action log brings a new entry from each verifier that sees it, outside the
 6 h rule: about two a day for each replica, by the two action logs the figure in `docs/RELEASE.md` rests on. On Nov 12
 (17:11 UTC) the contract account held 10.4 NEAR, of which 3.7 NEAR were bound by 372 KB of storage: the 6.7 NEAR left
@@ -153,8 +154,8 @@ it logged in the last 6 hours, so it needs no state between runs; the full attes
 artifacts (30 days).
 
 - Its key is a function-call key, `log_key` only, 1 NEAR allowance (`ed25519:6UfMSWGt…GhsU`, added Nov 10, tx
-  `Dm7aQ3FQfhWYaPiPzwACnhsSr73A9SFrAy2M3Aq8gRWE`), to be held in the repository secret `VERIFIER_V2_PRIVATE_KEY`
-  (Dastan sets it by hand from the key file; until then every run fails at startup with a clear message). A leak
+  `Dm7aQ3FQfhWYaPiPzwACnhsSr73A9SFrAy2M3Aq8gRWE`), held in the repository secret `VERIFIER_V2_PRIVATE_KEY`
+  (Dastan set it by hand from the key file on Nov 10; without it a run fails at startup with a clear message). A leak
   can write entries under that account until the allowance runs out and nothing else; the owner cannot remove a
   verifier, so a leaked key is dealt with client-side (drop it from `AINEK_TRUSTED_VERIFIERS`).
 - To rotate: generate a pair, `near account add-key ainek-v2-dastan.testnet grant-function-call-access --allowance
@@ -417,7 +418,7 @@ function-call key from the agent account.
 | contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` on Nov 6 in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash then `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The code was replaced twice on Nov 10, with no `migrate` because the state layout did not change: tx `Bw3RDR9TaBPzwFjxRa19nmjJUgL6fg8bXWUEAEGA5GFU` (the log read per verifier, #58) and tx `HoLzFiChw2SAQj59jBh3VRE1zo1shj1RdL1H8itzgCEC` (`action_count`, #65). No transaction has replaced it since: the code hash on chain, as `view_account` returned it on Nov 14, is `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk` (in hex `5a7e252f…761c3b`), which Dastan confirmed on Nov 14 is the build he made from commit `7b7292a`. It is again a non-reproducible build, so a reader cannot recompute the hash from the repository. The owner is `1dastan.testnet` since Nov 11 (`owner()` on chain; before that the contract owned itself), so owner calls are signed as that account. The contract account still holds a full-access key and can replace the code |
 | demo token | `token.ainek-dev-dastan.testnet` (deploy tx `6PjJPBANBCQqhUy2uYcgvnvUdy7ejBpz6RkaeLER2zG7`); 1,000,000 AINEK minted to `ainek-dev-dastan.testnet`, 10,000 of them sent to the contract |
 | agent | `agent.ainek-dev-dastan.testnet`, created with 0.5 NEAR, of which 0.1 NEAR is prepaid as storage on the contract |
-| agent's function-call key | `ed25519:CeUWgrZ9N4CQe7NG6S9oJJYgWEx4xky1fzUB2tMmGx1E` since Nov 7, deleted by the stop button on Nov 11 and added again on Nov 12 (the first was deleted when the stop button ran on Nov 7; to replace it, generate the pair where the bot runs and add only the public key, so the secret never travels): `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (less than the 1 NEAR that "Agent service" above asks for; five calls used 0.0018 NEAR, the two texts are not reconciled yet). The account also has the full-access key it was created with (in Dastan's keychain) |
+| agent's function-call key | `ed25519:CeUWgrZ9N4CQe7NG6S9oJJYgWEx4xky1fzUB2tMmGx1E` since Nov 7, deleted by the stop button on Nov 11 and added again on Nov 12 (the first was deleted when the stop button ran on Nov 7; to replace it, generate the pair where the bot runs and add only the public key, so the secret never travels): `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (five calls used 0.0018 NEAR). The account also has the full-access key it was created with (in Dastan's keychain) |
 | receivers registered on the token | the contract and one of the policy's two whitelisted receivers; the other is left unregistered on purpose (the `Failed` demo) |
 | first actions | action 0: `Allow`, 1 AINEK, `Executed` in the proposing tx `2Hpjzuq3BXdb1zGsPc1fpBcS4azoxDEH3ymLLS3kdMBd`. Action 1: `NeedsApproval`, 400 AINEK, proposed in `5LXLQQob287RaTkDph5RyTZfEvsuMSSwArTB2L9Gi8mc`, approved by the owner in `J68M3NSGuxTB4uR1ZSFauian46nftUAR9Gch9rVPtQaP`, `Executed` |
 
@@ -545,7 +546,8 @@ change or remove them). What it does not change:
   append forever, at the contract's expense (bounded per entry by the size limits above). Clients choose which verifiers
   they trust, and since Nov 8 can read a trusted verifier's entries on their own (`latest_keys` with `verifier`): without
   the argument the newest 100 entries of a model come from all verifiers together, so a flood from one key pushes the
-  others out of that page. The web client still reads without the argument (Bektur's side).
+  others out of that page. The web client, the Node runner and the agent read each trusted verifier's entries on their own as well as the
+  general window (`latestKeysFor` in `packages/proof/src/near-view.ts`).
 - The contract account pays for the storage of log entries. If its balance runs low, every write fails, `log_key`,
   `commit_proof` and `propose_action` alike, until someone sends the account NEAR; a plain transfer works and needs
   no key. NEAR on the account cannot be taken out again.

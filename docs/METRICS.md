@@ -15,7 +15,7 @@ one the verifier had logged with the key. The slowest run took 35.3 s, 27.9 s of
 Timings move from day to day with NEAR AI, Intel and NVIDIA. The same command gave a median of 9.9 s on Nov 6 (commit
 `6c596e4`, SDK 0.2.1, first run 22.7 s), 7.1 s on Nov 10 (commit `765708d`, 50 of 50 verified, p90 10.3 s), 8.9 s on
 Nov 11 (commit `3941bde`, 49 of 50, p90 15.6 s) and 9.8 s on Nov 13. The difference is in the network steps: the
-attestation median was 3.6 s on Nov 10 and 11 and 4.8 s on Nov 13, the round trip to the model 1.9, 3.8 and 3.3 s
+attestation median was 3.7 s on Nov 10, 3.6 s on Nov 11 and 4.8 s on Nov 13, the round trip to the model 1.9, 3.8 and 3.3 s
 (p90 4.1, 10.0 and 10.5 s); the local steps take about 20 ms on every day. Read the four days as a range.
 
 One run of the 150 on Nov 10, 11 and 13 did not verify: run 41 of Nov 11. Its attestation step did not finish within 120 s, the runner's

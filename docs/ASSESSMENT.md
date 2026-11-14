@@ -137,10 +137,11 @@ Can the client refuse a change until somebody it trusts has approved it?
   marked for long enough.
 - **Open.** A new release of the serving containers behind the same launcher is not refused by default: this is the
   finding of Nov 12. The rule that refuses it is off by default. Both our verifiers have written release marks since
-  Nov 12, 17:10 UTC. On Nov 13 the log did not keep up: a release went live at 00:56 UTC, and the mark for the replica
+  Nov 12, 17:10 UTC, the one in the site's default trust set with a gap of almost 32 hours (Nov 13, 00:18 UTC to Nov 14,
+  08:13 UTC; [RELEASE.md](RELEASE.md)). On Nov 13 the log did not keep up: a release went live at 00:56 UTC, and the mark for the replica
   that answered us came 5 hours 28 minutes later, from the second verifier only, so a client routed there with the rule
-  on would have refused all that time. Its controls are unit tests; against the live service the rule has accepted once (Nov 12, one
-  replica). A mark covers the release that serves the model, not everything the same log deployed: the log does not
+  on would have refused all that time. Its controls are unit tests; against the live service the rule has accepted twice (Nov 12, `pnpm demo:attest`,
+  one replica; Nov 14, a message sent from the hosted chat) and refused once (the hosted chat on the morning of Nov 14). A mark covers the release that serves the model, not everything the same log deployed: the log does not
   record which earlier services a later deployment replaced. A rollback is marked like any other release once a verifier
   has followed it. The wait counts from the verifiers' marks, by their clocks and the client's, not from when the code
   became public; it sees a day of the log, and no wait is the default. "Marked by a verifier" means followed to public

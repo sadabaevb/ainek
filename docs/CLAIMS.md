@@ -23,7 +23,8 @@ output may say more than this file does.
   recorded, and the repository's tag of the recorded name points at that commit (a commit id alone could be a fork's:
   GitHub serves those under the parent's name; a recorded tag the repository does not have fails the check). The proxy image the file pins by digest has a signed build provenance
   (Sigstore, GitHub Actions) naming its repository, branch and commit, and so does the Compose Manager image the log says
-  it started as; that image is also compared with the one the measured compose starts the manager as. The quote behind
+  it started as; that image is also shown next to the one the measured compose starts the manager as, a reading that does
+  not count toward the check mark or the release marks. The quote behind
   the log and the quote behind the signing key name one CVM instance id, which rules out a mix-up between replicas, not
   a host that runs two CVMs under one id. This is signed provenance, not a reproducible build. It follows what was
   recorded, not which containers run at this moment (the SDK's own note on the verified log: "This does not establish a
@@ -74,10 +75,11 @@ output may say more than this file does.
 - (Tier 2) The policy decision is **signed by a key generated inside an Intel TDX enclave** (OutLayer); the contract
   verifies this signature before executing. The signature shows which key signed, not which code ran: that is in the
   run's attestation (`wasm_hash`). The contract does not check it. `pnpm demo:policy` shows the whole check on a recorded run: the quote is signed by Intel and commits to
-  the published build, the input and the decision. It then checks the runs behind the agent service's seven live actions the same way, to the build and the decision only: those runs do not publish the job's input. The agent service runs the same check before it proposes anything; that has run on one live payment (Nov 6, `pnpm -F agent once`). `/verify` runs it in the browser for an action proof, without the job's input, which a proof does not carry.
+  the published build, the input and the decision. It then checks the runs behind the agent service's seven live actions the same way, to the build and the decision only: those runs do not publish the job's input. The agent service runs the same check before it proposes anything; it has run before each of the service's seven live actions (action 2 on Nov 6 with `pnpm -F agent once`, actions 3, 4, 8 and 9 through the bot on Nov 7, actions 10 and 11 on Nov 11). `/verify` runs it in the browser for an action proof, without the job's input, which a proof does not carry.
 - (Tier 2) The policy job **cannot retain or exfiltrate its input by construction**: it is a WASI-P1 binary with no
   network and no storage interfaces, its build is reproducible (`Cargo.lock`, pinned toolchain), and the `wasm_hash`
-  you get from building the repo equals the hash in the attestation. This is a proof of *inability to retain*, not a
+  that `scripts/wasm-hash.sh` produces (a pinned linux/amd64 container; it needs Docker) equals the hash in the
+  attestation. A plain `cargo build` on your own machine gives a working wasm with another hash. This is a proof of *inability to retain*, not a
   proof of deletion, and it applies to the policy job only — not to the model enclave, and not to the OutLayer worker
   around the job; the action input is public on-chain anyway.
 - The card tells you when privacy is **only contractual**: a response signed by the gateway (`signature_kind: gateway`,
@@ -141,14 +143,14 @@ output may say more than this file does.
   starts from an empty log when its file is missing or unreadable. The rule speaks for the moment of attestation, which
   is why the browser attests again for every message while the rule is on. It checks the replica that attested, and the
   gateway picks the replica per connection. Its cost is refusals: after every action in an enclave, until a verifier has
-  seen that replica again. On the two logs we hold that is about two windows a day for each replica. Live we have one
-  run that would send and one window that would refuse. Entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC) were the first
+  seen that replica again. On the two logs we hold that is about two windows a day for each replica. Live we have a run that would send
+  (Nov 12), a message that was sent (Nov 14) and two refusals (a window on Nov 13, the hosted chat on Nov 14). Entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC) were the first
   with marks, one from each verifier, and with the rule on `pnpm demo:attest` reported that it would send, for the one
   replica that answered. On Nov 13 a replica stayed unmarked for about five and a half hours after a release, and a client
   routed there would have refused all that time. The verifier in the site's default trust set wrote no release mark for
   almost 32 hours on Nov 13 and 14: a client that trusts only it and has the rule on would have refused for much of
-  that time (on a replica whose action log had grown since the last mark, and on every replica once those marks were a
-  day old), and the one we tried on the morning of Nov 14 did. One message with the rule on has been sent end to end on the hosted site, on
+  that time (on a replica whose action log had grown since the last mark, on one this verifier had never marked, and on every
+  replica once those marks were a day old), and the one we tried on the morning of Nov 14 did. One message with the rule on has been sent end to end on the hosted site, on
   Nov 14, after the marks were back (times and entries in `docs/RELEASE.md`). How often the rule refuses over a day we
   have not measured.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
@@ -199,7 +201,7 @@ output may say more than this file does.
   formats are theirs and may change without notice; then the reading says it could not be made.
 - **A log that can grow without end.** `latest_keys` reads a model's whole history before it filters by verifier and
   age. Measured in near-sdk's unit-test environment, not on a node, that costs about 0.15 Tgas an entry, which reaches
-  the 300 Tgas of a view call near 2,000 entries for one model; the log held 79 on Nov 13. Past that point every read
+  the 300 Tgas of a view call near 2,000 entries for one model; the log held 112 entries on Nov 14, 110 of them for this model. Past that point every read
   fails and the client refuses everything until the contract is replaced. A verifier writes an entry for every
   attestation a report carries, with no cap for a round.
 - **A browser key limited to `commit_proof`.** Sign-in asks for that limit; the wallet decides what it grants. Meteor allowed
