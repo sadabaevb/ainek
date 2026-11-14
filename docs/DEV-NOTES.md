@@ -3605,3 +3605,11 @@ All times are UTC.
   voice said "a day" while the on-screen text said "31 hours": the voice now says "more than a day". Step 4 in DETAILS
   promised that the message would go through; now both red cards are named. The `pnpm demo:controls` line about the new
   release said "the client does not refuse on it"; with the switch it refuses, and the line was corrected.
+- **The documents in English (Bektur: "the judges do not understand Russian").** `docs/SPEC.md` first (#112), then these
+  notes, `docs/FIELD.md`, `docs/ROADMAP.md`, `docs/HACKATHON-RULES.md` and `docs/prompts/`. The agent translated them in
+  parts, under one list of fixed terms. Each part was compared with its Russian source by a script (headings, lists and
+  tables, code blocks, every inline code span, the numbers) and by a reader for omissions, additions and changes of
+  meaning; then the branch was read as a whole for one name per thing and for links that point into these files. Nothing
+  was added or dropped on purpose; where a translated line and the code disagree, the code and the Russian original in
+  the git history decide. Three lines of this file keep Russian words, because they quote a Russian test message and two
+  strings of the site's Russian version.
