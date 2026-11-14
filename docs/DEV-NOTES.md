@@ -3665,3 +3665,18 @@ All times are UTC.
   UTC: the head is #117, the chain holds, all 4 places are still in it.
 - **The video's end card.** "We can still replace the contract" became "A locked contract, not a reproducible build".
   All 2700 frames were rendered again and the same voice was mixed over them; the voice does not mention the contract.
+
+## 2026-11-14, the post on X is out; the video link in the README (Bektur)
+
+- **The post.** Dastan published it from his account at 15:07 UTC: https://x.com/kingleard_/status/2121621128829681958. The hackathon's
+  rules do not ask for the lead's account, only that a person publishes it. Read back from X's public data: the
+  text is the 271 characters drafted, with "built at NEAR HACKATHON", `@NEARProtocol` and `#NEARHackathon`, and a video
+  of 90 seconds is attached. The end frame of the video as X serves it was looked at: it is the version made after the
+  lock ("A locked contract, not a reproducible build").
+- **The README.** The link stands under the title; the row about the "Stricter" switch says again that the video shows
+  both results; Disclosures say that the video was put together by the agent, with a synthetic voice. These were taken
+  out earlier today, because the README cannot point to a video that has no link yet. The two TODO comments are gone:
+  the tag `hackathon-submission` goes on the commit that merges this.
+- **A fresh clone of `main` before this** (`b8298cf`, 15:01 UTC): install, 434 tests, the type check, `pnpm demo`
+  VERIFIED, `pnpm demo:controls` 15 of 15, `pnpm demo:log` from #0 to #117 with all 4 places and the line "The contract
+  account has no access key".

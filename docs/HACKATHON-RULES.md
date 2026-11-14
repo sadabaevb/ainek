@@ -49,11 +49,11 @@ All 13 track ids: `defi`, `thesis`, `privacy`, `business`, `swarms`, `security`,
 - IP stays with the team; the organizers get non-exclusive promo rights.
 
 ## Submission checklist (Nov 14)
-- [ ] `git clone` → README → everything runs on someone else's machine
-- [ ] LICENSE in the root
-- [ ] README: what it is, steps "do X, see Y", limits, disclosures, diff link; the "NEAR provides / Ainek adds" and trust tables, metrics and next steps since Nov 14 are in `docs/DETAILS.md` and `docs/METRICS.md`, the README links to them
+- [x] `git clone` → README → everything runs on someone else's machine: a fresh clone of `main` on Nov 14 (install, 434 tests, `pnpm demo`, `demo:controls`, `demo:log`), on our own machine
+- [x] LICENSE in the root (MIT)
+- [x] README: what it is, steps "do X, see Y", limits, disclosures, diff link; the "NEAR provides / Ainek adds" and trust tables, metrics and next steps since Nov 14 are in `docs/DETAILS.md` and `docs/METRICS.md`, the README links to them
 - [x] No secrets in the history (`gitleaks` or a manual check): Nov 12, all branches and PR heads, DEV-NOTES; repeat before the tag
 - [ ] Tag `hackathon-submission`
-- [ ] Video uploaded, the post on X published, the link copied
+- [x] Video uploaded, the post on X published, the link copied: https://x.com/kingleard_/status/2121621128829681958 (Nov 14, 15:07 UTC, Dastan's account)
 - [ ] A mainnet NEAR account for the prize exists and is under the team's control
 - [ ] Form: the website field is empty; the 201 response is saved
