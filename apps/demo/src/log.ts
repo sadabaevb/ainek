@@ -4,7 +4,7 @@
 // or given with --seen). A chain that holds says the entries fit each other; that they are the entries once written,
 // only an earlier place can say. The controls at the end show both halves on the entries just read.
 import { parseArgs } from 'node:util';
-import { DEMO_SWAPPED_KEY, LogPoint, chainBreak, isForeignAnswer, keyLogReader, oneLine, pointStanding, readWholeLog, rewrittenFrom, shortHex as short, utcTextOfMs, walkLog, type KeyEntry } from '@ainek/proof';
+import { DEMO_SWAPPED_KEY, LogPoint, chainBreak, isForeignAnswer, keyLogReader, oneLine, pointStanding, readWholeLog, rewrittenFrom, shortHex as short, utcTextOfMs, viewAccessKeys, walkLog, type KeyEntry } from '@ainek/proof';
 import { loadLiveEnv } from './env.ts';
 import { readJson } from './evidence.ts';
 import { FAIL, NA, OK, describe, exitFlushed, head, line } from './term.ts';
@@ -119,7 +119,16 @@ if (!whole) {
 
   console.log();
   const covers = points.length ? 'A place covers the entries up to its own index, from the day it was taken: nothing after that index, and nothing before that day. ' : '';
-  line(NA, `${covers}One RPC node was read: that another gives everyone the same log is not shown. The contract account has a full-access key (docs/CLAIMS.md, "An immutable log")`);
+  // Who can still sign for the account that keeps this log: the chain's own list of its keys, asked now. Any key counts,
+  // not only a full-access one: `migrate` is `#[private]`, and a function-call key of the account can call it. An account
+  // that does not exist lists no keys either; this one has just answered as the log's contract.
+  const keys = await viewAccessKeys(cfg.rpcUrl, cfg.contract).catch((err: unknown) => {
+    line(NA, `The keys of the contract account could not be read, so who can replace its code is not shown: ${oneLine(describe(err).replace(/\s+/g, ' '), 240)}`);
+    return undefined;
+  });
+  if (keys?.length === 0) line(OK, 'The contract account has no access key: nobody can sign a new deployment for it');
+  else if (keys) line(NA, `The contract account has ${keys.length === 1 ? 'an access key' : `${keys.length} access keys`}: whoever holds one can sign for the account, and with a full-access key replace its code`);
+  line(NA, `${covers}One RPC node was read: that another gives everyone the same log is not shown. Nor that the code deployed there was built from this repository (docs/CLAIMS.md, "An immutable log")`);
   line(NA, `To compare a later log with this one: pnpm demo:log --seen ${top.index}:${top.entry_hash}`);
   const kept = points.length === 0 ? '' : `, and ${points.length === 1 ? 'the place seen earlier is' : `${points.length === 2 ? 'both' : `all ${points.length}`} places seen earlier are`} still in it`;
   console.log(failed ? `\nResult: FAILED. See the line marked ${FAIL} above.` : `\nResult: the chain holds from #0 to #${last.index}${kept}.`);

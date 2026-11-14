@@ -11,6 +11,9 @@ output may say more than this file does.
   NEAR** written by verifiers (today: three, two of them ours and one run by a friend of ours since Nov 13; the log is designed for independent verifiers). If the key is not in the
   log, or (since Nov 11) is not logged together with the compose hash the client attested (the hash of the enclave's launcher: see "We do not claim"), the client refuses to send. Which verifiers count, and how many must agree, is the viewer's choice on `/log`; the site
   only sets the default.
+- The log's contract is **locked**. Since Nov 14, 14:12 UTC the contract account has no access key (the last one was
+  deleted in tx `GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc`), so nobody, us included, can sign a new deployment for it. `pnpm demo:log` reads the account's
+  keys from the chain on every run. What the lock does not show is under "An immutable log" below.
 - Among the 26 hackathon entries whose code we read on Nov 6, 2026 (`docs/FIELD.md`), none combines a public log of TEE keys, a
   refusal before sending and E2EE to the attested key. We do not claim this for entries we read only from their README, or for later ones. None
   of them has independent verifiers writing to a public log of AI model keys, and neither do we: of the three verifiers that write to our log two are ours and the third is run by a friend of ours.
@@ -170,15 +173,20 @@ output may say more than this file does.
   log read. The signed commit transaction goes to a second endpoint: the wallet connector broadcasts it through its own
   FastNear endpoint (the "Who sees what" table).
 - **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
-  previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
+  previous one. Since Nov 14 the contract account has no access key, so nobody can sign a new deployment for it. Two
+  things the lock does not prove. First, that the locked code is the source in this repository, which has no method
+  that deploys code or adds a key: it is a non-reproducible build of commit `7b7292a`, deployed on Nov 10 (code hash
+  `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk`), and a reader cannot rebuild it to the same hash, so this is our
+  statement. Second, that nothing was rewritten before the lock, while we held the key: a
   rewrite would show only to someone who kept an earlier `head`. `pnpm demo:log` is that reader: it recomputes every hash
   from the first entry and compares the log with the places recorded in `docs/samples/log-points.json` (the first read on
   Nov 8, the others on Nov 13 and Nov 14), so a
   clone of the repository holds an earlier head, and it prints the head of the day to keep for a later run. A place
   covers the entries up to its own index from the day it was read, and nothing else: entry #0 since Nov 8, entries #1 to
   #86 since Nov 13, entries #87 to #111 since Nov 14, later entries not until another place is kept. It reads one RPC node:
-  that another node gives another reader the same log is not shown. `pnpm -F demo check-agent` prints how many such keys
-  the account has.
+  that another node gives another reader the same log is not shown. `pnpm demo:log` and `pnpm -F demo check-agent`
+  print how many keys the account has. A bug in the locked contract cannot be fixed: a fix means the same code on a new
+  account, and a log that starts again at #0.
 - **Instant revocation.** The browser reuses a verification for up to 60 minutes and accepts a log entry up to 24 hours
   old; the log has no revoke entry yet, and nothing unregisters a verifier. An entry's time is the one its verifier
   wrote: the contract does not compare it with the block's. Since Nov 13 the client applies its own clock as well, with

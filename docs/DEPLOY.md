@@ -427,7 +427,7 @@ function-call key from the agent account.
 
 | What | Value |
 |---|---|
-| contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` on Nov 6 in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash then `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The code was replaced twice on Nov 10, with no `migrate` because the state layout did not change: tx `Bw3RDR9TaBPzwFjxRa19nmjJUgL6fg8bXWUEAEGA5GFU` (the log read per verifier, #58) and tx `HoLzFiChw2SAQj59jBh3VRE1zo1shj1RdL1H8itzgCEC` (`action_count`, #65). No transaction has replaced it since: the code hash on chain, as `view_account` returned it on Nov 14, is `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk` (in hex `5a7e252f…761c3b`), which Dastan confirmed on Nov 14 is the build he made from commit `7b7292a`. It is again a non-reproducible build, so a reader cannot recompute the hash from the repository. The owner is `1dastan.testnet` since Nov 11 (`owner()` on chain; before that the contract owned itself), so owner calls are signed as that account. The contract account has had no keys since Nov 14 ("Locking the contract" below): nobody can replace the code |
+| contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` on Nov 6 in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash then `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The code was replaced twice on Nov 10, with no `migrate` because the state layout did not change: tx `Bw3RDR9TaBPzwFjxRa19nmjJUgL6fg8bXWUEAEGA5GFU` (the log read per verifier, #58) and tx `HoLzFiChw2SAQj59jBh3VRE1zo1shj1RdL1H8itzgCEC` (`action_count`, #65). No transaction has replaced it since: the code hash on chain, as `view_account` returned it on Nov 14, is `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk` (in hex `5a7e252f…761c3b`), which Dastan confirmed on Nov 14 is the build he made from commit `7b7292a`. It is again a non-reproducible build, so a reader cannot recompute the hash from the repository. The owner is `1dastan.testnet` since Nov 11 (`owner()` on chain; before that the contract owned itself), so owner calls are signed as that account. The contract account has had no keys since Nov 14 ("Locking the contract" below): nobody can sign a new deployment for it |
 | demo token | `token.ainek-dev-dastan.testnet` (deploy tx `6PjJPBANBCQqhUy2uYcgvnvUdy7ejBpz6RkaeLER2zG7`); 1,000,000 AINEK minted to `ainek-dev-dastan.testnet`, 10,000 of them sent to the contract |
 | agent | `agent.ainek-dev-dastan.testnet`, created with 0.5 NEAR, of which 0.1 NEAR is prepaid as storage on the contract |
 | agent's function-call key | `ed25519:CeUWgrZ9N4CQe7NG6S9oJJYgWEx4xky1fzUB2tMmGx1E` since Nov 7, deleted by the stop button on Nov 11 and added again on Nov 12 (the first was deleted when the stop button ran on Nov 7; to replace it, generate the pair where the bot runs and add only the public key, so the secret never travels): `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (five calls used 0.0018 NEAR). The account also has the full-access key it was created with (in Dastan's keychain) |
@@ -509,16 +509,17 @@ live yet: a rejection through the bot, a reject from the `/agent` page, a commit
 Done on Nov 14 at 14:12 UTC: the contract account's last key, the full-access
 `ed25519:C6bSQV12CZsJDu9PAgeKfE4j1Sx9Luj9EdmqbRrtt67y`, was deleted in tx `GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc`,
 and `view_access_key_list` for `ainek-log-dastan.testnet` returns no keys. Until then "append-only" rested on trusting
-whoever held that key: they could deploy other code or rewrite the state. Now nobody can, and nobody can fix a bug in
-the contract either.
+whoever held that key: they could deploy other code or rewrite the state. Now nobody can sign a deployment for the
+account, and nobody can fix a bug in the contract either.
 
 Steps 1 and 2 below were not done. The locked code is the non-reproducible build of `7b7292a` deployed on Nov 10 (code
 hash `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk`, the table above). It matches the build on Dastan's machine, but a
 reader cannot rebuild it to the same hash, so "this code is the source at `7b7292a`" is our statement. What anyone can
-check is that the code hash has not changed since Nov 10 and now cannot change. Steps 3 to 5 are done. Step 6 is not
-done yet: the README, `docs/CLAIMS.md` ("An immutable log"), the closing line of `pnpm demo:log` and the end card in
-`docs/DEMO-SCRIPT.md` still say the contract account has a full-access key. The text below is the plan as it was
-written before the lock.
+check is that the code hash has not changed since Nov 10 and that nobody can sign a deployment that changes it. Steps 3
+to 5 are done. Step 6 is done as far as it can be without a reproducible build: the README, `docs/CLAIMS.md` ("An
+immutable log") and the end card in `docs/DEMO-SCRIPT.md` say that the account has no key and that the build cannot be
+repeated, and `pnpm demo:log` reads the account's keys from the chain on every run. The text below is the plan as it
+was written before the lock.
 
 Before starting:
 

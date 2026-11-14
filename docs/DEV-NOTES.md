@@ -3642,3 +3642,26 @@ All times are UTC.
   server's address had 10 of 60 anonymous requests left; a fresh `--dry-run` on the same server marked two replicas of
   three and brought the limit to 0; with the token the first round marked all 15. Why the reset of the limit did not
   help has not been found out; with a limit of 5000 per hour it does not get in the way.
+
+## 2026-11-14, the texts after the lock; the log command reads the contract's keys (Bektur)
+
+- **Checked on the chain first (14:43 UTC, the testnet RPC).** `view_access_key_list` for `ainek-log-dastan.testnet`
+  returns no keys; the code hash is `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk`; tx
+  `GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc` is a `DeleteKey` of `ed25519:C6bSQV12…tt67y`, signed by the account
+  itself, and it succeeded. `contracts/ainek/src` has no call that deploys code or adds a key.
+- **The texts Dastan's entry above lists.** The README's first limit was "we can replace the contract"; it is now "the
+  locked code cannot be rebuilt to its hash", and the lock is named under "What works today" and "How NEAR is used"
+  with the transaction. `docs/CLAIMS.md` has a claim "locked", and "An immutable log" says what the lock does not
+  prove: that the locked code is the source (a non-reproducible build of `7b7292a`), and that nothing was rewritten
+  before the lock (only a place of the log kept earlier shows that). `docs/REVIEW.md`, step 6 in `docs/DEPLOY.md`, the
+  two rows of `docs/PRIOR-ART.md` about contracts without keys and the two lines of `docs/FIELD.md` follow. Everywhere
+  the wording is "nobody can sign a new deployment for it": that much the chain shows by itself. "The code cannot
+  change" also needs the source to have no method that replaces it, and that rests on our statement about the build.
+- **`pnpm demo:log` asks instead of stating.** Its closing line said "The contract account has a full-access key" as
+  fixed text. It now reads the account's keys (`viewAccessKeys`) on every run: no key gives "✓ The contract account has
+  no access key: nobody can sign a new deployment for it"; some keys give a dash line with the count; a failed read
+  gives a dash line that says it is not shown. Any key counts, not only a full-access one: `migrate` is `#[private]`,
+  and a function-call key of the account could call it. `pnpm -F demo check-agent` prints the same fact. Run at 14:46
+  UTC: the head is #117, the chain holds, all 4 places are still in it.
+- **The video's end card.** "We can still replace the contract" became "A locked contract, not a reproducible build".
+  All 2700 frames were rendered again and the same voice was mixed over them; the voice does not mention the contract.
