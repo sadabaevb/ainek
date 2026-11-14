@@ -104,7 +104,7 @@ The rest:
 
 ```bash
 # offline, no key
-pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
+pnpm test                        # every package (proof, tier1-node, web, verifier, agent, demo): canonical JSON, hashing, signatures, the fail-closed rule, the recorded
                                  #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
 pnpm demo:controls               # negative controls on the recording `pnpm demo` accepts: 15 changes (a byte of the quote,
                                  #   the nonce, the key, the launcher, the event log, the action log, the answer), each of
@@ -112,17 +112,19 @@ pnpm demo:controls               # negative controls on the recording `pnpm demo
                                  #   each for its own reason." The same table runs in `pnpm test`
 
 # needs the network; demo:live and the chat also need NEARAI_API_KEY in .env (cp .env.example .env; cloud.near.ai → API Keys)
-pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attests the model with a fresh nonce, verifies the TDX + GPU
-                                 #   evidence and prints the key-log entry a registered verifier would append; sends nothing.
+pnpm -F verifier dry-run         # no key, needs network (up to ~90 s): re-attests each model in VERIFIER_MODELS (one by default, two
+                                 #   in .env.example) with a fresh nonce, verifies the TDX + GPU evidence and prints the key-log
+                                 #   entry a registered verifier would append for each replica; sends nothing, and keeps the raw
+                                 #   reports under services/verifier/data/reports.
                                  #   It retries what the SDK calls temporary (3 tries); if it still ends in
                                  #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again;
                                  #   demo:attest says so itself and ends "NOT CHECKED", which is not a failed check
 
-pnpm demo:attest                 # no key, needs network (10 to 15 s): what demo:live does up to the send, then the code behind the
+pnpm demo:attest                 # no key, needs network (10 to 40 s): what demo:live does up to the send, then the code behind the
                                  #   key (above; seven or eight anonymous GitHub API requests on Nov 12, of the 60 an hour allowed;
                                  #   GITHUB_TOKEN raises that). --history adds every release in the log, one request each;
                                  #   exits 0 on WOULD SEND with no failed check
-pnpm demo:log                    # no key, needs network (about 2 s): reads every entry of the key log, recomputes each hash
+pnpm demo:log                    # no key, needs network (a few seconds): reads every entry of the key log, recomputes each hash
                                  #   from the entry's fields and the hash before it, and compares the log with places seen
                                  #   earlier: the ones recorded in docs/samples/log-points.json, and yours with
                                  #   --seen <index>:<entry hash> (the command prints the pair to keep). Then three controls on
@@ -148,7 +150,7 @@ At https://ainek.vercel.app, or at `http://localhost:3000` with `pnpm -F web dev
 
 1. **See the log:** `/log` → the live log for `z-ai/glm-5.3-flash` and the trust set and quorum the client applies (today: entries by `ainek-dev-dastan.testnet`, which the site trusts by default, and by `ainek-v2-dastan.testnet` and `anas-verifier.testnet`, which you can add, on `ainek-log-dastan.testnet`). The client trusts entries no older than 24 h: when there is no fresh entry `/log` says so ("No entry younger than 24 hours"), and the chat then refuses by design. The verifier daemon refreshes the log.
 2. **Decide who you trust:** `/log`, "Who you trust" → untick the verifier and the preview says the chat would refuse; send a chat message → "Key logged only outside the trust set. Message not sent." ("See who you trust" opens the panel in a new tab, so the thread stays; "Back to the site default" undoes it). The choice stays in your browser and applies from the next message.
-3. **See fail-closed:** the chat's first switch swaps the key (`/?tamper=1`, the first row of the table in the README; `pnpm demo:tamper` offline). The second (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
+3. **See fail-closed:** the chat's first switch swaps the key (`/?tamper=1`, the second row of the table in the README; `pnpm demo:tamper` offline). The second (`/?tamper=deployment`) keeps the real key and shows the client a deployment nobody logged → "Unknown deployment. Message not sent."; `/log`, "Deployments seen", lists the ones verifiers did log.
 4. **Turn the release rule on for yourself:** in the chat tick "Stricter: send only when a verifier you trust has marked this state of the enclave (the release rule)" and send a message. The browser attests again for this message and sends only when a verifier on your list has marked the enclave's action log exactly as it stands at that moment. On Nov 13 and 14 the site's default verifier wrote no release mark for almost 32 hours, and with the box ticked the card was red: "No release mark in the log. Message not sent." (the account is in [RELEASE.md](RELEASE.md)). On `/log`, "Who you trust" says which verifiers write release marks and when each last did. Marks have been written again since Nov 14, 08:13 UTC, and at 09:28 UTC a message sent with the box ticked was answered with its proof. Yours is answered when a verifier on your list has marked the state the enclave attests as you send. Otherwise the card is red and its title says why: "No release mark in the log. Message not sent." when the entries that vouch for the key carry no mark, "No verifier has marked this state of the enclave. Message not sent." when the enclave has added to its action log since the last mark. The preview on `/log` cannot apply the rule, because it has no attestation. It says the chat would refuse when no entry that vouches for the key carries a mark at all. Otherwise it says the rule is decided when you send. A mark is good until the enclave adds to its action log. After a new release at NEAR AI, every client with the rule on is refused until a verifier it trusts has followed that release and marked it. The switch stays in your browser, like your trust set, and a card refused by it says so. It can only add the rule. It does not turn off a rule the site has on (`AINEK_REQUIRE_RELEASE=1`) and does not set the wait (`AINEK_RELEASE_WAIT_MIN`). It says nothing about the Incognito model, which has no enclave.
 5. **See the non-TEE route:** pick the Incognito model in the chat → red card "This answer went through a non-attested model" (gateway signature only; our server sees this route in plaintext, and the card says so).
 6. **Re-verify a proof yourself:** "Re-verify yourself" on a card, "Copy a link to this proof" to hand the same check to someone else (the disclosure travels in the address after `#`, which browsers do not send to a server; such a link runs to several thousand characters, more than a Telegram message holds: where a chat cuts it, send the file), or paste [`docs/samples/disclosure.sample.json`](samples/disclosure.sample.json) (or a card's "Disclose to auditor" file) into `/verify` → Verify → hashes recomputed in your browser, signature checked, log entry re-read from the public log. "NEAR AI Verification Center" shows the same signature on NEAR AI's own page. Uncommitted proofs get a commit button on the card and on `/verify?id=…` (needs a testnet wallet). Connecting adds the function-call key; an account that never prepaid storage then gets a "Prepay 0.1 NEAR for storage and commit" button (one wallet dialog, 50 to 68 commits, not withdrawable); after that the key commits without a dialog, and the row shows the transaction.
@@ -227,9 +229,12 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Next steps
 
-- A verifier anyone can run in one command (`docker run` / `npx ainek-verify`) and, in a next version of the contract, open
-  verifier registration with a storage deposit, so the log stops depending on us. In this contract the owner registers verifiers.
-- A revoke entry in the log and a governed allowlist of compose hashes, so the card can compare measurements, not only show them.
+- A verifier anyone can run in one command. Today it runs from a Docker image you build yourself or from a GitHub
+  workflow you copy (`services/verifier/README.md`); next come a published image or `npx ainek-verify` and, in a next
+  version of the contract, open verifier registration with a storage deposit, so the log stops depending on us. In this
+  contract the owner registers verifiers.
+- A revoke entry in the log and a governed allowlist of compose hashes. Today the client refuses a launcher no trusted
+  verifier logged (on since Nov 11), but nobody decides which launchers are acceptable.
 - (Tier 2) The contract checks the model key behind an action against the key log at `propose_action`; today it checks
   only that the agent committed a proof hash.
 - A second provider in the same log (Venice): one public log for the whole private-inference industry, not one vendor.

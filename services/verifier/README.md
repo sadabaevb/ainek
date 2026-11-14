@@ -30,7 +30,7 @@ A key whose evidence does not verify is not logged, the other keys of the report
 ## Try it without an account
 
 ```sh
-pnpm -F verifier dry-run   # live re-attestation with a fresh nonce (up to ~40 s), prints the KeyEntryInput; sends nothing
+pnpm -F verifier dry-run   # live re-attestation with a fresh nonce (up to ~90 s), prints a KeyEntryInput for each replica; sends nothing
 ```
 
 No NEAR account, no API key: it shows exactly what a registered verifier would append to the log.
@@ -101,7 +101,7 @@ z-ai/glm-5.3-flash: key 5a02…caff with this compose already sent by us in this
 A release that could not be followed reads `release not marked: <why>` on that line, and the key is logged all the same.
 
 Variables (root `.env`, see `.env.example`): `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY`, `VERIFIER_MODELS`
-(comma-separated, default `z-ai/glm-5.3-flash`), `VERIFIER_INTERVAL_MIN` (15), `VERIFIER_REPORTS_PER_ROUND` (5; 1 in a dry run), `AINEK_CONTRACT`, `NEAR_RPC_URL`,
+(comma-separated, default `z-ai/glm-5.3-flash` in the code; the `.env.example` you copied names two models, so remove the second unless you mean to verify it), `VERIFIER_INTERVAL_MIN` (15), `VERIFIER_REPORTS_PER_ROUND` (5; 1 in a dry run), `AINEK_CONTRACT`, `NEAR_RPC_URL`,
 `NEARAI_BASE_URL`, `AINEK_ACCEPTED_TCB`, optional `VERIFIER_DATA_DIR`, `VERIFIER_RELEASE_MARKS` (on; `0` logs keys without
 release marks) and optional `GITHUB_TOKEN`. The release check reads public repositories on GitHub: a few requests for a
 release it has not read yet, then one in ten minutes for each release it sees (where the release's tag points). GitHub

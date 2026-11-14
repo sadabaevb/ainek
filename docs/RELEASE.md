@@ -16,12 +16,13 @@ the model to a source commit:
 | File | the file at that commit in the public repository `nearai/cvm-compose-files` hashes to the recorded sha256 |
 | Tag | the repository's tag of the recorded name points at that commit; a tag the repository does not have fails. A commit id alone could be a fork's: GitHub serves those under the parent's name |
 | Proxy image | pinned by digest in the file; its signed build provenance (Sigstore, GitHub Actions) names the repository, branch and commit |
-| Manager image | the same provenance check for Compose Manager, which writes the log, and a comparison with the image the measured compose starts it as |
+| Manager image | the same provenance check for Compose Manager, which writes the log. Next to it, whether this is the image the measured compose starts it as: a reading, which does not count toward the check mark or the release marks |
 | Engine and weights | printed as the file of the engine's own latest release names them; not checked |
 
 A check has three outcomes, and the command keeps them apart: it held, it failed, or it could not be made. GitHub saying
 "no such tag, file or build proof" fails the check; GitHub not answering leaves it not made. The summary line gets a check
-mark only when every check of the release was made and held.
+mark only when every check of the release was made and held: the instance, the file, the tag and the two build
+provenances.
 
 What that log held on the CVM that answered us on Nov 12, 2026 (`pnpm demo:attest --history` prints it for the CVM that
 answers you):
@@ -121,8 +122,10 @@ for one address. A read that fails is not remembered, so every report of a round
 (`packages/proof/src/release-chain.ts`). By the same report he put a token with no permissions (public repositories
 only) into `verifier.env` and restarted the container on the same image, `6f2ff98`; in the first round after that all
 15 attestations had their release checked, and entries #106 to #108 carry the marks. With the rule on for everyone, the hosted chat would have refused for much of that time: on the replica
-with the new release from 00:56 UTC, when its action log grew past the last mark, and on every replica from Nov 14,
-00:18 UTC, when those marks were a day old and no longer counted.
+with the new release from 00:56 UTC, when its action log grew past the last mark; on a second replica once its log grew
+past the 171 actions last marked (it had 215 when the marks returned); on the third replica throughout, because this
+verifier had never marked it before entry #108; and on every replica from Nov 14, 00:18 UTC, when the last marks were a
+day old and no longer counted.
 
 A visitor's own switch has been in the chat since Nov 14. With it on, the chat did refuse, as recorded that morning at
 about 07:40 UTC, 31 hours into the gap. A visitor who also trusted `anas-verifier.testnet` saw the release check on
