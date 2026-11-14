@@ -113,6 +113,11 @@ file ([PRIOR-ART.md](PRIOR-ART.md)); we learned of it on Nov 13.
 The first measured window came the next night. On Nov 13 at 00:56 UTC release v0.0.581 of the model's file went live on
 one replica, 38 minutes after its commit. The mark for that state came at 06:24 UTC, 5 hours 28 minutes later, and from
 the second verifier only: GitHub ran its hourly schedule at 23:28 and next at 06:24. The verifier on our server, the
-only one in the site's default trust set, wrote two entries after the release, neither with a mark; why its release
-check did not pass we have not established (`docs/DEV-NOTES.md`, Nov 13). With the rule on, a client routed to that
-replica would have refused all that time.
+only one in the site's default trust set, wrote no release mark from Nov 13, 00:18 UTC (entry #77) to Nov 14, 08:13 UTC
+(entry #106): almost 32 hours and thirteen entries without one. The cause, as its operator read it in the daemon's log
+on Nov 14: it ran without a GitHub token, used up the 60 requests an hour GitHub gives one address, and stayed over the
+limit, because a read that fails is not remembered and every report of a round asks again. With the rule on for
+everyone, the hosted chat would have refused all that time. With a visitor's own switch on (in the chat since Nov 14)
+it did refuse, as recorded that morning at about 07:40 UTC; for a visitor who also trusted `anas-verifier.testnet`, which
+had marked the state at 06:56 UTC, the release check on `/log` said the action log as it stood was marked
+(`docs/DEV-NOTES.md`, Nov 13 and 14).

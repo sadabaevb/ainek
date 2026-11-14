@@ -41,7 +41,7 @@ under [Limits](#limits).
 | --- | --- |
 | Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
 | Open [`/log`](https://ainek.vercel.app/log), "Who you trust" | The public key log, read from the NEAR contract, and your own choice of which verifiers count: untick the trusted one and the page says "Nobody is selected, so the chat refuses every message." |
-| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave", send any message | As the log stood on Nov 14: a red card, "Message not sent.", because the verifier the site trusts has written no mark for the release that runs now. On `/log` tick `anas-verifier.testnet` (the list shows when each verifier last wrote a release mark) and the same message passes that check |
+| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave", send any message | The browser attests again for this message and sends only if a verifier you trust has marked the enclave's action log as it stands: an answer with its proof when one has, a red card, "Message not sent.", when none has. `/log` shows when each verifier last wrote a release mark. From Nov 13, 00:18 UTC the verifier the site trusts wrote none for almost 32 hours; with the box ticked the chat refused, as recorded in the video |
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
@@ -117,8 +117,9 @@ What to know before trusting any of this. There are 26 in all, each with its rea
   public sources", not "approved".
 - **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log and
   acted on only for a visitor who turns the rule on in the chat. On Nov 13 the first mark for a new release came five
-  and a half hours after it went live, and from a verifier outside the site's default trust set; the one the site trusts
-  wrote none. With the rule on for everyone, the hosted chat would have refused all that time and longer
+  and a half hours after it went live, and from a verifier outside the site's default trust set. The one the site trusts
+  wrote no release mark for almost 32 hours, until Nov 14, 08:13 UTC: its release check had used up GitHub's limit for
+  requests without a token. With the rule on for everyone, the hosted chat would have refused all that time
   ([docs/RELEASE.md](docs/RELEASE.md)).
 - **The deployment is attested, the model is not verified.** Weights are not checked, what the enclave keeps cannot be
   proven, and the page is served by our server.
