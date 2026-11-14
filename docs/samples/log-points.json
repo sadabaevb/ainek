@@ -4,6 +4,7 @@
   "points": [
     { "index": 0, "entry_hash": "5b2e5e5b0e3314b8efc47188eef0c400c36842fdd87f050587fffecdc6116979", "seen": "2026-11-08" },
     { "index": 80, "entry_hash": "b530269416ee6c7f63dabbac0ef211d87c3a6244757eacbd34eb8c734b057fa3", "seen": "2026-11-13" },
-    { "index": 86, "entry_hash": "7bf088ebbd313eaf688d30c1ee8aee9c5a092b0e0b6eb236a5d192af3c94fdf0", "seen": "2026-11-13" }
+    { "index": 86, "entry_hash": "7bf088ebbd313eaf688d30c1ee8aee9c5a092b0e0b6eb236a5d192af3c94fdf0", "seen": "2026-11-13" },
+    { "index": 111, "entry_hash": "8023942ce71d5a0e1c216b7d07a5502388c08482e0e16afca1641a6cc012105b", "seen": "2026-11-14" }
   ]
 }

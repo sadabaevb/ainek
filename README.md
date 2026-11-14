@@ -68,7 +68,7 @@ pnpm demo:attest     # 10 to 15 s: the model's evidence fetched now and verified
                      #   in the log → "Result: WOULD SEND"; then the release behind the key, down to a source commit.
                      #   Nothing is sent. If Intel's service does not answer it ends "NOT CHECKED": run it again
 pnpm demo:log        # about 2 s: every hash of the log's chain recomputed and compared with places of the log recorded
-                     #   in this repository → "Result: the chain holds from #0 to #…, and all 3 places seen earlier
+                     #   in this repository → "Result: the chain holds from #0 to #…, and all 4 places seen earlier
                      #   are still in it."
 pnpm -F verifier dry-run  # up to 40 s: the entry a registered verifier would append; sends nothing. Ends in
                      #   `quote.collateral_unavailable` when Intel's service does not answer: run it again
@@ -115,14 +115,11 @@ What to know before trusting any of this. There are 26 in all, each with its rea
   GitHub account ([docs/DEPLOY.md](docs/DEPLOY.md)). The site trusts one of ours by default; you can change that on `/log`.
 - **A log entry is not a review.** A verifier writes down what attests. Its mark for a release says "followed to
   public sources", not "approved".
-- **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log and
-  acted on only for a visitor who turns the rule on in the chat. On Nov 13 the first mark for a new release came five
-  and a half hours after it went live. It came from a verifier outside the site's default trust set. The site's default
-  verifier wrote no release mark for almost 32 hours, until Nov 14, 08:13 UTC; by its operator's report, its release
-  check had used up GitHub's limit for requests without a token. With the rule on for everyone, the hosted chat would
-  have refused for much of that time: on a replica once its action log grew past the last mark, and on every replica
-  once those marks were a day old. With the box ticked it did refuse on the morning of Nov 14, and it answered at
-  09:28 UTC, once the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
+- **The client does not refuse on the release by default.** The finding on the first screen is only recorded in the log.
+  The chat acts on it only if the visitor ticks the box. The log was late: on Nov 13 a new release got its first mark
+  five and a half hours after going live, and the site's default verifier wrote none for almost 32 hours, until Nov 14,
+  08:13 UTC. With the box ticked, the chat found no mark from a trusted verifier and refused that morning; it answered
+  at 09:28 UTC, when the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
 - **The deployment is attested, the model is not verified.** Weights are not checked, what the enclave keeps cannot be
   proven, and the page is served by our server.
 

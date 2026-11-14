@@ -97,7 +97,7 @@ pnpm demo:attest     # the model's evidence fetched now and verified here (Intel
                      #   GitHub. It stops before a message exists: nothing is encrypted, sent or signed
 pnpm demo:log        # the whole key log read from the contract and every hash of its chain recomputed here, then
                      #   compared with the places of the log recorded in this repository → "Result: the chain holds
-                     #   from #0 to #86, and all 3 places seen earlier are still in it." (the second number grows with the log)
+                     #   from #0 to #111, and all 4 places seen earlier are still in it." (the second number grows with the log)
 ```
 
 The rest:
