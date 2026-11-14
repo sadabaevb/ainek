@@ -1,27 +1,25 @@
 # Ainek — a public log of private-AI keys on NEAR, and agents that spend under a signed policy
 
 > NEAR Hackathon submission (Nov 1–14, 2026). Tracks: **Privacy & Private AI** (messages encrypted end to end to an
-> attested key; of a conversation, at most a salted hash goes on chain), **AI Security & Defense** (the client refuses
-> before sending to a key nobody you trust has logged; the agent pays only under a signed policy), **Open Innovation**
-> (a public key log for private AI, after Certificate Transparency).
+> attested key), **AI Security & Defense** (the client refuses before sending; the agent pays only under a signed
+> policy), **Open Innovation** (a public key log for private AI, after Certificate Transparency).
 
 <!-- TODO before submission: 90-second video link here. -->
 
 A private model on NEAR AI Cloud answers from inside a TEE, a sealed environment the hardware vouches for, and signs
 each answer with a key bound to it. The hardware proves that the enclave is genuine. It does not prove that you are
-shown the same key as everyone else, or which code runs behind that key. On the replica that answered us (NEAR AI runs
-several copies of the model), the enclave's own record shows **five builds of the proxy that decrypts prompts in three
-weeks, behind one unchanged signing key**. [Brave](https://brave.com/blog/browser-ai-e2ee/), which builds on NEAR AI,
-wrote on Oct 15, 2026 that there is "no public log of TEE keys yet".
+shown the same key as everyone else, or which code runs behind that key. NEAR AI runs several copies (replicas) of the
+model. On the replica that answered us, the enclave's own record shows **five builds of the proxy that decrypts prompts
+in three weeks, behind one unchanged signing key**. [Brave](https://brave.com/blog/browser-ai-e2ee/), which builds on
+NEAR AI, wrote on Oct 15, 2026 that there is "no public log of TEE keys yet".
 
 **Ainek is a public, append-only log of those keys in a NEAR contract, and a client that sends nothing to a key the
-verifiers you chose did not log.** The idea is borrowed from Certificate Transparency for web certificates; unlike
-there, the writers here are not independent yet. A verifier checks the hardware evidence and writes down the key and
-the launcher behind it (the boot configuration the hardware measures). A key or a launcher nobody you trust has logged
-is refused before a message leaves. A message that does leave is encrypted end to end to that key, so our server cannot
-read it; prompts and answers never go on chain, only a salted hash of a proof when you commit one. Verifiers also
-record the release that serves the model, down to a source commit; refusing a release nobody recorded is off by
-default, and one switch in the chat turns it on for you.
+verifiers you chose did not log.** The idea comes from Certificate Transparency for web certificates; unlike there, the
+writers here are not independent yet. A verifier checks the hardware evidence and writes down the key and the launcher
+behind it (the boot configuration the hardware measures). If nobody you trust has logged them, the client refuses
+before a message leaves. A message that does leave is encrypted end to end to that key, so our server cannot read it,
+and at most a salted hash of its proof goes on chain. Verifiers also record the release that serves the model, down to
+a source commit. Refusing a release nobody recorded is off by default; one switch in the chat turns it on for you.
 
 **For agents that spend:** the agent's key can propose a payment, not make one. A private policy (a whitelist, caps,
 a threshold above which a person decides) runs inside Intel TDX on OutLayer, a service that runs jobs in enclaves for
@@ -33,10 +31,9 @@ and a stop button deletes the agent's key.
 | ![The proof card: model, hardware, key in the public log, hashes, E2EE, on NEAR](docs/screenshots/proof-card.png) | ![Red card: key not in the public log, message not sent](docs/screenshots/refused.png) |
 
 **Checked, not asserted.** 15 changes to recorded evidence are each refused for their own reason
-(`pnpm demo:controls`). 50 of 50 live runs verified on Nov 13 ([docs/METRICS.md](docs/METRICS.md)). In the 76
-repositories read for our survey of this hackathon's field we did not find, as far as the readings go, an append-only
-key log for several verifiers with the choice of whom to trust left to the viewer
-([docs/PRIOR-ART.md](docs/PRIOR-ART.md)).
+(`pnpm demo:controls`). 50 of 50 live runs verified on Nov 13 ([docs/METRICS.md](docs/METRICS.md)). We read 76
+repositories for our survey of this hackathon's field. As far as those readings go, none has an append-only key log for
+several verifiers where the viewer chooses whom to trust ([docs/PRIOR-ART.md](docs/PRIOR-ART.md)).
 
 **Limits, up front.** Testnet, not audited, and we can still replace the contract (its account has a full-access key).
 Three verifiers write to the log: two are ours, and the third is run by a friend of ours, with his own key, from his
@@ -50,11 +47,11 @@ own GitHub account. His entries name the same key and launchers as ours. More un
 
 | Do | See |
 | --- | --- |
-| Open the [chat](https://ainek.vercel.app) and click "Ask a private question" | An answer and its proof card, "Verified in this browser" (the picture above): the model, the hardware checks, the key's entry in the public log, the hashes, end-to-end encryption. "Re-verify yourself" runs the checks again in your browser |
+| Open the [chat](https://ainek.vercel.app) and click "Ask a private question" | An answer and its proof card, "Verified in this browser" (the picture above). "Re-verify yourself" runs the checks again in your browser |
 | Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
 | Open [`/log`](https://ainek.vercel.app/log), "Who you trust" | The public key log, read from the NEAR contract, and your own choice of which verifiers count: untick the trusted one and the page says "Nobody is selected, so the chat refuses every message." |
-| On [`/log`](https://ainek.vercel.app/log), "The code behind the key" → "Check the release" | The release that serves the model now, followed to a source commit, and under it the releases in that replica's action log (its own record of what was deployed in it): the kind of record the finding at the top was read from. Your browser asks GitHub and Sigstore, so it starts only when you click |
-| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave (the release rule)", send any message | The browser attests again for this message. You get an answer with its proof if a verifier you trust has marked the enclave's action log as it stands now, and the red card "Message not sent." if none has. Both are the client working: after each new release at NEAR AI it refuses until a verifier you trust has marked it. The video shows both, recorded on Nov 14 ([Limits](#limits)) |
+| On [`/log`](https://ainek.vercel.app/log), "The code behind the key" → "Check the release" | The release that serves the model now, followed to a source commit. Under it are the releases in that replica's action log, which is its own record of what was deployed in it. The finding at the top was read from this kind of record. Your browser asks GitHub and Sigstore, so the check starts only when you click |
+| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave (the release rule)", send any message | The browser attests again for this message. If a verifier you trust has marked the enclave's action log as it stands now, you get an answer with its proof. If none has, you get the red card "Message not sent." That is the client working: after each new release at NEAR AI it refuses until a verifier you trust has marked it. The video shows both results, recorded on Nov 14 ([Limits](#limits)) |
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
@@ -64,10 +61,10 @@ with no enclave) → the red card "This answer went through a non-attested model
 "Re-verify yourself" on a proof card, or a disclosure file pasted into `/verify`, re-checks a proof in your browser.
 Every step with all it shows: [docs/DETAILS.md](docs/DETAILS.md#in-a-browser-step-by-step).
 
-The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If it stops answering, everything
-except sending a message still works, `pnpm demo` replays a recorded exchange offline, and the chat runs locally with
-your key. If it refuses with no `?tamper` in the address, `/log` says why: the client refuses when no verifier you
-trust has logged the key in the last 24 hours.
+The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If the chat stops answering,
+everything except sending a message still works, `pnpm demo` replays a recorded exchange offline, and the chat runs
+locally with your own key. If the chat refuses and the address has no `?tamper`, open `/log` to see why: the client
+refuses when no verifier you trust has logged the key in the last 24 hours.
 
 **From a clean clone.** Node 24 or newer and pnpm 10 (`corepack enable`; `nvm use` reads the repo's `.nvmrc`; the
 root `pnpm` commands say so themselves when Node is older).
@@ -163,7 +160,7 @@ As of Nov 14, 2026.
 
 - **The key log and the client run end to end** on testnet and on the hosted demo: the contract
   `ainek-log-dastan.testnet`, the chat with its proof card, `/verify`, `/log`, `/auditor`. Three verifiers write to the
-  log, and the entries of the one we do not operate name the same key and launchers for the model as ours do.
+  log ([Limits](#limits)).
 - **The agent is on testnet:** twelve actions, all proposed by us. Seven came from the agent service with a real model
   answer, six of them through a Telegram bot on Nov 7 and 11
   ([docs/DETAILS.md](docs/DETAILS.md#the-agent-half-tier-2)).

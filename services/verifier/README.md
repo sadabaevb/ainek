@@ -30,7 +30,7 @@ A key whose evidence does not verify is not logged, the other keys of the report
 ## Try it without an account
 
 ```sh
-pnpm -F verifier dry-run   # live re-attestation with a fresh nonce (up to ~40 s), prints the KeyEntryInput; sends nothing
+pnpm -F verifier dry-run   # live re-attestation with a fresh nonce (up to ~90 s), prints a KeyEntryInput for each replica; sends nothing
 ```
 
 No NEAR account, no API key: it shows exactly what a registered verifier would append to the log.

@@ -500,8 +500,9 @@ submission, because after it nobody can fix a bug in the contract either.
 
 Before starting:
 
-- The repository is public. A reproducible build is only "rebuildable by anyone" then. The build itself already works
-  with the private repo; whether the deploy step insists on a public remote has not been tried.
+- The repository is public (it has been since Nov 13). A reproducible build is only "rebuildable by anyone" then. The
+  build itself worked while the repository was private; whether the deploy step insists on a public remote has not been
+  tried.
 - `cargo near build reproducible-wasm` in `contracts/ainek` gives the same sha256 on a second machine. Tried on Nov 6
   on one machine (an Apple-silicon Mac, the amd64 image under emulation): two builds of commit `c4a7752` both gave
   `dbb7c5c041c2549d788e81ccfaba9975a824f2e0452eb8796b170077ffa99cc9`. The container compiles with Rust 1.96.0, the

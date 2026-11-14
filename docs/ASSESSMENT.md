@@ -76,7 +76,7 @@ Does what was measured resolve to source somebody can read, and is it the code t
   quote's MRCONFIGID binds. The enclave's action log is authenticated against a quote of its own, and that quote must name
   the same CVM instance as the key's. The latest release for the model's service is followed to a file in
   `nearai/cvm-compose-files` (sha256 compared), to the repository's tag, and to the signed build provenance of the proxy
-  image, which names a source commit. Compose Manager's image is checked the same way and compared with the one the
+  image, which names a source commit. Compose Manager's image is checked the same way and shown next to the one the
   measured compose starts.
 - **Must be refused.** `pnpm demo:controls`, section 3: one character added to the app compose; an event added to the
   RTMR3 event log; an action removed from the action log. `pnpm test` (`release.test.ts`, against a fake GitHub): a file
