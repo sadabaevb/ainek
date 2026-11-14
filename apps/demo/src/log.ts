@@ -120,7 +120,8 @@ if (!whole) {
   console.log();
   const covers = points.length ? 'A place covers the entries up to its own index, from the day it was taken: nothing after that index, and nothing before that day. ' : '';
   // Who can still sign for the account that keeps this log: the chain's own list of its keys, asked now. Any key counts,
-  // not only a full-access one: `migrate` is `#[private]`, and a function-call key of the account can call it.
+  // not only a full-access one: `migrate` is `#[private]`, and a function-call key of the account can call it. An account
+  // that does not exist lists no keys either; this one has just answered as the log's contract.
   const keys = await viewAccessKeys(cfg.rpcUrl, cfg.contract).catch((err: unknown) => {
     line(NA, `The keys of the contract account could not be read, so who can replace its code is not shown: ${oneLine(describe(err).replace(/\s+/g, ' '), 240)}`);
     return undefined;
