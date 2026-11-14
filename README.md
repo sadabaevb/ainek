@@ -110,7 +110,8 @@ pnpm -F web dev      # http://localhost:3000; everything before a message works 
 ```
 
 Every command with its flags and what it needs: [docs/DETAILS.md](docs/DETAILS.md#the-commands-in-full). Rust is
-needed only for the two contracts and `jobs/policy`.
+needed only for the two contracts and `jobs/policy`: rustup installs the toolchain each of them pins, and the contract
+also needs `cargo-near` (`cargo install cargo-near --version 0.21.1 --locked`).
 
 ## What it checks
 
@@ -219,8 +220,8 @@ docs/                see "Where to read more" above; samples/ (recorded evidence
 Tests:
 
 - `pnpm test`, `pnpm typecheck`: TypeScript (node:test) in `packages/proof`, `packages/tier1-node`, `services/verifier`, `services/agent`, `apps/web`, `apps/demo`
-- `contracts/ainek`: `cargo near build non-reproducible-wasm` builds it; `cargo test` runs unit tests and a `near-sandbox` integration test
-- `jobs/policy`: `cargo test`
+- `contracts/ainek`: `cargo near build non-reproducible-wasm` builds it; `cargo test` runs 73 unit tests and two `near-sandbox` tests (the key log and the agent's flow, end to end). Both commands need `cargo-near`; the first `cargo test` takes a few minutes
+- `jobs/policy`: `cargo test` (19 tests)
 - `pnpm -F demo check-contract`: the deployed contract's ABI against SPEC §4.1, the hash of every entry included
 - `pnpm -F demo check-agent`: the agent's keys, funds and recorded decisions on chain
 
