@@ -210,7 +210,7 @@ Tests:
 - AI-generated code: substantial parts were written with Claude Code and reviewed by the team; the TypeScript branches went
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
-  <!-- TODO link compare pre-hackathon...hackathon-submission -->
+  [`pre-hackathon...hackathon-submission`](https://github.com/sadabaevb/ainek/compare/pre-hackathon...hackathon-submission).
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
   project of his own, built apart from this one: [NearBy](https://github.com/dastansam/nearby) (Dastan) and ushak (Bektur).
   <!-- TODO before submission: the link for ushak; check that both links open without a login; drop any not submitted -->
