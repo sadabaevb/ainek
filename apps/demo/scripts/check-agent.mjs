@@ -69,6 +69,7 @@ else note(`action_count() = ${count}; the node has no action past #${records.len
 note('A commit is a salted hash: neither the chain nor this script opens it, so this does not show a model answer behind it. The test actions run from scripts used placeholders (docs/DEPLOY.md).');
 
 const contractFullAccess = agentKeysOf(contractKeys, cfg.contract).fullAccess;
-if (contractFullAccess > 0) note(`${contractFullAccess} full-access key(s) on the contract account: whoever holds one can replace the code.`);
+if (contractKeys.length === 0) note('no access key on the contract account: nobody can sign a new deployment for it.');
+else note(`${contractKeys.length} access key(s) on the contract account, ${contractFullAccess} of them full-access: whoever holds a full-access one can replace the code.`);
 console.log(failures === 0 ? 'Result: OK' : `Result: ${failures} check(s) failed`);
 process.exit(failures === 0 ? 0 : 1);

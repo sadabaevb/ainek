@@ -515,10 +515,11 @@ the contract either.
 Steps 1 and 2 below were not done. The locked code is the non-reproducible build of `7b7292a` deployed on Nov 10 (code
 hash `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk`, the table above). It matches the build on Dastan's machine, but a
 reader cannot rebuild it to the same hash, so "this code is the source at `7b7292a`" is our statement. What anyone can
-check is that the code hash has not changed since Nov 10 and now cannot change. Steps 3 to 5 are done. Step 6 is not
-done yet: the README, `docs/CLAIMS.md` ("An immutable log"), the closing line of `pnpm demo:log` and the end card in
-`docs/DEMO-SCRIPT.md` still say the contract account has a full-access key. The text below is the plan as it was
-written before the lock.
+check is that the code hash has not changed since Nov 10 and now cannot change. Steps 3 to 5 are done. Step 6 is
+done as far as it can be without a reproducible build: the README, `docs/CLAIMS.md` ("An immutable log") and the end
+card in `docs/DEMO-SCRIPT.md` say that the account has no key and that the build cannot be repeated, and
+`pnpm demo:log` reads the account's keys from the chain on every run. The text below is the plan as it was written
+before the lock.
 
 Before starting:
 

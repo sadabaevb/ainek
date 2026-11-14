@@ -47,7 +47,7 @@ repositories, did not watch the videos, did not open the demos.
 
 | What | Who has it | What we have |
 | --- | --- | --- |
-| The contract cannot be swapped | Black box, NEAR Books, Judge, Warrant: 0 keys, the hash matches the build | The log contract has one full-access key, the owner is the contract itself |
+| The contract cannot be swapped | Black box, NEAR Books, Judge, Warrant: 0 keys, the hash matches the build | The log contract has one full-access key, the owner is the contract itself (as read then; since Nov 14 it has no keys, the owner is a separate account, and the build still cannot be repeated) |
 | Which code made the decision | Judge, Jurat check every run; Charter derives the key from the build hash | The claims are corrected, the check of the run's attestation is in progress |
 | Raw attestation reports are open | Vouch, Measure, TEE Receipts | At the verifier locally, the hash on chain |
 | Code in a TEE works together with a contract on chain | All eight projects with their own code in a TEE | The job runs on OutLayer testnet; contract v3, the token and the agent on testnet are not set up yet |
@@ -190,7 +190,7 @@ result with a key on a YubiKey; the signed feed with a hash chain is mirrored in
 
 - **The contract cannot be swapped.** `sealed-review-feed.testnet` has zero access keys (checked over RPC on Nov 13), and
   `contract_source_metadata` names the commit it was built from. The contract itself checks the signature of every entry and
-  the chain. Our contract has one full-access key.
+  the chain. Our contract has one full-access key (none since Nov 14; its build is not reproducible).
 - **A deeper hardware check.** MRTD and RTMR0-2 are recomputed from the published OS image, not only matched against
   the event log; there are checks of the TD attributes, of a second source of Intel collateral and of NVIDIA tokens against pinned
   keys. We take the SDK's checks as they are.
