@@ -68,7 +68,7 @@ pnpm demo:attest     # 10 to 15 s: the model's evidence fetched now and verified
                      #   in the log → "Result: WOULD SEND"; then the release behind the key, down to a source commit.
                      #   Nothing is sent. If Intel's service does not answer it ends "NOT CHECKED": run it again
 pnpm demo:log        # about 2 s: every hash of the log's chain recomputed and compared with places of the log recorded
-                     #   in this repository → "Result: the chain holds from #0 to #…, and all 3 places seen earlier
+                     #   in this repository → "Result: the chain holds from #0 to #…, and all 4 places seen earlier
                      #   are still in it."
 pnpm -F verifier dry-run  # up to 40 s: the entry a registered verifier would append; sends nothing. Ends in
                      #   `quote.collateral_unavailable` when Intel's service does not answer: run it again
