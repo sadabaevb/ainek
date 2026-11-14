@@ -37,16 +37,16 @@ are needed for `report_hash`) and checks them with `verifyModelAttestation` from
 through dcap-qvl, the GPU through NRAS, the policy `acceptedTcbStatuses: ['UpToDate']`), builds a `KeyEntry`, calls `log_key` under
 the verifier's own account, and saves the full attestation report to local storage (a JSON file) under
 `sha256(report)`. The six-hour rule: an entry that is already covered by an entry of this verifier not older than six hours
-(the same key, the same compose and all of its `image_digests` values) is not written again (`SIX_HOURS_NS`, `covers` in
+(the same key, the same compose hash and all of its `image_digests` values) is not written again (`SIX_HOURS_NS`, `covers` in
 `services/verifier/src/log.ts`).
 Two instances on two machines with different accounts (§4). Since 12 November, after checking a key the verifier goes through
 the release behind it (§7.4) and, if all the checks agree, appends release marks to the entry (§7.5).
 
-**Run by someone else in 5 minutes.** The verifier is not our internal service but the thing that makes the difference between a *log* and an *owner's registry*
+**Run by someone else in 5 minutes.** The verifier is not an internal service of ours. It is what makes the difference between a *log* and an *owner's registry*
 (docs/FIELD.md: at TEE Receipts the owner registers the keys). So it is packaged as a Docker image (`services/verifier/Dockerfile`) and
 runs from one's own GitHub account using the file `services/verifier/github-workflow.example.yml`, with one
 required parameter, the verifier account and its key (env); the steps are in `services/verifier/README.md`. The package in ghcr
-is not public yet, and there is no npm package (`npx ainek-verify`): these are next steps. The goal: by Nov 10 the log has entries from `v3`, a verifier run by a person from outside the team.
+is not public yet, and there is no npm package (`npx ainek-verify`): these are next steps. The goal: by Nov 10 the log has entries from `v3`, a verifier run by someone outside the team.
 
 ### 3.3 Client `apps/web` (Next.js): Bektur
 The NEAR AI SDK works in the browser (the generic entry, the manual flow from the verification-guide): `AttestationClient` through our proxy,
@@ -79,13 +79,11 @@ other people's pages in the browser but not a script. An exception that the card
 The page itself fits the request into these two limits (`apps/web/lib/history.ts`): the next message carries the latest
 exchanges of the conversation that fit into 50 messages and 64 KB. In E2EE a message takes two bytes per byte of text and up to
 178 bytes of wrapping (SDK 0.3.0; the test encrypts real requests). The earliest exchanges stay on the page, and it says
-how many of them will not go with the next message. There is one cut: an exchange that did not fit ends the history, and earlier
-short ones are not taken because of it. The page waits for a reply for 180 seconds (`REPLY_TIMEOUT_MS` in
+how many of them will not go with the next message. There is one cut: the first exchange that does not fit ends the history, and earlier, shorter ones are not taken either. The page waits for a reply for 180 seconds (`REPLY_TIMEOUT_MS` in
 `apps/web/lib/nearai-browser.ts`): the request is not streamed, and until the model has written the whole reply, nothing arrives. When
 the time runs out, the card says that the reply did not come and that the request may have reached the model. The proxy function lives 200 seconds
 (`maxDuration`), longer than the page; when the page has stopped waiting or the visitor has left, the proxy aborts the request upstream too
-(`req.signal`), so that the model does not finish a reply that nobody will read. Where the platform does not pass on the dropped
-connection, the request upstream runs to the end.
+(`req.signal`), so that the model does not finish a reply that nobody will read. Where the platform does not report the dropped connection, the upstream request runs to completion.
 
 In a request to the private model the page sets `reasoning_effort: "low"` (`REASONING_EFFORT` in
 `apps/web/lib/relay-guard.ts`; the proxy lets this field through only with this value and only for the attested model).
@@ -95,7 +93,7 @@ with measurements: `docs/METRICS.md`, the section on reasoning effort. The field
 
 The proxy checks the request body as it will send it: the bytes received go upstream, not the parsed JSON, so the body
 must match `JSON.stringify` of the parsed body byte for byte. Otherwise a body with a field named twice (first a forbidden
-model, then an allowed one) would pass the check as one thing and be read upstream as another. The page and the SDK's E2EE wrapper write
+model, then an allowed one) would pass the check as one request and be read upstream as another. The page and the SDK's E2EE wrapper write
 exactly such JSON; the test runs their real requests through this check.
 
 ### 3.5 Policy job `jobs/policy` (Rust, OutLayer WASI-P1): Dastan
@@ -111,14 +109,13 @@ and the worker measurements are approved at `worker.outlayer.*`. The agent does 
 compute the hash of itself), it is not part of the signature, and after the rule is moved to another build it will name the old one until the secret
 is updated. What must be compared is the hash from the attestation, not this field.
 
-**Retention is impossible by construction.** WASI-P1 gives the binary only stdin/stdout, environment variables and randomness: no network or file
-interfaces by the execution format, that is, the code has physically nowhere to save or send the input. To make this
+**Retention is impossible by construction.** WASI-P1 gives the binary only stdin/stdout, environment variables and randomness: the execution format provides no network or file interfaces, so the code has physically nowhere to save or send the input. To make this
 checkable, the build is reproducible: `Cargo.lock` is committed, and `scripts/wasm-hash.sh` (`cargo build --release --locked
 --target wasm32-wasip1` in a linux/amd64 container pinned by digest and a pinned toolchain version,
 `jobs/policy/rust-toolchain.toml`) gives the same `wasm_hash` on any machine; a build outside the container works, but its hash
 depends on the host platform; CI (`.github/workflows/policy-wasm.yml`) prints it, it is also
 published in `docs/DEPLOY.md` and matches the hash in the OutLayer attestation (it is not written into the contract). Anyone can build from the repo and compare.
-This is a proof of the impossibility of saving, not a proof of deletion: this is how we word it. It does not apply to the NEAR AI model
+We word this as a proof that saving is impossible, not as a proof of deletion. It does not apply to the NEAR AI model
 (their serving image is closed).
 
 ### 3.6 Agent `services/agent` (Node 24, TS): Bektur; the contract part (`chain.ts`) and the policy deploy: Dastan
@@ -282,11 +279,7 @@ callback `on_transfer` → `Executed` and the event `action_executed`, or `Faile
 and the policy and key have not changed since the decision) executes in the same way, event
 `action_approved`; `reject` → `Rejected`, `action_rejected`. `Deny` → `Denied`, `action_denied`, without execution.
 The amount counts toward `spent_today` immediately on `Allow` and `NeedsApproval` (so that a queue of waiting actions does not get around the daily limit)
-and is returned on `Rejected`/`Failed`. The daily limit is hard, and an approval does not raise it (§6.2): an action left over from
-the previous day cannot be approved, only `reject`ed, after which the agent proposes it again through the job (otherwise yesterday's queue
-would go through on top of today's limit; the price of the rule: an action proposed shortly before 00:00 UTC, that is, before 06:00 in Bishkek,
-must be approved before that boundary; yesterday's actions that were not rejected take up room in the queue of 20). Within a day `approve` is not limited to ten minutes: the decision's expiry belongs
-to `propose_action`. `propose_action` and `approve` must be called with at least
+and is returned on `Rejected`/`Failed`. The daily limit is hard, and an approval does not raise it (§6.2). An action left over from the previous day cannot be approved, only `reject`ed, after which the agent proposes it again through the job. Otherwise yesterday's queue would go through on top of today's limit. The price of the rule: an action proposed shortly before 00:00 UTC, that is, before 06:00 in Bishkek, must be approved before that boundary, and yesterday's actions that were not rejected take up room in the queue of 20. Within a day, `approve` has no ten-minute limit: the decision's expiry applies to `propose_action`. `propose_action` and `approve` must be called with at least
 60 TGas (the transfer and the callback are paid from it; the default 30 TGas in near-api-js is not enough).
 The event `action_proposed {action_id, agent_id, verdict, policy_hash, policy_version, action_commit, model_proof_commit}` carries
 no amount and no receiver; the transfer itself is visible in the transaction on public testnet (we say this honestly). The other events:
@@ -430,12 +423,10 @@ integers up to 2^53−1 (U64/U128 are decimal strings, as in near-sdk), `undefin
    minutes): the contract compares `observed_at` only with the lower bound of the window by block time, and an entry dated in the future
    would otherwise stay in the window forever, and an RPC that answers from an old block would pass old entries off as fresh.
    Why: the view returns no more than 100 entries, and verifiers are registered by the contract owner, not by the client, so without
-   separate reads one registered account would push out the entries of the trusted ones. A verifier's own read is
-   also limited to a hundred. The client requires an entry with the same `signing_address` and `compose_hash`
+   separate reads one registered account would push out the entries of the trusted ones. A read of a single verifier is also limited to 100 entries. The client requires an entry with the same `signing_address` and `compose_hash`
    from at least `AINEK_QUORUM` verifiers out of `AINEK_TRUSTED_VERIFIERS` (entries of unknown verifiers are shown but not counted); if two trusted verifiers have no common key in the window, the result is the banner
    "split-view" and a refusal (different sets with a common key, as in an ordinary key change, do not count as a disagreement). Consequence:
-   a trusted verifier that stopped near a key change is left, after a day, with the old key against the new one of
-   the others, and the client refuses everyone until its entry leaves the window. So a verifier enters the default set
+   a trusted verifier that stopped around a key change still has only the old key after a day, while the others have the new one, and the client refuses everyone until its entry leaves the window. So a verifier enters the default set
    only after a day of steady work on schedule. No entry: a refusal with an explanation, nothing is sent. `AINEK_TRUSTED_VERIFIERS` and `AINEK_QUORUM` come from the environment (by default `ainek-dev-dastan.testnet` and 1; a quorum that does not read as an integer from 1 is replaced by a strict one: all trusted verifiers, but not fewer than two) and are
    only default values: the visitor changes them on `/log` (stored in the visitor's browser, separately for each network and contract;
    they take effect from the next message). Candidates for the list: the default values, `verifiers()`, authors of entries in the window and any
@@ -600,8 +591,7 @@ or by the switch. `pnpm demo:attest` names the variable.
    "rewritten" is not said here. An exact match with an earlier mark does not cancel this refusal.
 5. A mark for exactly the current action log (the same length, the same hash) must be held by at least `AINEK_QUORUM` different
    verifiers among the entries from step 1. If there are such verifiers but fewer, the refusal is `release-below-quorum`.
-   If there are none, the refusal is `unknown-release`: after the last mark the enclave appended to the log, or no trusted
-   verifier has marked this instance (a verifier may have seen it and not marked it: a mark is written only if all the
+   If there are none, the refusal is `unknown-release`: either the enclave appended to its action log after the last mark, or no trusted verifier has marked this instance (a verifier may have seen it and not marked it: a mark is written only if all the
    release checks agreed).
 
 The rule does not read the actions themselves: a release of the model file, a deployment from another file, a restart of
@@ -646,8 +636,7 @@ other: the verifier will check it and mark it. No wait for a release is set by d
 attestation is the one checked, while the gateway chooses the instance for each connection.
 The verifier does not remember an action log for longer than its entries in the window: when marks longer than a cut log leave the
 window, it will mark the cut log like an ordinary one. Without marks from trusted verifiers, the rule, when on, always
-refuses. They have written marks since Nov 12, but on Nov 13 the log did not keep up with a release: one replica stood
-for more than three hours without a mark (DEV-NOTES 2026-11-13). Therefore the rule is off by default.
+refuses. They have written marks since Nov 12, but on Nov 13 the log did not keep up with a release: one replica went more than three hours without a mark (DEV-NOTES 2026-11-13). Therefore the rule is off by default.
 
 `pnpm demo:attest` prints, at the end of its step 5, what the log says about the answering replica's action log; `/log` shows
 the same line (`releaseLineFor`) last under the check "Code behind the key": for one replica, which goes through
@@ -659,15 +648,15 @@ entry with marks without an account. For the submission the rule is shown, not a
 after a day of entries with marks, if the log keeps up with releases (DECISIONS 2026-11-12); on Nov 13 it did not.
 
 ### 7.6 Who else has looked at this state (since Nov 13; shown only)
-Of the three verifiers of our log, two are ours and the third is run by a friend of ours. Other people also check NEAR AI and publish the result under the same values
+Of the three verifiers of our key log, two are ours and the third is run by a friend of ours. Other people also check NEAR AI and publish the result under the same values
 that the enclave attests. The client reads three such sources and shows them next to the release (`outsideReadings` in
 `packages/proof/src/outside-readings.ts`; `pnpm demo:attest` after step 5; the "Code behind the key" row of the card and `/log` after
 the release check):
 
 | Source | Where from | On which value |
 | --- | --- | --- |
-| Countersign | the `hosts` and `entry(seq)` views of the contract `sealed-review-feed.testnet` (NEAR testnet) | the model's signing key and the launcher's compose-hash |
-| Quill Cloud | `enclave-go/sidecar/near_ai_policy.json` in its repository (raw.githubusercontent.com) | the launcher's compose-hash and the action log hash |
+| Countersign | the `hosts` and `entry(seq)` views of the contract `sealed-review-feed.testnet` (NEAR testnet) | the model's signing key and the launcher's compose hash |
+| Quill Cloud | `enclave-go/sidecar/near_ai_policy.json` in its repository (raw.githubusercontent.com) | the launcher's compose hash and the action log hash |
 | teemoon audits | the page `manifests/nearai/cvm-compose-files/<file without .yaml>/sha256-<hash>.md` in its repository | the release file's hash |
 
 A Countersign feed entry is a JWT signed with ES256. It is read only if the signature checked out with one of the two feed keys
@@ -722,7 +711,7 @@ on Nov 12 with a request of our own (`pnpm demo:reply-key`): HTTP 400 "Decryptio
 (see "Known issues we inherited" in `docs/CLAIMS.md`).
 
 Unresolved (in `docs/CLAIMS.md`, "We do not claim"; the README has the five main points and a link): size/timing side channels; the identity of the weights (the deployment is attested);
-the operator's code inside the enclave (partly: build provenance through Sigstore, next steps); the measurement allowlist (since Nov 11 the client refuses if the compose-hash is not recorded together with the key, §7.1; nobody decides which composes are allowed, and another instance under the same key can answer); key revocation (60 min cache, 24 h log window, no revoke entry); linkability of use (a commit is a transaction
+the operator's code inside the enclave (partly: build provenance through Sigstore, next steps); the measurement allowlist (since Nov 11 the client refuses if the compose hash is not recorded together with the key, §7.1; nobody decides which composes are allowed, and another instance under the same key can answer); key revocation (60 min cache, 24 h log window, no revoke entry); linkability of use (a commit is a transaction
 from the user's account); the server that serves the page is the same as the relay.
 
 ## 9. Metrics for the README
