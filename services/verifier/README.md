@@ -108,7 +108,7 @@ release it has not read yet, then one in ten minutes for each release it sees (w
 allows 60 anonymous requests an hour from one address; a token with no scopes raises that, and it is sent to
 api.github.com only. Set one for a daemon: a read that fails is not remembered, so every report of a round asks again, and
 a daemon that has hit the limit stays over it. Ours ran without a token and wrote no release mark for almost 32 hours
-on Nov 13 and 14. `--env-file` is read when the container is created: after a change to `verifier.env`, `docker rm` and
+on Nov 13 and 14 (`docs/RELEASE.md`). `--env-file` is read when the container is created: after a change to `verifier.env`, `docker rm` and
 `docker run` again, not `docker restart`.
 
 Tests: `pnpm -F verifier test` (offline, on the recorded report in `docs/samples`).

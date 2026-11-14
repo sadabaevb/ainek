@@ -113,13 +113,15 @@ file ([PRIOR-ART.md](PRIOR-ART.md)); we learned of it on Nov 13.
 The first measured window came the next night. On Nov 13 at 00:56 UTC release v0.0.581 of the model's file went live on
 one replica, 38 minutes after its commit. The mark for that state came at 06:24 UTC, 5 hours 28 minutes later, and from
 the second verifier only: GitHub ran its hourly schedule at 23:28 and next at 06:24. The verifier on our server, the
-only one in the site's default trust set, wrote no release mark from Nov 13, 00:18 UTC (entry #77) to Nov 14, 08:13 UTC
-(entry #106): almost 32 hours and thirteen entries without one. The cause, as its operator read it in the daemon's log
-on Nov 14: it ran without a GitHub token, used up the 60 requests an hour GitHub gives one address, and stayed over the
-limit, because a read that fails is not remembered and every report of a round asks again. With the rule on for
-everyone, the hosted chat would have refused all that time. With a visitor's own switch on (in the chat since Nov 14)
-it did refuse, as recorded that morning at about 07:40 UTC; for a visitor who also trusted `anas-verifier.testnet`, which
-had marked the state at 06:56 UTC, the release check on `/log` said the action log as it stood was marked. At 09:28 UTC,
-with the marks back, a message sent with the switch on and the default trust set was answered with its proof: the key
-at entry #106, whose mark covers the 280 actions the enclave attested to that browser. It is the one message with the
-rule on that we have sent end to end on the hosted site (`docs/DEV-NOTES.md`, Nov 13 and 14).
+only one in the site's default trust set as of Nov 14, wrote no release mark from Nov 13, 00:18 UTC (entry #77) to
+Nov 14, 08:13 UTC (entry #106). That is almost 32 hours and thirteen entries without one. Its operator read the cause
+in the daemon's log on Nov 14. The daemon ran without a GitHub token and used up the 60 requests an hour that GitHub
+gives one address. It then stayed over the limit, because a read that fails is not remembered and every report of a
+round asks again. With the rule on for everyone, the hosted chat would have refused all that time.
+
+A visitor's own switch has been in the chat since Nov 14. With it on, the chat did refuse, as recorded that morning at
+about 07:40 UTC, 31 hours into the gap. A visitor who also trusted `anas-verifier.testnet` saw the release check on
+`/log` say that the action log as it stood was marked: that verifier had marked the state at 06:56 UTC. At 09:28 UTC,
+with the marks back, a message sent with the switch on and the default trust set was answered with its proof. Its key
+is at entry #106, and that entry's mark covers the 280 actions the enclave attested to that browser. As of Nov 14 it is
+the only message with the rule on that we have sent end to end on the hosted site (`docs/DEV-NOTES.md`, Nov 13 and 14).
