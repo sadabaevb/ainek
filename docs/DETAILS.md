@@ -104,7 +104,7 @@ The rest:
 
 ```bash
 # offline, no key
-pnpm test                        # packages/proof: canonical JSON, hashing, signatures, the fail-closed rule, the recorded
+pnpm test                        # every package (proof, tier1-node, web, verifier, agent, demo): canonical JSON, hashing, signatures, the fail-closed rule, the recorded
                                  #   samples end to end, the on-chain entry #0 hash reproduced byte for byte
 pnpm demo:controls               # negative controls on the recording `pnpm demo` accepts: 15 changes (a byte of the quote,
                                  #   the nonce, the key, the launcher, the event log, the action log, the answer), each of
@@ -112,8 +112,10 @@ pnpm demo:controls               # negative controls on the recording `pnpm demo
                                  #   each for its own reason." The same table runs in `pnpm test`
 
 # needs the network; demo:live and the chat also need NEARAI_API_KEY in .env (cp .env.example .env; cloud.near.ai → API Keys)
-pnpm -F verifier dry-run         # no key, needs network (up to ~40 s): re-attests the model with a fresh nonce, verifies the TDX + GPU
-                                 #   evidence and prints the key-log entry a registered verifier would append; sends nothing.
+pnpm -F verifier dry-run         # no key, needs network (up to ~90 s): re-attests each model in VERIFIER_MODELS (one by default, two
+                                 #   in .env.example) with a fresh nonce, verifies the TDX + GPU evidence and prints the key-log
+                                 #   entry a registered verifier would append for each replica; sends nothing, and keeps the raw
+                                 #   reports under services/verifier/data/reports.
                                  #   It retries what the SDK calls temporary (3 tries); if it still ends in
                                  #   `quote.collateral_unavailable`, Intel's API did not answer (Node calls it directly): run it again;
                                  #   demo:attest says so itself and ends "NOT CHECKED", which is not a failed check
@@ -227,9 +229,12 @@ stop button: DeleteKey + pause_agent                                            
 
 ## Next steps
 
-- A verifier anyone can run in one command (`docker run` / `npx ainek-verify`) and, in a next version of the contract, open
-  verifier registration with a storage deposit, so the log stops depending on us. In this contract the owner registers verifiers.
-- A revoke entry in the log and a governed allowlist of compose hashes, so the card can compare measurements, not only show them.
+- A verifier anyone can run in one command. Today it runs from a Docker image you build yourself or from a GitHub
+  workflow you copy (`services/verifier/README.md`); next come a published image or `npx ainek-verify` and, in a next
+  version of the contract, open verifier registration with a storage deposit, so the log stops depending on us. In this
+  contract the owner registers verifiers.
+- A revoke entry in the log and a governed allowlist of compose hashes. Today the client refuses a launcher no trusted
+  verifier logged (on since Nov 11), but nobody decides which launchers are acceptable.
 - (Tier 2) The contract checks the model key behind an action against the key log at `propose_action`; today it checks
   only that the agent committed a proof hash.
 - A second provider in the same log (Venice): one public log for the whole private-inference industry, not one vendor.
