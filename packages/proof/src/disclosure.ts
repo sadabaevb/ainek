@@ -1,4 +1,4 @@
-// Selective disclosure (SPEC §5.1, "Раскрыть аудитору"): one exchange's proof, its log entry and the exact
+// Selective disclosure (SPEC §5.4, "Disclose to auditor"): one exchange's proof, its log entry and the exact
 // bytes, in one JSON file an auditor can feed to /verify, /auditor or the replay demo. The bytes are the E2EE
 // ciphertext as sent/received: the plaintext is never part of a disclosure.
 import { z } from 'zod';
