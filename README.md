@@ -64,7 +64,7 @@ verifiers are ours, and only our client requires the log. Every limit, with its 
 | Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
 | Open [`/log`](https://ainek.vercel.app/log), "Who you trust" | The public key log, read from the NEAR contract, and your own choice of which verifiers count: untick the trusted one and the page says "Nobody is selected, so the chat refuses every message." |
 | On [`/log`](https://ainek.vercel.app/log), "The code behind the key" → "Check the release" | The release that serves the model now, followed to a source commit. Under it are the releases in that replica's action log, which is its own record of what was deployed in it. The finding at the top was read from this kind of record. Your browser asks GitHub and Sigstore, so the check starts only when you click |
-| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave (the release rule)", send any message | The browser attests again for this message. If a verifier you trust has marked the enclave's action log as it stands now, you get an answer with its proof. If none has, you get the red card "Message not sent." That is the client working: after each new release at NEAR AI it refuses until a verifier you trust has marked it ([Limits](#limits)). The video shows both results, recorded on Nov 14 |
+| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave (the release rule)", send any message | The browser attests again for this message. If a verifier you trust has marked the enclave's action log as it stands now, you get an answer with its proof. If none has, you get the red card "Message not sent." That is the client working: after each new release at NEAR AI it refuses until a verifier you trust has marked it ([Limits](#limits)). The video shows the answer and the red card, both recorded on Nov 14 |
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
@@ -253,8 +253,8 @@ Tests:
   `out-layer/private-dao-example` (Tier 2).
 - AI-generated code: substantial parts were written with Claude Code and reviewed by the team; the TypeScript branches went
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
-- The video was put together by Claude Code: a page in the site's look photographed frame by frame, with recordings of
-  the hosted site inside, and a synthetic voice. What is recorded and what is drawn: `docs/DEMO-SCRIPT.md`.
+- The video was made by Claude Code: a page styled like the site, captured frame by frame, with recordings of the
+  hosted site inside and a synthetic voice. What is recorded and what is drawn: `docs/DEMO-SCRIPT.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   [`pre-hackathon...hackathon-submission`](https://github.com/sadabaevb/ainek/compare/pre-hackathon...hackathon-submission).
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one

@@ -65,7 +65,7 @@ Its lines and start times are in the table above, so a person's voice can replac
 
 ## X posts
 
-Published on Nov 14 at 15:07 UTC from Dastan's account: https://x.com/kingleard_/status/2121621128829681958. Each is within 280 characters by X's count (a link counts as 23). The video is attached to the first.
+The post was published on Nov 14 at 15:07 UTC from Dastan's account: https://x.com/kingleard_/status/2121621128829681958. Each text is within 280 characters by X's count (a link counts as 23). The video is attached to the first.
 
 - Post (271), as published: "Private AI proves its hardware is real. It doesn't say the code reading your prompts had 5 builds in 3 weeks. Same key. Ainek, built at NEAR HACKATHON: Certificate Transparency for private AI on @NEARProtocol. Nothing goes to an enclave nobody vouched for. #NEARHackathon"
-- Reply under it (278), as drafted for it: "Try it, no wallet: https://ainek.vercel.app/?tamper=1 Code, limits: https://github.com/sadabaevb/ainek The key log is a locked NEAR contract. The agent's policy runs in Intel TDX on OutLayer; the contract checks its signature. Two of 3 verifiers are ours. Would you run one? @NearLegion @NearBuilders"
+- Reply under it (278), the text drafted for it: "Try it, no wallet: https://ainek.vercel.app/?tamper=1 Code, limits: https://github.com/sadabaevb/ainek The key log is a locked NEAR contract. The agent's policy runs in Intel TDX on OutLayer; the contract checks its signature. Two of 3 verifiers are ours. Would you run one? @NearLegion @NearBuilders"

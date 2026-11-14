@@ -49,7 +49,8 @@ All 13 track ids: `defi`, `thesis`, `privacy`, `business`, `swarms`, `security`,
 - IP stays with the team; the organizers get non-exclusive promo rights.
 
 ## Submission checklist (Nov 14)
-- [x] `git clone` → README → everything runs on someone else's machine: a fresh clone of `main` on Nov 14 (install, 434 tests, `pnpm demo`, `demo:controls`, `demo:log`), on our own machine
+- [x] `git clone` → README → everything runs: a fresh clone of `main` on Nov 14 on our own machine (install, 434 tests, `pnpm demo`, `demo:controls`, `demo:log`)
+- [ ] The same run on someone else's machine
 - [x] LICENSE in the root (MIT)
 - [x] README: what it is, steps "do X, see Y", limits, disclosures, diff link; the "NEAR provides / Ainek adds" and trust tables, metrics and next steps since Nov 14 are in `docs/DETAILS.md` and `docs/METRICS.md`, the README links to them
 - [x] No secrets in the history (`gitleaks` or a manual check): Nov 12, all branches and PR heads, DEV-NOTES; repeat before the tag
