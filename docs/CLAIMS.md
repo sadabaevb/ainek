@@ -144,7 +144,8 @@ output may say more than this file does.
   is why the browser attests again for every message while the rule is on. It checks the replica that attested, and the
   gateway picks the replica per connection. Its cost is refusals: after every action in an enclave, until a verifier has
   seen that replica again. On the two logs we hold that is about two windows a day for each replica. Live we have a run that would send
-  (Nov 12), a message that was sent (Nov 14) and two refusals (a window on Nov 13, the hosted chat on Nov 14). Entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC) were the first
+  (Nov 12), a message that was sent (Nov 14), one refusal (the hosted chat on the morning of Nov 14) and a window in
+  which a client would have refused (Nov 13). Entries #73 and #74 (Nov 12, 17:10 and 17:30 UTC) were the first
   with marks, one from each verifier, and with the rule on `pnpm demo:attest` reported that it would send, for the one
   replica that answered. On Nov 13 a replica stayed unmarked for about five and a half hours after a release, and a client
   routed there would have refused all that time. The verifier in the site's default trust set wrote no release mark for

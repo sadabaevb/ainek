@@ -17,8 +17,8 @@ NEAR AI, wrote on Oct 15, 2026 that there is "no public log of TEE keys yet".
 verifiers you chose did not log.** The idea comes from Certificate Transparency for web certificates; unlike there, the
 writers here are not independent yet. A verifier checks the hardware evidence and writes down the key and the launcher
 behind it (the boot configuration the hardware measures). If nobody you trust has logged them, the client refuses
-before a message leaves. A message that does leave is encrypted end to end to that key, so our server cannot read it,
-and at most a salted hash of its proof goes on chain. Verifiers also record the release that serves the model, down to
+before a message leaves. A message to the attested model is encrypted end to end to that key, so our server cannot
+read it, and at most a salted hash of its proof goes on chain. Verifiers also record the release that serves the model, down to
 a source commit. Refusing a release nobody recorded is off by default; one switch in the chat turns it on for you.
 
 **For agents that spend:** the agent's key can propose a payment, not make one. A private policy (a whitelist, caps,
@@ -37,7 +37,7 @@ several verifiers where the viewer chooses whom to trust ([docs/PRIOR-ART.md](do
 
 **Limits, up front.** Testnet, not audited, and we can still replace the contract (its account has a full-access key).
 Three verifiers write to the log: two are ours, and the third is run by a friend of ours, with his own key, from his
-own GitHub account. His entries name the same key and launchers as ours. More under [Limits](#limits).
+own GitHub account. For this model his entries name the same key and launchers as ours. More under [Limits](#limits).
 
 **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
 
@@ -51,7 +51,7 @@ own GitHub account. His entries name the same key and launchers as ours. More un
 | Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
 | Open [`/log`](https://ainek.vercel.app/log), "Who you trust" | The public key log, read from the NEAR contract, and your own choice of which verifiers count: untick the trusted one and the page says "Nobody is selected, so the chat refuses every message." |
 | On [`/log`](https://ainek.vercel.app/log), "The code behind the key" → "Check the release" | The release that serves the model now, followed to a source commit. Under it are the releases in that replica's action log, which is its own record of what was deployed in it. The finding at the top was read from this kind of record. Your browser asks GitHub and Sigstore, so the check starts only when you click |
-| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave (the release rule)", send any message | The browser attests again for this message. If a verifier you trust has marked the enclave's action log as it stands now, you get an answer with its proof. If none has, you get the red card "Message not sent." That is the client working: after each new release at NEAR AI it refuses until a verifier you trust has marked it. The video shows both results, recorded on Nov 14 ([Limits](#limits)) |
+| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave (the release rule)", send any message | The browser attests again for this message. If a verifier you trust has marked the enclave's action log as it stands now, you get an answer with its proof. If none has, you get the red card "Message not sent." That is the client working: after each new release at NEAR AI it refuses until a verifier you trust has marked it ([Limits](#limits)) |
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
@@ -62,12 +62,13 @@ with no enclave) → the red card "This answer went through a non-attested model
 Every step with all it shows: [docs/DETAILS.md](docs/DETAILS.md#in-a-browser-step-by-step).
 
 The hosted chat runs on our NEAR AI key, which has a spend limit and a rate limit. If the chat stops answering,
-everything except sending a message still works, `pnpm demo` replays a recorded exchange offline, and the chat runs
-locally with your own key. If the chat refuses and the address has no `?tamper`, open `/log` to see why: the client
-refuses when no verifier you trust has logged the key in the last 24 hours.
+`pnpm demo` replays a recorded exchange offline and the chat runs locally with your own key; the log on `/log`,
+`/agent`, `/auditor` and `/verify` read NEAR and do not use that key. If the chat refuses and the address has no
+`?tamper`, the red card says why and links to who you trust. Most often no verifier you trust has logged this key, or
+the launcher of the replica that answered, in the last 24 hours.
 
 **From a clean clone.** Node 24 or newer and pnpm 10 (`corepack enable`; `nvm use` reads the repo's `.nvmrc`; the
-root `pnpm` commands say so themselves when Node is older).
+`demo:*`, `test` and `typecheck` commands say so themselves when Node is older).
 
 ```bash
 git clone https://github.com/sadabaevb/ainek && cd ainek && pnpm i
@@ -230,9 +231,7 @@ Tests:
   verification guide, `near-examples/nearai-cloud-verification-example`, `nearai/nearai-cloud-verifier`,
   `out-layer/private-dao-example` (Tier 2).
 - AI-generated code: substantial parts were written with Claude Code and reviewed by the team; the TypeScript branches went
-  through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`. The video was
-  also put together by the agent, from recordings of the hosted site, and its voice is synthetic
-  ([docs/DEMO-SCRIPT.md](docs/DEMO-SCRIPT.md)).
+  through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   [`pre-hackathon...hackathon-submission`](https://github.com/sadabaevb/ainek/compare/pre-hackathon...hackathon-submission).
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
