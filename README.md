@@ -116,13 +116,10 @@ What to know before trusting any of this. There are 26 in all, each with its rea
 - **A log entry is not a review.** A verifier writes down what attests. Its mark for a release says "followed to
   public sources", not "approved".
 - **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log and
-  acted on only for a visitor who turns the rule on in the chat. On Nov 13 the first mark for a new release came five
-  and a half hours after it went live. It came from a verifier outside the site's default trust set. The site's default
-  verifier wrote no release mark for almost 32 hours, until Nov 14, 08:13 UTC; by its operator's report, its release
-  check had used up GitHub's limit for requests without a token. With the rule on for everyone, the hosted chat would
-  have refused for much of that time: on a replica once its action log grew past the last mark, and on every replica
-  once those marks were a day old. With the box ticked it did refuse on the morning of Nov 14, and it answered at
-  09:28 UTC, once the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
+  acted on only for a visitor who turns the rule on in the chat. The log did not keep up: on Nov 13 the first mark for
+  a new release came five and a half hours after it went live, and the site's default verifier wrote none for almost
+  32 hours, until Nov 14, 08:13 UTC. With the box ticked the chat refused that morning and answered at 09:28 UTC, once
+  the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
 - **The deployment is attested, the model is not verified.** Weights are not checked, what the enclave keeps cannot be
   proven, and the page is served by our server.
 
