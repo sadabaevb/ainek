@@ -63,5 +63,5 @@ Its lines and start times are in the table above, so a person's voice can replac
 
 Each within 280 characters by X's count (a link counts as 23). The video is attached to the first.
 
-- Post (278): "Ainek, built at NEAR HACKATHON. A TEE key can stay the same while the code behind it changes: 5 proxy builds in 3 weeks, by NEAR AI's public record. So: a public log of keys and releases on @NEARProtocol, and a client that refuses what your verifiers did not log. #NEARHackathon"
+- Post (276): "1 TEE key. 5 builds of the code behind it. 3 weeks. Attestation proves the enclave, not which code runs. Ainek, built at NEAR HACKATHON: Certificate Transparency for private AI on @NEARProtocol. A public log of keys and releases, a client that refuses the rest. #NEARHackathon"
 - Reply with the repo link (242 with the link): "Repo: https://github.com/sadabaevb/ainek. You choose which verifiers count; today two are ours and one is a friend's. Every proof re-checks in your browser, and pnpm demo replays the checks offline with no API key. What we do not claim is in the README."
