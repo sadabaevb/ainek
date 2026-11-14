@@ -96,8 +96,20 @@ the last 24 hours. It runs in Docker on a Linux VPS (x86_64, clock synchronized)
 `ainek-dev-dastan.testnet`.
 
 On the server everything lives in `/opt/ainek-verifier`: `src/` is the tracked files of `main` (no `.env`), and
-`verifier.env` (mode 600, root only) holds `VERIFIER_ACCOUNT_ID` and `VERIFIER_PRIVATE_KEY` and nothing else. The
-contract, the RPC and the model come from the defaults in the code.
+`verifier.env` (mode 600, root only) holds `VERIFIER_ACCOUNT_ID`, `VERIFIER_PRIVATE_KEY` and `GITHUB_TOKEN`, nothing
+else. The contract, the RPC and the model come from the defaults in the code.
+
+`GITHUB_TOKEN` is required on the server since Nov 14: a fine-grained token with access to public repositories only and
+no permissions. Without it the release check reads GitHub anonymously, 60 requests an hour per IP address. From the
+01:03 UTC round on Nov 13 no entry from this verifier carried release marks, almost 32 hours from the last marked entry
+(#77, Nov 13 00:18 UTC) to the next (#106, Nov 14 08:13 UTC), and the marks did not come back on their own. On Nov 14 a
+fresh dry run on the same server marked two of the three launchers and ran the anonymous quota down to 0 of 60; with the
+token the first round marked all 15 attestations. Why GitHub's hourly reset did not bring them back we have not
+established. With the token the limit is 5,000 an hour. To set or replace it without printing it, remove the old line,
+copy the token and run
+`pbpaste | ssh <server> 'umask 077; read -r t; printf "GITHUB_TOKEN=%s\n" "$t" >> /opt/ainek-verifier/verifier.env'`,
+then `docker stop`, `docker rm` and `docker run` again (`docker restart` does not read `--env-file` again). When the
+token expires the check reads GitHub anonymously again; a round without marks says `release not marked: …` in the log.
 
 The key on the server should be a function-call key that can only call `log_key` on the contract, not the account's
 full-access key: the daemon needs nothing else, and whoever reads the file can then only write log entries under the
@@ -415,7 +427,7 @@ function-call key from the agent account.
 
 | What | Value |
 |---|---|
-| contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` on Nov 6 in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash then `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The code was replaced twice on Nov 10, with no `migrate` because the state layout did not change: tx `Bw3RDR9TaBPzwFjxRa19nmjJUgL6fg8bXWUEAEGA5GFU` (the log read per verifier, #58) and tx `HoLzFiChw2SAQj59jBh3VRE1zo1shj1RdL1H8itzgCEC` (`action_count`, #65). No transaction has replaced it since: the code hash on chain, as `view_account` returned it on Nov 14, is `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk` (in hex `5a7e252f…761c3b`), which Dastan confirmed on Nov 14 is the build he made from commit `7b7292a`. It is again a non-reproducible build, so a reader cannot recompute the hash from the repository. The owner is `1dastan.testnet` since Nov 11 (`owner()` on chain; before that the contract owned itself), so owner calls are signed as that account. The contract account still holds a full-access key and can replace the code |
+| contract with agents | `ainek-log-dastan.testnet`, upgraded with `migrate` on Nov 6 in tx `EKTgWzARoPNoqhSE8Wb2k32wYMWUKqEG4WyeFLRW3UBM` (code hash then `GsUogroonduMzsAtwe7vYLLFoCKDrw6ULSfQTZnV85ey`, a non-reproducible build of `main` at `79e8fcf`). The code was replaced twice on Nov 10, with no `migrate` because the state layout did not change: tx `Bw3RDR9TaBPzwFjxRa19nmjJUgL6fg8bXWUEAEGA5GFU` (the log read per verifier, #58) and tx `HoLzFiChw2SAQj59jBh3VRE1zo1shj1RdL1H8itzgCEC` (`action_count`, #65). No transaction has replaced it since: the code hash on chain, as `view_account` returned it on Nov 14, is `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk` (in hex `5a7e252f…761c3b`), which Dastan confirmed on Nov 14 is the build he made from commit `7b7292a`. It is again a non-reproducible build, so a reader cannot recompute the hash from the repository. The owner is `1dastan.testnet` since Nov 11 (`owner()` on chain; before that the contract owned itself), so owner calls are signed as that account. The contract account has had no keys since Nov 14 ("Locking the contract" below): nobody can replace the code |
 | demo token | `token.ainek-dev-dastan.testnet` (deploy tx `6PjJPBANBCQqhUy2uYcgvnvUdy7ejBpz6RkaeLER2zG7`); 1,000,000 AINEK minted to `ainek-dev-dastan.testnet`, 10,000 of them sent to the contract |
 | agent | `agent.ainek-dev-dastan.testnet`, created with 0.5 NEAR, of which 0.1 NEAR is prepaid as storage on the contract |
 | agent's function-call key | `ed25519:CeUWgrZ9N4CQe7NG6S9oJJYgWEx4xky1fzUB2tMmGx1E` since Nov 7, deleted by the stop button on Nov 11 and added again on Nov 12 (the first was deleted when the stop button ran on Nov 7; to replace it, generate the pair where the bot runs and add only the public key, so the secret never travels): `commit_proof` and `propose_action` on the contract, allowance 0.25 NEAR (five calls used 0.0018 NEAR). The account also has the full-access key it was created with (in Dastan's keychain) |
@@ -492,11 +504,21 @@ On Nov 11, with the deployment check on and `1dastan.testnet` as the owner, the 
 Actions 10 and 11 took 0.0221 NEAR of the storage credit: 0.0745 NEAR was left on Nov 11, about 4 more actions. Not run
 live yet: a rejection through the bot, a reject from the `/agent` page, a commit failure recovered by the retry.
 
-## Locking the contract (Dastan; not done yet)
+## Locking the contract (Dastan; done on Nov 14)
 
-Today `ainek-log-dastan.testnet` has one full-access key (its owner role went to `1dastan.testnet` on Nov 11, step 3 below), so "append-only" rests on trusting whoever
-holds that key: they could deploy other code or rewrite the state. The lock removes that. It is the last step before
-submission, because after it nobody can fix a bug in the contract either.
+Done on Nov 14 at 14:12 UTC: the contract account's last key, the full-access
+`ed25519:C6bSQV12CZsJDu9PAgeKfE4j1Sx9Luj9EdmqbRrtt67y`, was deleted in tx `GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc`,
+and `view_access_key_list` for `ainek-log-dastan.testnet` returns no keys. Until then "append-only" rested on trusting
+whoever held that key: they could deploy other code or rewrite the state. Now nobody can, and nobody can fix a bug in
+the contract either.
+
+Steps 1 and 2 below were not done. The locked code is the non-reproducible build of `7b7292a` deployed on Nov 10 (code
+hash `76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk`, the table above). It matches the build on Dastan's machine, but a
+reader cannot rebuild it to the same hash, so "this code is the source at `7b7292a`" is our statement. What anyone can
+check is that the code hash has not changed since Nov 10 and now cannot change. Steps 3 to 5 are done. Step 6 is not
+done yet: the README, `docs/CLAIMS.md` ("An immutable log"), the closing line of `pnpm demo:log` and the end card in
+`docs/DEMO-SCRIPT.md` still say the contract account has a full-access key. The text below is the plan as it was
+written before the lock.
 
 Before starting:
 
