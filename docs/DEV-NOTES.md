@@ -3613,3 +3613,32 @@ All times are UTC.
   was added or dropped on purpose; where a translated line and the code disagree, the code and the Russian original in
   the git history decide. Three lines of this file keep Russian words, because they quote a Russian test message and two
   strings of the site's Russian version.
+
+## 2026-11-14, the contract is locked; the GitHub token on the server (Dastan)
+
+- **The lock.** At 14:12 UTC the last key of the account `ainek-log-dastan.testnet` was deleted, a full-access key,
+  `ed25519:C6bSQV12CZsJDu9PAgeKfE4j1Sx9Luj9EdmqbRrtt67y`, tx `GtzUDA1yxczNGHsiViS7p2JKgnSswVEkEzwmpxMEmbEc`. After it
+  `view_access_key_list` is empty, the code is the same (`76FFsCm7KpQgdorWjg5YY9pyjLvGC6T8H78eajgirudk`, the build from
+  `7b7292a`), the owner is `1dastan.testnet`, the head of the log is #111, 6.24 NEAR is free. Checked before the
+  deletion: the account had exactly one key and no function-call keys; the owner acts (`1dastan.testnet` registered
+  `anas-verifier.testnet` on Nov 13, and `register_verifier` requires a full-access key); the contract has no method that
+  deploys code or adds keys, and `migrate` is marked `#[private]`, so after the lock there is nobody to call it; nothing
+  in `contracts/ainek` changed after Nov 10.
+- **What the lock did not give.** Steps 1–2 of `docs/DEPLOY.md` ("Locking the contract") were not done: a
+  non-reproducible build was locked. That the code on the chain was built from `7b7292a` remains our word; anyone can
+  check only that the hash has not changed since Nov 10 and will not change again. This has to be said instead of
+  "full-access key" in the README, in CLAIMS ("An immutable log"), in the last line of `pnpm demo:log`
+  (`apps/demo/src/log.ts`) and in the final card of `docs/DEMO-SCRIPT.md`; until that is done, they say what is not true.
+- **After the lock.** The contract can be topped up with an ordinary transfer, no key is needed. A bug in the contract
+  cannot be fixed; the fallback is the same code on a new account and a new `AINEK_CONTRACT`, but the log will start at #0.
+- **`GITHUB_TOKEN` on the server (08:13 UTC).** The cause and entries #106–#108 are described in Bektur's entry above.
+  The token is fine-grained: public repositories only, no permissions; with it GitHub answers with a limit of 5000 per
+  hour. The first attempt appended to `verifier.env` the line `GITHUB_TOKEN=pbpaste | ssh …` (the clipboard held the
+  command itself); I removed it before the container was recreated; the file has three lines: the account, the key, the
+  token. `docs/DEPLOY.md` now says that the token is required on the server, why, and how to set it without printing it.
+- **A correction to my explanation of the cause.** I wrote that the retries of failed reads ate every new hour. The code
+  does not show this: successful reads are remembered, and the first round after the hourly reset should have filled
+  that store. Only this is established: the marks did not come back by themselves for almost 32 hours; at 04:49 UTC the
+  server's address had 10 of 60 anonymous requests left; a fresh `--dry-run` on the same server marked two replicas of
+  three and brought the limit to 0; with the token the first round marked all 15. Why the reset of the limit did not
+  help has not been found out; with a limit of 5000 per hour it does not get in the way.
