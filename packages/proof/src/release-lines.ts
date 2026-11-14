@@ -133,13 +133,15 @@ export function describeRelease(inspection: ReleaseInspection, { model, now = Da
  * Where the public key log stands on the action log of one attested report, in the words of the rule that decides it
  * (`releaseStanding` in release-marks.ts): one line, the same in `pnpm demo:attest` and on /log. `enforced` says whether
  * this client refuses by the rule. If it does, a log that is not marked is a failure: this client does not send. If it
- * does not, the line only says what the rule would say. A rewritten log is a failure either way.
+ * does not, the line only says what the rule would say. Either way `turnedOnBy` names what turns the rule on in this
+ * client: the setting in a terminal; in the browser the site's setting or the viewer's switch. A rewritten log is a
+ * failure whatever the rule, and names neither.
  */
-export function releaseInLogLine(inLog: ReleaseLogVerdict, enforced: boolean): ReleaseLine {
+export function releaseInLogLine(inLog: ReleaseLogVerdict, enforced: boolean, turnedOnBy = 'AINEK_REQUIRE_RELEASE=1'): ReleaseLine {
   if (inLog.status === 'ok') return { status: 'ok', text: `key log: ${inLog.detail}` };
   if (inLog.status === 'rewritten-log') return { status: 'fail', text: `key log: the enclave's action log was rewritten: ${inLog.detail}` };
-  if (enforced) return { status: 'fail', text: `key log: ${inLog.detail}: this client does not send (the release rule, AINEK_REQUIRE_RELEASE, is on)` };
-  return { status: 'skipped', text: `key log: ${inLog.detail} (the release rule, AINEK_REQUIRE_RELEASE, is off: this client sends all the same; with it on it would not)` };
+  if (enforced) return { status: 'fail', text: `key log: ${inLog.detail}: this client does not send (the release rule is on, by ${turnedOnBy})` };
+  return { status: 'skipped', text: `key log: ${inLog.detail} (the release rule is off: this client sends all the same; with it on, by ${turnedOnBy}, it would not)` };
 }
 
 /**

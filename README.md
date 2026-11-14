@@ -11,8 +11,8 @@ of the proxy that decrypts prompts, behind one unchanged signing key, in three w
 verifiers you chose did not log.** A verifier checks the hardware evidence and writes down the key and the launcher
 behind it (the boot configuration the hardware measures). A key or a launcher nobody you trust has logged is refused,
 before a message leaves. Verifiers also record the release that serves the model, down to a source commit; refusing a
-release nobody recorded is a setting of the client, off by default. The idea is borrowed from Certificate Transparency
-for web certificates. Unlike there, the writers here are not independent yet.
+release nobody recorded is off by default, and one switch in the chat turns it on for you. The idea is borrowed from
+Certificate Transparency for web certificates. Unlike there, the writers here are not independent yet.
 
 **For agents that spend:** the agent's key can propose a payment, not make one. A private policy (a whitelist, caps,
 a threshold above which a person decides) runs inside Intel TDX, on OutLayer, and signs its decision. The contract
@@ -41,6 +41,7 @@ under [Limits](#limits).
 | --- | --- |
 | Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
 | Open [`/log`](https://ainek.vercel.app/log), "Who you trust" | The public key log, read from the NEAR contract, and your own choice of which verifiers count: untick the trusted one and the page says "Nobody is selected, so the chat refuses every message." |
+| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave", send any message | As the log stood on Nov 14: a red card, "Message not sent.", because the verifier the site trusts has written no mark for the release that runs now. On `/log` tick `anas-verifier.testnet` (the list shows when each verifier last wrote a release mark) and the same message passes that check |
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
@@ -114,10 +115,11 @@ What to know before trusting any of this. There are 26 in all, each with its rea
   GitHub account ([docs/DEPLOY.md](docs/DEPLOY.md)). The site trusts one of ours by default; you can change that on `/log`.
 - **A log entry is not a review.** A verifier writes down what attests. Its mark for a release says "followed to
   public sources", not "approved".
-- **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log, not
-  acted on. On Nov 13 the first mark for a new release came five and a half hours after it went live, and from a
-  verifier outside the site's default trust set; the one the site trusts wrote none. With the rule on, the hosted chat
-  would have refused all that time and longer ([docs/RELEASE.md](docs/RELEASE.md)).
+- **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log and
+  acted on only for a visitor who turns the rule on in the chat. On Nov 13 the first mark for a new release came five
+  and a half hours after it went live, and from a verifier outside the site's default trust set; the one the site trusts
+  wrote none. With the rule on for everyone, the hosted chat would have refused all that time and longer
+  ([docs/RELEASE.md](docs/RELEASE.md)).
 - **The deployment is attested, the model is not verified.** Weights are not checked, what the enclave keeps cannot be
   proven, and the page is served by our server.
 

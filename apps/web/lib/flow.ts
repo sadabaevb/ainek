@@ -5,7 +5,7 @@
 // Node mirror: packages/tier1-node/src/tier1.ts (same steps and ids; keep the two in sync).
 import { DEMO_SWAPPED_KEY, DEMO_UNKNOWN_COMPOSE, buildCheckedModelProof, latestKeysFor, composeHashOf, evaluateKeyLogForAll, composesBehindKey, proofEntryOf, releaseRuleOf, withReleaseRule, type KeyEntry, type KeyLogVerdict, type ModelProof, type TrustSet, type ProofCommitLookup, type Tier1StepId, type VerifyReport, isAlreadyCommitted } from '@ainek/proof';
 import type { CompletionSignature, VerifiedGatewayAttestation, VerifiedModelAttestation } from '@nearai/inference-sdk';
-import type { PublicConfig } from './config';
+import { releaseRuleFor, type PublicConfig } from './config';
 import { describeError } from './errors';
 import { keyLogFor } from './key-log';
 import {
@@ -110,6 +110,8 @@ export interface ChatParams {
   tamper: Tamper;
   /** Who counts for the key-log check: the viewer's choice or the site default (useTrust). */
   trust: TrustSet;
+  /** Whether the release rule (SPEC §7.5) applies to this message: the site's setting or the viewer's own switch (useTrust). */
+  releaseRule: boolean;
   onStep: Emit;
 }
 
@@ -134,8 +136,10 @@ export async function runChat(cfg: PublicConfig, params: ChatParams): Promise<Ch
   }
 }
 
-async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
+async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, releaseRule: asked, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
+  // A caller can add the release rule, never take it away: where the site has it on, it is on.
+  const releaseRule = releaseRuleFor(cfg, asked);
 
   // 0. The user chose the private model: it must support model attestation, otherwise nothing is sent (never a silent downgrade to plaintext).
   const meta = await runStep(emit, 'metadata', `asking the gateway about ${model}`, () => fetchModelMetadata(model), (m) => `${model}: provider ${String(m.providerType)}, model attestation ${m.attestationSupported === true ? 'supported' : 'not supported'}`);
@@ -149,7 +153,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   // SPEC §7.5: the release rule reads the action log of this attestation and says nothing about what the enclave did
   // after it, so a verification kept for up to an hour will not do: with the rule on, the model reports are verified
   // again for every message.
-  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy, cfg.requireLoggedRelease), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
+  const deployment = await runStep(emit, 'attestation', 'verifying Intel TDX quotes and NVIDIA GPU evidence in this browser', () => verifyDeployment(model, policy, releaseRule), (d) => `${d.tookMs === 0 ? 'cached' : seconds(d.tookMs)}: gateway ${d.gateway.tcbStatus}; ${d.models.length} model report${d.models.length === 1 ? '' : 's'} ${d.models.map((x) => `${x.tcbStatus}/gpu ${x.gpuEvidence}`).join(', ')}`).catch((err: unknown) => {
     logStop.abort();
     throw err;
   });
@@ -167,7 +171,7 @@ async function teeRoute(cfg: PublicConfig, { model, messages, tamper, trust, onS
   const verdictFor = (signingAddress: string, composes: readonly (string | undefined)[]): KeyLogVerdict => {
     const query = { model, signingAddress, trustedVerifiers: trust.verifiers, quorum: trust.quorum };
     const key = evaluateKeyLogForAll(entries, query, composes);
-    return cfg.requireLoggedRelease ? withReleaseRule(key, entries, query, deployment.models, releaseRuleOf(cfg)) : key;
+    return releaseRule ? withReleaseRule(key, entries, query, deployment.models, releaseRuleOf(cfg)) : key;
   };
   const keyVerdict = verdictFor(seenKey, tamper === 'deployment' ? [DEMO_UNKNOWN_COMPOSE] : honestComposes);
   const seenCompose = keyVerdict.deployment?.composeHash;
@@ -307,10 +311,10 @@ export async function commitOutcome(outcome: VerifiedOutcome, resolveCommitter: 
 }
 
 /** The user picked the Incognito model (SPEC §3.9): no model evidence, no E2EE; plaintext goes through our proxy and the gateway, and the card says so. */
-async function nonTeeRoute(cfg: PublicConfig, { model, messages, trust, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
+async function nonTeeRoute(cfg: PublicConfig, { model, messages, trust, releaseRule, onStep: emit }: ChatParams, progress: Progress): Promise<ChatOutcome> {
   const policy = { acceptedTcbStatuses: cfg.acceptedTcbStatuses };
   const meta = await runStep(emit, 'metadata', `asking the gateway about ${model}`, () => fetchModelMetadata(model), (m) => `${model}: provider ${String(m.providerType)}, model attestation ${m.attestationSupported === true ? 'supported' : 'not supported'}`);
-  if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, trust, onStep: emit }, progress); // it is attested after all: use the real path
+  if (meta.attestationSupported === true) return teeRoute(cfg, { model, messages, tamper: false, trust, releaseRule, onStep: emit }, progress); // it is attested after all: use the real path
   const gateway = await runStep(emit, 'attestation', 'verifying the gateway only (this model has no model attestation)', () => verifyGateway(policy), (g) => `gateway ${g.tcbStatus}; no model evidence exists for ${model}`, 'attestation-gateway');
   emit({ id: 'key-log', status: 'skipped', detail: 'no model key to look up: nothing to verify against the log' });
   const exchange = await runStep(emit, 'send', 'sending in plaintext through our proxy (no model key to encrypt to)', () => sendPlain(model, messages), (x) => `completion ${x.completionId} (plaintext through our proxy and the gateway)`, 'send-plain');

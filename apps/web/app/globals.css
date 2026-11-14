@@ -161,6 +161,7 @@ p { margin: 0.75rem 0; }
 .card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem 1rem; margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 0.4rem; padding: 0.9rem var(--card-pad) 0.8rem; border-bottom: 1px solid var(--ink); }
 .card-head.ok, .trust-verdict.ok { --tone: var(--ok); --tone-bg: var(--ok-bg); }
 .card-head.fail, .trust-verdict.fail { --tone: var(--fail); --tone-bg: var(--fail-bg); }
+.trust-verdict.open { --tone: var(--ink); --tone-bg: var(--sheet-2); } /* decided only when a message is sent */
 /* Consistent, not confirmed: neither verdict colour. */
 .card-head.skipped { --tone: var(--muted); --tone-bg: transparent; }
 .stamp { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.65rem; border: 2px solid var(--tone); border-radius: 2px; background: var(--tone-bg); color: var(--tone); font: 500 0.8rem/1.25 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; transform: rotate(-1.2deg); }
@@ -220,9 +221,9 @@ p { margin: 0.75rem 0; }
 /* The controls of the chat and the forms of the other pages. */
 .controls { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; align-items: flex-end; margin: 1.5rem 0 1.25rem; }
 .controls .field { display: flex; flex-direction: column; gap: 0.3rem; flex: 2 1 22rem; min-width: 0; }
-.demo-switches { display: grid; gap: 0.3rem; font-size: 0.875rem; }
-.demo-switches label, .trust-list label { cursor: pointer; }
-.demo-switches label { display: flex; gap: 0.5rem; align-items: baseline; } /* a second line of the text stays clear of the box */
+.switches { display: grid; gap: 0.3rem; font-size: 0.875rem; }
+.switches label, .trust-list label { cursor: pointer; }
+.switches label { display: flex; gap: 0.5rem; align-items: baseline; } /* a second line of the text stays clear of the box */
 input[type="checkbox"] { accent-color: var(--ink); }
 select, textarea.json, .controls input[type="text"], .trust-add input[type="text"] { width: 100%; min-height: 2.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--ink); border-radius: var(--radius); background: var(--sheet); color: var(--ink); font: 400 0.95rem/1.4 var(--sans); letter-spacing: normal; text-transform: none; }
 select { padding-right: 2rem; }

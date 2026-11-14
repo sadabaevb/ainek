@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { logMark, type KeyEntry, type ManagerAction } from '@ainek/proof';
-import { withKeyLog, type KeyLogContext } from './key-log-line.ts';
+import { releaseTurnedOnBy, withKeyLog, type KeyLogContext } from './key-log-line.ts';
 import type { ReleaseCheck } from './release.ts';
 
 const MODEL = 'vendor/model-a';
@@ -17,7 +17,7 @@ const report = { signer: { signingAddress: KEY }, deployment: { appCompose: '{}'
 /** A release check that held, as the chain gives it. */
 const check: ReleaseCheck = { status: 'ok', failures: [], unchecked: [], retry: false, history: [], lines: [{ status: 'ok', text: 'release serving the model: v0.0.2' }] };
 const entry = (marks: string[]): KeyEntry => ({ index: 7, model: MODEL, verifier: 'v1.testnet', signing_address: KEY, compose_hash: 'c0'.repeat(32), observed_at: String(Date.parse('2026-11-12T08:00:00Z')), image_digests: [`sha256:${'d'.repeat(64)}`, ...marks] }) as unknown as KeyEntry;
-const log = (entries: KeyEntry[], over: Partial<KeyLogContext> = {}): KeyLogContext => ({ entries, trust: { verifiers: ['v1.testnet'], quorum: 1 }, rule: { withLauncher: false, waitMs: 0 }, enforced: false, ...over });
+const log = (entries: KeyEntry[], over: Partial<KeyLogContext> = {}): KeyLogContext => ({ entries, trust: { verifiers: ['v1.testnet'], quorum: 1 }, rule: { withLauncher: false, waitMs: 0 }, enforced: false, turnedOnBy: releaseTurnedOnBy(false), ...over });
 
 /** The moment of the release check: two hours after the entries of these tests were observed. */
 const AT = Date.parse('2026-11-12T10:00:00Z');
@@ -26,7 +26,7 @@ test('withKeyLog: the key log\'s standing is one more line under the release che
   // Today's log: the key is there, no entry marks an action log. The line says so, and the check's own verdict stands.
   const unmarked = withKeyLog(check, report, MODEL, log([entry([])]), AT);
   assert.deepEqual(unmarked.lines.slice(0, -1), check.lines);
-  assert.deepEqual(unmarked.lines.at(-1), { status: 'skipped', text: "key log: none of the 1 log entry for this key and launcher carries a mark of the enclave's action log (the release rule, AINEK_REQUIRE_RELEASE, is off: this client sends all the same; with it on it would not)" });
+  assert.deepEqual(unmarked.lines.at(-1), { status: 'skipped', text: "key log: none of the 1 log entry for this key and launcher carries a mark of the enclave's action log (the release rule is off: this client sends all the same; with it on, by the switch for the release rule in the chat, it would not)" });
   assert.deepEqual([unmarked.status, unmarked.failures], ['ok', []]);
   // A verifier that writes marks, and the log as it stood then: a check mark on the line.
   const marked = [entry([logMark(INSTANCE, actions)])];
@@ -47,7 +47,9 @@ test('withKeyLog: the line never goes missing, and what refuses the chat fails t
   // With the rule on, the chat does not send to a log nobody marked: the row is not green then.
   const enforced = withKeyLog(check, report, MODEL, log([entry([])], { enforced: true }), AT);
   assert.equal(enforced.status, 'fail');
-  assert.match(enforced.failures.at(-1) ?? '', /^key log: none of the 1 log entry .*: this client does not send \(the release rule, AINEK_REQUIRE_RELEASE, is on\)$/);
+  assert.match(enforced.failures.at(-1) ?? '', /^key log: none of the 1 log entry .*: this client does not send \(the release rule is on, by the switch for the release rule in the chat\)$/);
+  // Where the site has the rule on, the line says so and does not point at a switch that cannot turn it off.
+  assert.match(withKeyLog(check, report, MODEL, log([entry([])], { enforced: true, turnedOnBy: releaseTurnedOnBy(true) }), AT).failures.at(-1) ?? '', /\(the release rule is on, by the site's setting\)$/);
   assert.equal(withKeyLog(check, report, MODEL, log([entry([logMark(INSTANCE, actions)])], { enforced: true }), AT).status, 'ok', 'and green when the log is marked as it stands');
 });
 

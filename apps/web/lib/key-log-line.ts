@@ -5,6 +5,12 @@ import { releaseLineFor, withFinding, type KeyEntry, type ReleaseRule, type Trus
 import type { VerifiedModelAttestation } from '@nearai/inference-sdk';
 import type { ReleaseCheck } from './release.ts';
 
+/**
+ * What turns the release rule on in the browser, for the line under the release check: the site's setting, or the
+ * viewer's own switch where the site has it off. The line is English on every page, so it does not quote the label.
+ */
+export const releaseTurnedOnBy = (siteHasIt: boolean): string => (siteHasIt ? "the site's setting" : 'the switch for the release rule in the chat');
+
 /** What a page knows about the public key log when it shows a release: the entries it read and the rule the chat applies to them. */
 export interface KeyLogContext {
   entries: readonly KeyEntry[];
@@ -13,6 +19,8 @@ export interface KeyLogContext {
   rule: ReleaseRule;
   /** The chat refuses by the release rule; otherwise the line only says what the rule would say. */
   enforced: boolean;
+  /** `releaseTurnedOnBy` for this site. */
+  turnedOnBy: string;
 }
 
 /**
@@ -27,7 +35,7 @@ export interface KeyLogContext {
  */
 export function withKeyLog(check: ReleaseCheck, attestation: Pick<VerifiedModelAttestation, 'signer' | 'deployment' | 'report'>, model: string, log: KeyLogContext | null, at: number): ReleaseCheck {
   const line = log
-    ? releaseLineFor(log.entries, { model, signingAddress: attestation.signer.signingAddress, trustedVerifiers: log.trust.verifiers, quorum: log.trust.quorum }, attestation, { ...log.rule, now: at }, log.enforced)
+    ? releaseLineFor(log.entries, { model, signingAddress: attestation.signer.signingAddress, trustedVerifiers: log.trust.verifiers, quorum: log.trust.quorum }, attestation, { ...log.rule, now: at }, log.enforced, log.turnedOnBy)
     : ({ status: 'skipped', text: 'key log: not read at the moment, so where it stands on this action log is not known' } as const);
   return { ...withFinding(check, line), lines: [...check.lines, line] };
 }

@@ -35,12 +35,15 @@ export const ProofCard = memo(function ProofCard({ outcome, onCommit, onRetry }:
   }
   if (outcome.kind === 'refused') {
     // The decision is the same (nothing sent); the wording follows the verdict's reason, decided once in @ainek/proof.
-    const { reason, title, body } = refusalText(t, outcome.keyVerdict);
+    const { reason, title, body, byReleaseRule } = refusalText(t, outcome.keyVerdict);
+    // Where the site leaves the rule off, only the viewer's own switch can have turned it on: say so, or a visitor who
+    // ticked it days ago sees a chat that refuses everything and no reason why.
+    const ownSwitch = byReleaseRule && !cfg.requireLoggedRelease ? t.refusedByOwnSwitch : null;
     return (
       <RedCard
         title={title}
         body={body}
-        note={[t.refusedConsequence[reason], ...(outcome.tampered === 'deployment' ? [t.deploymentDemoNote, cfg.requireLoggedDeployment ? null : t.deploymentDemoOffNote] : [])].filter(Boolean).join(' ')}
+        note={[t.refusedConsequence[reason], ownSwitch, ...(outcome.tampered === 'deployment' ? [t.deploymentDemoNote, cfg.requireLoggedDeployment ? null : t.deploymentDemoOffNote] : [])].filter(Boolean).join(' ')}
         action={
           outcome.tampered && onRetry ? <button type="button" className="btn primary" onClick={onRetry}>{outcome.tampered === 'deployment' ? t.retryRealDeployment : t.retryHonest}</button>
           // A new tab, because the thread lives in this page; the choice reaches it through storage. Not on a split view: a disagreement is an alarm to read, not a list to edit.

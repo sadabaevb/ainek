@@ -41,7 +41,9 @@ output may say more than this file does.
   `AINEK_REQUIRE_RELEASE=1` the client sends only when the action log it was attested is exactly one that a quorum of the
   viewer's verifiers marked, and it refuses a log that does not begin with what a verifier saw from the same instance. The
   rule compares one record with another and reads no action, so it needs no network; in the browser it attests again for
-  every message, because a verification kept for an hour says nothing about that hour. A client may also wait
+  every message, because a verification kept for an hour says nothing about that hour. In the browser a visitor can turn
+  the rule on for themselves with a switch in the chat (since Nov 14): it is kept in that browser, like the trust set,
+  and can only add the rule, never turn off one the site has on. A client may also wait
   (`AINEK_RELEASE_WAIT_MIN`): it then sends only when the log has been marked as it stands for that many minutes by a
   quorum, so anything added to the log starts the wait again. `pnpm -F verifier dry-run` prints
   the entry a verifier would log, and `pnpm demo:attest` says where the log stands for the replica that answers; `/log`
@@ -107,7 +109,8 @@ output may say more than this file does.
   of the proxy for `z-ai/glm-5.3-flash` had changed four times (five images in all), twice after our log first held that
   CVM's compose hash: the client would have refused neither. Since Nov 12 `pnpm demo:attest` reads this log and follows the release to a source
   commit, and the browser does the same when the visitor asks (the proof card, `/log`). By default that is a reading, not a
-  rule: the client refuses on what an enclave deployed only when `AINEK_REQUIRE_RELEASE` is on, which works only against
+  rule: the client refuses on what an enclave deployed only when the release rule is on (`AINEK_REQUIRE_RELEASE`, or a
+  visitor's own switch in the chat), which works only against
   verifiers that write release marks (below), and a proof says which key signed and which launcher was attested, not which
   release answered.
 - **That the action log is a measurement.** A release leaves the enclave's measurements as they were. The log is Compose

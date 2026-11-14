@@ -5,17 +5,18 @@ import { NearProvider } from 'near-connect-hooks';
 import { useRouter } from 'next/navigation';
 import { Suspense, createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { TrustSet } from '@ainek/proof';
-import type { PublicConfig } from '@/lib/config';
+import { releaseRuleFor, type PublicConfig } from '@/lib/config';
 import { WALLET_MANIFEST_URL } from '@/lib/wallet';
 import { LANG_COOKIE, dict, type Dict, type Lang } from '@/lib/i18n';
-import { useCustomTrust } from '@/lib/trust-set';
+import { useCustomTrust, useOwnReleaseRule } from '@/lib/trust-set';
 
 const ConfigContext = createContext<PublicConfig | null>(null);
-const TrustContext = createContext<{ trust: TrustSet; isCustom: boolean } | null>(null);
+/** `releaseRule`: whether the release rule (SPEC §7.5) applies for this viewer, by the site's setting or by their own switch on the chat page. */
+const TrustContext = createContext<{ trust: TrustSet; isCustom: boolean; releaseRule: boolean } | null>(null);
 const LangContext = createContext<{ lang: Lang; t: Dict; toggle: () => void } | null>(null);
 
 /**
- * The viewer's trust set, read inside the boundary below and not above it. The store has no value on the server and may
+ * The viewer's trust set and their switch for the release rule, read inside the boundary below and not above it. The store has no value on the server and may
  * have one in the browser, so React renders its reader once more, at once, when it hydrates. Above the boundary that
  * second render reached a boundary whose content had not arrived yet, and React threw the server's HTML away and showed
  * nothing until it had: about two seconds of an empty page at 400 kbit/s, for a visitor with a trust set of their own.
@@ -23,7 +24,8 @@ const LangContext = createContext<{ lang: Lang; t: Dict; toggle: () => void } | 
 function TrustProvider({ config, children }: { config: PublicConfig; children: ReactNode }) {
   // Kept apart from the config, whose identity effects are keyed on: choosing who to trust must not re-run a page's reads.
   const custom = useCustomTrust(config);
-  const trust = useMemo(() => ({ trust: custom ?? config.siteTrust, isCustom: custom !== null }), [custom, config]);
+  const ownReleaseRule = useOwnReleaseRule(config);
+  const trust = useMemo(() => ({ trust: custom ?? config.siteTrust, isCustom: custom !== null, releaseRule: releaseRuleFor(config, ownReleaseRule) }), [custom, ownReleaseRule, config]);
   return <TrustContext.Provider value={trust}>{children}</TrustContext.Provider>;
 }
 
