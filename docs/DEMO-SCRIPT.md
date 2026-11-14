@@ -56,8 +56,8 @@ the end card. The scene of the proof was made after that review: the reader saw 
 ## How it is made
 
 One HTML page at 1920×1080 in the site's own type and colours, photographed frame by frame and joined with ffmpeg; the
-recordings play inside it. The voice is the macOS system voice and can be replaced by a person's: its lines and start
-times are in the table above. The page and the scripts are kept outside the repository.
+recordings play inside it. The voice is synthetic: Kokoro, an open speech model run on our own machine (voice `af_heart`).
+Its lines and start times are in the table above, so a person's voice can replace it. The page and the scripts are kept outside the repository.
 
 ## X posts
 

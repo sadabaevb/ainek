@@ -118,8 +118,9 @@ Nov 14, 08:13 UTC (entry #106). That is almost 32 hours and thirteen entries wit
 Nov 14, which we have not checked against the daemon's log: the daemon ran without a GitHub token, and a dry run of the
 same image on the same server marked two of the three deployments and then met GitHub's limit of 60 requests an hour
 for one address. A read that fails is not remembered, so every report of a round asks again
-(`packages/proof/src/release-chain.ts`). He wrote that he was setting a token; what changed on the server before the marks returned he
-has not told us yet. With the rule on for everyone, the hosted chat would have refused for much of that time: on the replica
+(`packages/proof/src/release-chain.ts`). By the same report he put a token with no permissions (public repositories
+only) into `verifier.env` and restarted the container on the same image, `6f2ff98`; in the first round after that all
+15 attestations had their release checked, and entries #106 to #108 carry the marks. With the rule on for everyone, the hosted chat would have refused for much of that time: on the replica
 with the new release from 00:56 UTC, when its action log grew past the last mark, and on every replica from Nov 14,
 00:18 UTC, when those marks were a day old and no longer counted.
 
