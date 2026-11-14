@@ -119,5 +119,7 @@ on Nov 14: it ran without a GitHub token, used up the 60 requests an hour GitHub
 limit, because a read that fails is not remembered and every report of a round asks again. With the rule on for
 everyone, the hosted chat would have refused all that time. With a visitor's own switch on (in the chat since Nov 14)
 it did refuse, as recorded that morning at about 07:40 UTC; for a visitor who also trusted `anas-verifier.testnet`, which
-had marked the state at 06:56 UTC, the release check on `/log` said the action log as it stood was marked
-(`docs/DEV-NOTES.md`, Nov 13 and 14).
+had marked the state at 06:56 UTC, the release check on `/log` said the action log as it stood was marked. At 09:28 UTC,
+with the marks back, a message sent with the switch on and the default trust set was answered with its proof: the key
+at entry #106, whose mark covers the 280 actions the enclave attested to that browser. It is the one message with the
+rule on that we have sent end to end on the hosted site (`docs/DEV-NOTES.md`, Nov 13 and 14).

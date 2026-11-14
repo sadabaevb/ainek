@@ -16,7 +16,7 @@ is an addition.
 | 0:29–0:39 | **Real run: a swapped key.** The hosted chat: "Swap the key before sending" → the progress strip → the red card "Key not in the public log. Message not sent.", then a closer view of the card. Beside it: "Refused in the browser. The prompt never left this page." | "A real run, on testnet. We hand the page a swapped key. It refuses in the browser, and the prompt never leaves." |
 | 0:39–0:50 | **Real run: the release rule.** The hosted chat: tick "Stricter: send only when a verifier you trust has marked this state of the enclave", type a question, Send → the red card "No release mark in the log. Message not sent." Beside it: "For 31 hours the site's default verifier had written no release marks. That is the rule's cost, and why it is opt-in." | "Verifiers also mark each release. One switch: no mark from a verifier you trust, no message. Our default verifier had written none for a day, so it refused." |
 | 0:50–0:58 | **The release, followed.** From `/log`, "Code behind the key": "release v0.0.593, deployed 2026-11-14 02:28 UTC; its proxy was built from nearai/inference-proxy@3f7e979827", then the line "key log: the action log as it stands (280 actions) is marked by anas-verifier.testnet since 2026-11-14 06:56 UTC". Text: "A friend's verifier did mark this state… Add that verifier to the ones you trust, and this check passes. You choose which verifiers count." | "On request, your browser follows the release to a source commit. A friend's verifier did mark it. Trust that one, and the check passes." |
-| 0:58–1:05 | **A proof for every answer.** The proof card of a real answer, its rows framed one after another; a list beside it (hardware checked in your browser, key in the public log, signed in the enclave and hashes recomputed, end-to-end encryption, "On NEAR, if you commit it: a salted hash, never the text"); the stamp "This disclosure checks out" from `/auditor`. | "When it checks out, every answer becomes a proof you can hand to an auditor. On NEAR: only a salted hash." |
+| 0:58–1:05 | **Real run: a proof for every answer.** The hosted chat again, the same box still ticked: Send → the progress strip → the model's answer and the card "Verified in this browser", then a closer view that travels down the card: model, hardware, key in the public log (#106, logged by ainek-dev-dastan.testnet), request and response, end-to-end encryption, and "Code behind the key" with release v0.0.593 followed to nearai/inference-proxy@3f7e979827. Beside it: "09:28 UTC: the default verifier's marks are back. The same box is ticked.", "✓ Sent and answered. Hardware, key in the log, signature, encryption: verified in your browser.", "Hand it to an auditor. On NEAR, if you commit it: a salted hash, never the text." | "Then the marks came back. Same switch, and the message goes. Every answer is a proof you can hand to an auditor." |
 | 1:05–1:13 | **Agents that spend.** A drawing: the agent (its key can call `propose_action`) → a private policy inside Intel TDX that signs its verdict → the NEAR contract that checks the signature. A proposal "pay 5000 AINEK → newguy.testnet" travels to the policy, "verdict: DENY · signed in the TEE" to the contract: "Denied by policy v1. Nothing moved." "On chain: the attempt and the verdict. Off chain: the conversation and the policy." | "Agents can only propose a payment. A policy inside Intel TDX signs the verdict, and the NEAR contract checks the signature." |
 | 1:13–1:18 | **The real record.** `/agent`, action #4 with its four checks, then the same record with the verdict edited to Allow: the signature check turns red. "And a stop button: it deletes the agent's key and pauses the agent." | "Five thousand to a new vendor: denied. Edit the record, and the signature fails." |
 | 1:18–1:24 | **Check it yourself.** A terminal: `pnpm i && pnpm demo` → three lines of checks → "Result: VERIFIED"; `pnpm demo:controls` → three refusals → "Result: REFUSED. 15 of 15 changes were refused." Beside it: "Don't trust our page. Clone it." | "Don't trust our page: clone it. The checks replay offline, with no API key." |
@@ -28,18 +28,24 @@ Each scene says where its picture comes from in a line at the bottom left.
 
 - **Drawn:** the gap, the time axis (its dates are those of `docs/RELEASE.md`: the replica that answered us on Nov 12),
   the picture of the log (its entries and their marks are the log's own on Nov 14) and the flow of an agent's payment.
-- **Recorded on Nov 14 from https://ainek.vercel.app:** the two refusals, frame by frame as the screen changed, by a
-  browser without a window. Both end before a send, and that browser was also set to drop any chat completion, so
-  nothing could reach the model and the key was not spent. The pointer is drawn over the recording. The wait for the
-  hardware check runs faster than it did: 8 seconds shown in 3.4, and 5.4 in 2.1. The source line says so.
+- **Recorded on Nov 14 from https://ainek.vercel.app:** the two refusals (about 07:40 UTC) and the answer (09:28 UTC),
+  frame by frame as the screen changed, by a browser without a window. The refusals end before a send, and for them
+  the browser was also set to drop any chat completion, so nothing could reach the model and the key was not spent.
+  For the answer it let exactly one chat completion through: one message, sent with the human's yes, with the release
+  rule on and the site's default trust set. The pointer is drawn over the recordings. The wait for the hardware check
+  runs faster than it did: 8 seconds shown in 3.4, 5.4 in 2.1, and 5.3 in 0.9. The source line says so.
+- **The closer view of the proof card** is a picture of the same card taken about a minute after the answer, when
+  "Check the release" had been pressed: when the answer arrived that row read "not checked". It is put together from
+  two pictures of that card, because the page's fixed header covered a part of each. The source line says that it is
+  the card after the press.
 - **Stills of Nov 14:** the release check on `/log` (with the default trust set, and with the rule on and
-  `anas-verifier.testnet` trusted), action #4 on `/agent` and its edited copy, the stamp on `/auditor`.
-- **A still of Nov 12:** the proof card, the one in `docs/screenshots/proof-card.png`.
+  `anas-verifier.testnet` trusted), action #4 on `/agent` and its edited copy.
 - **The terminal:** lines of the real output of `pnpm demo` and `pnpm demo:controls` at commit `e78eed7`, shortened.
 
-Not in the video: an answer arriving live, a commit signed by a wallet, the Telegram bot, the stop button being pressed,
-the Incognito model's red card. The video says "this check passes" about the release rule with the friend's verifier
-trusted and not "the message is sent": a message with the rule on has not been sent end to end yet.
+Not in the video: a commit signed by a wallet, the auditor's page, the Telegram bot, the stop button being pressed, the
+Incognito model's red card. The video says "this check passes" about the release rule with the friend's verifier
+trusted and not "the message is sent": the one message sent with the rule on went with the default trust set, after
+its verifier's marks were back.
 
 ## How it was reviewed
 
@@ -55,6 +61,8 @@ pause button and once against `docs/CLAIMS.md`. What changed after it:
 - "Six releases since Nov 4" (another replica, another day, another unit than the five builds) is gone.
 - "Without us" became "themselves"; "private: the conversation and the policy" became "off chain"; the limits moved to
   the end card and now say that we can still replace the contract; the source lines are larger.
+
+The scene of the proof was made after that review: the reader saw a still of Nov 12 in its place, not the recording.
 
 ## How it is made
 

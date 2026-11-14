@@ -147,7 +147,8 @@ output may say more than this file does.
   replica that answered. On Nov 13 a replica stayed unmarked for about five and a half hours after a release, and a client
   routed there would have refused all that time. The verifier in the site's default trust set wrote no release mark for
   almost 32 hours (Nov 13, 00:18 UTC to Nov 14, 08:13 UTC): a client that trusts only it and has the rule on refused all
-  that time. How often the rule refuses over a day we have not measured.
+  that time. One message with the rule on has gone end to end on the hosted site (Nov 14, 09:28 UTC, the default trust
+  set, after the marks were back). How often the rule refuses over a day we have not measured.
 - **A measurement allowlist.** The log records what verifiers saw, not what should run: which compose hashes are
   acceptable is not governed (next steps). Instances of a model share one signing key, so the signature alone does not say
   which deployment answered. Since Nov 11 the client narrows this (SPEC §7.1, `AINEK_REQUIRE_DEPLOYMENT=1`): the key must be
