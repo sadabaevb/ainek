@@ -1,28 +1,26 @@
 # Ainek — Certificate Transparency for private AI on NEAR, and agents that spend only under a signed policy
 
-> NEAR Hackathon submission (Nov 1–14, 2026). Tracks: **Privacy & Private AI** (messages encrypted end to end to an
-> attested key), **AI Security & Defense** (the client refuses before sending; the agent pays only under a signed
-> policy), **Open Innovation** (a public key log for private AI, after Certificate Transparency).
+> NEAR Hackathon submission (Nov 1–14, 2026). Tracks: Privacy & Private AI, AI Security & Defense, Open Innovation.
 
 <!-- TODO before submission: 90-second video link here. -->
 
-**One signing key. Five builds of the code behind it. Three weeks.** That is what the attested record of one NEAR AI
-enclave shows for the proxy that decrypts your prompts: the code was replaced four times, and the key your client
-checks never changed. The record is NEAR AI's own and public by design, but a check that stops at the key never reads
-it. Hardware attestation proves that the enclave is genuine. It does not tell you which code is answering, or whether
-you are shown the same key as everyone else. [Brave](https://brave.com/blog/browser-ai-e2ee/), which builds on NEAR AI,
-wrote on Oct 15, 2026 that there is "no public log of TEE keys yet".
+**One signing key. Five builds of the proxy behind it. Three weeks.** That is what the attested record of the enclave
+that answered us on NEAR AI Cloud shows: the proxy that decrypts prompts was replaced four times, each build signed and
+published by NEAR AI, and the key a client checks did not change. Hardware attestation proves that the enclave is
+genuine. It does not tell you which code is answering, or whether you are shown the same key as everyone else.
+[Brave](https://brave.com/blog/browser-ai-e2ee/), which builds on NEAR AI, wrote on Oct 15, 2026 that there is "no
+public log of TEE keys yet".
 
-**Ainek is that log, and the client that acts on it.** Verifiers check the hardware evidence, follow each release down
-to a source commit, and write the key, its launcher (the boot configuration the hardware measures) and the release
-into an append-only log in a NEAR contract. Your browser checks the same evidence itself and sends nothing to a key
-the verifiers you chose did not record. You get an answer with a proof you can re-check, or a refusal before anything
-leaves the page. It is the idea of Certificate Transparency, applied to the keys of private AI.
+**Ainek is a public log of those keys, written by several verifiers, and the client that acts on it.** Verifiers check
+the hardware evidence and trace the release that serves the model to a source commit. They write the key, its launcher
+(the boot configuration the hardware measures) and the release they traced into an append-only log in a NEAR contract.
+Your browser checks the same evidence itself and sends nothing to a key the verifiers you chose did not record. You get
+an answer with a proof you can re-check, or a refusal before anything leaves the page.
 
 **For agents that spend:** the agent's key can propose a payment, not make one. A private policy (a whitelist, caps,
-a threshold above which a person decides) runs inside Intel TDX on OutLayer, a service that runs jobs in enclaves for
-NEAR contracts, and signs its decision. The contract checks that signature, then pays, refuses or waits for the owner,
-and a stop button deletes the agent's key.
+a threshold above which a person decides) runs inside Intel TDX on OutLayer, which runs jobs in enclaves for NEAR
+contracts, and signs its decision. The contract checks that signature, then pays, refuses or waits for the owner, and
+a stop button deletes the agent's key.
 
 | The key is in the log: an answer with a proof you can re-check | The key is not: nothing is sent |
 | --- | --- |
@@ -30,24 +28,25 @@ and a stop button deletes the agent's key.
 
 **What works today**
 
-- **It refuses before sending.** A swapped key or an unknown launcher never gets your message. With one switch in the
-  chat, neither does a release that no verifier you trust has marked. 15 of 15 changes to recorded evidence are
+- **It refuses before sending.** A swapped key or an unknown launcher never gets your message; with one switch in the
+  chat, neither does a release that no verifier you trust has recorded. 15 of 15 changes to recorded evidence are
   refused, each for its own reason (`pnpm demo:controls`).
-- **Every attested answer comes with a proof.** A message to the attested model is encrypted end to end to its key, so
-  our server cannot read it. The enclave's signature over the exact bytes is re-checked in your browser: 50 of 50 live
-  runs on Nov 13 ([docs/METRICS.md](docs/METRICS.md)). An auditor can check one answer against NEAR without its text.
-- **The code behind the key is one click away.** Your browser follows the running release to a source commit through
-  its signed build provenance.
-- **Agents propose, the contract decides.** Twelve actions on testnet, each with a decision signed by the key generated
-  inside Intel TDX and checked by the contract.
-- **It is more than our word.** Three verifiers write to the log, one of them run outside the team, and you choose
-  which of them count. In the 76 repositories we read for our survey of this hackathon, we found no other append-only
-  key log for several verifiers with that choice left to the viewer ([docs/PRIOR-ART.md](docs/PRIOR-ART.md)).
+- **Every attested answer comes with a proof.** The message is encrypted end to end to the attested key, so our server
+  cannot read it, and the enclave's signature is re-checked in your browser: 50 of 50 live runs on Nov 13
+  ([docs/METRICS.md](docs/METRICS.md)). An auditor can check one answer against NEAR without its text.
+- **Agents propose, the contract decides.** Twelve actions on testnet, proposed by us, each with a decision signed by
+  the policy's key and checked by the contract.
+- **The release behind the key is one click away.** Your browser follows the release that serves the model to a source
+  commit through its signed build provenance.
+- **You choose whom to trust.** Three verifiers write to the log, two of ours and one run by a friend, and which of
+  them count is your choice (the site starts from one of ours). In the 76 repositories read for our survey of this
+  hackathon, we found no other append-only key log for several verifiers that leaves that choice to the viewer
+  ([docs/PRIOR-ART.md](docs/PRIOR-ART.md)).
 - **It runs without us.** `pnpm i && pnpm demo` replays the checks offline with no API key, and 434 tests pass from a
   clean clone.
 
-**Where it stops.** Testnet, not audited, and two of the three verifiers are ours. Every limit, with its reason, is
-under [Limits](#limits).
+**Where it stops.** Testnet, not audited, and not yet as independent as Certificate Transparency: two of the three
+verifiers are ours, and only our client requires the log. Every limit, with its reason, is under [Limits](#limits).
 
 **Reviewing this?** Every claim, the code behind it and a command that shows it: [docs/REVIEW.md](docs/REVIEW.md).
 
@@ -170,8 +169,7 @@ What Ainek does not prove yet. There are 26 in all, each with its reason, in
 As of Nov 14, 2026.
 
 - **The key log and the client run end to end** on testnet and on the hosted demo: the contract
-  `ainek-log-dastan.testnet`, the chat with its proof card, `/verify`, `/log`, `/auditor`. Three verifiers write to the
-  log ([Limits](#limits)).
+  `ainek-log-dastan.testnet`, the chat with its proof card, `/verify`, `/log`, `/auditor`.
 - **The agent is on testnet:** twelve actions, all proposed by us. Seven came from the agent service with a real model
   answer, six of them through a Telegram bot on Nov 7 and 11
   ([docs/DETAILS.md](docs/DETAILS.md#the-agent-half-tier-2)).
