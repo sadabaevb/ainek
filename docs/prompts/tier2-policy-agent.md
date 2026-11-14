@@ -1,43 +1,45 @@
-# Сессия 4 (Дастан, 7–9 ноября) — ярус 2: policy job, контракт v2, агент
+# Session 4 (Dastan, Nov 7-9): Tier 2: policy job, contract v2, agent
 
-Запускать только после контрольной точки 6 ноября (ярус 1 бегает из чистого клона) и решения GO в docs/DECISIONS.md. Агент-сервис на TS (Telegram, structured output, вызов OutLayer) делает Бектур параллельно — ты отдаёшь ему ABI v2 и формат Decision.
+> Translated from Russian on Nov 14, 2026. The original is in this file's git history.
+
+Run only after the checkpoint of Nov 6 (Tier 1 runs from a clean clone) and the GO decision in docs/DECISIONS.md. The agent service in TS (Telegram, structured output, the OutLayer call) is built by Bektur in parallel: you give him the ABI v2 and the Decision format.
 
 ---
 
-Прочитай CLAUDE.md, docs/SPEC.md §3.5, §3.6, §4.3, §5.2, §6, §7.2 и docs/DECISIONS.md.
+Read CLAUDE.md, docs/SPEC.md §3.5, §3.6, §4.3, §5.2, §6, §7.2 and docs/DECISIONS.md.
 
 **`jobs/policy` (Rust, OutLayer WASI-P1):**
-1. Вход/выход строго по SPEC §6.2; политика из env `POLICY_JSON`, ключ из `PROTECTED_ED25519`; `canonical_bytes(decision)`
-   — та же функция, что в `packages/proof/canonical.ts`, тест-векторы общие.
-2. Логика §6.2; `nonce = sha256(action_commit || now)`; `expires_at = now + 10 мин`. Выход ≤ 900 байт — проверь тестом.
-3. Unit-тесты на все ветки (whitelist, per_action, per_day, needs_approval, deny_new_receivers). Детерминизм: один вход — один выход.
-4. Деплой на OutLayer testnet; секреты закрыты правилом «One build only» (правило доступа, владелец может его перенести:
-   SPEC §3.5). Записать `wasm_hash` и `pubkey` в docs/DEPLOY.md; в `register_agent` идёт `pubkey`.
+1. Input/output strictly per SPEC §6.2; the policy from the env `POLICY_JSON`, the key from `PROTECTED_ED25519`; `canonical_bytes(decision)`
+   is the same function as in `packages/proof/canonical.ts`, the test vectors are shared.
+2. The logic of §6.2; `nonce = sha256(action_commit || now)`; `expires_at = now + 10 min`. Output ≤ 900 bytes: check it with a test.
+3. Unit tests for all branches (whitelist, per_action, per_day, needs_approval, deny_new_receivers). Determinism: one input, one output.
+4. Deploy to OutLayer testnet; the secrets are locked by the rule "One build only" (an access rule, the owner can move it:
+   SPEC §3.5). Record `wasm_hash` and `pubkey` in docs/DEPLOY.md; `register_agent` takes the `pubkey`.
 
-**Контракт v2 (`contracts/ainek`):**
-1. Методы SPEC §4.3. `ed25519_verify` из `near_sdk::env`. Проверки в `propose_action` — все из §4.3, каждая с отдельным тестом.
-2. Cross-contract `ft_transfer` на демо-токен (`token.ainek.testnet`, NEP-141 через factory или готовый FT-контракт из
-   docs.near.org/primitives/ft); 1 yocto deposit; callback обновляет статус действия; `storage_deposit` получателей
-   — скрипт `scripts/register-receivers.ts`.
-3. События: `action_proposed`, `action_pending`, `action_executed`, `action_denied`, `agent_paused` — без суммы и получателя.
-4. Тесты инвариантов: повтор nonce → ошибка; просроченное решение → ошибка; подпись чужим ключом → ошибка;
-   `policy_hash` не совпадает → ошибка; агент на паузе → ошибка; ключ агента удалён → транзакция не проходит (тест на уровне ключей).
+**Contract v2 (`contracts/ainek`):**
+1. The methods of SPEC §4.3. `ed25519_verify` from `near_sdk::env`. The checks in `propose_action` are all those of §4.3, each with a separate test.
+2. A cross-contract `ft_transfer` to the demo token (`token.ainek.testnet`, NEP-141 through a factory or a ready FT contract from
+   docs.near.org/primitives/ft); 1 yocto deposit; a callback updates the action's status; the receivers' `storage_deposit`
+   is a script `scripts/register-receivers.ts`.
+3. Events: `action_proposed`, `action_pending`, `action_executed`, `action_denied`, `agent_paused`: without the amount and the receiver.
+4. Invariant tests: a repeated nonce → error; an expired decision → error; a signature by a foreign key → error;
+   `policy_hash` does not match → error; the agent is paused → error; the agent's key is deleted → the transaction does not go through (a test at the key level).
 
 **`services/agent` (Node 24, TS):**
-1. grammY-бот: владелец пишет текст → NEAR AI через `runTier1` из `packages/tier1-node` (напрямую, TLS-пин к шлюзу, E2EE;
-   structured output через function tool `tools` + `tool_choice`, не `response_format` — его SDK не шифрует; аргументы вызова
-   разбираются zod-схемой `Action`; system prompt «ты казначей, извлеки действие или откажись») → model proof как в клиенте.
-2. → OutLayer HTTPS API (`X-Payment-Key`, вход §6.2, `spent_today` из view контракта) → `Decision` + `sig`.
-3. → `propose_action` FC-ключом агента (`near-api-js`, ключ только на `commit_proof` и `propose_action`, allowance выставить; model proof коммитится до предложения).
-4. `NeedsApproval` → inline-кнопки «Approve / Reject» владельцу; Approve → инструкция владельцу подтвердить в кошельке
-   (или `near-cli` с полным ключом) — агент не должен уметь одобрять сам.
-5. Собрать `ActionProof` (SPEC §5.2), коммит, отправить карточку текстом + ссылку на web-карточку.
-6. Стоп-кнопка: `scripts/stop-agent.ts` — `DeleteKey` ключа агента владельцем + `pause_agent`; затем демонстрация
-   отказа следующей попытки (ошибка ончейн).
+1. A grammY bot: the owner writes text → NEAR AI through `runTier1` from `packages/tier1-node` (directly, a TLS pin to the gateway, E2EE;
+   structured output through a function tool `tools` + `tool_choice`, not `response_format`, which the SDK does not encrypt; the call's arguments
+   are parsed by the zod schema `Action`; system prompt "you are a treasurer, extract the action or refuse") → a model proof as in the client.
+2. → the OutLayer HTTPS API (`X-Payment-Key`, input §6.2, `spent_today` from the contract's view) → `Decision` + `sig`.
+3. → `propose_action` with the agent's FC key (`near-api-js`, the key only for `commit_proof` and `propose_action`, set the allowance; the model proof is committed before the proposal).
+4. `NeedsApproval` → inline buttons "Approve / Reject" to the owner; Approve → an instruction to the owner to confirm in the wallet
+   (or `near-cli` with a full key): the agent must not be able to approve by itself.
+5. Assemble the `ActionProof` (SPEC §5.2), the commit, send the card as text + a link to the web card.
+6. The stop button: `scripts/stop-agent.ts`: the owner's `DeleteKey` of the agent's key + `pause_agent`; then a demonstration of
+   the refusal of the next attempt (an on-chain error).
 
-Метрики для README: время от сообщения до `action_executed`, доля ложных блокировок на 50 тестовых действий, газ.
+Metrics for the README: the time from the message to `action_executed`, the share of false blocks on 50 test actions, the gas.
 
-**Воспроизводимая сборка (SPEC §3.5):** `rust-toolchain.toml` с точной версией, `Cargo.lock` в репо, профиль release с
-фиксированными флагами, скрипт `scripts/wasm-hash.sh` (sha256 от .wasm), GitHub Action, который собирает и печатает хеш.
-Проверить, что хеш с двух машин совпадает и равен `wasm_hash` в аттестации OutLayer и в docs/DEPLOY.md. Если OutLayer
-добавляет к образу что-то своё (обёртку) — задокументировать, какой именно хеш аттестуется, и сверять его.
+**Reproducible build (SPEC §3.5):** `rust-toolchain.toml` with an exact version, `Cargo.lock` in the repo, a release profile with
+fixed flags, a script `scripts/wasm-hash.sh` (sha256 of the .wasm), a GitHub Action that builds and prints the hash.
+Check that the hash from two machines matches and equals `wasm_hash` in the OutLayer attestation and in docs/DEPLOY.md. If OutLayer
+adds something of its own to the image (a wrapper), document which exact hash is attested, and compare that one.

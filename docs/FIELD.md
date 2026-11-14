@@ -1,385 +1,385 @@
-# Поле хакатона — кто рядом с нами (срез 6 ноября 2026)
+# The hackathon field: who is near us (snapshot of Nov 6 2026)
 
-Источник: `https://nearhackathon.com/#projects` (API `/api/projects?page=N`: имя, треки, ссылка на демо-пост), посты в X и ветки авторов,
-README и код репозиториев, просмотр контрактов на цепочке. На 2 ноября заявок было 58, 6 ноября 184; срезы 10 ноября (463 заявки, только по галерее) и 13 ноября (820 заявок, тексты постов и поиск по коду) — в конце файла.
+> Translated from Russian on Nov 14, 2026. The original is in this file's git history.
 
-**Как читали.** 175 заявок: пост, факты о репозитории и начало README. 26 самых близких и самых сильных: по коду и на цепочке (TEE Receipts, Measure, Veridom Pay, Throughput Treasury, Black box, Vouch, FlashFirm, PrivatePay Agent, AgentGuard, Charter, Judge on NEAR, Sealed Exploit, Redline, KeyLease, Jurat, NEAR Books, Skarbnik, Warrant, Claw Guard, Lifeguard, Writ, Release Passport, Tidepool, Quittance, NOVA Copy-Trading, Arkhe Guard). Ничего из чужих
-репозиториев не запускали, видео не смотрели, демо не открывали.
+Source: `https://nearhackathon.com/#projects` (API `/api/projects?page=N`: name, tracks, link to the demo post), posts in X and authors' threads,
+READMEs and code of the repositories, a look at the contracts on chain. On Nov 2 there were 58 entries, on Nov 6 184; the snapshots of Nov 10 (463 entries, gallery only) and Nov 13 (820 entries, post texts and code search) are at the end of the file.
 
-## Что видно сразу
+**How we read.** 175 entries: the post, facts about the repository and the start of the README. The 26 nearest and strongest: by code and on chain (TEE Receipts, Measure, Veridom Pay, Throughput Treasury, Black box, Vouch, FlashFirm, PrivatePay Agent, AgentGuard, Charter, Judge on NEAR, Sealed Exploit, Redline, KeyLease, Jurat, NEAR Books, Skarbnik, Warrant, Claw Guard, Lifeguard, Writ, Release Passport, Tidepool, Quittance, NOVA Copy-Trading, Arkhe Guard). We ran nothing from other people's
+repositories, did not watch the videos, did not open the demos.
 
-- **59 из 175 заявок делают лимиты на траты агента** (Security: 100 заявок, Agents: 93). Источник тот же, что и 2 ноября: [официальный промпт трека](https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/06-security.md). Любой
-  проект, который продаёт себя как «лимиты + whitelist для агента», один из многих.
-- **Privacy: 27 заявок, Open: 29** (на 6 ноября; на 10 ноября 82 и 91, срез в конце файла). Тогда там было намного меньше народу, и подсказки трека Privacy (Private AI, TEE, NEAR AI Cloud) совпадают с нашей темой.
-- **TEE используют мало кто:** у 126 заявок его нет совсем, 14 только упоминают, 19 просто вызывают NEAR AI, 11 запускают свой код в TEE, 5 сами проверяют аттестацию (оценка по README, у проверенных по коду исправлена).
-- **Прямого аналога нет.** Публичный журнал ключей ИИ, отказ до отправки промпта и шифрование до аттестованного ключа вместе не сделал никто из проверенных по коду.
-  Части есть у разных команд. Независимых верификаторов, которые пишут в публичный журнал ключей ИИ, нет ни у кого, в том числе у нас.
-- **Приватная политика только у нас** (ярус 2: job уже работает, агент целиком ещё нет). У всех восьми проверенных проектов со своим кодом в TEE (AgentGuard, Charter, Judge, Sealed Exploit, Redline, KeyLease, Jurat, NEAR Books) логика решения открыта, скрыты только входные данные.
-- **Разделы для судей есть у 44 заявок.** Claude Code у судей читает их первым, это уже норма.
+## What is visible at once
 
-## Ближайшие проекты
+- **59 of 175 entries build limits on an agent's spending** (Security: 100 entries, Agents: 93). The source is the same as on Nov 2: [the official track prompt](https://github.com/nearai/near-hackathon-prompt-examples/blob/main/tracks/06-security.md). Any
+  project that sells itself as "limits + whitelist for an agent" is one of many.
+- **Privacy: 27 entries, Open: 29** (as of Nov 6; on Nov 10 82 and 91, the snapshot is at the end of the file). There were far fewer people there then, and the hints of the Privacy track (Private AI, TEE, NEAR AI Cloud) match our topic.
+- **Few use TEE:** 126 entries have none at all, 14 only mention it, 19 simply call NEAR AI, 11 run their own code in a TEE, 5 check the attestation themselves (an estimate from the README, corrected for those checked by code).
+- **There is no direct analogue.** A public log of AI keys, refusal before the prompt is sent, and encryption to an attested key together were not done by anyone among those checked by code.
+  The parts exist in different teams. Nobody has independent verifiers that write to a public log of AI keys, including us.
+- **A private policy is only ours** (Tier 2: the job already works, the agent as a whole not yet). In all eight checked projects with their own code in a TEE (AgentGuard, Charter, Judge, Sealed Exploit, Redline, KeyLease, Jurat, NEAR Books) the decision logic is open, only the inputs are hidden.
+- **44 entries have sections for judges.** Claude Code on the judges' side reads them first, this is already the norm.
 
-| Проект | Что сделано (по коду и цепочке) | Где сильнее нас | Чего у них нет |
+## Nearest projects
+
+| Project | What is done (by code and chain) | Where it is stronger than us | What they lack |
 | --- | --- | --- | --- |
-| [TEE Receipts](https://github.com/tmdry4530/tee-receipts) | Квитанции на ответы NEAR AI; реестр подписантов с историей; контракт сам проверяет подпись ответа; testnet | Сырые доказательства в репозитории; проверка подписи в контракте | Реестр ведёт только владелец (у нас регистрация пока тоже у него), цепочки хешей нет; журнал не читается перед отправкой; нет шифрования; хеши без соли |
-| [Vouch](https://github.com/Oduwal/Vouch) | ИИ ставит залог на ответ, спор решает жюри; testnet, 215 транзакций | Самая глубокая проверка TEE: DCAP, RTMR0-3, compose, подпись NVIDIA, шлюз; доказательства в транзакциях, любой перепроверит скриптом | Журнала ключей нет; нет шифрования |
-| [Charter](https://github.com/Spagero763/charter) | ИИ-фонд с мандатом; охранник в OutLayer подписывает сделки; mainnet | Ключ выводится из хеша сборки (`signing_keys`, `bind: "wasm"`); сильный сюжет с поддельным приказом на mainnet | Проверка модели сводится к сверке nonce; логика мандата открыта |
-| [AgentGuard](https://github.com/CodeMasterLabs/agentguard) | Хранилище платит, держит или отказывает; TEE-оракул рисков; testnet, 217 транзакций | Работает, MCP, Intents | Оракул необязателен, контекст для него выбирает сам агент; политика открыта |
-| [Judge on NEAR](https://github.com/vijaygopalbalasa/judge-near) | Судья в TDX и эскроу | Браузер проверяет котировку и хеш wasm каждого запуска; контракт без ключей | Политики трат и модели нет |
-| [Jurat](https://github.com/nftkingiii/jurat) | Пороговое доказательство баланса; mainnet | Браузер проверяет запуск целиком | Действий с деньгами нет |
-| [Black box](https://github.com/tenxagent/blackbox) | Хеш-цепочка решений агента; mainnet; 6 ноября активно пушит | Контракт без ключей, неизменность доказуема | TEE нет; журнал решений, а не ключей |
-| [Measure](https://github.com/dreyyyy1/measure) | Проверяет TDX-котировки MPC-узлов NEAR | Настоящий сторонний аудитор | Снимок, ничего не пишет и не блокирует |
-| [Veridom Pay](https://github.com/khrisdidukh/veridom-pay) | Контракт сверяет промпт и подпись NEAR AI, вердикт выпускает деньги | Деньги уже привязаны к подписи модели | Проверка TEE тонкая; запросы открыты в транзакциях |
-| [PrivatePay Agent](https://github.com/Nassami1/privatepay-agent) | Инвойс редактируется локально, агент платит через контракт с открытыми лимитами; самый заметный из ранних постов | Работает на testnet, большой охват | По его README проверка котировки ещё не реализована; политика открыта |
+| [TEE Receipts](https://github.com/tmdry4530/tee-receipts) | Receipts for NEAR AI answers; a registry of signers with history; the contract itself checks the answer's signature; testnet | Raw evidence in the repository; signature check in the contract | The registry is kept only by the owner (for us registration is also with the owner so far), no hash chain; the log is not read before sending; no encryption; hashes without salt |
+| [Vouch](https://github.com/Oduwal/Vouch) | The AI stakes a deposit on its answer, a jury settles disputes; testnet, 215 transactions | The deepest TEE check: DCAP, RTMR0-3, compose, NVIDIA signature, gateway; evidence in transactions, anyone can recheck it with a script | No key log; no encryption |
+| [Charter](https://github.com/Spagero763/charter) | An AI fund with a mandate; a guard in OutLayer signs deals; mainnet | The key is derived from the build hash (`signing_keys`, `bind: "wasm"`); a strong story with a forged order on mainnet | The model check comes down to matching a nonce; the mandate logic is open |
+| [AgentGuard](https://github.com/CodeMasterLabs/agentguard) | A vault pays, holds or refuses; a TEE risk oracle; testnet, 217 transactions | Works, MCP, Intents | The oracle is optional, the agent itself picks the context for it; the policy is open |
+| [Judge on NEAR](https://github.com/vijaygopalbalasa/judge-near) | A judge in TDX and escrow | The browser checks the quote and the wasm hash of every run; the contract has no keys | No spending policy and no model |
+| [Jurat](https://github.com/nftkingiii/jurat) | A threshold proof of balance; mainnet | The browser checks the whole run | No actions with money |
+| [Black box](https://github.com/tenxagent/blackbox) | A hash chain of the agent's decisions; mainnet; actively pushing on Nov 6 | The contract has no keys, immutability is provable | No TEE; a log of decisions, not of keys |
+| [Measure](https://github.com/dreyyyy1/measure) | Checks the TDX quotes of NEAR MPC nodes | A real third-party auditor | A snapshot, writes nothing and blocks nothing |
+| [Veridom Pay](https://github.com/khrisdidukh/veridom-pay) | The contract matches the prompt and the NEAR AI signature, the verdict releases the money | The money is already tied to the model's signature | The TEE check is thin; the requests are open in transactions |
+| [PrivatePay Agent](https://github.com/Nassami1/privatepay-agent) | The invoice is redacted locally, the agent pays through a contract with open limits; the most visible of the early posts | Works on testnet, wide reach | By its README the quote check is not implemented yet; the policy is open |
 
-## Сильные вне нашей темы
+## Strong, outside our topic
 
-[Skarbnik](https://github.com/pgreyy/skarbnik) (контракт сам проверяет Groth16 от RISC Zero, патчи за вознаграждение на секретном входе),
-[Warrant](https://github.com/emmanuelist/warrant) (опционы внутри `intents.near`, mainnet, контракт без ключей, проверка одной командой),
-[Tidepool](https://github.com/Watchmeecryt/tidepool) (песочница NEAR Intents, похоже, ей пользуются другие команды),
-[NEAR Books](https://github.com/IhorMuliar/nearbooks) (TDX-воркер на mainnet, контракт без ключей, воспроизводимая сборка),
-[Sealed Exploit](https://github.com/edycutjong/sealed) (баг-баунти с вердиктом в TEE, выплаты на цепочке),
-[Lifeguard](https://github.com/Timidan/lifeguard) (агент может погасить заём, но не занять: транзакцию собирает контракт).
+[Skarbnik](https://github.com/pgreyy/skarbnik) (the contract itself checks a RISC Zero Groth16, bounty patches on a secret input),
+[Warrant](https://github.com/emmanuelist/warrant) (options inside `intents.near`, mainnet, a contract without keys, a one-command check),
+[Tidepool](https://github.com/Watchmeecryt/tidepool) (a NEAR Intents sandbox, other teams seem to use it),
+[NEAR Books](https://github.com/IhorMuliar/nearbooks) (a TDX worker on mainnet, a contract without keys, a reproducible build),
+[Sealed Exploit](https://github.com/edycutjong/sealed) (a bug bounty with the verdict in a TEE, payouts on chain),
+[Lifeguard](https://github.com/Timidan/lifeguard) (an agent can repay a loan but not borrow: the contract builds the transaction).
 
-## Где поле опередило нас
+## Where the field got ahead of us
 
-| Что | У кого | У нас |
+| What | Who has it | What we have |
 | --- | --- | --- |
-| Контракт нельзя подменить | Black box, NEAR Books, Judge, Warrant: 0 ключей, хеш совпадает со сборкой | На контракте журнала один полный ключ, владелец это сам контракт |
-| Какой код принял решение | Judge, Jurat проверяют каждый запуск; Charter выводит ключ из хеша сборки | Заявления исправлены, проверка аттестации запуска в работе |
-| Сырые отчёты аттестации открыты | Vouch, Measure, TEE Receipts | У верификатора локально, в цепочке хеш |
-| Код в TEE работает вместе с контрактом на цепочке | Все восемь проектов со своим кодом в TEE | Job запущен на OutLayer testnet; контракт v3, токен и агент на testnet ещё не настроены |
-| Путь для проверяющего | Warrant: одна команда без установки | `pnpm demo` есть, связи заявлений с кодом нет |
+| The contract cannot be swapped | Black box, NEAR Books, Judge, Warrant: 0 keys, the hash matches the build | The log contract has one full-access key, the owner is the contract itself |
+| Which code made the decision | Judge, Jurat check every run; Charter derives the key from the build hash | The claims are corrected, the check of the run's attestation is in progress |
+| Raw attestation reports are open | Vouch, Measure, TEE Receipts | At the verifier locally, the hash on chain |
+| Code in a TEE works together with a contract on chain | All eight projects with their own code in a TEE | The job runs on OutLayer testnet; contract v3, the token and the agent on testnet are not set up yet |
+| A path for the reviewer | Warrant: one command with no install | `pnpm demo` exists, no link between the claims and the code |
 
-## Что это меняет в плане
+## What this changes in the plan
 
-1. **Внешний верификатор важнее всего.** Этого нет ни у кого. Пока все записи делает один верификатор, наш журнал отличается от реестра владельца только
-   замыслом. Цель: к 10 ноября в логе есть записи человека не из команды.
-2. **Открытую регистрацию верификаторов** решили не делать (`docs/DECISIONS.md`), поэтому всё держится на п. 1. Выбор, кому доверять, у посетителя уже есть (`/log`).
-3. **Не продаёмся как спенд-гард.** Первое в README, посте и видео: ответ пришёл из аттестованного анклава, а ключ можно сверить с публичным журналом. Агент и лимиты следуют из этого.
-4. **Заявления не сильнее кода.** Проверка по коду показала, что у нескольких проектов README обещает больше, чем сделано. Проверяющие сделают с нами то же.
-5. **TEE Receipts может догнать нас по сути за несколько дней**, если вернётся к проекту (с 1 ноября пушей нет). Говорим «единственные, у кого проверяет не поставщик», только когда это станет правдой.
+1. **An outside verifier matters most.** Nobody else has this. While one verifier makes all the entries, our log differs from an owner's registry only
+   in intent. The goal: by Nov 10 the log has entries by a person outside the team.
+2. **We decided not to do open registration of verifiers** (`docs/DECISIONS.md`), so everything rests on item 1. The choice of whom to trust is already with the visitor (`/log`).
+3. **We do not sell ourselves as a spend guard.** First in the README, the post and the video: the answer came from an attested enclave, and the key can be checked against a public log. The agent and the limits follow from this.
+4. **Claims no stronger than the code.** The check by code showed that for several projects the README promises more than is done. The reviewers will do the same to us.
+5. **TEE Receipts could catch up with us in substance within a few days** if it returns to the project (no pushes since Nov 1). We say "the only ones where someone other than the provider checks" only when it becomes true.
 
-## Срез 10 ноября: только галерея
+## Snapshot of Nov 10: gallery only
 
-Источник: тот же API галереи (`/api/projects?page=N`), все страницы, 10 ноября около 15:55 UTC. В этот раз читали только
-название, треки и ссылку на демо-пост. Посты в X без входа не открываются, код и контракты новых заявок не смотрели.
-Всё ниже — по названию и трекам.
+Source: the same gallery API (`/api/projects?page=N`), all pages, Nov 10 at about 15:55 UTC. This time we read only
+the name, the tracks and the link to the demo post. Posts in X do not open without a login, we did not look at the code and contracts of the new entries.
+Everything below is by name and tracks.
 
-| | 2 ноября | 6 ноября | 8 ноября | 10 ноября |
+| | Nov 2 | Nov 6 | Nov 8 | Nov 10 |
 | --- | --- | --- | --- | --- |
-| Заявок в галерее | 58 | 184 | 310 | 463 |
+| Entries in the gallery | 58 | 184 | 310 | 463 |
 | AI Security & Defense | | 100 | 156 | 217 |
 | Agents | | 93 | 149 | 212 |
 | Open Innovation | | 29 | 49 | 91 |
 | Privacy & Private AI | | 27 | 51 | 82 |
 
-- **Заявок прибавляется всё быстрее:** +126 за 6–8 ноября, +153 за 8–10 ноября. Privacy вырос с 51 до 82 (в 1,6 раза при
-  1,5 по всей галерее), Open с 49 до 91 (в 1,9 раза). Из 463 записей уникальных названий 436: «AgentGuard» записан
-  семь раз, «Leash» шесть. Это разные записи; разные ли это проекты, по названию и трекам не видно.
-- **Теснее всего в Security и Agents:** 217 заявок в Security (47 % галереи), 140 одновременно в Security и Agents. Для
-  нашей половины про агента и политику это людная сторона, как и 6 ноября.
-- **В Privacy много заявок «во все треки».** Из 82 заявок 38 поданы в четыре трека и больше (46 % против 15 % по
-  галерее), и только 23 — в один-два. Только в Privacy подались 8, три из них мы знаем с 6–8 ноября (Sealed Ledger, Sealed
-  Dossier, PredicTEE). Мы в трёх треках.
-- **Privacy, Security и Open вместе указаны у 15 записей**, но ровно эту тройку, как у нас, заявила одна (Provable AI
-  Compliance); у остальных 14 треков от четырёх до девяти. Среди них записи с названиями AgentGuard, Charter, Sealed
-  Exploit и Veto.
-- **Ainek в галерее нет**: форма ещё не отправлена, это по плану.
-- **Кого открыть вручную перед подачей.** Название говорит мало, поэтому это «неизвестно, стоит проверить», а не
-  «ближайшие». По теме проверки ИИ и доказательств: Provable AI Compliance, VeilProof (Privacy), Key proof, Agent-Receipt
-  (Security). По теме «агент подписывает только по политике»: presign-guard for NEAR, near-threshold-guardian,
-  Mandate (две записи), Approval Moment. Менее ясные по названию: RedactGate, Hushmark,
-  Morrowseal, SealedBounty, SealedSwarm, cipherwork, Antibody, TAINT. Из тех, чей код мы читали 6 ноября, в
-  галерее на месте TEE Receipts, Judge on NEAR, Jurat, Measure, Black box, PrivatePay Agent, Claw Guard, Redline; из увиденных 8 ноября —
+- **Entries are being added faster and faster:** +126 over Nov 6-8, +153 over Nov 8-10. Privacy grew from 51 to 82 (1.6 times against
+  1.5 for the whole gallery), Open from 49 to 91 (1.9 times). Of 463 records there are 436 unique names: "AgentGuard" is recorded
+  seven times, "Leash" six. These are different records; whether they are different projects is not visible from the name and tracks.
+- **It is tightest in Security and Agents:** 217 entries in Security (47% of the gallery), 140 in Security and Agents at once. For
+  our half about the agent and the policy this is the crowded side, as on Nov 6.
+- **Privacy has many "all tracks" entries.** Of 82 entries 38 are filed in four tracks or more (46% against 15% in the
+  gallery), and only 23 in one or two. 8 filed only in Privacy, three of them we know from Nov 6-8 (Sealed Ledger, Sealed
+  Dossier, PredicTEE). We are in three tracks.
+- **Privacy, Security and Open together are listed for 15 records**, but exactly this triple, like ours, was declared by one (Provable AI
+  Compliance); the other 14 have from four to nine tracks. Among them are records named AgentGuard, Charter, Sealed
+  Exploit and Veto.
+- **Ainek is not in the gallery**: the form is not submitted yet, this is as planned.
+- **Whom to open by hand before the submission.** A name says little, so this is "unknown, worth checking", not
+  "nearest". On the topic of checking AI and proofs: Provable AI Compliance, VeilProof (Privacy), Key proof, Agent-Receipt
+  (Security). On the topic "the agent signs only by policy": presign-guard for NEAR, near-threshold-guardian,
+  Mandate (two records), Approval Moment. Less clear by name: RedactGate, Hushmark,
+  Morrowseal, SealedBounty, SealedSwarm, cipherwork, Antibody, TAINT. Of those whose code we read on Nov 6, in the
+  gallery in place are TEE Receipts, Judge on NEAR, Jurat, Measure, Black box, PrivatePay Agent, Claw Guard, Redline; of those seen on Nov 8:
   PredicTEE, Sealed Dossier, Sealed Ledger, Glassbox.
-- **Что это меняет.** По названиям ничего не подтверждено и не опровергнуто: вывод от 6 ноября («публичный журнал
-  ключей + отказ до отправки» вместе не сделал никто из прочитанных по коду) не пересмотрен и остаётся с той датой. То,
-  что журнала ключей не видно по названиям, не значит, что его ни у кого нет. Заявок стало больше, поэтому 10 ноября мы
-  сделали путь судьи за минуту и сократили README; как именно читают судьи, мы не знаем. Если 12–13 ноября останется
-  час, его стоит потратить на первые две группы названий выше: открыть посты вручную и поправить `docs/PRIOR-ART.md`,
-  если кто-то из них делает журнал ключей.
+- **What this changes.** By names nothing is confirmed or refuted: the conclusion of Nov 6 ("public key log + refusal before
+  sending" together was not done by anyone among those read by code) is not revised and stays with that date. That
+  the key log is not visible by names does not mean that nobody has one. There are more entries, so on Nov 10 we
+  made the judge's path take a minute and shortened the README; how exactly judges read, we do not know. If an
+  hour is left on Nov 12-13, it is worth spending on the first two groups of names above: open the posts by hand and correct `docs/PRIOR-ART.md`,
+  if any of them builds a key log.
 
-### Те же названия, открытые в браузере (10 ноября, вечер)
+### The same names, opened in the browser (Nov 10, evening)
 
-17 постов из списка выше прочитаны в X с аккаунта Бектура. У двух самых близких прочитаны README и часть кода, и каждое
-утверждение о них ниже сверено с их репозиторием отдельным проходом; остальные только по посту. Ничего не запускали.
+17 posts from the list above were read in X from Bektur's account. For the two nearest, the README and part of the code were read, and every
+claim about them below was checked against their repository in a separate pass; the others only by the post. We ran nothing.
 
-| Заявка | Что это | Насколько близко к нам |
+| Entry | What it is | How close to us |
 | --- | --- | --- |
-| [Provable AI Compliance](https://github.com/zavodil/near-attested-ai) | Шлюз соответствия для запросов компании к ИИ: открытые пакеты правил в реестре NEAR, правила применяются в TDX на OutLayer, оттуда же вызов модели NEAR AI; подписанная метка на каждый запрос | **Близко к ярусу 2.** Сильнее нас: одна котировка Intel на запуск связывает код шлюза, вход, выход и вызывающего; реестр без методов правки и удаления; одна команда без ключа перепроверяет записанный день (10 запусков, 6 отказов, одна подделка). Слабее нас: журнала ключей нет; до модели обычный TLS, не E2EE; если доказательства модели не прошли проверку, ответ всё равно выдаётся с меткой `model_attested: true`; по умолчанию вопросы правил решает модель вне TEE (их README это признаёт); денег не двигает |
-| [CIPHERWORK](https://github.com/wadadawadada/cipherwork) | Приватный инференс с оплатой по доказательству: клиент проверяет TDX (GPU — если есть) до отправки, шифрует до аттестованного ключа, проверяет подпись; эскроу платит по подписи верификатора. Два коммита, оба 9 ноября | **Близко к ярусу 1.** Отказ до отправки и E2EE есть; проверяет каждую аттестацию модели, которую вернул шлюз. Журнала ключей нет: один ключ верификатора самого проекта; принимает и `OutOfDate` TCB |
-| SealedBounty | Судья баг-баунти в TEE NEAR AI, контракт проверяет подпись перед выплатой | Сосед TEE Receipts и Sealed Exploit; репозиторий не нашли |
-| Key proof | Сверяет написанную человеком политику агента с его настоящими ключами доступа на цепочке, только чтение | Пересекается с карточкой агента на `/agent` («что может его ключ»); TEE нет |
-| RedactGate | Вырезает персональные данные перед чатом с ИИ; головы хеш-цепочки журнала пишет в контракт NEAR | Та же идея «журнал нельзя переписать», но журнал про редактирование, не про ключи |
-| Hushmark | Проверка PR на скрытые инструкции для ИИ-агентов; спорные места смотрит модель в TEE NEAR AI | Использует приватную модель; проверки ключа до отправки в посте нет |
-| TAINT | Контракт проверяет, кто определил каждое значение платежа | Спенд-гард против инъекций |
-| presign-guard, near-threshold-guardian, Mandate (две разные заявки), Approval Moment, Agent-Receipt | Проверка транзакции перед подписью, лимиты, одобрение человеком | Спенд-гарды, как и 6 ноября |
-| VeilProof, Antibody, SealedSwarm, Morrowseal | Платёжеспособность агента без раскрытия кошелька, баг-баунти с автозапуском, закрытые аукционы GPU, цифровое наследство | Другая тема |
+| [Provable AI Compliance](https://github.com/zavodil/near-attested-ai) | A compliance gateway for a company's requests to AI: open rule packs in a NEAR registry, the rules are applied in TDX on OutLayer, the NEAR AI model call is made from there; a signed mark on every request | **Close to Tier 2.** Stronger than us: one Intel quote per run binds the gateway code, the input, the output and the caller; a registry with no edit and delete methods; one command with no key rechecks the recorded day (10 runs, 6 refusals, one forgery). Weaker than us: no key log; plain TLS up to the model, not E2EE; if the model's proofs fail the check, the answer is still issued with the mark `model_attested: true`; by default the rule questions are decided by a model outside the TEE (their README admits this); it moves no money |
+| [CIPHERWORK](https://github.com/wadadawadada/cipherwork) | Private inference paid by proof: the client checks TDX (GPU if there is one) before sending, encrypts to the attested key, checks the signature; escrow pays by the verifier's signature. Two commits, both Nov 9 | **Close to Tier 1.** Refusal before sending and E2EE are there; it checks every model attestation the gateway returned. No key log: one key, the project's own verifier; it also accepts an `OutOfDate` TCB |
+| SealedBounty | A bug bounty judge in the NEAR AI TEE, the contract checks the signature before the payout | A neighbour of TEE Receipts and Sealed Exploit; we did not find the repository |
+| Key proof | Matches a human-written policy of the agent against its real access keys on chain, read-only | Overlaps with the agent card on `/agent` ("what its key can do"); no TEE |
+| RedactGate | Cuts personal data out before a chat with AI; writes the heads of the log's hash chain into a NEAR contract | The same idea "the log cannot be rewritten", but the log is about redaction, not about keys |
+| Hushmark | Checks a PR for hidden instructions to AI agents; disputed places are looked at by a model in the NEAR AI TEE | Uses a private model; the post has no key check before sending |
+| TAINT | The contract checks who defined each value of a payment | A spend guard against injections |
+| presign-guard, near-threshold-guardian, Mandate (two different entries), Approval Moment, Agent-Receipt | A transaction check before signing, limits, human approval | Spend guards, as on Nov 6 |
+| VeilProof, Antibody, SealedSwarm, Morrowseal | An agent's solvency without revealing the wallet, a bug bounty with auto-run, sealed GPU auctions, a digital inheritance | A different topic |
 
-**Что это меняет.**
+**What this changes.**
 
-1. **Отказ до отправки и шифрование больше не только наши.** У CIPHERWORK это есть для модели, у Provable AI Compliance —
-   для анклава OutLayer. Фраза «журнал ключей + отказ до отправки + E2EE вместе нет ни у кого из 26» верна с датой
-   6 ноября; README, CLAIMS и `docs/PRIOR-ART.md` теперь говорят и про этих двоих. Отличие Ainek — **публичный журнал, в
-   который пишут верификаторы, и выбор посетителя, кому из них верить**. Утром 13 ноября оба верификатора были наши; вечером появился третий, его ведёт наш друг (`docs/DEPLOY.md`).
-2. **В ярусе 2 у каждого своё.** Provable AI Compliance связывает запуск шлюза одной котировкой и даёт перепроверить
-   десять запусков сразу; наш `pnpm demo:policy` с 11 ноября делает такую проверку для шести: исходного и пяти живых действий агента (у пяти без входа задачи). Зато мы строже к самой
-   модели: ключ должен быть в журнале, шифрование идёт до её ключа, а непройденная проверка останавливает отправку. У
-   нас политика закрыта, и по её решению двигаются деньги; у них пакеты правил открыты, и деньги не двигаются.
-3. **Подача.** Первый экран README и сценарий видео вели с отказа до отправки, то есть с общего. Теперь вторая строка
-   «пути судьи» — выбор доверенных верификаторов на `/log`, вступление называет его прямо, а в сценарии «Nobody lets you
-   check» заменено на «Few let you check»: абсолютное «никто» соседи опровергают.
-4. **Что взяли у соседей.** Перепроверка всех живых запусков агента одной командой сделана 11 ноября (`pnpm
-   demo:policy`). Не сделано: проверка каждой аттестации, которую вернул шлюз, а не одной.
+1. **Refusal before sending and encryption are no longer only ours.** CIPHERWORK has it for the model, Provable AI Compliance
+   for the OutLayer enclave. The phrase "the key log + refusal before sending + E2EE together nobody among the 26 has" is true with the date
+   Nov 6; the README, CLAIMS and `docs/PRIOR-ART.md` now speak about these two as well. The difference of Ainek is **a public log that
+   verifiers write to, and the visitor's choice of which of them to believe**. On the morning of Nov 13 both verifiers were ours; in the evening a third appeared, run by our friend (`docs/DEPLOY.md`).
+2. **In Tier 2 each has its own.** Provable AI Compliance binds the gateway run with one quote and lets you recheck
+   ten runs at once; our `pnpm demo:policy` since Nov 11 does such a check for six: the original and five live actions of the agent (for five without the task's input). On the other hand we are stricter about the
+   model itself: the key must be in the log, encryption goes to its key, and a failed check stops the send. For
+   us the policy is closed, and money moves by its decision; for them the rule packs are open, and no money moves.
+3. **The submission.** The first screen of the README and the video script led with refusal before sending, that is with the common ground. Now the second line
+   of the "judge's path" is the choice of trusted verifiers on `/log`, the intro names it directly, and in the script "Nobody lets you
+   check" is replaced with "Few let you check": the absolute "nobody" is refuted by the neighbours.
+4. **What we took from the neighbours.** Rechecking all live runs of the agent with one command was done on Nov 11 (`pnpm
+   demo:policy`). Not done: checking every attestation the gateway returned, not just one.
 
-**Что стало с планом от 6 ноября** (раздел «Что это меняет в плане» выше): внешнего верификатора к 10 ноября нет, до
-открытия репозитория 13-го его не будет, и README, CLAIMS и шапка так и говорили («both verifiers that write to the log
-are ours») до вечера 13 ноября, когда появился третий, который ведёт наш друг. Остальные пункты выполнены: не продаёмся как спенд-гард, каждое заявление привязано к коду в
-`docs/REVIEW.md`, «единственные» нигде не написано.
+**What happened to the plan of Nov 6** (the section "What this changes in the plan" above): there was no outside verifier by Nov 10, there will be none before
+the repository opens on the 13th, and the README, CLAIMS and the header said so ("both verifiers that write to the log
+are ours") until the evening of Nov 13, when a third appeared, run by our friend. The other items are done: we do not sell ourselves as a spend guard, every claim is tied to code in
+`docs/REVIEW.md`, "the only ones" is written nowhere.
 
-## Срез 13 ноября: тексты всех постов и поиск по коду
+## Snapshot of Nov 13: the texts of all posts and a code search
 
-Источник: тот же API галереи, все 103 страницы, 13 ноября около 04:00 UTC. Срез 12 ноября (658 заявок) не сохранён,
-поэтому сравнение идёт с 10 ноября.
+Source: the same gallery API, all 103 pages, Nov 13 at about 04:00 UTC. The snapshot of Nov 12 (658 entries) was not saved,
+so the comparison is with Nov 10.
 
-**Как читали.** В этот раз не только названия:
+**How we read.** This time not only the names:
 
-- **Текст демо-поста** для 779 заявок из 820, без входа в X: через открытую точку, которой X отдаёт посты для
-  встраивания на чужие страницы (`cdn.syndication.twimg.com/tweet-result`). Длинные посты она отдаёт обрезанными
-  примерно до 280 знаков (таких 233), 15 постов удалены авторами, у 26 заявок ссылка ведёт не на пост. Ссылка на
-  GitHub есть в тексте 205 постов.
-- **Поиск по коду GitHub** (`gh search code`) по тому, что есть только в коде, который сам проверяет NEAR AI:
-  `compose_manager_attestation`, `cvm-compose-files`, `X-Encrypt-All-Fields`, `x-no-aliasing`, пакет
-  `@nearai/inference-sdk` в `package.json`. Так нашлись репозитории, которых в галерее ещё нет, и проекты вне хакатона.
-- **Код** самых близких репозиториев; что именно прочитано и кем, сказано у каждого. Ничего не запускали.
+- **The text of the demo post** for 779 of 820 entries, without logging in to X: through an open endpoint that X serves posts from
+  for embedding on other people's pages (`cdn.syndication.twimg.com/tweet-result`). It serves long posts truncated
+  to about 280 characters (there are 233 of them), 15 posts were deleted by their authors, for 26 entries the link leads not to a post. A link to
+  GitHub is in the text of 205 posts.
+- **GitHub code search** (`gh search code`) for what is only in code that NEAR AI itself checks:
+  `compose_manager_attestation`, `cvm-compose-files`, `X-Encrypt-All-Fields`, `x-no-aliasing`, the package
+  `@nearai/inference-sdk` in `package.json`. This found repositories that are not in the gallery yet, and projects outside the hackathon.
+- **The code** of the nearest repositories; what exactly was read and by whom is said for each. We ran nothing.
 
-| | 2 ноября | 6 ноября | 8 ноября | 10 ноября | 13 ноября |
+| | Nov 2 | Nov 6 | Nov 8 | Nov 10 | Nov 13 |
 | --- | --- | --- | --- | --- | --- |
-| Заявок в галерее | 58 | 184 | 310 | 463 | 820 |
+| Entries in the gallery | 58 | 184 | 310 | 463 | 820 |
 | AI Security & Defense | | 100 | 156 | 217 | 375 |
 | Agents | | 93 | 149 | 212 | 354 |
 | Open Innovation | | 29 | 49 | 91 | 176 |
 | Privacy & Private AI | | 27 | 51 | 82 | 160 |
 
-- **За три дня галерея выросла в 1,8 раза**: Privacy и Open почти вдвое (в 1,95 и 1,93 раза), Security и Agents в 1,7
-  раза. Уникальных названий 772 из 820: «AgentGuard» записан 12 раз, «Leash» 7, «Tripwire» 5.
-- **Лимиты на траты агента — по-прежнему самая людная тема.** В Security и Agents одновременно поданы 232 заявки; слова
-  про лимиты, белые списки и инъекции есть в 216 постах из 779 с текстом (оценка по словам, не по коду).
-- **TEE, аттестацию или NEAR AI Cloud называют 78 постов**, 47 из них в треке Privacy. Большинство пользуется анклавом
-  как готовым источником доверия: «ответ подписан в TEE», «контракт проверил подпись».
-- **В Privacy 160 заявок**, из них 67 поданы в четыре трека и больше, 45 — в один-два, 15 — только в Privacy. Ровно
-  нашу тройку треков (Privacy, Security, Open) заявили пять: Provable AI Compliance, Airlock, Shade, Asylia, whoami.
-- **На 13 ноября Ainek в галерее нет**: форма ещё не отправлена.
+- **In three days the gallery grew 1.8 times**: Privacy and Open almost twofold (1.95 and 1.93 times), Security and Agents 1.7
+  times. There are 772 unique names out of 820: "AgentGuard" is recorded 12 times, "Leash" 7, "Tripwire" 5.
+- **Agent spending limits are still the most crowded topic.** 232 entries are filed in Security and Agents at once; words
+  about limits, allowlists and injections are in 216 of the 779 posts with text (an estimate by words, not by code).
+- **TEE, attestation or NEAR AI Cloud are named by 78 posts**, 47 of them in the Privacy track. Most use the enclave
+  as a ready source of trust: "the answer is signed in the TEE", "the contract checked the signature".
+- **Privacy has 160 entries**, of them 67 filed in four tracks or more, 45 in one or two, 15 only in Privacy. Exactly
+  our triple of tracks (Privacy, Security, Open) was declared by five: Provable AI Compliance, Airlock, Shade, Asylia, whoami.
+- **On Nov 13 Ainek is not in the gallery**: the form is not submitted yet.
 
-### Countersign: ближайший сосед
+### Countersign: the nearest neighbour
 
-[greenlima/sealed-review](https://github.com/greenlima/sealed-review), проект называется Countersign. Найден поиском по
-коду, в галерее 13 ноября его нет; README называет его заявкой хакатона в треках Privacy и Security. Репозиторий создан
-7 ноября, 12 коммитов, последний 12 ноября. Прочитаны README, `METHOD.md`, части `watcher/` (launcher, drift, e2ee) и
-`mirror/`; контракт и журналы запусков GitHub Actions посмотрены 13 ноября. Ничего не запускали.
+[greenlima/sealed-review](https://github.com/greenlima/sealed-review), the project is called Countersign. Found by code
+search, it is not in the gallery on Nov 13; its README calls it a hackathon entry in the Privacy and Security tracks. The repository was created
+on Nov 7, 12 commits, the last on Nov 12. We read the README, `METHOD.md`, parts of `watcher/` (launcher, drift, e2ee) and
+`mirror/`; the contract and the GitHub Actions run logs were looked at on Nov 13. We ran nothing.
 
-**Что это.** Независимая проверка машин NEAR AI перед отправкой запроса, для той же модели, что у нас (GLM 5.3 Flash,
-напрямую и через шлюз). Программа `watcher` (Rust) проверяет каждую машину, до которой дошла; человек подписывает
-результат ключом на YubiKey; подписанная лента с цепочкой хешей зеркалируется в контракт NEAR testnet; клиент
-(`watcher gate`, `watcher ask`) читает текущий вердикт и отправляет запрос только проверенной машине.
+**What it is.** An independent check of NEAR AI machines before a request is sent, for the same model as ours (GLM 5.3 Flash,
+directly and through the gateway). The program `watcher` (Rust) checks every machine it reached; a person signs the
+result with a key on a YubiKey; the signed feed with a hash chain is mirrored into a NEAR testnet contract; the client
+(`watcher gate`, `watcher ask`) reads the current verdict and sends the request only to a checked machine.
 
-**Где он сильнее нас** (по коду и цепочке):
+**Where it is stronger than us** (by code and chain):
 
-- **Контракт нельзя подменить.** У `sealed-review-feed.testnet` ноль ключей доступа (проверено по RPC 13 ноября), а
-  `contract_source_metadata` называет коммит, из которого он собран. Контракт сам проверяет подпись каждой записи и
-  цепочку. У нашего контракта один полный ключ.
-- **Проверка железа глубже.** MRTD и RTMR0–2 пересчитываются из опубликованного образа ОС, а не только сверяются с
-  журналом событий; есть проверки атрибутов TD, второго источника коллатерали Intel и токенов NVIDIA по закреплённым
-  ключам. Мы берём проверки SDK как есть.
-- **Запрос не доходит до непроверенной машины.** Ключ TLS сверяется во время рукопожатия; у нас так только из Node, в
-  браузере это невозможно.
-- **Доказательства каждой записи опубликованы** (выпуски `feed-000001` … `feed-000008` на GitHub), и проверку можно
-  повторить. Наши отчёты лежат у верификатора, в цепочке их хеш.
-- **Зеркало читается у двух поставщиков RPC** на одной высоте блока; мы читаем у одного.
-- **Смена кода за ключом ловится публично и каждый день.** `watcher drift` сравнивает то, что запущено на машине, с
-  тем, что записал вердикт. Запуск по расписанию 12 ноября завершился ошибкой «2 reviewed machine(s) run another
-  workload than their verdict recorded». Это то же наблюдение, что у нас в «коде за ключом», сделанное независимо.
+- **The contract cannot be swapped.** `sealed-review-feed.testnet` has zero access keys (checked over RPC on Nov 13), and
+  `contract_source_metadata` names the commit it was built from. The contract itself checks the signature of every entry and
+  the chain. Our contract has one full-access key.
+- **A deeper hardware check.** MRTD and RTMR0-2 are recomputed from the published OS image, not only matched against
+  the event log; there are checks of the TD attributes, of a second source of Intel collateral and of NVIDIA tokens against pinned
+  keys. We take the SDK's checks as they are.
+- **The request does not reach an unchecked machine.** The TLS key is matched during the handshake; for us this is only from Node, in the
+  browser it is impossible.
+- **The evidence for every entry is published** (releases `feed-000001` ... `feed-000008` on GitHub), and the check can be
+  repeated. Our reports are at the verifier, on chain there is their hash.
+- **The mirror is read at two RPC providers** at the same block height; we read at one.
+- **A change of code behind the key is caught publicly and every day.** `watcher drift` compares what runs on the machine with
+  what the verdict recorded. The scheduled run on Nov 12 ended with the error "2 reviewed machine(s) run another
+  workload than their verdict recorded". This is the same observation as ours in "code behind the key", made independently.
 
-**Чего у него нет** (по его же `METHOD.md` и коду):
+**What it lacks** (by its own `METHOD.md` and code):
 
-- **Кто собрал образ и из какого исходника, не проверяется** («Image provenance: not checked yet»). Журнал действий
-  читается, записывается файл релиза, его SHA-256, тег и коммит; с публичным репозиторием и подписью сборки они не
-  сверяются. Мы доводим релиз до исходного коммита прокси.
-- **Клиент не сравнивает релиз при запросе** («The gate itself does not yet compare workloads per request»). Наше
-  правило `AINEK_REQUIRE_RELEASE` это делает, но по умолчанию выключено.
-- **Подпись ответа не проверяется** («Response signatures are not checked yet»), доказательства на ответ нет. У нас
-  подпись и оба хеша пересчитываются на каждый ответ, а солёный хеш доказательства уходит в цепочку.
-- **Шифрование версии 2** (`watcher/src/e2ee.rs`); у нас версия 3, где ключ ответа привязан к запросу, и есть живой
-  отрицательный тест подмены этого ключа.
-- **Один проверяющий.** Оба ключа ленты принадлежат одному человеку, записи появляются после ручной подписи (восемь
-  записей за шесть дней, вердикт живёт три дня). У нас журнал рассчитан на нескольких верификаторов, выбор и кворум у
-  посетителя, а записи пишут программы без участия человека. По существу положение одинаковое: и там, и у нас
-  проверяет автор проекта, человека со стороны нет ни у кого.
-- **Только командная строка.** Нужны Rust и сборка около шести минут; чата, страницы и агента нет.
-- **Оба текущих вердикта — `warning`** (метод `hosts` контракта, 13 ноября), так что без флага `--accept warning` его
-  клиент отказывает на обоих маршрутах. Для маршрута через шлюз это решение метода: клиент не видит, какой машине шлюз
-  передал запрос.
+- **Who built the image and from which source is not checked** ("Image provenance: not checked yet"). The action log is
+  read, the release file, its SHA-256, the tag and the commit are recorded; they are not matched against the public repository and the build signature. We take a release down to the proxy's source commit.
+- **The client does not compare the release per request** ("The gate itself does not yet compare workloads per request"). Our
+  rule `AINEK_REQUIRE_RELEASE` does this, but it is off by default.
+- **The response signature is not checked** ("Response signatures are not checked yet"), there is no proof per answer. We
+  recompute the signature and both hashes on every answer, and the proof's salted hash goes on chain.
+- **Encryption version 2** (`watcher/src/e2ee.rs`); we have version 3, where the reply key is bound to the request, and there is a live
+  negative test of swapping this key.
+- **One checker.** Both feed keys belong to one person, entries appear after a manual signature (eight
+  entries in six days, a verdict lives three days). For us the log is designed for several verifiers, the choice and the quorum are
+  with the visitor, and the entries are written by programs with no human involved. In substance the position is the same: both there and with us
+  the project's author checks, and nobody has an outside person.
+- **Command line only.** It needs Rust and a build of about six minutes; there is no chat, no page and no agent.
+- **Both current verdicts are `warning`** (the contract's `hosts` method, Nov 13), so without the flag `--accept warning` its
+  client refuses on both routes. For the route through the gateway this is a decision of the method: the client does not see which machine the gateway
+  passed the request to.
 
-### Остальные новые соседи
+### Other new neighbours
 
-22 репозитория прочитаны 13 ноября агентами-читателями (Claude) по одному заданию: где в коде проверяется квота, в каком
-порядке идут вызовы, какие заголовки шифрования стоят. У четырёх верхних строк таблицы ключевые утверждения мы потом
-сами сверили с исходниками; остальные строки — со слов читателей. Цепочку и размещённые демо не смотрели, ничего не
-запускали.
+22 repositories were read on Nov 13 by reader agents (Claude) with one task: where in the code the quote is checked, in what
+order the calls go, which encryption headers are set. For the four top rows of the table we then checked the key claims
+ourselves against the sources; the other rows are from the readers' words. We did not look at the chain and the hosted demos, we ran nothing.
 
-| Заявка | Что это (по коду) | Насколько близко к нам |
+| Entry | What it is (by code) | How close to us |
 | --- | --- | --- |
-| [Shade](https://github.com/tookerrjobs/shade) | Реестр ключей подписи модели в контракте NEAR: ключ становится действующим, когда `threshold` наблюдателей одобрили одни и те же измерения; клиент перед отправкой берёт три свежих отчёта, проверяет квоту (dcap-qvl, только `UpToDate`) и отказывает, если ключа нет в реестре; контракт сам проверяет подпись ответа (`ecrecover`) и хранит квитанцию из двух хешей; раскрытие проверяется статической страницей | **Тот же замысел, что наш ярус 1, и те же три трека.** Есть у них и нет у нас: кворум наблюдателей держит контракт, подпись ответа проверяется в цепочке, наблюдатель сам отзывает сменившийся ключ, TLS закреплён. Чего у них нет: шифрования до ключа модели (идёт обычный TLS) и проверки GPU; релиз за ключом не прослеживается (их `DESIGN.md` это признаёт), реестр не дописывается, а переписывается. По их README: шлюз в демо поддельный, на testnet ничего нет, ни одного живого ответа NEAR AI не получено; в репозитории один коммит |
-| [Neslos](https://github.com/Agozie180/Neslos) | Хранилище агента: решение принимается в своём анклаве TDX (Phala), подписывается, контракт проверяет подпись и платит; модель NEAR AI вызывается через SDK 0.3.0 с E2EE | **Ближе всех к «коду за ключом».** `src/core/inference-provenance.ts` читает журнал действий, берёт файл из `nearai/cvm-compose-files` по коммиту, сверяет его SHA-256 и проверяет происхождение образов функциями SDK; принятое состояние закреплено в файле (коммит, файл, хеш журнала). Это статический список одобренного, а не журнал: публичного журнала ключей нет |
-| [DNA Confidential](https://github.com/indaga-ai/private-dna-reading) | Браузер сам проверяет аттестацию модели (Intel, NVIDIA, журнал действий привязан к квоте), шифрует сводку E2EE v3 до ключа модели, проверяет подпись ответа; кнопка отправки открывается только после проверки | **Тот же путь клиента, что у нас, без цепочки.** Журнала ключей нет; проверяется первая аттестация для модели, а не каждая; последний релиз из журнала действий показывается, но до репозитория не прослеживается |
-| [Oathline](https://github.com/Anshv784/oathline) | Контракт принимает ключ модели только после проверки квоты **в цепочке** (вызов `tee-verifier.testnet`), с одноразовым числом от самого контракта; вопрос уходит модели через закреплённую программу OutLayer; подпись ответа проверяется в цепочке | Реестр ключей с проверкой Intel в цепочке и без владельца-привратника: зарегистрировать может любой, чьи доказательства прошли. Записи перезаписываются, цепочки хешей нет; шифрования нет; ответ хранится в цепочке |
-| [TITAN EXCUBAT](https://github.com/alnitak34/titan-excubat) | Плагин, который не выпускает ответ модели, пока проверка SDK не вернула `provider_tee` | По отчёту читателя: клиентское правило «только один проверенный коммит прокси» через функции происхождения SDK. Всё проверено на поддельном SDK, их README так и говорит |
-| [SafeRedline](https://github.com/oocoder/saferedline), [CodeCloak](https://github.com/PinnacleCryptNG/CodeCloak), [Recourse](https://github.com/devprashant19/Recourse) | Строгая проверка на сервере перед отправкой: шлюз и **каждая** аттестация модели, у первых двух ещё и токен NVIDIA по ключам NVIDIA | По отчёту читателя: отказ до отправки есть, проверяют каждого кандидата (мы — тот отчёт, что вернулся). Журнала нет (у Recourse реестр подписантов от владельца, только в песочнице), шифрования нет, принимают и `OutOfDate` |
-| [Forseti](https://github.com/whatislove666/forseti), [Psephex](https://github.com/UnityNodes/psephex), [Sealed Bench](https://github.com/jazulay/sealed-bench) | Судья рынка предсказаний, суд из трёх моделей, закрытый бенчмарк: контракт проверяет подпись модели | Подпись в цепочке, ключи добавляет владелец. По отчёту читателя до отправки ничего не проверяется, а у Psephex он кода проверки аттестации не нашёл (README говорит «attested with a fresh nonce»); сами мы не сверяли |
-| [Blindsight](https://github.com/Prosperlinho/Blindsight), [Hindsight](https://github.com/Nnadijoshuac/hindsight), [Bursar](https://github.com/DCSteve96/Bursar), [Caesura](https://github.com/mitchuski/caesura), scrim, cloak | Приложения на NEAR AI, где проверка не останавливает отправку | При сбое проверки запрос всё равно уходит (Blindsight — открытым текстом), ошибки аттестации глотаются, либо проверка идёт после ответа. По отчёту читателя README у Blindsight, Hindsight, Bursar и Caesura говорит о проверке больше, чем делает код; сами мы эти шесть не сверяли |
-| [Proving Ground](https://github.com/sambitsargam/proving-ground), [Probarion](https://github.com/probarion/probarion) | Спенд-гарды: проверяющий в OutLayer; хранилища без ключей на mainnet | По отчёту читателя: Proving Ground ближе всех по форме к ярусу 2, но контракт верит результату OutLayer без подписи решения; у Probarion контракты без ключей и без метода обновления |
+| [Shade](https://github.com/tookerrjobs/shade) | A registry of model signing keys in a NEAR contract: a key becomes active when `threshold` watchers approved the same measurements; before sending, the client takes three fresh reports, checks the quote (dcap-qvl, `UpToDate` only) and refuses if the key is not in the registry; the contract itself checks the answer's signature (`ecrecover`) and stores a receipt of two hashes; the reveal is checked by a static page | **The same idea as our Tier 1, and the same three tracks.** They have and we lack: the watchers' quorum is held by the contract, the answer's signature is checked on chain, a watcher itself revokes a key that changed, TLS is pinned. What they lack: encryption to the model's key (plain TLS is used) and a GPU check; the release behind the key is not traced (their `DESIGN.md` admits this), the registry is not appended to but rewritten. By their README: the gateway in the demo is fake, there is nothing on testnet, not one live NEAR AI answer was received; one commit in the repository |
+| [Neslos](https://github.com/Agozie180/Neslos) | An agent's vault: the decision is made in its own TDX enclave (Phala), signed, the contract checks the signature and pays; the NEAR AI model is called through SDK 0.3.0 with E2EE | **Closest to "code behind the key".** `src/core/inference-provenance.ts` reads the action log, takes the file from `nearai/cvm-compose-files` by commit, matches its SHA-256 and checks the images' provenance with SDK functions; the accepted state is pinned in a file (commit, file, action log hash). This is a static list of the approved, not a log: there is no public key log |
+| [DNA Confidential](https://github.com/indaga-ai/private-dna-reading) | The browser itself checks the model's attestation (Intel, NVIDIA, the action log bound to the quote), encrypts the summary with E2EE v3 to the model's key, checks the answer's signature; the send button opens only after the check | **The same client path as ours, without a chain.** No key log; the first attestation for a model is checked, not every one; the latest release from the action log is shown, but not traced to a repository |
+| [Oathline](https://github.com/Anshv784/oathline) | The contract accepts a model key only after a quote check **on chain** (a call to `tee-verifier.testnet`), with a nonce from the contract itself; the question goes to the model through a pinned OutLayer program; the answer's signature is checked on chain | A key registry with an Intel check on chain and no owner-gatekeeper: anyone whose proofs passed can register. Entries are overwritten, no hash chain; no encryption; the answer is stored on chain |
+| [TITAN EXCUBAT](https://github.com/alnitak34/titan-excubat) | A plugin that does not release the model's answer until the SDK check returned `provider_tee` | By the reader's report: a client rule "only one checked proxy commit" through the SDK's provenance functions. Everything is tested on a fake SDK, their README says so |
+| [SafeRedline](https://github.com/oocoder/saferedline), [CodeCloak](https://github.com/PinnacleCryptNG/CodeCloak), [Recourse](https://github.com/devprashant19/Recourse) | A strict server-side check before sending: the gateway and **every** model attestation, for the first two also the NVIDIA token against NVIDIA keys | By the reader's report: refusal before sending is there, they check every candidate (we check the report that came back). No log (Recourse has a signer registry from the owner, only in a sandbox), no encryption, they accept `OutOfDate` too |
+| [Forseti](https://github.com/whatislove666/forseti), [Psephex](https://github.com/UnityNodes/psephex), [Sealed Bench](https://github.com/jazulay/sealed-bench) | A prediction market judge, a court of three models, a sealed benchmark: the contract checks the model's signature | The signature on chain, the owner adds the keys. By the reader's report nothing is checked before sending, and in Psephex he found no attestation check code (the README says "attested with a fresh nonce"); we did not check it ourselves |
+| [Blindsight](https://github.com/Prosperlinho/Blindsight), [Hindsight](https://github.com/Nnadijoshuac/hindsight), [Bursar](https://github.com/DCSteve96/Bursar), [Caesura](https://github.com/mitchuski/caesura), scrim, cloak | Apps on NEAR AI where the check does not stop the send | If the check fails the request goes anyway (Blindsight in plain text), attestation errors are swallowed, or the check runs after the answer. By the reader's report the README of Blindsight, Hindsight, Bursar and Caesura says more about checking than the code does; we did not check these six ourselves |
+| [Proving Ground](https://github.com/sambitsargam/proving-ground), [Probarion](https://github.com/probarion/probarion) | Spend guards: a checker in OutLayer; vaults without keys on mainnet | By the reader's report: Proving Ground is closest in form to Tier 2, but the contract trusts the OutLayer result with no signature on the decision; Probarion has contracts without keys and without an update method |
 
-В таблице 19 репозиториев из 22. Ещё три — клиенты NEAR AI без цепочки, все по отчёту читателя:
-[PipTradeDex Private Intent](https://github.com/codedforum/piptradedex) шифрует сам, версией 2, и перед отправкой сверяет
-только привязку ключа к отчёту, без проверки квоты; [SentinelReview](https://github.com/chokri29/SentinelReview) и
-[near-private-preflight](https://github.com/elsoul/near-private-preflight) проверяют и шифруют через SDK 0.3.0.
+The table has 19 repositories of the 22. Three more are NEAR AI clients without a chain, all by the reader's report:
+[PipTradeDex Private Intent](https://github.com/codedforum/piptradedex) encrypts itself, with version 2, and before sending matches
+only the key's binding to the report, with no quote check; [SentinelReview](https://github.com/chokri29/SentinelReview) and
+[near-private-preflight](https://github.com/elsoul/near-private-preflight) check and encrypt through SDK 0.3.0.
 
-**Что есть у других и нет у нас** (после всех срезов; заявки 13 ноября, кроме четырёх сверенных, — по отчёту читателя):
+**What others have and we lack** (after all the snapshots; the Nov 13 entries, except the four we checked, are by the reader's report):
 
-- **Контракт без ключей**: Black box, NEAR Books, Judge, Warrant (срез 6 ноября), Countersign, Caesura, Psephex (оракул),
+- **A contract without keys**: Black box, NEAR Books, Judge, Warrant (snapshot of Nov 6), Countersign, Caesura, Psephex (the oracle),
   Bursar, Probarion.
-- **Подпись модели проверяется в цепочке**: TEE Receipts, Veridom Pay (срез 6 ноября), Shade, Oathline, Forseti, Psephex,
+- **The model's signature is checked on chain**: TEE Receipts, Veridom Pay (snapshot of Nov 6), Shade, Oathline, Forseti, Psephex,
   Sealed Bench, Recourse.
-- **Проверка квоты Intel в цепочке**: Oathline.
-- **Кворум, который держит контракт**: Shade, Psephex.
-- **Проверяется каждая аттестация, которую вернул шлюз**: CIPHERWORK (срез 10 ноября), SafeRedline, CodeCloak, Recourse,
+- **An Intel quote check on chain**: Oathline.
+- **A quorum held by the contract**: Shade, Psephex.
+- **Every attestation the gateway returned is checked**: CIPHERWORK (snapshot of Nov 10), SafeRedline, CodeCloak, Recourse,
   Neslos, Countersign.
-- **Сырые доказательства опубликованы**: Vouch, Measure, TEE Receipts (срез 6 ноября), Countersign.
-- **Загрузочные измерения закреплены или пересчитаны**: Countersign, Neslos.
+- **Raw evidence is published**: Vouch, Measure, TEE Receipts (snapshot of Nov 6), Countersign.
+- **Boot measurements are pinned or recomputed**: Countersign, Neslos.
 
-**Чего мы ни у кого из прочитанных не нашли:** дописываемого журнала ключей с цепочкой хешей, в который пишут несколько
-верификаторов, с выбором и кворумом у посетителя; меток релиза в таком журнале и правила клиента по ним; закрытой
-политики, решение которой подписано в задаче OutLayer и проверено контрактом (Charter подписывает в OutLayer при
-открытом мандате; Neslos подписывает в своём анклаве, и его хранилище проверяет подпись). Это сказано про 23
-репозитория этого среза и 28 прочитанных раньше, не про все 820 заявок. Третий пункт позже сужен: см. «Ещё 25
-репозиториев» ниже (Aegis, Bouncer).
+**What we did not find in any of those read:** an appendable key log with a hash chain that several
+verifiers write to, with the choice and the quorum at the visitor; release marks in such a log and a client rule on them; a closed
+policy whose decision is signed in an OutLayer job and checked by the contract (Charter signs in OutLayer with an
+open mandate; Neslos signs in its own enclave, and its vault checks the signature). This is said about the 23
+repositories of this snapshot and the 28 read earlier, not about all 820 entries. The third item was narrowed later: see "25 more
+repositories" below (Aegis, Bouncer).
 
-### Ещё 25 репозиториев: поиск по коду до конца (13 ноября, днём)
+### 25 more repositories: the code search to the end (Nov 13, daytime)
 
-Утром поиск (запросы в списке выше) брал первые сто результатов на запрос. Днём набор запросов был другой и шёл до
-конца, до тысячи результатов на запрос. Всего тринадцать:
+In the morning the search (the queries in the list above) took the first hundred results per query. In the daytime the set of queries was different and went
+to the end, up to a thousand results per query. Thirteen in all:
 
-- по коду, который читает аттестацию NEAR AI: `compose_manager_attestation`, `model_attestations`,
+- by code that reads the NEAR AI attestation: `compose_manager_attestation`, `model_attestations`,
   `gateway_attestation`, `"attestation/report" near`, `X-Encryption-Version`, `x-no-aliasing`,
   `"@nearai/inference-sdk"`;
-- по контрактам на near-sdk: `compose_hash`, `signing_address`, `register_signer`, `ed25519_verify attestation`,
+- by contracts on near-sdk: `compose_hash`, `signing_address`, `register_signer`, `ed25519_verify attestation`,
   `ecrecover attestation`, `request_execution outlayer`.
 
-Вместе они дали 383 репозитория, 86 из них созданы 19 октября или позже. 25, которых мы ещё не читали, прочитал
-агент-читатель (Claude) по клонам, по тому же заданию, что утром. Ничего не запускали. Его отчёт мы с исходниками не
-сверяли, кроме двух строк, Aegis и Bouncer: их мы потом открыли сами, потому что на них опирается правка в README. Не все
-25 есть в галерее: drouter подан на другой хакатон, у recordless-mobile и near-ai-vscode хакатон не упомянут.
+Together they gave 383 repositories, 86 of them created on Oct 19 or later. The 25 we had not read yet were read by a
+reader agent (Claude) from clones, with the same task as in the morning. We ran nothing. We did not check its report against the sources,
+except two rows, Aegis and Bouncer: we opened those ourselves afterwards, because a README correction relies on them. Not all
+25 are in the gallery: drouter was submitted to another hackathon, recordless-mobile and near-ai-vscode do not mention a hackathon.
 
-| Репозиторий | Что это (по отчёту) | Насколько близко к нам |
+| Repository | What it is (by the report) | How close to us |
 | --- | --- | --- |
-| [nymiralabs/nymira](https://github.com/nymiralabs/nymira) | Предоплаченные кредиты NEAR AI как ZK-ноты в хранилище на NEAR; чат шифруется к аттестованному ключу модели | Ближе всех по клиенту: квота TDX проверяется в браузере (dcap-qvl в WASM), при неудаче ничего не шифруется и не уходит, шифрование версии 2. Журнала в цепочке нет: якорь доверия — один файл политики с измерениями и compose-хешами (не ключами), подписанный ключом команды; наблюдатель переподписывает его каждые 10 минут. Релиз не прослеживается |
-| [iamdflame/priced-in](https://github.com/iamdflame/priced-in) | Рынки предсказаний на mainnet, три присяжных на NEAR AI | Ключ модели записан в контракте (`register_model`: пишет владелец, один ключ на модель, перезаписывается). Контракт сам собирает запрос и проверяет подпись NEAR AI над ним. Реестр читает контракт при вердикте, а не клиент перед отправкой |
-| [thisisjoshford/recordless-mobile](https://github.com/thisisjoshford/recordless-mobile) | Приложение для заметок со встреч под iOS, ядро на Rust | Единственный из 25, кто идёт по журналу действий: проверяет вторую квоту менеджера, проигрывает журнал, берёт файлы из `nearai/cvm-compose-files` на записанном коммите и принимает только с тем sha256, что подписал анклав; дальше до ревизии весов и дайджестов образов. До тега, подписи сборки и коммита исходников не идёт. Цепочки нет, шифрования E2EE нет (привязка к TLS-ключу) |
-| [dcablorh/Aegis](https://github.com/dcablorh/Aegis) (сверено нами, коммит `41e9c6a`) | Хранилище, которое спасает заём на Burrow от ликвидации | Ближе всех по агентской части. Политика лежит в контракте как обязательство и шифртекст; контракт сам вызывает задачу OutLayer и проверяет подпись Ed25519 на решении (`rescue.rs`). Ключ подписи задача читает из секрета OutLayer (`AEGIS_SIGNING_KEY_HEX`), а «аттестация», которую сверяет контракт, — строка, которую задача сообщает о себе сама, по умолчанию `unattested-local`. Одобрения человеком нет: исполняет аккаунт-keeper |
-| [AduAkorful/bouncer](https://github.com/AduAkorful/bouncer) (сверено нами, коммит `6cdf602`) | Сторож в анклаве OutLayer сверяет счёт с закрытой книгой и подписывает вердикт | Контракт проверяет подпись сторожа по ключу, записанному для каждого хранилища (`verdict.rs`). Сторож подписывает ключом, который держит платформа OutLayer (`outlayer::signing_keys::sign` в `guard/src/main.rs`), и сам его не читает: по ключу разницы с нами мы не заявляем. Выплату забирает победитель своей подписью после задержки (`claim`); одобрения человеком перед исполнением нет |
-| [plavutskyi/mask-wars](https://github.com/plavutskyi/mask-wars), [zakyirsyaad/foundling](https://github.com/zakyirsyaad/foundling) | Закрытый материал в OutLayer: тестовый набор судьи, параметры стратегии | Контракт вызывает OutLayer и верит ответу: подписи не проверяет |
-| [leomanza/delibera.xyz](https://github.com/leomanza/delibera.xyz) | Жюри из нескольких агентов для DAO | OutLayer как кошелёк агента: политику применяет сам OutLayer, контракт подпись не проверяет. Аттестация NEAR AI проверяется после ответа |
-| [thepigdestroyer/drouter](https://github.com/thepigdestroyer/drouter) | Маршрутизатор к анклавам Tinfoil на тестовой сети Arc (EVM); подан на другой хакатон | Реестр измерений узлов, в который пишут несколько проверяющих из списка владельца; новый результат проверяющего заменяет прежний, события остаются; браузер читает реестр перед отправкой. Недоступный реестр даёт «пропущено», а не отказ; кворум назван в коде симуляцией: все ключи у сервера демо |
-| [dhairya-pandya/sieve](https://github.com/dhairya-pandya/sieve), [Techkeyy/secondeyes](https://github.com/Techkeyy/secondeyes), [dev-doji/beeline-relay](https://github.com/dev-doji/beeline-relay), [HuRiKh4n/robinhoot-kingdom](https://github.com/HuRiKh4n/robinhoot-kingdom) | Контракт проверяет подпись модели-рецензента или судьи | Ключ в контракте пишет владелец: один ключ или список без истории (у sieve ключи копятся, каждый со сроком). Читает контракт, не клиент |
-| [EndPx/proofbill](https://github.com/EndPx/proofbill), [apexweb-adam/leash](https://github.com/apexweb-adam/leash) | Покупка результата ИИ; судья страниц | Проверка аттестации до запроса, на сервере, без журнала и без E2EE. У ProofBill в цепочке солёные обязательства и оплата после одобрения человеком |
-| [Mramaran/termwork](https://github.com/Mramaran/termwork), [VitalPointAI/near-ai-vscode](https://github.com/VitalPointAI/near-ai-vscode), [ryan-tobin/blindfold](https://github.com/ryan-tobin/blindfold), [dylantlwu/baitnet](https://github.com/dylantlwu/baitnet), [Victork19/swarm-for-hire](https://github.com/Victork19/swarm-for-hire), [nisargpatel7042lva/vouch](https://github.com/nisargpatel7042lva/vouch), [topmember-build/plumbline](https://github.com/topmember-build/plumbline) | Разное | Проверка после ответа, только привязка без квоты, или только наличие полей. Этот vouch — не Vouch из таблицы ближайших |
-| [Pradeeppilotdev/countersign](https://github.com/Pradeeppilotdev/countersign), [hey-research-lab/proof-of-ship-near](https://github.com/hey-research-lab/proof-of-ship-near), [jcarbonnell/nova](https://github.com/jcarbonnell/nova) | Счета продавцов; эскроу; своё хранилище в TEE | Пересечения нет. Этот countersign — не Countersign из раздела выше |
+| [nymiralabs/nymira](https://github.com/nymiralabs/nymira) | Prepaid NEAR AI credits as ZK notes in a vault on NEAR; the chat is encrypted to the model's attested key | Closest by client: the TDX quote is checked in the browser (dcap-qvl in WASM), on failure nothing is encrypted and nothing is sent, encryption version 2. No log on chain: the trust anchor is one policy file with measurements and compose hashes (not keys), signed by the team's key; a watcher re-signs it every 10 minutes. The release is not traced |
+| [iamdflame/priced-in](https://github.com/iamdflame/priced-in) | Prediction markets on mainnet, three jurors on NEAR AI | The model key is recorded in the contract (`register_model`: written by the owner, one key per model, overwritten). The contract itself builds the request and checks the NEAR AI signature over it. The contract reads the registry at the verdict, not the client before sending |
+| [thisisjoshford/recordless-mobile](https://github.com/thisisjoshford/recordless-mobile) | A meeting notes app for iOS, the core in Rust | The only one of the 25 that goes by the action log: checks the manager's second quote, replays the log, takes files from `nearai/cvm-compose-files` at the recorded commit and accepts only with the sha256 that the enclave signed; then on to the weights revision and the image digests. It does not go to the tag, the build signature and the source commit. No chain, no E2EE encryption (binding to the TLS key) |
+| [dcablorh/Aegis](https://github.com/dcablorh/Aegis) (checked by us, commit `41e9c6a`) | A vault that saves a Burrow loan from liquidation | Closest on the agent side. The policy lies in the contract as a commitment and a ciphertext; the contract itself calls an OutLayer job and checks the Ed25519 signature on the decision (`rescue.rs`). The job reads the signing key from an OutLayer secret (`AEGIS_SIGNING_KEY_HEX`), and the "attestation" the contract matches is a string that the job reports about itself, `unattested-local` by default. There is no human approval: the keeper account executes |
+| [AduAkorful/bouncer](https://github.com/AduAkorful/bouncer) (checked by us, commit `6cdf602`) | A guard in an OutLayer enclave matches an invoice against a closed ledger and signs a verdict | The contract checks the guard's signature against a key recorded for each vault (`verdict.rs`). The guard signs with a key held by the OutLayer platform (`outlayer::signing_keys::sign` in `guard/src/main.rs`) and does not read it itself: on the key we claim no difference from us. The payout is taken by the winner with their own signature after a delay (`claim`); there is no human approval before execution |
+| [plavutskyi/mask-wars](https://github.com/plavutskyi/mask-wars), [zakyirsyaad/foundling](https://github.com/zakyirsyaad/foundling) | Closed material in OutLayer: a judge's test set, strategy parameters | The contract calls OutLayer and trusts the answer: it does not check the signature |
+| [leomanza/delibera.xyz](https://github.com/leomanza/delibera.xyz) | A jury of several agents for a DAO | OutLayer as the agent's wallet: OutLayer itself applies the policy, the contract does not check the signature. The NEAR AI attestation is checked after the answer |
+| [thepigdestroyer/drouter](https://github.com/thepigdestroyer/drouter) | A router to Tinfoil enclaves on the Arc test network (EVM); submitted to another hackathon | A registry of node measurements that several checkers from the owner's list write to; a checker's new result replaces the previous one, the events remain; the browser reads the registry before sending. An unavailable registry gives "skipped", not a refusal; the quorum is called a simulation in the code: all keys are on the demo server |
+| [dhairya-pandya/sieve](https://github.com/dhairya-pandya/sieve), [Techkeyy/secondeyes](https://github.com/Techkeyy/secondeyes), [dev-doji/beeline-relay](https://github.com/dev-doji/beeline-relay), [HuRiKh4n/robinhoot-kingdom](https://github.com/HuRiKh4n/robinhoot-kingdom) | The contract checks the signature of a reviewer or judge model | The owner writes the key in the contract: one key or a list without history (in sieve keys accumulate, each with an expiry). The contract reads it, not the client |
+| [EndPx/proofbill](https://github.com/EndPx/proofbill), [apexweb-adam/leash](https://github.com/apexweb-adam/leash) | Buying an AI result; a page judge | The attestation check before the request, on the server, with no log and no E2EE. ProofBill has salted commitments on chain and payment after human approval |
+| [Mramaran/termwork](https://github.com/Mramaran/termwork), [VitalPointAI/near-ai-vscode](https://github.com/VitalPointAI/near-ai-vscode), [ryan-tobin/blindfold](https://github.com/ryan-tobin/blindfold), [dylantlwu/baitnet](https://github.com/dylantlwu/baitnet), [Victork19/swarm-for-hire](https://github.com/Victork19/swarm-for-hire), [nisargpatel7042lva/vouch](https://github.com/nisargpatel7042lva/vouch), [topmember-build/plumbline](https://github.com/topmember-build/plumbline) | Various | A check after the answer, a binding only with no quote, or only the presence of fields. This vouch is not the Vouch from the table of the nearest |
+| [Pradeeppilotdev/countersign](https://github.com/Pradeeppilotdev/countersign), [hey-research-lab/proof-of-ship-near](https://github.com/hey-research-lab/proof-of-ship-near), [jcarbonnell/nova](https://github.com/jcarbonnell/nova) | Sellers' invoices; escrow; its own vault in a TEE | No overlap. This countersign is not the Countersign from the section above |
 
-Что из этого следует:
+What follows from this:
 
-1. **Журнала, как наш, по отчёту нет ни у кого из 25.** Ключ модели в контракте держат пятеро: priced-in, sieve,
-   secondeyes, beeline-relay, robinhoot-kingdom. Ближе всех к самому журналу drouter, и он не про NEAR.
-2. **Третий пункт «не нашли» сужен.** Решение, подписанное в задаче OutLayer при закрытой политике и проверенное
-   контрактом, есть у Aegis; Bouncer близок к этому. У нас сверх Aegis ключ решения рождается внутри анклава: там его
-   задаёт владелец обычным секретом. Ни у того, ни у другого действие не ждёт одобрения человека. Первые два пункта верны
-   для всех 76 репозиториев, насколько их читали; третий только для первых 51.
-3. **К тем, кто идёт по журналу действий** (Neslos из таблицы выше и проекты раздела «Вне хакатона» ниже), добавляется
-   recordless-mobile. Он доходит до ревизии весов, мы — до коммита исходников прокси.
-4. **Что у соседей сильнее и к сдаче не делается:** проверка квоты прямо в браузере, без прокси NEAR AI (nymira);
-   подпись ответа, проверенная контрактом над запросом, который он собрал сам (priced-in).
+1. **A log like ours, by the report, nobody among the 25 has.** A model key in a contract is held by five: priced-in, sieve,
+   secondeyes, beeline-relay, robinhoot-kingdom. Closest to the log itself is drouter, and it is not about NEAR.
+2. **The third "not found" item is narrowed.** A decision signed in an OutLayer job with a closed policy and checked by the
+   contract is in Aegis; Bouncer is close to this. What we have beyond Aegis: the decision key is born inside the enclave; there it
+   is set by the owner as an ordinary secret. In neither does the action wait for human approval. The first two items are true
+   for all 76 repositories, as far as they were read; the third only for the first 51.
+3. **To those who go by the action log** (Neslos from the table above and the projects of the "Outside the hackathon" section below), recordless-mobile is added.
+   It reaches the weights revision, we reach the proxy's source commit.
+4. **What is stronger at the neighbours and is not being done before the submission:** a quote check right in the browser, without the NEAR AI proxy (nymira);
+   an answer signature checked by the contract over a request it built itself (priced-in).
 
-### Прежние строки: что изменилось с 6 и 10 ноября
+### Earlier rows: what changed since Nov 6 and 10
 
-Агент-читатель сверил с кодом на 13 ноября каждое наше утверждение о четырёх старых соседях. Все остались верны.
+A reader agent checked against the code, as of Nov 13, every claim of ours about four old neighbours. All remained true.
 
-- **TEE Receipts:** коммитов с 1 ноября нет. Реестр пишет только владелец, цепочки хешей нет, журнал не читается перед
-  отправкой, шифрования и соли нет.
-- **CIPHERWORK:** те же два коммита от 9 ноября. Уточнение: его шифрование — версия 2 (в lock-файле SDK 0.1.0).
-- **Provable AI Compliance:** 12 коммитов за 11–12 ноября, все в README, браузерном проверяющем и страницах отчёта;
-  модуль в анклаве и реестр не менялись. По-прежнему: журнала ключей нет, до модели TLS, непройденная проверка
-  доказательств модели не останавливает ответ с меткой `model_attested: true`, вопросы правил по умолчанию решает
-  модель вне TEE. Его README теперь называет вторую заявку того же автора.
-- **Vouch:** после 6 ноября коммитов нет.
-- **Attested Arena** ([zavodil/attested-arena](https://github.com/zavodil/attested-arena), вторая заявка автора Provable
-  AI Compliance, семь коммитов 12 ноября): соревнование моделей на закрытых заданиях, судья в OutLayer. Журнала ключей
-  и шифрования нет; задания уходят модели до проверки её доказательств (`judge/src/main.rs`), при провале результат
-  просто не подписывается.
-- **Рядом с ярусом 2, вне галереи:** [zavodil/offchain-smart-contract](https://github.com/zavodil/offchain-smart-contract)
-  того же автора (создан 11 ноября). Контракт вызывает судью в OutLayer, закреплённого по хешу сборки, проверяет
-  подпись вердикта в цепочке (`ed25519_verify`) и платит, отказывает или передаёт людям. Это форма нашего яруса 2.
-  Отличие по его README: правила там открытые (пакеты в публичном реестре), закрыт вход; у нас закрыта политика, а
-  аргументы действия открыты.
+- **TEE Receipts:** no commits since Nov 1. The registry is written only by the owner, no hash chain, the log is not read before
+  sending, no encryption and no salt.
+- **CIPHERWORK:** the same two commits of Nov 9. A clarification: its encryption is version 2 (SDK 0.1.0 in the lock file).
+- **Provable AI Compliance:** 12 commits over Nov 11-12, all in the README, the browser checker and the report pages;
+  the module in the enclave and the registry did not change. Still: no key log, TLS up to the model, a failed check of the
+  model's proofs does not stop the answer with the mark `model_attested: true`, the rule questions are by default decided
+  by a model outside the TEE. Its README now names the second entry by the same author.
+- **Vouch:** no commits after Nov 6.
+- **Attested Arena** ([zavodil/attested-arena](https://github.com/zavodil/attested-arena), the second entry by the author of Provable
+  AI Compliance, seven commits on Nov 12): a competition of models on closed tasks, the judge in OutLayer. No key log
+  and no encryption; the tasks go to the model before its proofs are checked (`judge/src/main.rs`), on failure the result
+  is simply not signed.
+- **Next to Tier 2, outside the gallery:** [zavodil/offchain-smart-contract](https://github.com/zavodil/offchain-smart-contract)
+  by the same author (created Nov 11). The contract calls a judge in OutLayer pinned by the build hash, checks the
+  verdict's signature on chain (`ed25519_verify`) and pays, refuses or hands over to people. This is the form of our Tier 2.
+  The difference by its README: the rules there are open (packs in a public registry), the input is closed; for us the policy is closed and
+  the action's arguments are open.
 
-### Вне хакатона: журнал действий NEAR AI уже читают
+### Outside the hackathon: the NEAR AI action log is already being read
 
-12 ноября мы написали, что проверка деплоя не видит релиз за ключом, и стали читать журнал действий анклава. Поиск по
-коду показал, что несколько проектов делают это с сентября–октября и отказывают по нему. Прочитано агентом-читателем;
-README Brave, проверку аттестации в его шлюзе и обзор Quill от 12 ноября мы открыли сами.
+On Nov 12 we wrote that the deployment check does not see the release behind the key, and started reading the enclave's action log. A code
+search showed that several projects have been doing this since September-October and refuse by it. Read by a reader agent;
+the Brave README, the attestation check in its gateway and the Quill review of Nov 12 we opened ourselves.
 
-| Проект | Что делает с журналом действий | Кто решает, что одобрено |
+| Project | What it does with the action log | Who decides what is approved |
 | --- | --- | --- |
-| [Brave near-verifier](https://github.com/brave/near-verifier) и шлюз Leo | Каждый файл из журнала берётся из `nearai/cvm-compose-files` по коммиту и сверяется по SHA-256; образы NEAR проверяются по подписи сборки **и пересборкой из исходников**; шлюз Brave пускает модель, только если каждый её ключ подписи зарегистрирован, а за настройкой `VERIFY_NEAR_COMPOSE_SEQUENCE` ещё и если после последнего одобренного состояния журнала нет релиза без отметки (включена ли настройка у них, не видно) | Brave. Отметки лежат в его хранилище S3; README называет их «an access gate, not a log» |
-| [Quill Cloud](https://github.com/Lore-Hex/quill-cloud-proxy) (TrustedRouter) | Закрепляет хеш всей истории действий; любое добавленное действие закрывает маршрут до нового обзора человеком. Обзор от 12 ноября одобрил реплику `19aea169…` с загрузчиком `c900dc73…`, файлом релиза `2d10ba2c…` (v0.0.567) и историей `e196ae72…` в 271 действие. Те же три значения стоят в метках наших записей #73 и #74 от 12 ноября: два чтения одного журнала сошлись до хеша | Quill, в публичном репозитории: файл политики и датированные обзоры |
-| [AnonRouter](https://github.com/anonrouter/confidential-content-plane) | Каждый файл журнала должен быть в опубликованном коммите репозитория NEAR с тем же SHA-256; происхождение образов не проверяет | Никто: принимается любой релиз, который NEAR опубликовал |
-| [Hermes confidential mode](https://github.com/ainsleys/hermes-confidential-mode) | Вся карта сервисов реплики, файлы сверены по коммиту и SHA-256; изменившаяся сборка получает отказ | Пользователь, в локальном списке |
-| [teemoon audits](https://github.com/teemoonai/audits) | Обзоры исходников по каждому образу, файлу релиза и образу ОС, с вердиктом; приложение показывает ссылку на обзор, только если работает ровно проверенная сборка | Авторы обзоров, в публичном репозитории |
-| [teep](https://github.com/13rac1/teep), [Morse](https://github.com/trymorse/morse-enclave), Trace Commons, Salomon | Журнал разбирается или привязывается к квоте; до исходников не доводится | Списки, вшитые в программу, или локальные |
+| [Brave near-verifier](https://github.com/brave/near-verifier) and the Leo gateway | Every file from the log is taken from `nearai/cvm-compose-files` by commit and matched by SHA-256; NEAR images are checked by the build signature **and by a rebuild from source**; the Brave gateway lets a model through only if each of its signing keys is registered, and with the setting `VERIFY_NEAR_COMPOSE_SEQUENCE` also if after the last approved state of the log there is no release without a mark (whether the setting is on at their side is not visible) | Brave. The marks lie in its S3 storage; the README calls them "an access gate, not a log" |
+| [Quill Cloud](https://github.com/Lore-Hex/quill-cloud-proxy) (TrustedRouter) | Pins the hash of the whole action history; any added action closes the route until a new human review. The review of Nov 12 approved the replica `19aea169…` with the launcher `c900dc73…`, the release file `2d10ba2c…` (v0.0.567) and the history `e196ae72…` of 271 actions. The same three values stand in the marks of our entries #73 and #74 of Nov 12: two readings of one log matched down to the hash | Quill, in a public repository: a policy file and dated reviews |
+| [AnonRouter](https://github.com/anonrouter/confidential-content-plane) | Every log file must be in a published commit of the NEAR repository with the same SHA-256; it does not check the images' provenance | Nobody: any release that NEAR published is accepted |
+| [Hermes confidential mode](https://github.com/ainsleys/hermes-confidential-mode) | The whole service map of the replica, files matched by commit and SHA-256; a changed build gets a refusal | The user, in a local list |
+| [teemoon audits](https://github.com/teemoonai/audits) | Source reviews for each image, release file and OS image, with a verdict; the app shows a link to the review only if exactly the reviewed build is running | The reviews' authors, in a public repository |
+| [teep](https://github.com/13rac1/teep), [Morse](https://github.com/trymorse/morse-enclave), Trace Commons, Salomon | The log is parsed or bound to the quote; not taken to the sources | Lists built into the program, or local ones |
 
-- **Отказ по смене кода за тем же ключом — не наша находка.** Brave, Quill и Hermes делают это раньше нас. Обзор Quill
-  от 12 ноября отмечает то же, что наш журнал: под именем модели отвечает ещё и общая машина малых моделей
-  (загрузчик `e8416a02…`), и NEAR в тот день выкатывал релизы четыре раза.
-- **У каждого из них одобрение — список одного оператора или одного пользователя.** Публичного журнала, в который
-  пишут несколько проверяющих и по которому клиент сам выбирает, кому верить, агент-читатель не нашёл ни у кого;
-  ожидания перед доверием новому состоянию тоже.
-- **Реестр, по которому судят поставщиков** (Private Inference Beat): по файлу оценок, который прочитал агент, оценка
-  маршрута NEAR AI «E2EE through gateway» не менялась с 14 октября, и запись уровня «пробел» в ней одна: сессия,
-  подмена ключа ответа (#1061).
+- **A refusal on a code change behind the same key is not our find.** Brave, Quill and Hermes do it before us. The Quill review
+  of Nov 12 notes the same as our log: under the model's name a shared machine of small models also answers
+  (launcher `e8416a02…`), and NEAR rolled out releases four times that day.
+- **For each of them the approval is the list of one operator or one user.** A public log that several checkers
+  write to and by which the client itself chooses whom to believe, the reader agent found in nobody;
+  nor waits before trusting a new state.
+- **A registry by which providers are judged** (Private Inference Beat): by the scores file the agent read, the score
+  of the NEAR AI route "E2EE through gateway" has not changed since Oct 14, and there is one entry of the "gap" level in it: the session,
+  swapping the reply key (#1061).
 
-### Прокси уже есть
+### Proxies already exist
 
-- [Yaasha/near-e2ee-proxy](https://github.com/Yaasha/near-e2ee-proxy): локальный прокси с интерфейсом OpenAI, проверка
-  SDK до отправки, шифрование версии 2. 20 коммитов до 1 ноября, дальше тихо.
-- [teep](https://github.com/13rac1/teep): то же для нескольких поставщиков, со вшитыми списками измерений; активен.
-- У NEAR есть свой локальный прокси (`nearai/ironwire`), без шифрования и с проверкой после ответа.
+- [Yaasha/near-e2ee-proxy](https://github.com/Yaasha/near-e2ee-proxy): a local proxy with an OpenAI interface, the
+  SDK check before sending, encryption version 2. 20 commits until Nov 1, quiet after that.
+- [teep](https://github.com/13rac1/teep): the same for several providers, with built-in lists of measurements; active.
+- NEAR has its own local proxy (`nearai/ironwire`), without encryption and with a check after the answer.
 
-Ни один не сверяется с публичным журналом. Локальный прокси «проверка, шифрование, отказ» новым бы не был; новым был бы
-только журнал как источник для таких прокси.
+None of them matches against a public log. A local proxy "check, encrypt, refuse" would not be new; only
+the log as a source for such proxies would be new.
 
-**Версии шифрования у прочитанных клиентов.** Версия 3, где ключ ответа привязан к запросу: Ainek, DNA Confidential,
-Neslos, SentinelReview, near-private-preflight. Версия 2: Countersign, CIPHERWORK, teep, near-e2ee-proxy, Hermes, Morse.
+**Encryption versions in the clients read.** Version 3, where the reply key is bound to the request: Ainek, DNA Confidential,
+Neslos, SentinelReview, near-private-preflight. Version 2: Countersign, CIPHERWORK, teep, near-e2ee-proxy, Hermes, Morse.
 
-### Что это меняет
+### What this changes
 
-1. **Говорить не «мы нашли, что код за ключом меняется», а «где живёт одобрение».** Смену кода за ключом видят Brave,
-   Quill, плагин Hermes, Countersign. Наше — публичный журнал, в который пишут несколько верификаторов, выбор и кворум у посетителя, и
-   метки релиза в этом журнале. README и CLAIMS теперь так и говорят.
-2. **Человек со стороны с верификатором остаётся главным.** У Countersign, Shade и у нас проверяют сами авторы.
-   Записей постороннего проверяющего мы не нашли ни в одном из 51 прочитанного репозитория.
-3. **Ключ на аккаунте контракта стал заметнее.** У ближайшего соседа контракт без ключей, и ещё у четырёх заявок.
-   Решение от 8 ноября (не запирать до подачи) принимал Дастан; пересматривать ли его, решать ему.
-4. **Прокси не делаем ради новизны:** два уже есть.
-5. **Правило релиза остаётся выключенным**, теперь с измерением: 13 ноября метка для реплики пришла через 5 часов 28
-   минут после релиза, и только от второго верификатора (`docs/DEV-NOTES.md`).
+1. **Say not "we found that the code behind the key changes", but "where the approval lives".** A change of code behind the key is seen by Brave,
+   Quill, the Hermes plugin, Countersign. Ours is a public log that several verifiers write to, the choice and the quorum at the visitor, and
+   release marks in this log. The README and CLAIMS now say exactly this.
+2. **A person from outside with a verifier remains the main thing.** At Countersign, Shade and with us the authors themselves check.
+   We found entries by an outside checker in none of the 51 repositories read.
+3. **The key on the contract's account became more noticeable.** The nearest neighbour has a contract without keys, and four more entries.
+   The decision of Nov 8 (not to lock before the submission) was made by Dastan; whether to revisit it is for him to decide.
+4. **We do not make a proxy for novelty:** two already exist.
+5. **The release rule stays off**, now with a measurement: on Nov 13 the mark for a replica came 5 hours 28
+   minutes after the release, and only from the second verifier (`docs/DEV-NOTES.md`).
 
-Ссылки на список заявок и промпты треков: `docs/LINKS.md`.
+Links to the list of entries and the track prompts: `docs/LINKS.md`.

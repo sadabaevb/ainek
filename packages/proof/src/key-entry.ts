@@ -1,6 +1,6 @@
 // Build the KeyEntryInput (SPEC §4.1) a verifier logs after `verifyModelAttestation` succeeded. One implementation
 // for every verifier instance, so field conventions (digest prefix, hex form, hashes) cannot drift. Conventions
-// are listed in SPEC §4.1 under "Соглашения верификатора".
+// are listed in SPEC §4.1 under "Verifier conventions".
 import { normalizeHex, sha256Hex, utf8Bytes } from './hash.ts';
 import { KeyEntryInput, type SigningAlgo } from './schema.ts';
 

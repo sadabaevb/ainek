@@ -1,7 +1,7 @@
 # Prior art, in this hackathon and outside it, and what Ainek adds
 
 Moved here from the README on Nov 10, 2026, with one pointer adjusted; two rows, marked "read Nov 10", were added the same day. The method and the full list of entries we looked at are in
-[FIELD.md](FIELD.md) (in Russian).
+[FIELD.md](FIELD.md).
 
 We read the code of the nearest entries and looked at their contracts on chain on Nov 6, 2026. We did not run them or open their demos, and they may have moved on since. Several are ahead of Ainek in places: Vouch has the deepest attestation check we saw, Charter runs on mainnet, AgentGuard is deployed and in use, and TEE Receipts checks the answer's signature in the contract. The two rows marked "read Nov 10" rest on posts, READMEs and parts of the code, checked against the repos, not on a full read. The seven rows marked "read Nov 13" name what was read. All were read with Claude Code: Countersign directly, the other six by delegated agents. For Shade, Neslos, DNA Confidential and Oathline we then checked the statements in those rows against the source a second time; Aegis and Bouncer we read ourselves after the agent, at the commits named in their rows. A section at the end, added the same day, lists projects outside the hackathon. Rows marked (Tier 2) describe a part of Ainek that ran on testnet on Nov 7, through the Telegram bot except for a rejection and the stop button; see "The agent half" in [DETAILS.md](DETAILS.md#the-agent-half-tier-2).
 
