@@ -180,9 +180,12 @@ As of Nov 14, 2026.
 - [docs/METRICS.md](docs/METRICS.md): 50 live runs on Nov 13 (a median of 9.8 s for a whole run), long conversations,
   long input, slow answers.
 - [docs/PRIOR-ART.md](docs/PRIOR-ART.md): the neighbours in this hackathon and outside it, and where they are ahead.
-- [docs/SPEC.md](docs/SPEC.md) (interfaces, in Russian), [docs/DEPLOY.md](docs/DEPLOY.md) (what is deployed where),
+- [docs/SPEC.md](docs/SPEC.md) (the interfaces: the contract's ABI, the proof schema, the policy and its decision, the
+  client's rules), [docs/DEPLOY.md](docs/DEPLOY.md) (what is deployed where),
   [docs/ASSESSMENT.md](docs/ASSESSMENT.md) (the client against the six obligations of Private Inference Beat, an
   independent registry of private-inference providers).
+- The team's working notes are in Russian: `docs/DEV-NOTES.md` (the journal), `docs/FIELD.md` (the survey behind
+  PRIOR-ART), `docs/ROADMAP.md`, `docs/HACKATHON-RULES.md` and `docs/prompts/` (the plan and the prompts of Nov 2).
 
 ## Repository
 
@@ -231,7 +234,7 @@ Tests:
   verification guide, `near-examples/nearai-cloud-verification-example`, `nearai/nearai-cloud-verifier`,
   `out-layer/private-dao-example` (Tier 2).
 - AI-generated code: substantial parts were written with Claude Code and reviewed by the team; the TypeScript branches went
-  through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
+  through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md` (in Russian).
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
   [`pre-hackathon...hackathon-submission`](https://github.com/sadabaevb/ainek/compare/pre-hackathon...hackathon-submission).
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
