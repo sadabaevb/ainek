@@ -113,6 +113,20 @@ file ([PRIOR-ART.md](PRIOR-ART.md)); we learned of it on Nov 13.
 The first measured window came the next night. On Nov 13 at 00:56 UTC release v0.0.581 of the model's file went live on
 one replica, 38 minutes after its commit. The mark for that state came at 06:24 UTC, 5 hours 28 minutes later, and from
 the second verifier only: GitHub ran its hourly schedule at 23:28 and next at 06:24. The verifier on our server, the
-only one in the site's default trust set, wrote two entries after the release, neither with a mark; why its release
-check did not pass we have not established (`docs/DEV-NOTES.md`, Nov 13). With the rule on, a client routed to that
-replica would have refused all that time.
+only one in the site's default trust set as of Nov 14, wrote no release mark from Nov 13, 00:18 UTC (entry #77) to
+Nov 14, 08:13 UTC (entry #106). That is almost 32 hours and thirteen entries without one. The cause is its operator's report of
+Nov 14, which we have not checked against the daemon's log: the daemon ran without a GitHub token, and a dry run of the
+same image on the same server marked two of the three deployments and then met GitHub's limit of 60 requests an hour
+for one address. A read that fails is not remembered, so every report of a round asks again
+(`packages/proof/src/release-chain.ts`). By the same report he put a token with no permissions (public repositories
+only) into `verifier.env` and restarted the container on the same image, `6f2ff98`; in the first round after that all
+15 attestations had their release checked, and entries #106 to #108 carry the marks. With the rule on for everyone, the hosted chat would have refused for much of that time: on the replica
+with the new release from 00:56 UTC, when its action log grew past the last mark, and on every replica from Nov 14,
+00:18 UTC, when those marks were a day old and no longer counted.
+
+A visitor's own switch has been in the chat since Nov 14. With it on, the chat did refuse, as recorded that morning at
+about 07:40 UTC, 31 hours into the gap. A visitor who also trusted `anas-verifier.testnet` saw the release check on
+`/log` say that the action log as it stood was marked: that verifier had marked the state at 06:56 UTC. At 09:28 UTC,
+with the marks back, a message sent with the switch on and the default trust set was answered with its proof. Its key
+is at entry #106, and that entry's mark covers the 280 actions the enclave attested to that browser. As of Nov 14 it is
+the only message with the rule on that we have sent end to end on the hosted site (`docs/DEV-NOTES.md`, Nov 13 and 14).

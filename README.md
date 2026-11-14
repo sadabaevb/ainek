@@ -41,7 +41,7 @@ under [Limits](#limits).
 | --- | --- |
 | Open [`/?tamper=1`](https://ainek.vercel.app/?tamper=1) and send any message | The client is shown a swapped key and refuses: the red card "Key not in the public log. Message not sent." |
 | Open [`/log`](https://ainek.vercel.app/log), "Who you trust" | The public key log, read from the NEAR contract, and your own choice of which verifiers count: untick the trusted one and the page says "Nobody is selected, so the chat refuses every message." |
-| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave", send any message | As the log stood on Nov 14: a red card, "Message not sent.", because the verifier the site trusts has written no mark for the release that runs now. On `/log` tick `anas-verifier.testnet` (the list shows when each verifier last wrote a release mark) and the same message passes that check |
+| In the [chat](https://ainek.vercel.app) tick "Stricter: send only when a verifier you trust has marked this state of the enclave", send any message | The browser attests again for this message. It sends only if a verifier you trust has marked the enclave's action log as it stands: you get an answer with its proof when one has, and a red card, "Message not sent.", when none has. `/log` shows when each verifier last wrote a release mark. The video shows both outcomes, recorded on Nov 14; why the chat refused that morning is under [Limits](#limits) |
 | Open [`/agent`](https://ainek.vercel.app/agent), then action #4 | A real denial from testnet (5000 AINEK to a new vendor, nothing moved), re-checked in your browser. Click "Demo: change the verdict and re-check" and the signature check turns red |
 | Open [`/auditor`](https://ainek.vercel.app/auditor) → "Use the sample file" → Check | "This disclosure checks out": one disclosed proof checked against its commit on NEAR, without the plaintext |
 
@@ -117,9 +117,12 @@ What to know before trusting any of this. There are 26 in all, each with its rea
   public sources", not "approved".
 - **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log and
   acted on only for a visitor who turns the rule on in the chat. On Nov 13 the first mark for a new release came five
-  and a half hours after it went live, and from a verifier outside the site's default trust set; the one the site trusts
-  wrote none. With the rule on for everyone, the hosted chat would have refused all that time and longer
-  ([docs/RELEASE.md](docs/RELEASE.md)).
+  and a half hours after it went live. It came from a verifier outside the site's default trust set. The site's default
+  verifier wrote no release mark for almost 32 hours, until Nov 14, 08:13 UTC; by its operator's report, its release
+  check had used up GitHub's limit for requests without a token. With the rule on for everyone, the hosted chat would
+  have refused for much of that time: on a replica once its action log grew past the last mark, and on every replica
+  once those marks were a day old. With the box ticked it did refuse on the morning of Nov 14, and it answered at
+  09:28 UTC, once the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
 - **The deployment is attested, the model is not verified.** Weights are not checked, what the enclave keeps cannot be
   proven, and the page is served by our server.
 
@@ -210,10 +213,10 @@ Tests:
 - AI-generated code: substantial parts were written with Claude Code and reviewed by the team; the TypeScript branches went
   through `/simplify` and `/code-review` before merge; see the commit history and `docs/DEV-NOTES.md`.
 - Hackathon window: all code after tag `pre-hackathon` (project kit: docs, spec, prompts, no code; Nov 2 2026). Diff:
-  <!-- TODO link compare pre-hackathon...hackathon-submission -->
+  [`pre-hackathon...hackathon-submission`](https://github.com/sadabaevb/ainek/compare/pre-hackathon...hackathon-submission).
 - Other projects by the same people in this hackathon: Ainek is the one we build together. Each of us also submits one
-  project of his own, built apart from this one: nearby (Dastan) and ushak (Bektur).
-  <!-- TODO before submission: links and exact spelling of both names; drop any not submitted -->
+  project of his own, built apart from this one: [NearBy](https://github.com/dastansam/nearby) (Dastan) and ushak (Bektur).
+  <!-- TODO before submission: push the tag `hackathon-submission` (the compare link above needs it); the link for ushak; check that both links open without a login; drop any not submitted -->
 
 ## License
 
