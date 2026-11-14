@@ -115,11 +115,11 @@ What to know before trusting any of this. There are 26 in all, each with its rea
   GitHub account ([docs/DEPLOY.md](docs/DEPLOY.md)). The site trusts one of ours by default; you can change that on `/log`.
 - **A log entry is not a review.** A verifier writes down what attests. Its mark for a release says "followed to
   public sources", not "approved".
-- **The client does not refuse on the release by default.** The finding on the first screen is recorded in the log and
-  acted on only for a visitor who turns the rule on in the chat. The log did not keep up: on Nov 13 the first mark for
-  a new release came five and a half hours after it went live, and the site's default verifier wrote none for almost
-  32 hours, until Nov 14, 08:13 UTC. With the box ticked the chat refused that morning and answered at 09:28 UTC, once
-  the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
+- **The client does not refuse on the release by default.** The finding on the first screen is only recorded in the log.
+  The chat acts on it only if the visitor ticks the box. The log was late: on Nov 13 a new release got its first mark
+  five and a half hours after going live, and the site's default verifier wrote none for almost 32 hours, until Nov 14,
+  08:13 UTC. With the box ticked, the chat found no mark from a trusted verifier and refused that morning; it answered
+  at 09:28 UTC, when the marks were back ([docs/RELEASE.md](docs/RELEASE.md)).
 - **The deployment is attested, the model is not verified.** Weights are not checked, what the enclave keeps cannot be
   proven, and the page is served by our server.
 

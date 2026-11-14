@@ -169,9 +169,8 @@ output may say more than this file does.
 - **An immutable log.** "Append-only" describes the code deployed today: `log_key` only appends, and each entry hashes the
   previous one. The contract account still has a full-access key, so whoever holds it (today: us) can replace the code. A
   rewrite would show only to someone who kept an earlier `head`. `pnpm demo:log` is that reader: it recomputes every hash
-  from the first entry and compares the log with the places recorded in this repository (entry #0 as read on Nov 8,
-  the heads #80 and #86 as read on Nov 13, the second after the first entries of the verifier outside the team, and the
-  head #111 as read on Nov 14), so a
+  from the first entry and compares the log with the places recorded in `docs/samples/log-points.json` (the first read on
+  Nov 8, the others on Nov 13 and Nov 14), so a
   clone of the repository holds an earlier head, and it prints the head of the day to keep for a later run. A place
   covers the entries up to its own index from the day it was read, and nothing else: entry #0 since Nov 8, entries #1 to
   #86 since Nov 13, entries #87 to #111 since Nov 14, later entries not until another place is kept. It reads one RPC node:
